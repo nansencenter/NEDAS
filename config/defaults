@@ -1,0 +1,47 @@
+#experiment design
+EXP_NAME=test
+DATE_START=202101010000    ##format ccyymmddHHII
+DATE_END=202101070000
+DATE_CYCLE_START=202101020000
+DATE_CYCLE_END=202101060000
+CYCLE_PERIOD=180           ##in minutes
+ANALYSIS_WINDOW=(-0 +0) ##define analysis window, obs within window will contribute to update
+
+#Paths, env config
+WORK_DIR=$USERWORK/$EXP_NAME
+SCRIPT_DIR=$HOME/code/nextsim-dart
+CODE_DIR=$HOME/code
+DATA_DIR=$HOME/data
+
+#Model config
+##grid dimension, type:cartesian?
+NX=256
+NY=256
+NZ_UP=20
+NZ_DOWN=10
+
+##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently need changing a parameter, set it here
+
+
+#Observation
+
+
+#DA parameters
+ANALYSIS_TYPE=EnKF  ##filter/smoother
+NUM_ENS=30  #ensemble size, number of members/realizations
+
+##multiscale
+NUM_SCALES=1
+RUN_ALIGNMENT=false
+
+##inflation
+ADAPT_INFL=false
+
+##localization
+HROI=600 ##in km
+VROI_UP=10  ##in num. of levels
+VROI_DOWN=10    ##?should it be in meters?
+
+##HPC settings
+HOSTPPN=32
+HOSTTYPE=betzy
