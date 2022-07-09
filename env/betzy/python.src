@@ -1,0 +1,25 @@
+ulimit -s 2000000
+
+module --force purge
+ml load StdEnv
+ml load iimpi/2020a
+ml load Python/3.8.2-GCCcore-9.3.0
+ml load SciPy-bundle/2020.03-foss-2020a-Python-3.8.2
+ml load matplotlib/3.2.1-foss-2020a-Python-3.8.2
+ml load Cartopy/0.18.0-foss-2020a-Python-3.8.2
+ml load Fiona/1.8.16-foss-2020a-Python-3.8.2
+
+ml load PROJ/7.0.0-GCCcore-9.3.0
+export PROJ_LIB=/cluster/software/PROJ/7.0.0-GCCcore-9.3.0/share/proj
+
+export NEXTSIMDIR=$HOME/code/nextsim
+export NEXTSIMTOOLS_ROOT_DIR=$HOME/code/nextsim-tools
+export CLUSTER_ROOT_DIR=/cluster/projects/nn2993k/sim
+export NEXTSIM_DATA_DIR=$USERWORK/output/data
+export NEXTSIM_MESH_DIR=$CLUSTER_ROOT_DIR/mesh
+export BAMGDIR=$HOME/code/nextsim/contrib/bamg
+export MAPXDIR=$HOME/code/nextsim/contrib/mapx
+export PATH=$PATH:$NEXTSIMTOOLS_ROOT_DIR/python/pynextsim/scripts
+export PYTHONPATH=$PYTHONPATH:$NEXTSIMTOOLS_ROOT_DIR/python
+export PYTHONPATH=$PYTHONPATH:$NEXTSIMTOOLS_ROOT_DIR/python/swarp_funs
+
