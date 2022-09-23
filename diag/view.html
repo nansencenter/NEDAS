@@ -1,0 +1,75 @@
+<html>
+<body onkeydown='javascript:shortcut(event)'>
+<h3>
+    Show Variable:
+    <a href="view.html?vname=sic">Concentration</a>,
+    <a href="view.html?vname=sit">Thickness</a>,
+    <a href="view.html?vname=velocity">Velocity</a>,
+    <a href="view.html?vname=damage">Damage</a>
+    (keyboard: &larr;, &rarr; moves in time; &uarr;, &darr; toggles ensemble members) <br/>
+    <p id='imagecap'></p>
+</h3>
+<div style='width:100%;overflow:hidden;'>
+<div style='width:50%;overflow:hidden;float:left'> <img style='width:120%;margin:0% 0% 0% -20%;' name='animation1' src='' alt='' /> </div>
+<div style='width:50%;overflow:hidden;float:right'> <img style='width:120%;margin:0% 0% 0% -20%;' name='animation2' src='' alt='' /> </div>
+</div>
+</body>
+</html>
+
+<script type='text/javascript'>
+function load(){
+    dir='output/figs';
+    const queryString = window.location.search;
+    const urlParams = new URLSearchParams(queryString);
+    vname=urlParams.get('vname');
+    imagelist=new Array();
+    n=41;
+    imagelist='000.png,001.png,002.png,003.png,004.png,005.png,006.png,007.png,008.png,009.png,010.png,011.png,012.png,013.png,014.png,015.png,016.png,017.png,018.png,019.png,020.png,021.png,022.png,023.png,024.png,025.png,026.png,027.png,028.png,029.png,030.png,031.png,032.png,033.png,034.png,035.png,036.png,037.png,038.png,039.png,040.png'.split(',');
+    memlist=new Array();
+    m=40;
+    memlist='001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020,021,022,023,024,025,026,027,028,029,030,031,032,033,034,035,036,037,038,039,040'.split(',');
+    //load all images
+    images1=new Array();
+    images2=new Array();
+    for(var j=0; j<n; j++){
+        images1[j]=new Array();
+        for(var i=0; i<m; i++){
+            images1[j][i]=new Image();
+            images1[j][i].src=dir+'/'+vname+'/'+memlist[i]+'/'+imagelist[j];
+        }
+        images2[j]=new Image();
+        images2[j].src=dir+'/'+vname+'/sprd/'+imagelist[j];
+    }
+    //initial image shown
+    ii=0;
+    jj=0;
+    document.animation1.src=images1[jj][ii].src;
+    document.animation2.src=images2[jj].src;
+    document.getElementById("imagecap").innerHTML=vname+'/'+memlist[ii]+'/'+imagelist[jj];
+}
+//shortcuts to advance forward backward
+function shortcut(event) {
+  key=event.keyCode;
+  if(key==37) {
+    if(jj>0){ jj--;}
+    else{ jj=n-1;}
+  }
+  if(key==39) {
+    if(jj<n-1){ jj++;}
+    else{ jj=0;}
+  }
+  if(key==38) {
+    if(ii>0){ ii--;}
+    else{ ii=m-1;}
+  }
+  if(key==40) {
+    if(ii<m-1){ ii++;}
+    else{ ii=0;}
+  }
+  document.animation1.src=images1[jj][ii].src;
+  document.animation2.src=images2[jj].src;
+  document.getElementById("imagecap").innerHTML=vname+'/'+memlist[ii]+'/'+imagelist[jj];
+}
+load();
+</script>
+
