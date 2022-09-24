@@ -1,5 +1,6 @@
 import numpy as np
 from pynextsim import NextsimBin
+import bamg
 import datetime
 import sys
 
@@ -15,8 +16,8 @@ outdir=sys.argv[1]  ##nextsim output dir
 v=int(sys.argv[2]) ##var id
 
 ##output variable
-vname = ('Concentration', 'Thickness', 'M_VT', 'Damage')[v]
-voname = ('sic', 'sit', 'siu', 'damage')[v]
+vname = ('Concentration', 'Thickness', 'M_VT', 'Damage', 'deform')[v]
+voname = ('sic', 'sit', 'siu', 'damage', 'deform')[v]
 
 ##read bin files
 out = np.zeros((2, ny, nx))
@@ -30,6 +31,20 @@ for n in range(nt):
     if vname == 'M_VT':
         out[0, :, :] = tmp['M_VT_1']
         out[1, :, :] = tmp['M_VT_2']
+    if vname == 'deform':
+        binfile_past = outdir+'/field_'+(t1+(n-1)*dt).strftime('%Y%m%dT%H%M%SZ')+'.bin'
+        nb0 = NextsimBin(binfile_past)
+        e1, e2, e3, area, pr, tri, x_e, y_e, u_e, v_e = nb.get_deformation_2files(nb0)
+        var_in = [np.array(e2*24*60*60, dtype='double')] ##convert to 1/day
+        tmp = bamg.interpMeshToPoints(tri.flatten()+1,
+                                      x_e.astype(np.double),
+                                      y_e.astype(np.double),
+                                      var_in,
+                                      x.flatten(), y.flatten(), True, np.nan)
+        sic = nb.get_gridded_vars(['Concentration'], x, y)['Concentration']
+        tmp = np.reshape(tmp, x.shape)
+        tmp[np.where(np.isnan(sic))] = np.nan
+        out[0, :, :] = tmp
     else:
         out[0, :, :] = tmp[vname]
 

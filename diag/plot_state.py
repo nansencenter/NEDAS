@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import datetime
-import cmocean
+from cmocean.cm import ice
 import os
 import sys
 
@@ -19,10 +19,10 @@ plot_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=60)
 v=int(sys.argv[1])  ##variable type
 m=int(sys.argv[2])  ##member id
 
-vname = ('sic', 'sit', 'velocity', 'damage')[v]
-vmin = (     0,     0,          0,      0.8)[v]
-vmax = (     1,     3,        0.3,        1)[v]
-vcolor = (cmocean.cm.ice, 'viridis', 'Blues', 'inferno')[v]
+vname = ('sic', 'sit', 'velocity', 'damage', 'deform')[v]
+vmin = (     0,     0,          0,      0.8,        0)[v]
+vmax = (     1,     3,        0.3,        1,      0.3)[v]
+vcolor = ( ice, 'viridis', 'Blues', 'inferno', 'plasma_r')[v]
 dv = (vmax-vmin)/40
 
 if not os.path.exists('output/figs/'+vname+'/{:03d}'.format(m+1)):

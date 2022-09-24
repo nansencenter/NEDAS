@@ -18,9 +18,9 @@ plot_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=60)
 
 v=int(sys.argv[1])  ##variable type
 
-vname = ('sic', 'sit', 'velocity', 'damage')[v]
-vmin = (     0,     0,          0,      0.8)[v]
-vmax = (     1,     3,        0.3,        1)[v]
+vname = ('sic', 'sit', 'velocity', 'damage', 'deform')[v]
+vmin = (     0,     0,          0,      0.8,        0)[v]
+vmax = (     1,     3,        0.3,        1,      0.3)[v]
 dv = (vmax-vmin)/40
 
 if not os.path.exists('output/figs/'+vname+'/sprd'):
