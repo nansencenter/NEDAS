@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import datetime
 from scale_util import *
 import sys
+import os
 
 t1 = datetime.datetime(2021, 1, 1, 0, 0, 0)
 dt = datetime.timedelta(hours=6)
