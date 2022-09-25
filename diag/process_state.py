@@ -45,7 +45,7 @@ for n in range(nt):
         tmp = np.reshape(tmp, x.shape)
         tmp[np.where(np.isnan(sic))] = np.nan
         out[0, :, :] = tmp
-    else:
+    if vname != 'M_VT' and vname != 'deform':
         out[0, :, :] = tmp[vname]
 
     ##output npy file
