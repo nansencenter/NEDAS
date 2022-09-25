@@ -11,6 +11,9 @@ nens = 40
 
 x, y = np.load('output/grid.npy')
 
+if not os.path.exists('output/figs/spectrum'):
+    os.makedirs('output/figs/spectrum')
+
 n = int(sys.argv[1])
 t = t1+n*dt
 tstr = t.strftime('%Y%m%dT%H%M%SZ')
@@ -88,5 +91,6 @@ ax.text(100, 6e-5, r'$\kappa^{-1}$', fontsize=12)
 ax.set_xlim(0.4, 500)
 ax.set_ylim(1e-8, 3e-2)
 ax.legend(loc='upper right', fontsize=12)
+ax.set_title(t.strftime('%Y-%m-%d %H:%M'), fontsize=20)
 plt.savefig('output/figs/spectrum/{:03d}.png'.format(n), dpi=200)
 plt.close()
