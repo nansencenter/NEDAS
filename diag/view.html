@@ -1,3 +1,7 @@
+<!--
+    Just put me in the directory with figs/, then open in a browser
+-->
+
 <html>
 <body onkeydown='javascript:shortcut(event)'>
 <h3>
@@ -24,16 +28,16 @@
 
 <script type='text/javascript'>
 function load(){
-    dir='output/figs';
     const queryString = window.location.search;
     const urlParams = new URLSearchParams(queryString);
     vname=urlParams.get('vname');
+    dir='figs';
     imagelist=new Array();
     n=41;
     imagelist='000.png,001.png,002.png,003.png,004.png,005.png,006.png,007.png,008.png,009.png,010.png,011.png,012.png,013.png,014.png,015.png,016.png,017.png,018.png,019.png,020.png,021.png,022.png,023.png,024.png,025.png,026.png,027.png,028.png,029.png,030.png,031.png,032.png,033.png,034.png,035.png,036.png,037.png,038.png,039.png,040.png'.split(',');
     memlist=new Array();
-    m=40;
-    memlist='001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020,021,022,023,024,025,026,027,028,029,030,031,032,033,034,035,036,037,038,039,040'.split(',');
+    m=10;
+    memlist='001,002,003,004,005,006,007,008,009,010'.split(',');
     //load all images
     images1=new Array();
     images2=new Array();

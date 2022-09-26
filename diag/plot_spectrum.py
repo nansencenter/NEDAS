@@ -8,7 +8,7 @@ import os
 t1 = datetime.datetime(2021, 1, 1, 0, 0, 0)
 dt = datetime.timedelta(hours=6)
 nt = 41
-nens = 40
+nens = 10
 
 x, y = np.load('output/grid.npy')
 

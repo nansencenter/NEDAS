@@ -11,7 +11,7 @@ import sys
 t1 = datetime.datetime(2021, 1, 1, 0, 0, 0)
 dt = datetime.timedelta(hours=6)
 nt = 41
-nens = 40
+nens = 10
 x, y = np.load('output/grid.npy')
 ny, nx = x.shape
 plot_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=60)
@@ -52,7 +52,8 @@ for n in range(nt):
         var_sprd = np.sqrt(var_sprd/(nens-1))
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 8), subplot_kw={'projection': plot_crs})
-    c = ax.contourf(x, y, var_sprd, np.arange(0, 10*dv, dv), cmap='Reds')
+    var_sprd[np.where(var_sprd>40*dv)] = 40*dv
+    c = ax.contourf(x, y, var_sprd, np.arange(0, 41*dv, dv), cmap='Reds')
     plt.colorbar(c, fraction=0.025, pad=0.015)
     ax.add_feature(cfeature.LAND, facecolor='gray', edgecolor='black', zorder=10, alpha=0.5)
     ax.set_title(vname+' ensemble spread '+t.strftime('%Y-%m-%d %H:%M'), fontsize=20)

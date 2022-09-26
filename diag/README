@@ -1,7 +1,7 @@
 diagnostics for nextsim output, ensemble runs
 
 1. Regrid the output (irregular mesh) to a uniform analysis grid (900x900 5km), which is easier for fft and obtaining spectra. This step is done by running
-    python process_state.py outdir var_id
+    python process_nextsim_state.py outdir var_id
 
 outdir is where the nextsim field/mesh_<date>.bin/dat files are located. The ensemble members are stored in separate dirs 001, 002...
 
@@ -13,7 +13,7 @@ Note: This interpolate step can be potentially done during model run as well. Us
 
 NEDAS/grid/gen_reference_grid.py generates a uniform reference_grid.nc for nextsim to read in. The python script make_uniform_grid.py generates the same grid x,y and save to grid.npy
 
-The process_state.py uses bamg interpFromMeshToMesh2dx to perform the interpolation, so it requires the pynextsim.NextsimBin to be correctly installed
+The process_nextsim_state.py uses bamg interpFromMeshToMesh2dx to perform the interpolation, so it requires the pynextsim.NextsimBin to be correctly installed
 
 
 2. Plot ensemble states.
