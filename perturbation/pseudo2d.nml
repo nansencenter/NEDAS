@@ -1,0 +1,12 @@
+&pseudo2D
+vslp     =  10
+vwndspd  =  3
+vsnowfall=  1
+vdwlongw =  50
+vsss     =  1
+vsst     =  .01
+scorr    =  250
+scorr_dx = 5
+tcorr    =  2
+prsflg   =  2
+/

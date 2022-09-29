@@ -1,0 +1,12 @@
+ulimit -s 2000000
+
+module --force purge
+ml load StdEnv
+ml load CMake/3.12.1
+ml load iimpi/2020a
+ml load imkl/2020.1.217-iimpi-2020a
+ml load FFTW/3.3.8-intel-2020a
+ml load netCDF-Fortran/4.5.2-iimpi-2020a
+
+export NETCDF=/cluster/software/netCDF-Fortran/4.5.2-iimpi-2020a
+export FFTW_DIR=/cluster/software/FFTW/3.3.8-intel-2020a
