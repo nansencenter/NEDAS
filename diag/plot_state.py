@@ -18,6 +18,7 @@ plot_crs = ccrs.NorthPolarStereo(central_longitude=-45, true_scale_latitude=60)
 
 v=int(sys.argv[1])  ##variable type
 m=int(sys.argv[2])  ##member id
+s=int(sys.argv[3])  ##scale, -1 if full-scale state
 
 vname = ('sic', 'sit', 'velocity', 'damage', 'deform')[v]
 vmin = (     0,     0,          0,      0.8,        0)[v]
@@ -25,20 +26,26 @@ vmax = (     1,     3,        0.3,        1,      0.3)[v]
 vcolor = ( ice, 'viridis', 'Blues', 'inferno', 'plasma_r')[v]
 dv = (vmax-vmin)/40
 
-if not os.path.exists('output/figs/'+vname+'/{:03d}'.format(m+1)):
-    os.makedirs('output/figs/'+vname+'/{:03d}'.format(m+1))
+mstr = '{:03d}'.format(m+1)
+
+if s==-1:
+    sstr = ''
+else:
+    sstr = '_scale{}'.format(s+1)
+
+if not os.path.exists('output/figs/'+vname+sstr+'/'+mstr):
+    os.makedirs('output/figs/'+vname+sstr+'/'+mstr)
 
 for n in range(nt):
     t = t1 + n*dt
     tstr = t.strftime('%Y%m%dT%H%M%SZ')
-    outdir = 'output/ensemble_run/{:03d}'.format(m+1)
+    outdir = 'output/ensemble_run/'+mstr
     if vname=='velocity':
-        var_u = np.load(outdir+'/siu_'+tstr+'.npy')
-        var_v = np.load(outdir+'/siv_'+tstr+'.npy')
+        var_u = np.load(outdir+'/siu'+sstr+'_'+tstr+'.npy')
+        var_v = np.load(outdir+'/siv'+sstr+'_'+tstr+'.npy')
         var = np.sqrt(var_u**2 + var_v**2)
     else:
-        var = np.load(outdir+'/'+vname+'_'+tstr+'.npy')
-
+        var = np.load(outdir+'/'+vname+sstr+'_'+tstr+'.npy')
 
     fig, ax = plt.subplots(1, 1, figsize=(10, 8), subplot_kw={'projection': plot_crs})
     var[np.where(var>vmax)]=vmax
@@ -51,9 +58,9 @@ for n in range(nt):
         ax.quiver(x[::d, ::d], y[::d, ::d], var_u[::d, ::d], var_v[::d, ::d], scale=5)
 
     ax.add_feature(cfeature.LAND, facecolor='gray', edgecolor='black', zorder=10, alpha=0.5)
-    ax.set_title(vname+' member{:03d} '.format(m+1)+t.strftime('%Y-%m-%d %H:%M'), fontsize=20)
+    ax.set_title(vname+' member'+mstr+' '+t.strftime('%Y-%m-%d %H:%M'), fontsize=20)
     ax.set_xlim(-2.2e6, 1.3e6)
     ax.set_ylim(-1.1e6, 2e6)
-    plt.savefig('output/figs/'+vname+'/{:03d}'.format(m+1)+'/{:03d}.png'.format(n), dpi=200)
+    plt.savefig('output/figs/'+vname+sstr+'/'+mstr+'/{:03d}.png'.format(n), dpi=200)
     plt.close()
 
