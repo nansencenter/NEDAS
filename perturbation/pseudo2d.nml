@@ -1,12 +1,50 @@
 &pseudo2D
-vslp     =  10
-vwndspd  =  3
-vsnowfall=  1
-vdwlongw =  50
-vsss     =  1
-vsst     =  .01
-scorr    =  250
-scorr_dx = 5
-tcorr    =  2
-prsflg   =  2
+
+debug = .false.
+
+xdim = 900
+ydim = 900
+dx = 5
+dt = 6
+
+n_sample = 50
+
+n_field = 7
+
+field(1)%name = 'slp     '
+field(1)%vars = 10.
+field(1)%hradius = 250.
+field(1)%tradius = 48.
+
+field(2)%name = 'uwind   '
+field(2)%vars = 3.
+field(2)%hradius = 250.
+field(2)%tradius = 48.
+
+field(3)%name = 'vwind   '
+field(3)%vars = 3.
+field(3)%hradius = 250.
+field(3)%tradius = 48.
+
+field(4)%name = 'snowfall'
+field(4)%vars = 1.
+field(4)%hradius = 250.
+field(4)%tradius = 48.
+
+field(5)%name = 'dwlongw '
+field(5)%vars = 50.
+field(5)%hradius = 250.
+field(5)%tradius = 48.
+
+field(6)%name = 'sss     '
+field(6)%vars = 1.
+field(6)%hradius = 250.
+field(6)%tradius = 48.
+
+field(7)%name = 'sst     '
+field(7)%vars = .01
+field(7)%hradius = 250.
+field(7)%tradius = 48.
+
+prsflg = 2
 /

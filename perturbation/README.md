@@ -1,6 +1,6 @@
 This offline perturbation code originially comes from `HYCOM/src/mod_random_forcing.F`. For more details about the original code contact Laurent Bertino laurent.bertino@nersc.no
 
-Modified by Yue Ying 2022
+Cleaned up and modified by Yue Ying 2022
 
 How to use:
 
@@ -13,50 +13,38 @@ How to use:
 List of namelist options:
 ```
 &pseudo2d
-      ! debug = .false.    ! debug mode
-!      randf        = .true.  ! Switches on/off random forcing
-!      seed         = 11
-!!!    variances of variables (std**2)
-!      vars%slp     =  10.0
-!      vars%taux    =  1.e-3
-!      vars%tauy    =  1.e-3
-!      vars%wndspd  =  0.64
-!      vars%clouds  =  5.e-3
-!      vars%airtmp  =  9.0
-!      vars%precip  =  1.0    ！ =1.0 means relative errors of 100%.
-!      vars%relhum  =  1.0    ！ =1.0 means relative errors of 100%.
-!      rf_hradius   =  500    ! Horizontal decorr length for rand forc [km];
-!      dx = ! grid resolution
-!      rf_tradius   =  2.0    ! Temporal decorr length for rand forc
-!      rf_prsflg    =  2      ! Pressure flag must be between 0 and 2
+debug = .true.   !!switch on/off debug mode
+
+xdim = 800 !!num grid points in x
+ydim = 600 !!num grid points in y
+dx = 5     !!grid resolution (km)
+dt = 6     !!time step interval (hours)
+
+n_sample = 10   !!number of perturbations to generate in time
+
+n_field = 3   !!number of variables to be perturbed (max 100)
+
+field(1)%name = 'slp     '     !!variable name (len=8)
+field(1)%vars = 10.            !!variance of perturbation (in their units)
+field(1)%hradius = 250.        !!horizontal correlation length (km)
+field(1)%tradius = 48.         !!time correlation length (hours)
+
+field(2)%name = 'uwind   '     !!more variables can be added with field(i) for i=1,...,n_field
+field(2)%vars = 3.
+field(2)%hradius = 250.
+field(2)%tradius = 48.
+
+field(3)%name = 'vwind   '
+field(3)%vars = 3.
+field(3)%hradius = 250.
+field(3)%tradius = 48.
+
+field(4)%name = 'snowfall'
+field(4)%vars = 1.
+field(4)%hradius = 250.
+field(4)%tradius = 48.
+
+prsflg = 1    !!flag for computing wind perturbation: 0=uncorrelated with slp;
+              !!  1=derived from slp perturbations (see module_random_field.F90 for details)
 /
 ```
-
-
-
-<!--- In ./src/main_pseudo2D.F90,     -->
-<!--    - Set the length of a sequential perturbations for one member to variable i_step.-->
-<!--    - Set domain size to xdim = 1024, ydim = 1024,xy_full = xdim*ydim.  It uses FFT, which generates faster when using power of 2.-->
-
-<!--- THEN, compile the code by makefile in ./src.-->
-
-<!--- Configuration of perturbations are set in pseudo2D.nml-->
-<!--- set mod_random_forcing.F90/rdtime as time step of forcing update. Also check the consistency with tcorr in pseudo2D.nml.-->
-
-<!--- In ./result folder, pertubation series are saved in subfolders distincted by ensemble id. For examples,-->
-<!--    -mem1 containts perturbations in netcdf as synforc_i.nc-->
-<!--    ncdump -h synforc_1.nc shows-->
-<!--        netcdf synforc_1 {-->
-<!--        dimensions:-->
-<!--            xy = 1048576 ;       (! xy =xdim*ydim)-->
-<!--        variables:               (! the following variables related variances are defined in pesudo.nml. uwind,vwind are horizontal wind speed in u,v directions. The other variables are independent (not correlated). One can add/reduce variables on the specific needs.)-->
-<!--            float uwind(xy) ;    -->
-<!--            float vwind(xy) ;-->
-<!--            float snowfall(xy) ;-->
-<!--            float Qlw_in(xy) ;-->
-<!--            float sss(xy) ;-->
-<!--            float sst(xy) ;-->
-<!--        }-->
-<!--- In ./report folder, it saves a document records previous studies. The estimation of the amplification is in ./report/get_ratio.m or .py-->
-
-<!--Use run_script.sh for a fresh compilation and generating perturbations, where ensemble size is given. The code can run in sequential or parallel on HPC-->
