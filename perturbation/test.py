@@ -12,26 +12,26 @@ def sample_correlation(x1, x2):
   cov = np.sum(x1p * x2p)
   x1_norm = np.sum(x1p ** 2)
   x2_norm = np.sum(x2p ** 2)
-  corr = cov/np.sqrt(x1_norm * x2_norm)
+  norm = x1_norm * x2_norm
+  corr = cov/np.sqrt(norm)
   return corr
 
 
-vname = 'slp'
+vname = 'vwind'
 xdim = 900
-ydim = 800
+ydim = 900
 dx = 5
 dt = 6
 
 n_field = 40
 nens = 20
 
-outdir = 'output'
+outdir = './'
 
 pert = np.zeros((nens, n_field, ydim, xdim))
-for m in range(nens):
-    for n in range(n_field):
-        f = Dataset(outdir+'/{:03d}'.format(m+1)+'/synforc_{:04d}.nc'.format(n))
-        pert[m, n, :, :] = np.array(f[vname])
+for n in range(n_field):
+    f = Dataset(outdir+'/synforc_{:04d}.nc'.format(n))
+    pert[:, n, :, :] = np.array(f[vname])
 
 ##length in time/space to sample
 L = int(0.25*xdim)
@@ -45,7 +45,7 @@ T = int(0.5*n_field)
 tcorr = np.zeros(T)
 for t in range(T):
     samp1 = pert[:, 0:T, 0, :].flatten()
-    samp2 = pert[:, t:T+t, 0, :].flatten()
+    samp2 = np.roll(pert, -t, axis=1)[:, 0:T, 0, :].flatten()
     tcorr[t] = sample_correlation(samp1, samp2)
 
 plt.figure(figsize=(10,5))

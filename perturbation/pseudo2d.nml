@@ -8,6 +8,7 @@ dx = 5
 dt = 6
 
 n_sample = 50
+nens = 20
 
 n_field = 7
 
@@ -36,15 +37,15 @@ field(5)%vars = 50.
 field(5)%hradius = 250.
 field(5)%tradius = 48.
 
-field(6)%name = 'sss     '
+field(6)%name = 'sst     '
 field(6)%vars = 1.
 field(6)%hradius = 250.
 field(6)%tradius = 48.
 
-field(7)%name = 'sst     '
+field(7)%name = 'sss     '
 field(7)%vars = .01
 field(7)%hradius = 250.
 field(7)%tradius = 48.
 
-prsflg = 2
+prsflg = 1
 /

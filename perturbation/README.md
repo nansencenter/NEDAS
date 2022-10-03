@@ -21,7 +21,7 @@ dx = 5     !!grid resolution (km)
 dt = 6     !!time step interval (hours)
 
 n_sample = 10   !!number of perturbations to generate in time
-
+nens = 20     !!ensemble size
 n_field = 3   !!number of variables to be perturbed (max 100)
 
 field(1)%name = 'slp     '     !!variable name (len=8)
