@@ -80,7 +80,7 @@ end subroutine set_random_seed
 subroutine rand_update(synforc, i_step)
     use module_pseudo2d
     implicit none
-    integer :: ix, jy, i, j, i_step
+    integer :: ix, jy, i, j, m, i_step
     real :: alpha, autocorr, wspd, mtime
     real*8, dimension(idm,jdm,nens,n_field), intent(inout) :: synforc ! dimensional forcing_fields
     integer :: slp_id, uwind_id, vwind_id, taux_id, tauy_id
@@ -90,6 +90,7 @@ subroutine rand_update(synforc, i_step)
     real, parameter :: rhoa = 1.2, cdfac = 0.0012, wlat=60., plat=40.
     real :: fcor, wndvar, wcor, wprsfac
     real, dimension(idm,jdm,nens) :: slp,uwind,vwind,dpresx,dpresy,ucor,vcor,ueq,veq,cd_new,w4,wfact,wndfac,wndspd
+    real, dimension(idm,jdm) :: ens_mean, umean,vmean
 
     if (debug) write (*, '("pseudo-random forcing is active for ensemble generation")')
     if (debug) print *, 'model grid scale =', dx  !dx is the same as minscpx, km.
@@ -144,6 +145,12 @@ subroutine rand_update(synforc, i_step)
 
         !!apply temporal correlation
         ran = alpha*ran1 + sqrt(1-alpha**2)*ran
+
+        !!make sure zero mean
+        ens_mean = sum(ran,3)/real(nens)
+        do m=1,nens
+            ran(:,:,m) = ran(:,:,m)-ens_mean
+        end do
 
         synforc(:, :, :, i) = ran
 
@@ -219,16 +226,20 @@ subroutine rand_update(synforc, i_step)
         vwind = wcor*vcor + (1.-wcor)*veq
         wndspd = sqrt(uwind**2 + vwind**2)
 
-        synforc(:,:,:,uwind_id) = uwind
-        synforc(:,:,:,vwind_id) = vwind
-
         ! adding perturbation to wind field systemically increases wind speed.
         ! this increment of wind speed should be reduced with air drag coef.
         ! to aviod over estimate the wind forcing. air drag = air drag/mean(windspd)* mean(windspd+perturbations)
-        !      uwind = uwind - compute_mean(uwind)
-        !      vwind = vwind - compute_mean(vwind)
-        !!!YY: this shall be made sure when applying the perturbations
-        !      ensemble mean of perturbation shall be set to zero in that step
+        !!YY: make sure wind pert has zero mean
+        umean = sum(uwind,3)/real(nens)
+        vmean = sum(vwind,3)/real(nens)
+        do m=1,nens
+            uwind(:,:,m) = uwind(:,:,m) - umean
+            vwind(:,:,m) = vwind(:,:,m) - vmean
+        end do
+
+        synforc(:,:,:,uwind_id) = uwind
+        synforc(:,:,:,vwind_id) = vwind
+
 
         !! Drag,  New drag - Computed directly from winds now
         if (taux_id .gt. 0) then
