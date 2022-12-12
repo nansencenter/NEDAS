@@ -4,4 +4,4 @@ __pycache__
 slurm*
 *nc
 log/
-
+output

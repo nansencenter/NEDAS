@@ -1,31 +1,14 @@
 import numpy as np
+from constants import *
 
-def get_grid_from_msh(msh_file):
-    f = open(msh_file, 'r')
-    if "$MeshFormat" not in f.readline():
-        raise ValueError("expecting $MeshFormat -  not found")
-    version, fmt, size = f.readline().split()
-    if "$EndMeshFormat" not in f.readline():
-        raise ValueError("expecting $EndMeshFormat -  not found")
-    if "$PhysicalNames" not in f.readline():
-        raise ValueError("expecting $PhysicalNames -  not found")
-    num_physical_names = int(f.readline())
-    for _ in range(num_physical_names):
-        topodim, ident, name = f.readline().split()
-    if "$EndPhysicalNames" not in f.readline():
-        raise ValueError("expecting $EndPhysicalNames -  not found")
-    if "$Nodes" not in f.readline():
-        raise ValueError("expecting $Nodes -  not found")
-    num_nodes = int(f.readline())
-    lines = [f.readline().strip() for n in range(num_nodes)]
-    iccc =np.array([[float(v) for v in line.split()] for line in lines])
-    x, y, z = (iccc[:, 1], iccc[:, 2], iccc[:, 3])
-    if "$EndNodes" not in f.readline():
-        raise ValueError("expecting $EndNodes -  not found")
-    return x, y, z
-
-def gen_uniform_grid(xstart, xend, ystart, yend, dx, rot_ang):
-    RE = 6378273.
+def make_uniform_grid(xstart, xend, ystart, yend, dx, rot_ang):
+    "
+    Make a uniform grid in Polar stereographic grid
+    inputs: xstart, xend, ystart, yend: start and end points in x and y directions (in meters)
+            dx: grid spacing in meters
+            rot_ang: rotation angle of grid
+    output: x[:, :], y[:, :], z[:, :] in meters
+    "
     th = rot_ang *np.pi/180.
     xcoord = np.arange(xstart, xend, dx*1e3)
     ycoord = np.arange(ystart, yend, dx*1e3)
@@ -37,9 +20,9 @@ def gen_uniform_grid(xstart, xend, ystart, yend, dx, rot_ang):
 
 def lonlat_to_xyz(lon, lat):
     d2r = np.pi/180.
-    x = np.cos(lat*d2r)*np.cos(lon*d2r)
-    y = np.cos(lat*d2r)*np.sin(lon*d2r)
-    z = np.sin(lat*d2r)
+    x = RE*np.cos(lat*d2r)*np.cos(lon*d2r)
+    y = RE*np.cos(lat*d2r)*np.sin(lon*d2r)
+    z = RE*np.sin(lat*d2r)
     return x, y, z
 
 def xyz_to_lonlat(x, y, z):
@@ -84,3 +67,32 @@ def get_corners(x):
     x_corners[:, :, 3] = xt[1:nx+1, 0:ny]
     return x_corners
 
+def get_unstruct_grid_from_msh(msh_file):
+    "Get the unstructured grid from .msh files
+    output: x[:], y[:], z[:]
+    "
+    f = open(msh_file, 'r')
+    if "$MeshFormat" not in f.readline():
+        raise ValueError("expecting $MeshFormat -  not found")
+    version, fmt, size = f.readline().split()
+    if "$EndMeshFormat" not in f.readline():
+        raise ValueError("expecting $EndMeshFormat -  not found")
+    if "$PhysicalNames" not in f.readline():
+        raise ValueError("expecting $PhysicalNames -  not found")
+    num_physical_names = int(f.readline())
+    for _ in range(num_physical_names):
+        topodim, ident, name = f.readline().split()
+    if "$EndPhysicalNames" not in f.readline():
+        raise ValueError("expecting $EndPhysicalNames -  not found")
+    if "$Nodes" not in f.readline():
+        raise ValueError("expecting $Nodes -  not found")
+    num_nodes = int(f.readline())
+    lines = [f.readline().strip() for n in range(num_nodes)]
+    iccc =np.array([[float(v) for v in line.split()] for line in lines])
+    x, y, z = (iccc[:, 1], iccc[:, 2], iccc[:, 3])
+    if "$EndNodes" not in f.readline():
+        raise ValueError("expecting $EndNodes -  not found")
+    return x, y, z
+
+def rotate_wind():
+    return u, v
