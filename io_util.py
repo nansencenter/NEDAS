@@ -25,6 +25,9 @@ def write_grid_nc(filename, dim, varname, dat):
     return f
 
 def read_grid_nc(filename, varname):
+    '''
+    read gridded data from netcdf file
+    '''
     from netCDF4 import Dataset
     f = Dataset(filename, 'r')
     assert(varname in f.variables)
@@ -32,7 +35,29 @@ def read_grid_nc(filename, varname):
     return dat
 
 
-# def read
+# def write_nextsim_bin(filename, grid, varname, dat):
+#     from pynextsim import NextsimBin
+#     f = NextsimBin(filename)
+
+#     return f
+
+def read_nextsim_bin(filename, varname):
+    from pynextsim import NextsimBin
+    f = NextsimBin(filename)
+    if varname in ('M_VT', 'M_UM', 'M_UT'):
+        x = f.mesh_info.nodes_x
+        y = f.mesh_info.nodes_y
+        nnodes = f.mesh_info.num_nodes
+        dat = f.get_var(varname)
+        return x, y, dat[0:nnodes], dat[nnodes:2*nnodes]
+    else:
+        x, y = f.mesh_info.get_elements_xy()
+        dat = f.get_var(varname)
+        return x, y, dat
+        return x, y, dat
+
 
 
 # def write_grid_ab():
+
+# def read_grid_ab():
