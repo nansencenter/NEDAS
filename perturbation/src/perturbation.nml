@@ -1,4 +1,4 @@
-&pseudo2D
+&perturbation
 
 debug = .false.
 
@@ -7,7 +7,7 @@ ydim = 900
 dx = 5
 dt = 6
 
-n_sample = 50
+n_sample = 10
 nens = 20
 
 n_field = 7

@@ -1,6 +1,6 @@
 module module_random_field
 ! ----------------------------------------------------------------------------
-! -- read_nml         - reads pseudo2d.nml and sets forcing variances as well as
+! -- read_nml         - reads perturbation.nml and sets forcing variances as well as
 !                       spatial and temporal correlation lengths (private)
 ! -- rand_update      - main routine - updates the nondimensional perturbations
 !                       contained in variable "ran", and applies the
@@ -27,21 +27,21 @@ end type forcing_field
 
 type(forcing_field), dimension(100) :: field  !!max n_field = 100 for now
 
-namelist /pseudo2d/ debug, xdim, ydim, dx, dt, n_sample, nens, n_field, field, prsflg
+namelist /perturbation/ debug, xdim, ydim, dx, dt, n_sample, nens, n_field, field, prsflg
 
 real, allocatable, dimension(:,:,:) :: ran, ran1
 
 
 contains
 
-!!YY: read pseudo2d.nml for setting, variance/hradius/tradius are now set
+!!YY: read perturbation.nml for setting, variance/hradius/tradius are now set
 !!      separately for each varible field(i)
 subroutine read_nml()
     implicit none
     integer i
 
-    open (99, file='pseudo2d.nml', status='old', action='read')
-    read (99, NML=pseudo2d)
+    open (99, file='perturbation.nml', status='old', action='read')
+    read (99, NML=perturbation)
     close (99)
 
     !!fft likes 2^n grid points, so we use larger grid, then trim it to size

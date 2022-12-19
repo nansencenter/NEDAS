@@ -8,11 +8,11 @@ How to use:
 
 2. Compile the perturbation code: `make`
 
-3. Go to runtime directory, `ln -fs $NEDAS_DIR/perturbation/perturbation.exe .` and make changes to namelist `pseudo2d.nml` accordingly, then run the program `./perturbation.exe`. There will be `synforc_*.nc` files generated. The file contains perturbations for different variables with dimension (nens, ydim, xdim)
+3. Go to runtime directory, `ln -fs $NEDAS_DIR/perturbation/perturbation.exe .` and make changes to namelist `perturbation.nml` accordingly, then run the program `./perturbation.exe`. There will be `synforc_*.nc` files generated. The file contains perturbations for different variables with dimension (nens, ydim, xdim)
 
 List of namelist options:
 ```
-&pseudo2d
+&perturbation
 debug = .true.   !!switch on/off debug mode
 
 xdim = 800 !!num grid points in x
