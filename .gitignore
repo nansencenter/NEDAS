@@ -1,7 +1,7 @@
-*o
-*mod
+*.o
+*.mod
 __pycache__
 slurm*
-*nc
+*.nc
 log/
 output

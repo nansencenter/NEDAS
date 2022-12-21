@@ -1,34 +1,34 @@
 import numpy as np
-from constants import *
+import config.constants as cc
 
 def make_uniform_grid(xstart, xend, ystart, yend, dx, rot_ang):
-    "
+    '''
     Make a uniform grid in Polar stereographic grid
     inputs: xstart, xend, ystart, yend: start and end points in x and y directions (in meters)
             dx: grid spacing in meters
             rot_ang: rotation angle of grid
-    output: x[:, :], y[:, :], z[:, :] in meters
-    "
-    th = rot_ang *np.pi/180.
-    xcoord = np.arange(xstart, xend, dx*1e3)
-    ycoord = np.arange(ystart, yend, dx*1e3)
-    xi, yi = np.meshgrid(xcoord, ycoord)
+    output: x[:, :], y[:, :] in meters
+    '''
+    xcoord = np.arange(xstart, xend, dx)
+    ycoord = np.arange(ystart, yend, dx)
+    yi, xi = np.meshgrid(ycoord, xcoord)
+    th = rot_ang *np.pi/180.  ##rotate grid
     x = np.cos(th)*xi + np.sin(th)*yi
     y = -np.sin(th)*xi + np.cos(th)*yi
-    z = np.array(np.sqrt(RE**2 - x**2 - y**2))
-    return x, y, z
+    x += 0.5*dx  ##move coords to center of grid box
+    y += 0.5*dx
+    return x, y
 
-def lonlat_to_xyz(lon, lat):
+def lonlat_to_xy(lon, lat):
     d2r = np.pi/180.
-    x = RE*np.cos(lat*d2r)*np.cos(lon*d2r)
-    y = RE*np.cos(lat*d2r)*np.sin(lon*d2r)
-    z = RE*np.sin(lat*d2r)
-    return x, y, z
+    x = cc.RE*np.cos(lat*d2r)*np.cos(lon*d2r)
+    y = cc.RE*np.cos(lat*d2r)*np.sin(lon*d2r)
+    return x, y
 
-def xyz_to_lonlat(x, y, z):
+def xy_to_lonlat(x, y):
     r2d = 180./np.pi
-    radius = np.array(np.sqrt(pow(x, 2.)+pow(y, 2.)+pow(z, 2.)), dtype=float)
-    lat = np.arcsin(z/radius) * r2d
+    z = np.sqrt(cc.RE**2 - x**2 - y**2)
+    lat = np.arcsin(z/cc.RE) * r2d
     lon = np.arctan2(y, x) * r2d
     lon -= 360. * np.floor(lon / 360.)
     return lon, lat
@@ -68,9 +68,10 @@ def get_corners(x):
     return x_corners
 
 def get_unstruct_grid_from_msh(msh_file):
-    "Get the unstructured grid from .msh files
+    '''
+    Get the unstructured grid from .msh files
     output: x[:], y[:], z[:]
-    "
+    '''
     f = open(msh_file, 'r')
     if "$MeshFormat" not in f.readline():
         raise ValueError("expecting $MeshFormat -  not found")
@@ -94,5 +95,18 @@ def get_unstruct_grid_from_msh(msh_file):
         raise ValueError("expecting $EndNodes -  not found")
     return x, y, z
 
-def rotate_wind():
-    return u, v
+def rotate_vector(x1, y1, u, v):
+    import pynextsim.lib as nsl
+    from pyproj import Proj
+    dst_proj = Proj(proj='stere',
+                    a=cc.RE, b=cc.RE*np.sqrt(1-cc.ECC**2),
+                    lon_0=cc.LON_0, lat_0=cc.LAT_0, lat_ts=cc.LAT_TS)
+    u1, v1 = nsl.transform_vectors(dst_proj, x1, y1, u, v, fill_polar_hole=True)
+    return u1, v1
+
+
+##make reference grid from config_file
+x_ref, y_ref = make_uniform_grid(cc.XSTART, cc.XSTART+cc.NX*cc.DX,
+                                 cc.YSTART, cc.YSTART+cc.NY*cc.DX,
+                                 cc.DX, cc.LAT_0)
+

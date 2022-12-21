@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def rmse():
     return
 
@@ -17,4 +18,7 @@ def sample_correlation(x1, x2):
   norm = x1_norm * x2_norm
   corr = cov/np.sqrt(norm)
   return corr
+
+
+
 
