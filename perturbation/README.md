@@ -21,8 +21,10 @@ dx = 5     !!grid resolution (km)
 dt = 6     !!time step interval (hours)
 
 n_sample = 10   !!number of perturbations to generate in time
+i_sample = 0    !!current sample index in time
+                !!!time correlation is created through averaging with previous sample in time
+                !!!so if i_sample>0, the previous synforc is read in and mixed with new sample.
 nens = 20     !!ensemble size
-n_field = 3   !!number of variables to be perturbed (max 100)
 
 field(1)%name = 'slp     '     !!variable name (len=8)
 field(1)%vars = 10.            !!variance of perturbation (in their units)
@@ -33,16 +35,16 @@ field(2)%name = 'uwind   '     !!more variables can be added with field(i) for i
 field(2)%vars = 3.
 field(2)%hradius = 250.
 field(2)%tradius = 48.
-
 field(3)%name = 'vwind   '
 field(3)%vars = 3.
 field(3)%hradius = 250.
 field(3)%tradius = 48.
-
 field(4)%name = 'snowfall'
 field(4)%vars = 1.
 field(4)%hradius = 250.
 field(4)%tradius = 48.
+
+n_field = 4   !!number of variables to be perturbed (max 100)
 
 prsflg = 1    !!flag for computing wind perturbation: 0=uncorrelated with slp;
               !!  1=derived from slp perturbations (see module_random_field.F90 for details)

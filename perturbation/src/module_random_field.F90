@@ -12,7 +12,7 @@ module module_random_field
 implicit none
 
 logical :: debug ! Switches on/off verbose mode
-integer :: xdim, ydim, n_sample, n_field, nens
+integer :: xdim, ydim, n_sample, i_sample, n_field, nens
 integer :: dx, dt
 integer :: prsflg ! random forcing pressure flag
 integer :: idm, jdm
@@ -27,9 +27,9 @@ end type forcing_field
 
 type(forcing_field), dimension(100) :: field  !!max n_field = 100 for now
 
-namelist /perturbation/ debug, xdim, ydim, dx, dt, n_sample, nens, n_field, field, prsflg
+namelist /perturbation/ debug, xdim, ydim, dx, dt, n_sample, i_sample, nens, n_field, field, prsflg
 
-real, allocatable, dimension(:,:,:) :: ran, ran1
+real, allocatable, dimension(:,:,:) :: ran
 
 
 contains
@@ -77,12 +77,13 @@ end subroutine set_random_seed
 ! --- This routine updates the random forcing component, according to
 ! --- a simple correlation progression with target variance specified
 ! --- by vars, hradius, tradius.
-subroutine rand_update(synforc, i_step)
+subroutine rand_update(synforc, i_sample, synforc_prev)
     use module_pseudo2d
     implicit none
-    integer :: ix, jy, i, j, m, i_step
+    integer :: ix, jy, i, j, m, i_sample
     real :: alpha, autocorr, wspd, mtime
     real*8, dimension(idm,jdm,nens,n_field), intent(inout) :: synforc ! dimensional forcing_fields
+    real*8, dimension(idm,jdm,nens,n_field), intent(in) :: synforc_prev
     integer :: slp_id, uwind_id, vwind_id, taux_id, tauy_id
     real, parameter :: airdns  =  1.2
     real, parameter :: pi      =  3.1415926536
@@ -113,9 +114,7 @@ subroutine rand_update(synforc, i_step)
     do i=1,n_field !!loop over n_field
 
         allocate(ran(idm,jdm,nens))
-        allocate(ran1(idm,jdm,nens))
         ran  = 0.
-        ran1 = 0.
 
         rh = field(i)%hradius/dx  ! Decorrelation length (num of grid cells)
         rv = field(i)%tradius/dt  ! Temporal decorrelation scale (time steps)
@@ -131,30 +130,18 @@ subroutine rand_update(synforc, i_step)
         ! rv -> 0        , alpha -> 0 (when 1>autocorr>0)
         alpha = autocorr**(1/rv)
 
-        !!previous random field
-        if (i_step==0) then
-            call pseudo2d(ran1, idm, jdm, nens, rh, fnx, fny)
-            ran1 = sqrt(field(i)%vars)*ran1
-        else
-            ran1 = synforc(:, :, :, i)
-        end if
-
         !!new random field for current time step
         call pseudo2d(ran, idm, jdm, nens, rh, fnx, fny)
         ran = sqrt(field(i)%vars)*ran
 
         !!apply temporal correlation
-        ran = alpha*ran1 + sqrt(1-alpha**2)*ran
+        if (i_sample>0) then
+            ran = alpha*synforc_prev(:,:,:,i) + sqrt(1-alpha**2)*ran
+        endif
 
-        !!make sure zero mean
-        ens_mean = sum(ran,3)/real(nens)
-        do m=1,nens
-            ran(:,:,m) = ran(:,:,m)-ens_mean
-        end do
+        synforc(:,:,:,i) = ran
 
-        synforc(:, :, :, i) = ran
-
-        deallocate(ran, ran1)
+        deallocate(ran)
 
     end do  !!loop n_field
 
@@ -229,13 +216,6 @@ subroutine rand_update(synforc, i_step)
         ! adding perturbation to wind field systemically increases wind speed.
         ! this increment of wind speed should be reduced with air drag coef.
         ! to aviod over estimate the wind forcing. air drag = air drag/mean(windspd)* mean(windspd+perturbations)
-        !!YY: make sure wind pert has zero mean
-        umean = sum(uwind,3)/real(nens)
-        vmean = sum(vwind,3)/real(nens)
-        do m=1,nens
-            uwind(:,:,m) = uwind(:,:,m) - umean
-            vwind(:,:,m) = vwind(:,:,m) - vmean
-        end do
 
         synforc(:,:,:,uwind_id) = uwind
         synforc(:,:,:,vwind_id) = vwind
