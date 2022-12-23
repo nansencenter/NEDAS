@@ -20,7 +20,6 @@ ydim = 600 !!num grid points in y
 dx = 5     !!grid resolution (km)
 dt = 6     !!time step interval (hours)
 
-n_sample = 10   !!number of perturbations to generate in time
 i_sample = 0    !!current sample index in time
                 !!!time correlation is created through averaging with previous sample in time
                 !!!so if i_sample>0, the previous synforc is read in and mixed with new sample.

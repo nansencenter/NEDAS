@@ -37,6 +37,10 @@ NZ_ICE = int(os.environ['NZ_ICE'])
 NZ_ATM = int(os.environ['NZ_ATM'])
 NZ_OCE = int(os.environ['NZ_OCE'])
 
+##perturbation
+PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
+PERTURB_NUM_SCALE = int(os.environ['PERTURB_NUM_SCALE'])
+
 ##Observation
 
 ##DA parameters

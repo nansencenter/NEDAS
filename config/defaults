@@ -3,9 +3,9 @@
 #experiment design
 EXP_NAME=test
 DATE_START=202101010000    ##format ccyymmddHHII
-DATE_END=202101070000
+DATE_END=202101310000
 DATE_CYCLE_START=202101020000
-DATE_CYCLE_END=202101060000
+DATE_CYCLE_END=202101300000
 CYCLE_PERIOD=360           ##in minutes
 
 ##HPC settings, paths, env config
@@ -27,15 +27,17 @@ XSTART=-2500000    ##start,end x coord (m)
 XEND=3000000
 YSTART=-2000000       ##start,end y coord (m)
 YEND=2500000
+NX=$((($XEND-$XSTART)/$DX))
+NY=$((($YEND-$YSTART)/$DX))
 NZ_ICE=1
 NZ_ATM=35
 NZ_OCE=10
 
 ##initial ensemble perturbation
-PERTURB_VARIABLE=(slp uwind vwind sst sss)
-PERTURB_NUM_SCALE=4
-
-
+PERTURB_PARAM_DIR=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
+PERTURB_VARIABLE=(slp uwind vwind sst sss)  ##list of perturbed variables
+PERTURB_NUM_ENS=5  ##ensemble batch size for perturbation.exe (if memory allows)
+PERTURB_NUM_SCALE=4  ##number of scale components to perturb with separate params.
 
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently need changing a parameter, set it here
 
@@ -45,7 +47,7 @@ PERTURB_NUM_SCALE=4
 
 #DA parameters
 ANALYSIS_TYPE=EnKF  ##filter/smoother
-NUM_ENS=30  #ensemble size, number of members/realizations
+NUM_ENS=100  #ensemble size, number of members/realizations
 
 ##multiscale
 NUM_SCALE=1

@@ -19,7 +19,7 @@ program main_perturbation
     allocate(synforc(idm,jdm,nens,n_field))
     allocate(synforc_prev(idm,jdm,nens,n_field))
 
-    if(debug) print *, 'generating sample: ', i_sample, '/', n_sample
+    if(debug) print *, 'generating sample: ', i_sample
 
     !!!read previous synforc
     if(i_sample>0) then

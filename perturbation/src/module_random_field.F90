@@ -12,7 +12,7 @@ module module_random_field
 implicit none
 
 logical :: debug ! Switches on/off verbose mode
-integer :: xdim, ydim, n_sample, i_sample, n_field, nens
+integer :: xdim, ydim, i_sample, n_field, nens
 integer :: dx, dt
 integer :: prsflg ! random forcing pressure flag
 integer :: idm, jdm
@@ -27,7 +27,7 @@ end type forcing_field
 
 type(forcing_field), dimension(100) :: field  !!max n_field = 100 for now
 
-namelist /perturbation/ debug, xdim, ydim, dx, dt, n_sample, i_sample, nens, n_field, field, prsflg
+namelist /perturbation/ debug, xdim, ydim, dx, dt, i_sample, nens, n_field, field, prsflg
 
 real, allocatable, dimension(:,:,:) :: ran
 
