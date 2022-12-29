@@ -1,37 +1,20 @@
 import numpy as np
 import config.constants as cc
+import cartopy
 
-def make_uniform_grid(xstart, xend, ystart, yend, dx, rot_ang):
+def make_uniform_grid(xstart, xend, ystart, yend, dx):
     '''
     Make a uniform grid in Polar stereographic grid
     inputs: xstart, xend, ystart, yend: start and end points in x and y directions (in meters)
             dx: grid spacing in meters
-            rot_ang: rotation angle of grid
     output: x[:, :], y[:, :] in meters
     '''
     xcoord = np.arange(xstart, xend, dx)
     ycoord = np.arange(ystart, yend, dx)
-    yi, xi = np.meshgrid(ycoord, xcoord)
-    th = rot_ang *np.pi/180.  ##rotate grid
-    x = np.cos(th)*xi + np.sin(th)*yi
-    y = -np.sin(th)*xi + np.cos(th)*yi
+    y, x = np.meshgrid(ycoord, xcoord)
     x += 0.5*dx  ##move coords to center of grid box
     y += 0.5*dx
     return x, y
-
-def lonlat_to_xy(lon, lat):
-    d2r = np.pi/180.
-    x = cc.RE*np.cos(lat*d2r)*np.cos(lon*d2r)
-    y = cc.RE*np.cos(lat*d2r)*np.sin(lon*d2r)
-    return x, y
-
-def xy_to_lonlat(x, y):
-    r2d = 180./np.pi
-    z = np.sqrt(cc.RE**2 - x**2 - y**2)
-    lat = np.arcsin(z/cc.RE) * r2d
-    lon = np.arctan2(y, x) * r2d
-    lon -= 360. * np.floor(lon / 360.)
-    return lon, lat
 
 def get_theta(x, y):
     nx, ny = x.shape
@@ -108,5 +91,8 @@ def rotate_vector(x1, y1, u, v):
 ##make reference grid from config_file
 x_ref, y_ref = make_uniform_grid(cc.XSTART, cc.XSTART+cc.NX*cc.DX,
                                  cc.YSTART, cc.YSTART+cc.NY*cc.DX,
-                                 cc.DX, cc.LAT_0)
+                                 cc.DX)
+
+crs = cartopy.crs.NorthPolarStereo(central_longitude=cc.LON_0,
+                                   true_scale_latitude=cc.LAT_TS)
 

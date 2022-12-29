@@ -11,15 +11,16 @@ CYCLE_PERIOD=360           ##in minutes
 ##HPC settings, paths, env config
 HOSTPPN=128
 HOSTTYPE=betzy
+SCRATCH=/cluster/work/users/yingyue
 WORK_DIR=$SCRATCH/$EXP_NAME
 SCRIPT_DIR=$HOME/code/NEDAS
 CODE_DIR=$HOME/code
-DATA_DIR=$HOME/data
+DATA_DIR=$SCRATCH/data
 
 ##Reference grid (stereographic proj)
 RE=6378273         ##earth radius
 ECC=0.081816153    ##earth eccentricity
-LON_0=0.           ##center longitude
+LON_0=-45.         ##center longitude
 LAT_0=90.          ##center latitude
 LAT_TS=60.         ##true-scale latitude
 DX=3000            ##grid spacing (meter)
