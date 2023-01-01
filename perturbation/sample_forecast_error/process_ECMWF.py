@@ -9,14 +9,14 @@ import sys
 
 n_sample = int(sys.argv[1])
 
-t0 = datetime.datetime.strptime('202010110000', '%Y%m%d%H%M')
+t0 = datetime.datetime.strptime('201911010000', '%Y%m%d%H%M')
 dt_sample = datetime.timedelta(days=3)
 dt = datetime.timedelta(days=1)
 cycle_period = datetime.timedelta(minutes=cc.CYCLE_PERIOD)
 Dt = datetime.timedelta(days=10)
 varname = {'x_wind_10m':'10U',
-           'y_wind_10m':'10V',
-           'atm_pressure':'MSL'}
+           'y_wind_10m':'10V'}
+           # 'atm_pressure':'MSL'}
 
 dt_in_file = datetime.timedelta(hours=6)
 assert(dt_in_file <= dt)
@@ -43,10 +43,16 @@ for fcst_step in range(1, int(Dt/dt)+1):
 
     dat_orig = dict()
     for v in varname:
-        dat_orig[v] = nc.read(file2, varname[v])[t_index, :, :] - nc.read(file1, varname[v])[0, :, :]
+        f1 = nc.Dataset(file1)
+        f2 = nc.Dataset(file2)
+        dat_orig[v] = f2[varname[v]][t_index, :, :] - f1[varname[v]][0, :, :]
+        f1.close()
+        f2.close()
+        # dat_orig[v] = nc.read(file2, varname[v])[t_index, :, :] - nc.read(file1, varname[v])[0, :, :]
 
     dat = dat_orig
-    dat['x_wind_10m'], dat['y_wind_10m'] = grid.rotate_vector(x, y, dat_orig['x_wind_10m'], dat_orig['y_wind_10m'])
+    if 'x_wind_10m' in varname and 'y_wind_10m' in varname:
+        dat['x_wind_10m'], dat['y_wind_10m'] = grid.rotate_vector(x, y, dat_orig['x_wind_10m'], dat_orig['y_wind_10m'])
 
     out_path = cc.PERTURB_PARAM_DIR+'/sample_ECMWF/{:03d}/{:04d}'.format(n_sample, int(fcst_step*dt/cycle_period))
     if not os.path.exists(out_path):
