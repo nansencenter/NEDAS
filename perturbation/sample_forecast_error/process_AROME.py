@@ -9,14 +9,14 @@ import sys
 
 n_sample = int(sys.argv[1])
 
-t0 = datetime.datetime.strptime('202010210000', '%Y%m%d%H%M')
+t0 = datetime.datetime.strptime('201911010000', '%Y%m%d%H%M')
 dt_sample = datetime.timedelta(days=1.5)
 dt = datetime.timedelta(minutes=cc.CYCLE_PERIOD)
 cycle_period = datetime.timedelta(minutes=cc.CYCLE_PERIOD)
 Dt = datetime.timedelta(hours=66)
 varname = {'x_wind_10m':'x_wind_10m',
-           'y_wind_10m':'y_wind_10m',
-           'atm_pressure':'air_pressure_at_sea_level'}
+           'y_wind_10m':'y_wind_10m'}
+           # 'atm_pressure':'air_pressure_at_sea_level'}
 
 dt_in_file = datetime.timedelta(hours=1)
 assert(dt_in_file <= dt)
@@ -42,7 +42,12 @@ for fcst_step in range(1, int(Dt/dt)+1):
 
     dat_orig = dict()
     for v in varname:
-        dat_orig[v] = nc.read(file2, varname[v])[t_index, 0, :, :] - nc.read(file1, varname[v])[0, 0, :, :]
+        f1 = nc.Dataset(file1)
+        f2 = nc.Dataset(file2)
+        dat_orig[v] = f2[varname[v]][t_index, 0, :, :] - f1[varname[v]][0, 0, :, :]
+        f1.close()
+        f2.close()
+        # dat_orig[v] = nc.read(file2, varname[v])[t_index, 0, :, :] - nc.read(file1, varname[v])[0, 0, :, :]
 
     out_path = cc.PERTURB_PARAM_DIR+'/sample_AROME/{:03d}/{:04d}'.format(n_sample, int(fcst_step*dt/cycle_period))
     if not os.path.exists(out_path):
