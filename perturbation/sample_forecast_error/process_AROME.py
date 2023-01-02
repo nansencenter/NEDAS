@@ -9,7 +9,7 @@ import sys
 
 n_sample = int(sys.argv[1])
 
-t0 = datetime.datetime.strptime('201911010000', '%Y%m%d%H%M')
+t0 = datetime.datetime.strptime('202011010000', '%Y%m%d%H%M')
 dt_sample = datetime.timedelta(days=1.5)
 dt = datetime.timedelta(minutes=cc.CYCLE_PERIOD)
 cycle_period = datetime.timedelta(minutes=cc.CYCLE_PERIOD)
@@ -55,6 +55,6 @@ for fcst_step in range(1, int(Dt/dt)+1):
 
     for v in varname:
         dat_grid = np.zeros((1, ny, nx))
-        dat_grid[0, :, :] = dat_orig[v].T
+        dat_grid[0, :, :] = dat_orig[v]
         nc.write(out_path+'/perturb.nc', {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
 
