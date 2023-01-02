@@ -47,7 +47,6 @@ for fcst_step in range(1, int(Dt/dt)+1):
         dat_orig[v] = f2[varname[v]][t_index, 0, :, :] - f1[varname[v]][0, 0, :, :]
         f1.close()
         f2.close()
-        # dat_orig[v] = nc.read(file2, varname[v])[t_index, 0, :, :] - nc.read(file1, varname[v])[0, 0, :, :]
 
     out_path = cc.PERTURB_PARAM_DIR+'/sample_AROME/{:03d}/{:04d}'.format(n_sample, int(fcst_step*dt/cycle_period))
     if not os.path.exists(out_path):
