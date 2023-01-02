@@ -22,11 +22,11 @@ def fft_wn(n):
 ## the first two dimensions are horizontal (i, j)
 def get_wn(x):
     dims = x.shape
-    n = dims[0]
-    wn = fft_wn(dims[0])
-    wni = np.expand_dims(wn, 1)
+    ii = fft_wn(dims[0])
+    jj = fft_wn(dims[1])
+    wni = np.expand_dims(ii, 1)
     wni = np.repeat(wni, dims[1], axis=1)
-    wnj = np.expand_dims(wn, 0)
+    wnj = np.expand_dims(jj, 0)
     wnj = np.repeat(wnj, dims[0], axis=0)
     for d in range(2, len(dims)):  ##extra dimensions
         wni = np.expand_dims(wni, d)
