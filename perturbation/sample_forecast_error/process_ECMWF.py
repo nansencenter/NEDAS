@@ -30,7 +30,8 @@ file0 = filename(t0)
 lon, lat = np.meshgrid(nc.read(file0, 'lon'), nc.read(file0, 'lat'))
 tmp = grid.crs.transform_points(grid.cartopy.crs.PlateCarree(), lon, lat)
 x = tmp[:, :, 0]; y = tmp[:, :, 1]
-igi = IrregularGridInterpolator(x, y, grid.x_ref, grid.y_ref)
+x_ref, y_ref = grid.make_uniform_grid(-2500000, 3000000, -2000000, 2500000, 20000)
+igi = IrregularGridInterpolator(x, y, x_ref, y_ref)
 
 for fcst_step in range(1, int(Dt/dt)+1):
     t1 = t0 + n_sample*dt_sample
@@ -48,7 +49,6 @@ for fcst_step in range(1, int(Dt/dt)+1):
         dat_orig[v] = f2[varname[v]][t_index, :, :] - f1[varname[v]][0, :, :]
         f1.close()
         f2.close()
-        # dat_orig[v] = nc.read(file2, varname[v])[t_index, :, :] - nc.read(file1, varname[v])[0, :, :]
 
     dat = dat_orig
     if 'x_wind_10m' in varname and 'y_wind_10m' in varname:
