@@ -1,6 +1,7 @@
 *.o
 *.mod
 __pycache__
+.ipynb_checkpoints
 slurm*
 *.nc
 log/
