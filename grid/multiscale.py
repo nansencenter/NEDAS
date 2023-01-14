@@ -44,6 +44,19 @@ def lowpass_resp(Kh, k1, k2):
     r[ind] = np.cos((Kh[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
     return r
 
+def get_scale_resp(Kh, kr, s):
+    ns = len(kr)
+    resp = np.zeros(Kh.shape)
+    if ns > 1:
+        if s == 0:
+            resp = lowpass_resp(Kh, kr[s], kr[s+1])
+        if s == ns-1:
+            resp = 1 - lowpass_resp(Kh, kr[s-1], kr[s])
+        if s > 0 and s < ns-1:
+            resp = lowpass_resp(Kh, kr[s], kr[s+1]) - lowpass_resp(Kh, kr[s-1], kr[s])
+    return resp
+
+
 def get_scale(x, kr, s):
     xk = grid2spec(x)
     xkout = xk.copy()
@@ -51,12 +64,7 @@ def get_scale(x, kr, s):
     if ns > 1:
         kx, ky = get_wn(x)
         Kh = np.sqrt(kx**2 + ky**2)
-        if s == 0:
-            xkout = xk * lowpass_resp(Kh, kr[s], kr[s+1])
-        if s == ns-1:
-            xkout = xk * (1 - lowpass_resp(Kh, kr[s-1], kr[s]))
-        if s > 0 and s < ns-1:
-            xkout = xk * (lowpass_resp(Kh, kr[s], kr[s+1]) - lowpass_resp(Kh, kr[s-1], kr[s]))
+        xkout = xk * get_scale_resp(Kh, kr, s)
     return spec2grid(xkout)
 
 ##power spectra
