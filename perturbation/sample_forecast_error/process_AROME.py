@@ -29,7 +29,11 @@ def filename(t):
 file0 = filename(t0)
 lon = nc.read(file0, 'longitude')
 lat = nc.read(file0, 'latitude')
-nx, ny = lat.shape
+ny, nx = lat.shape
+
+out_path = cc.PERTURB_PARAM_DIR+'/sample_AROME/{:03d}/'.format(n_sample)
+if not os.path.exists(out_path):
+    os.makedirs(out_path)
 
 for fcst_step in range(1, int(Dt/dt)+1):
     t1 = t0 + n_sample*dt_sample
@@ -40,20 +44,29 @@ for fcst_step in range(1, int(Dt/dt)+1):
     t_index = int(fcst_step*dt/dt_in_file)
     print('sample ', n_sample, 'fcst_step=', int(fcst_step*dt/cycle_period), t1, t2, t_index)
 
+      f1 = nc.Dataset(file1)
+      f2 = nc.Dataset(file2)
     dat_orig = dict()
     for v in varname:
-        f1 = nc.Dataset(file1)
-        f2 = nc.Dataset(file2)
+        dat_orig[v] = f2[varname[v]][0, 0, :, :] ##for reference
         dat_orig[v] = f1[varname[v]][t_index, 0, :, :] - f2[varname[v]][0, 0, :, :]
-        f1.close()
-        f2.close()
-
-    out_path = cc.PERTURB_PARAM_DIR+'/sample_AROME/{:03d}/'.format(n_sample)
-    if not os.path.exists(out_path):
-            os.makedirs(out_path)
+      f1.close()
+      f2.close()
 
     for v in varname:
         dat_grid = np.zeros((1, ny, nx))
         dat_grid[0, :, :] = dat_orig[v]
         nc.write(out_path+'/perturb_{:04d}.nc'.format(int(fcst_step*dt/cycle_period)), {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
 
+
+##get reference at beginning
+t = t0 + n_sample*dt_sample
+file = filename(t)
+f = nc.Dataset(file)
+dat_orig = dict()
+for v in varname:
+    dat_orig[v] = f[varname[v]][0, 0, :, :]
+    dat_grid = np.zeros((1, ny, nx))
+    dat_grid[0, :, :] = dat_orig[v]
+    nc.write(out_path+'/reference.nc', {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
+f.close()
