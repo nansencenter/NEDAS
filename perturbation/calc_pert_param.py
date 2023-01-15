@@ -19,7 +19,7 @@ cp = cc.CYCLE_PERIOD/60.
 
 _, ny, nx = nc.read(outdir+'/{:03d}/perturb_{:04d}.nc'.format(1, int(dt/cp)), vname).shape
 domain_size = np.maximum(nx, ny) * dx
-krange = domain_size/np.array([2000., 500., 150., 40.])
+krange = domain_size/np.array([1600., 800, 400., 200., 100, 50.])
 
 plt.figure(figsize=(15,15))
 ns = len(krange)
@@ -81,5 +81,5 @@ for s in range(ns):
     ax.set_xlabel('lag (h)')
     ax.grid()
 
-plt.savefig(outdir+'/fig_correlation.pdf')
+plt.savefig(outdir+'/fig_pert_param.pdf')
 
