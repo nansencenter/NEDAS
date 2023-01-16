@@ -85,13 +85,13 @@ while t < t_end:
     ##write output
     time = float((t - datetime.datetime(1900,1,1,0,0,0))/datetime.timedelta(days=1)) + np.arange(n_per_day)/n_per_day
     nc.write(out_file(t), {'time':0}, 'time', time, {'standard_name':'time', 'long_name':'time', 'units':'days since 1900-01-01 00:00:00', 'calendar':'standard'})
-    nc.write(out_file(m_index, t), {'y':ny}, 'y', grid.y_ref[0, :], {'standard_name':'projection_y_coordinate', 'units':'m', 'axis':'Y'})
-    nc.write(out_file(m_index, t), {'x':nx}, 'x', grid.x_ref[:, 0], {'standard_name':'projection_x_coordinate', 'units':'m', 'axis':'X'})
+    nc.write(out_file(t), {'y':ny}, 'y', grid.y_ref[0, :], {'standard_name':'projection_y_coordinate', 'units':'m', 'axis':'Y'})
+    nc.write(out_file(t), {'x':nx}, 'x', grid.x_ref[:, 0], {'standard_name':'projection_x_coordinate', 'units':'m', 'axis':'X'})
 
     for v in varname:
-        nc.write(out_file(m_index, t), {'time':0, 'y':ny, 'x':nx}, v, dat_out[v], {'long_name':long_name[v], 'standard_name':v, 'units':units[v], 'grid_mapping':'projection_stereo'})
+        nc.write(out_file(t), {'time':0, 'y':ny, 'x':nx}, v, dat_out[v], {'long_name':long_name[v], 'standard_name':v, 'units':units[v], 'grid_mapping':'projection_stereo'})
 
-    nc.write(out_file(m_index, t), {'y':ny, 'x':nx}, 'longitude', longitude, {'standard_name':'longitude', 'long_name':'longitude', 'units':'degree_east'})
-    nc.write(out_file(m_index, t), {'y':ny, 'x':nx}, 'latitude', latitude, {'standard_name':'latitude', 'long_name':'latitude', 'units':'degree_north'})
+    nc.write(out_file(t), {'y':ny, 'x':nx}, 'longitude', longitude, {'standard_name':'longitude', 'long_name':'longitude', 'units':'degree_east'})
+    nc.write(out_file(t), {'y':ny, 'x':nx}, 'latitude', latitude, {'standard_name':'latitude', 'long_name':'latitude', 'units':'degree_north'})
 
     t += datetime.timedelta(days=1)
