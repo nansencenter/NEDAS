@@ -15,6 +15,7 @@ DATE_CYCLE_END=os.environ['DATE_CYCLE_END']
 CYCLE_PERIOD=int(os.environ['CYCLE_PERIOD'])
 
 ##HPC settings, paths, env config
+SCRATCH=os.environ['SCRATCH']
 WORK_DIR=os.environ['WORK_DIR']
 SCRIPT_DIR=os.environ['SCRIPT_DIR']
 CODE_DIR=os.environ['CODE_DIR']
@@ -40,6 +41,7 @@ NZ_OCE = int(os.environ['NZ_OCE'])
 ##perturbation
 PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
 PERTURB_NUM_SCALE = int(os.environ['PERTURB_NUM_SCALE'])
+PERTURB_NUM_ENS = int(os.environ['PERTURB_NUM_ENS'])
 
 ##Observation
 
