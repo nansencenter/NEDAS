@@ -5,6 +5,7 @@
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=32
 #SBATCH --qos=devel
+#SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/%j
 
 source ~/.bashrc
 ##other initial environment src code
