@@ -185,7 +185,7 @@ contains
          b1 = 0.1e-06
          tol = 0.1e-10
          call zeroin(func2D, sigma, a1, b1, tol, rh, dx, fval, n1, n2)
-
+         
          sigma2 = sigma**2
          sum = 0.0
          do p = -n2/2 + 1, n2/2

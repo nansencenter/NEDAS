@@ -3,9 +3,8 @@
 . $CONFIG_FILE
 
 total_period=`diff_time $DATE_START $DATE_END`
-num_cycle=$((total_period/$CYCLE_PERIOD))
 
-param_path=$1
+scale=$1
 i_sample=$2
 
 cat << EOF
@@ -18,7 +17,6 @@ ydim = $((($YEND-$YSTART)/$DX))
 dx = $((DX/1000))
 dt = $((CYCLE_PERIOD/60))
 
-n_sample = $num_cycle
 i_sample = $i_sample
 nens = $PERTURB_NUM_ENS
 
@@ -27,11 +25,10 @@ EOF
 n_field=0
 for field in ${PERTURB_VARIABLE[@]}; do
     n_field=$((n_field+1))
-    param_dir=$param_path/`padzero $i_sample 3`/$field
     echo "field($n_field)%name = '`printf '%-8s' $field`'"
-    echo "field($n_field)%vars = `cat $param_dir/vars`"
-    echo "field($n_field)%hradius = `cat $param_dir/hradius`"
-    echo "field($n_field)%tradius = `cat $param_dir/tradius`"
+    echo "field($n_field)%vars = `./param.sh $field vars $scale $i_sample`"
+    echo "field($n_field)%hradius = `./param.sh $field hradius $scale $i_sample`"
+    echo "field($n_field)%tradius = `./param.sh $field tradius $scale $i_sample`"
 done
 
 cat << EOF

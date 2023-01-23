@@ -47,7 +47,7 @@ subroutine read_nml()
     !!fft likes 2^n grid points, so we use larger grid, then trim it to size
     idm = int(2.**ceiling(log(real(xdim))/log(2.)))
     jdm = int(2.**ceiling(log(real(ydim))/log(2.)))
-    if (debug) write(*, '(A,I5,A,I5,A,I5,A,I5,A)') 'xdim=', xdim, ' ydm=', ydim, ' enlarged to idm=', idm, ' jdm=', jdm, ' for generating synforc'
+    if (debug) write(*, '(A,I5,A,I5,A,I5,A,I5,A)') 'xdim=', xdim, ' ydm=', ydim, ' enlarged to idm=', idm, ' jdm=', jdm, ' for generating perturb'
 
     if (debug) then
         do i=1,n_field
@@ -77,18 +77,18 @@ end subroutine set_random_seed
 ! --- This routine updates the random forcing component, according to
 ! --- a simple correlation progression with target variance specified
 ! --- by vars, hradius, tradius.
-subroutine rand_update(synforc, i_sample, synforc_prev)
+subroutine rand_update(perturb, i_sample, perturb_prev)
     use module_pseudo2d
     implicit none
     integer :: ix, jy, i, j, m, i_sample
     real :: alpha, autocorr, wspd, mtime
-    real*8, dimension(idm,jdm,nens,n_field), intent(inout) :: synforc ! dimensional forcing_fields
-    real*8, dimension(idm,jdm,nens,n_field), intent(in) :: synforc_prev
+    real*8, dimension(idm,jdm,nens,n_field), intent(inout) :: perturb ! dimensional forcing_fields
+    real*8, dimension(idm,jdm,nens,n_field), intent(in) :: perturb_prev
     integer :: slp_id, uwind_id, vwind_id, taux_id, tauy_id
     real, parameter :: airdns  =  1.2
     real, parameter :: pi      =  3.1415926536
     real, parameter :: radtodeg= 57.2957795
-    real, parameter :: rhoa = 1.2, cdfac = 0.0012, wlat=60., plat=40.
+    real, parameter :: rhoa = 1.2, cdfac = 0.0012, wlat=80., plat=80.
     real :: fcor, wndvar, wcor, wprsfac
     real, dimension(idm,jdm,nens) :: slp,uwind,vwind,dpresx,dpresy,ucor,vcor,ueq,veq,cd_new,w4,wfact,wndfac,wndspd
     real, dimension(idm,jdm) :: ens_mean, umean,vmean
@@ -136,10 +136,10 @@ subroutine rand_update(synforc, i_sample, synforc_prev)
 
         !!apply temporal correlation
         if (i_sample>0) then
-            ran = alpha*synforc_prev(:,:,:,i) + sqrt(1-alpha**2)*ran
+            ran = alpha*perturb_prev(:,:,:,i) + sqrt(1-alpha**2)*ran
         endif
 
-        synforc(:,:,:,i) = ran
+        perturb(:,:,:,i) = ran
 
         deallocate(ran)
 
@@ -173,21 +173,19 @@ subroutine rand_update(synforc, i_sample, synforc_prev)
         end if
 
         wndvar = field(uwind_id)%vars  !!if field(vwind_id)%vars is different it is discarded
-        slp = synforc(:, :, :, slp_id)
-
-        wprsfac = 1.
+        slp = perturb(:, :, :, slp_id)
 
         fcor = 2*sin(plat/radtodeg)*2*pi/86400; ! Coriolis Constant
 
-        ! typical pressure gradient
+        !! typical pressure gradient
+        !! but should give wind according to wndspd variance
+        !! this is a correction factor for that
         wprsfac = 100.*sqrt(field(slp_id)%vars)/(rh*dx)
-
-        ! results in this typical wind magnitude
         wprsfac = wprsfac/fcor
+        !wprsfac = sqrt(wndvar)/(3*wprsfac)   ! 3*wprsfac is tuned here, compared with wprsfac used in https://svn.nersc.no/hycom/browser/HYCOM_2.2.37/CodeOnly/src_2.2.37/nersc/mod_random_forcing.F
 
-        ! but should give wind according to wndspd variance
-        ! this is a correction factor for that
-        wprsfac = sqrt(wndvar)/(3*wprsfac)   ! 3*wprsfac is tuned here, compared with wprsfac used in https://svn.nersc.no/hycom/browser/HYCOM_2.2.37/CodeOnly/src_2.2.37/nersc/mod_random_forcing.F
+        !!YY: no more ad hoc tuning, just specified by namelist "vars"
+        wprsfac = wndvar/wprsfac
 
         ! Pressure gradient. Coversion from mBar to Pa
         dpresx(2:idm,:,:) = 100.*(slp(2:idm,:,:) - slp(1:idm-1,:,:))/dx*wprsfac
@@ -207,7 +205,10 @@ subroutine rand_update(synforc, i_sample, synforc_prev)
         veq = -dpresy/abs(fcor)
 
         ! Weighting between coriiolis/equator solution
-        wcor = sin(wlat)/wlat*pi*0.5
+        !!YY: this doesn't look right: wlat is in degrees unit
+        !!and there will be devide by zero for wlat=0
+        !wcor = sin(wlat)/wlat*pi*0.5
+        wcor = sin(wlat*pi/180.)
 
         uwind = wcor*ucor + (1.-wcor)*ueq
         vwind = wcor*vcor + (1.-wcor)*veq
@@ -217,16 +218,16 @@ subroutine rand_update(synforc, i_sample, synforc_prev)
         ! this increment of wind speed should be reduced with air drag coef.
         ! to aviod over estimate the wind forcing. air drag = air drag/mean(windspd)* mean(windspd+perturbations)
 
-        synforc(:,:,:,uwind_id) = uwind
-        synforc(:,:,:,vwind_id) = vwind
+        perturb(:,:,:,uwind_id) = uwind
+        perturb(:,:,:,vwind_id) = vwind
 
 
         !! Drag,  New drag - Computed directly from winds now
         if (taux_id .gt. 0) then
             wndfac=(1.+sign(1.,wndspd-11.))*.5
             cd_new=(0.49+0.065*wndspd)*1.0e-3*wndfac+cdfac*(1.-wndfac)
-            synforc(:,:,:,taux_id) = uwind*wndspd*airdns*cd_new
-            synforc(:,:,:,tauy_id) = vwind*wndspd*airdns*cd_new
+            perturb(:,:,:,taux_id) = uwind*wndspd*airdns*cd_new
+            perturb(:,:,:,tauy_id) = vwind*wndspd*airdns*cd_new
         end if
 
     end if ! prsflg
