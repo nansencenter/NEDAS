@@ -1,14 +1,19 @@
 #!/bin/bash
 
+. $CONFIG_FILE
+
 nnodes=$1
 ncpus=$2
-offset_node=$3
+offset_batch=$3
 shift 3
 exe_command=$@
 
 
 ###this works on Betzy
-srun -N $nnodes -n $ncpus -r $offset_node --mpi=pmi2 $exe_command
+if [[ $HOSTTYPE == "betzy" ]]; then
+    offset_node=$((offset_batch/$SLURM_NTASKS_PER_NODE))
+    srun -N $nnodes -n $ncpus -r $offset_node --exact $exe_command
+fi
 
 
 ###The manual solution, just in case:
