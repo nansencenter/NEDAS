@@ -6,14 +6,15 @@ from pynextsim.irregular_grid_interpolator import IrregularGridInterpolator
 from pyproj import Proj
 from datetime import datetime, timedelta
 import os
+import sys
 
 def arome_filename(t):
     return 'https://thredds.met.no/thredds/dodsC/aromearcticarchive/{:04d}/{:02d}/{:02d}/arome_arctic_full_2_5km_{:04d}{:02d}{:02d}T{:02d}Z.nc'.format(t.year, t.month, t.day, t.year, t.month, t.day, t.hour)
 
 def ec_filename(t):
-    return '/cluster/work/users/yingyue/data/ECMWF_forecast_arctic/{:04d}/{:02d}/ec2_start{:04d}{:02d}{:02d}.nc'.format(t.year, t.month, t.year, t.month, t.day)
+    return '/Users/yueng/scratch/data/ECMWF_forecast_arctic/{:04d}/{:02d}/ec2_start{:04d}{:02d}{:02d}.nc'.format(t.year, t.month, t.year, t.month, t.day)
 
-out_path = '/cluster/work/users/yingyue/data/training'
+out_path = '/Users/yueng/scratch/data/training'
 
 t0 = datetime.strptime('202101010000', '%Y%m%d%H%M')
 dt = timedelta(days=1)
@@ -35,8 +36,9 @@ nx, ny = x_ref.shape
 igi = IrregularGridInterpolator(x, y, x_ref, y_ref)
 
 
-for n in range(1000):
-    t = t0 + n*dt
+for n in range(int(sys.argv[1]), int(sys.argv[2])):
+    t = t0 + int(sys.argv[3])* n*dt
+    print(n, t)
 
     ##read arome data and output to hr
     f = nc.Dataset(arome_filename(t))
@@ -45,7 +47,7 @@ for n in range(1000):
         dat_orig[v] = f[v][0, 0, :, :]
         dat_grid = np.zeros((1, ny, nx))
         dat_grid[0, :, :] = dat_orig[v]
-        nc.write(out_path+'/hr/{:03d}.nc'.format(n), {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
+        nc.write(out_path+'/hr/a{:03d}.nc'.format(n), {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
     f.close()
 
     ##read ecmwf data and output to lr
@@ -63,5 +65,5 @@ for n in range(1000):
     for v in varname:
         dat_grid = np.zeros((1, ny, nx))
         dat_grid[0, :, :] = igi.interp_field(dat[v]).T
-        nc.write(out_path+'/lr/{:03d}.nc'.format(n), {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
+        nc.write(out_path+'/lr/a{:03d}.nc'.format(n), {'t':1, 'y':ny, 'x':nx}, v, dat_grid)
 
