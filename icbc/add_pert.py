@@ -2,7 +2,6 @@ import numpy as np
 import config.constants as cc
 import grid
 import grid.io.netcdf as nc
-import grid.multiscale as ms
 import datetime
 import sys
 import os
@@ -54,7 +53,7 @@ while t < t_end:
             for s in range(ns):
                 elapse_time = n_index*cc.CYCLE_PERIOD/60
                 frac = np.maximum(0.0, 1.0 - elapse_time/growth_period[s])
-                mean[0, :, :] += ms.get_scale(dat[v][n, :, :], krange, s) * frac
+                mean[0, :, :] += grid.get_scale(dat[v][n, :, :], krange, s) * frac
             pert = nc.Dataset(pert_file(m_index, n_index))[varname_pert[v]][0, :, :]
             dat_out[v][n, :, :] = relax_factor * (mean + pert - dat[v][n, :, :]) + dat[v][n, :, :]
 

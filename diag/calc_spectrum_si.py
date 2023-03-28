@@ -2,7 +2,7 @@ import numpy as np
 import config.constants as cc
 import grid
 import grid.io.netcdf as nc
-from grid.multiscale import pwrspec2d
+from grid import pwrspec2d
 import datetime
 import sys
 import os
