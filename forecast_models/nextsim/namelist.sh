@@ -9,7 +9,7 @@ filename=small_arctic_10km.msh
 [setup]
 ice-type=topaz
 ocean-type=topaz
-atmosphere-type=generic_ps
+atmosphere-type=$ATMOS_TYPE
 bathymetry-type=etopo
 use_assimilation=false
 dynamics-type=bbm
@@ -57,6 +57,16 @@ datetime_in_filename=true
 exporter_path=.
 export_before_regrid=true
 export_after_regrid=true
+
+[moorings]
+use_moorings=true
+grid_type=regular
+spacing=3
+output_timestep=1
+variables=conc
+variables=thick
+variables=velocity
+variables=wind
 
 [debugging]
 check_fields_fast=false
