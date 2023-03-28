@@ -1,10 +1,10 @@
 ####All settings and their default values
 
 #experiment design
-EXP_NAME=test
+EXP_NAME=control
 DATE_START=200701010000    ##format ccyymmddHHII
-DATE_END=200701230000
-DATE_CYCLE_START=200701030000
+DATE_END=200701210000
+DATE_CYCLE_START=200701040000
 DATE_CYCLE_END=200701190000
 CYCLE_PERIOD=360           ##in minutes
 
@@ -23,10 +23,10 @@ ECC=0.081816153    ##earth eccentricity
 LON_0=-45.         ##center longitude
 LAT_0=90.          ##center latitude
 LAT_TS=60.         ##true-scale latitude
-DX=3000            ##grid spacing (meter)
+DX=5000            ##grid spacing (meter)
 XSTART=-2500000    ##start,end x coord (m)
 XEND=2500000
-YSTART=-2000000       ##start,end y coord (m)
+YSTART=-2500000       ##start,end y coord (m)
 YEND=2500000
 NX=$((($XEND-$XSTART)/$DX))
 NY=$((($YEND-$YSTART)/$DX))
@@ -38,7 +38,7 @@ NZ_OCE=10
 PERTURB_PARAM_DIR=$SCRIPT_DIR/perturbation  ##where to find vars,hradius,tradius params
 PERTURB_VARIABLE=(slp uwind vwind)  ##list of perturbed variables
 PERTURB_NUM_ENS=5  ##ensemble batch size for perturbation.exe (if memory allows)
-PERTURB_NUM_SCALE=7  ##number of scale components to perturb with separate params.
+PERTURB_NUM_SCALE=8  ##number of scale components to perturb with separate params.
 
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently need changing a parameter, set it here
 
@@ -48,7 +48,7 @@ PERTURB_NUM_SCALE=7  ##number of scale components to perturb with separate param
 
 #DA parameters
 ANALYSIS_TYPE=EnKF  ##filter/smoother
-NUM_ENS=40  #ensemble size, number of members/realizations
+NUM_ENS=10  #ensemble size, number of members/realizations
 
 ##multiscale
 NUM_SCALE=1

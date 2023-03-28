@@ -1,15 +1,20 @@
 import numpy as np
+import config.constants as cc
+import grid
+import grid.io.netcdf as nc
 from pynextsim import NextsimBin
 import bamg
 import datetime
 import sys
+import os
 
 ##date range
-t1 = datetime.datetime(2021, 1, 1, 0, 0, 0)
+t1 = datetime.datetime(2007, 2, 1, 6, 0, 0)
 dt = datetime.timedelta(hours=6)
-nt = 41
-x, y = np.load('output/grid.npy')
-ny, nx = x.shape
+nt = 76
+x = grid.x_ref
+y = grid.y_ref
+nx, ny = x.shape
 
 outdir=sys.argv[1]  ##nextsim output dir
 v=int(sys.argv[2]) ##var id
@@ -19,7 +24,7 @@ vname = ('Concentration', 'Thickness', 'M_VT', 'Damage', 'deform')[v]
 voname = ('sic', 'sit', 'siu', 'damage', 'deform')[v]
 
 ##read bin files
-out = np.zeros((2, ny, nx))
+out = np.zeros((2, nx, ny))
 
 for n in range(nt):
     t = t1 + n*dt
@@ -47,8 +52,14 @@ for n in range(nt):
     if vname != 'M_VT' and vname != 'deform':
         out[0, :, :] = tmp[vname]
 
-    ##output npy file
-    np.save(outdir+'/'+voname+'_'+t.strftime('%Y%m%dT%H%M%SZ')+'.npy', out[0, :, :])
+    ##output nc file
+    out_path = outdir+'/output/'
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    out_dat = np.zeros((1, ny, nx))
+    out_dat[0, :, :] = out[0, :, :].T
+    nc.write(out_path+t.strftime('%Y%m%dT%H%M%SZ')+'.nc', {'t':0, 'y':ny, 'x':nx}, voname, out_dat)
     if vname == 'M_VT':
-        np.save(outdir+'/siv'+'_'+t.strftime('%Y%m%dT%H%M%SZ')+'.npy', out[1, :, :])
+        out_dat[0, :, :] = out[1, :, :].T
+        nc.write(out_path+t.strftime('%Y%m%dT%H%M%SZ')+'.nc', {'t':0, 'y':ny, 'x':nx}, 'siv', out_dat)
 

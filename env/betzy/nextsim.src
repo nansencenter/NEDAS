@@ -8,9 +8,6 @@ ml load Boost/1.71.0-iimpi-2019b
 ml load netCDF/4.7.1-iimpi-2019b
 ml load FFTW/3.3.8-intel-2019b    # enkf/perturbation
 ml load imkl/2019.5.281-iimpi-2019b
-ml load CDO/1.9.8-intel-2019b         #cdo for interpolate DA analysis result to restart file.
-ml load ncview/2.1.7-intel-2019b
-ml load NCO/4.9.3-intel-2019b
 ml load iimpi/2019b
 
 # Linking module and neXtSIM envinronment variables

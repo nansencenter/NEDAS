@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account=nn2993k
-#SBATCH --job-name=run_cycle
-#SBATCH --time=0-03:30:00
-#SBATCH --nodes=10
+#SBATCH --job-name=forecast
+#SBATCH --time=0-04:00:00
+#SBATCH --nodes=5
 #SBATCH --ntasks-per-node=128
 #SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/%j
 
@@ -11,11 +11,11 @@ source ~/.bashrc
 
 #load configuration files, functions, parameters
 export SCRIPT_DIR=$HOME/code/NEDAS
-export CONFIG_FILE=$SCRIPT_DIR/config/test_cases/control
+export CONFIG_FILE=$SCRIPT_DIR/config/test_cases/wind_era5
 . $CONFIG_FILE
 . util.sh
 
-casename=wind10m_err1.0
+casename=$EXP_NAME
 
 source $SCRIPT_DIR/env/betzy/nextsim.src
 
@@ -23,7 +23,7 @@ export DATE=$DATE_START
 
 ntot=$SLURM_NNODES
 ncnt=0
-for m in `seq 31 $NUM_ENS`; do
+for m in `seq 1 $NUM_ENS`; do
     mem=`padzero $m 3`
     rundir=/cluster/work/users/yingyue/nextsim_ens_runs/$casename/$mem
     mkdir -p $rundir
@@ -35,7 +35,13 @@ for m in `seq 31 $NUM_ENS`; do
     cd data
     ln -fs /cluster/projects/nn2993k/sim/data/BATHYMETRY/* .
     ln -fs /cluster/work/users/yingyue/data/TOPAZ4/TP4DAILY_* .
-    ln -fs /cluster/work/users/yingyue/data/GENERIC_PS_ATM/$casename/$mem GENERIC_PS_ATM
+
+    if [[ $ATMOS_TYPE == "era5" ]]; then
+        ln -fs /cluster/work/users/yingyue/data/ERA5/$mem ERA5
+    fi
+    if [[ $ATMOS_TYPE == "generic_ps" ]]; then
+        ln -fs /cluster/work/users/yingyue/data/GENERIC_PS_ATM/$casename/$mem GENERIC_PS_ATM
+    fi
     cd ..
 
     export NEXTSIM_DATA_DIR=`pwd`/data

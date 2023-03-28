@@ -32,13 +32,13 @@ n_batch=$((NUM_ENS/$PERTURB_NUM_ENS))
 total_period=`diff_time $DATE_START $DATE_END`
 n_cycle=$((total_period/$CYCLE_PERIOD))
 
-for t in `seq 0 90`; do
+for t in `seq 57 $n_cycle`; do
     ncnt=0
-    ntot=$SLURM_NTASKS
+    ntot=40 #$SLURM_NTASKS
     for m in `seq 1 $n_batch`; do
         mkdir -p mem`padzero $m 3`
         cd mem`padzero $m 3`
-        for s in 5; do #`seq 1 $PERTURB_NUM_SCALE`; do
+        for s in `seq 1 $PERTURB_NUM_SCALE`; do
             mkdir -p scale$s
             cd scale$s
             . $SCRIPT_DIR/env/$HOSTTYPE/perturbation.src

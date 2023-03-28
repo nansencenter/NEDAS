@@ -47,12 +47,12 @@ case $varname in
         case $s_ind in
             1)
                 vars_start=0.0  #m/s
-                vars_end=3.8    #m/s
+                vars_end=3.5    #m/s
                 growth_period=336 #h
                 ;;
             2)
                 vars_start=0.0
-                vars_end=3.6
+                vars_end=3.0
                 growth_period=288
                 ;;
             3)
@@ -62,22 +62,22 @@ case $varname in
                 ;;
             4)
                 vars_start=0.2
-                vars_end=0.5
+                vars_end=0.6
                 growth_period=96
                 ;;
             5)
                 vars_start=0.15
-                vars_end=0.5
+                vars_end=0.4
                 growth_period=36
                 ;;
             6)
                 vars_start=0.1
-                vars_end=0.4
+                vars_end=0.3
                 growth_period=24
                 ;;
             7)
                 vars_start=0.1
-                vars_end=0.4
+                vars_end=0.3
                 growth_period=12
                 ;;
         esac
