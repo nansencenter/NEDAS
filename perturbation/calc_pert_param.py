@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import grid.io.netcdf as nc
 from diag import sample_correlation
 import config.constants as cc
-import grid.multiscale as ms
 import sys
 
 ##read perturb_*.nc and diagnose correlation length scales (time/space)
@@ -32,7 +31,7 @@ for s in range(ns):
     for n in range(n_sample):
         for m in range(1, nt):
             tmp = nc.read(outdir+'/{:03d}/perturb_{:04d}.nc'.format(n+1, int(m*dt/cp)), vname)[0, :, :]
-            pert[n, m-1, :] = ms.get_scale(tmp, krange, s)[int(0.5*ny), :]
+            pert[n, m-1, :] = grid.get_scale(tmp, krange, s)[int(0.5*ny), :]
 
     ##length in time/space to sample
     L = int(0.25*nx)

@@ -2,7 +2,6 @@ import numpy as np
 import config.constants as cc
 import grid
 import grid.io.netcdf as nc
-import grid.multiscale as ms
 import datetime
 import sys
 

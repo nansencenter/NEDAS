@@ -2,7 +2,6 @@ import numpy as np
 import config.constants as cc
 import grid
 import grid.io.netcdf as nc
-import grid.multiscale as ms
 import datetime
 import sys
 
@@ -24,7 +23,7 @@ for n in range(nt):
     var = nc.read(outdir+'/output/'+tstr+'.nc', vname)
     mask = np.isnan(var)
     var[np.where(mask)] = 0.
-    var_s = ms.get_scale(var, krange, s)
+    var_s = grid.get_scale(var, krange, s)
     var_s[np.where(mask)] = np.nan
     np.save(outdir+'/output/'+vname+'_scale{}'.format(s+1)+'_'+tstr+'.npy', var_s)
 

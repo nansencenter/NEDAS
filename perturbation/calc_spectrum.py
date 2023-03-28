@@ -1,6 +1,6 @@
 import numpy as np
 from netCDF4 import Dataset
-from grid.multiscale import pwrspec2d
+from grid import pwrspec2d
 import grid.io.netcdf as nc
 import sys
 
