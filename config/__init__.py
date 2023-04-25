@@ -1,8 +1,6 @@
-###parse config_file and get environment variables:
-##in bash environment: "set -a; source config_file; set +a"
-##this will export the settings into bash environment variables
-##then, in python scripts do "import config.constants as cc"
-##the variable "var" will be available as cc.var
+##before starting python, make sure to
+##   set -a; source config_file; set +a
+##to export the env variables for a case
 
 import os
 

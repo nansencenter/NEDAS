@@ -1,5 +1,6 @@
 *.o
 *.mod
+*.exe
 __pycache__
 .ipynb_checkpoints
 slurm*
