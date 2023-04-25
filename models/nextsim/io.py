@@ -1,10 +1,10 @@
-from pynextsim import NextsimBin
 
-def open(filename):
+def nextsim_open(filename):
+    from pynextsim import NextsimBin
     f = NextsimBin(filename)
     return f
 
-def get_dat(f, varname):
+def nextsim_get_dat(f, varname):
     if varname in ('M_VT', 'M_UM', 'M_UT'):
         x = f.mesh_info.nodes_x
         y = f.mesh_info.nodes_y
@@ -16,7 +16,7 @@ def get_dat(f, varname):
         dat = f.get_var(varname)
         return x, y, dat
 
-def get_gridded_dat(f, varname, x, y):
+def nextsim_get_gridded_dat(f, varname, x, y):
     dat = f.get_gridded_vars([varname], x, y)
     if varname in ('M_VT', 'M_UM', 'M_UT'):
         return dat[varname+'_1'], dat[varname+'_2']
