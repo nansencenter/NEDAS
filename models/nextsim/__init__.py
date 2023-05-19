@@ -74,13 +74,9 @@ def write_var(filename, v_name, v_rec, v_data):
         f.seek(v_info[v_name]['pos'])
         f.write(v_data.tobytes())
 
-##nextsim proj convention
-def proj():
-    from pyproj import Proj
-    a = 6378273
-    ecc = 0.081816153
-    b = a * np.sqrt(1 - ecc**2)
-    return Proj(proj='stere', a=a, b=b, lat_0=90., lon_0=-45., lat_ts=60.)
+##nextsim map projection
+from pyproj import Proj
+proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
 ##nextsim mesh info
 def indices(meshfile):
@@ -106,6 +102,34 @@ def triangulation(meshfile):
     xn, yn = nodes_xy(meshfile)
     ind = indices(meshfile)
     return Triangulation(xn, yn, ind)
+
+def get_unstruct_grid_from_msh(msh_file):
+    '''
+    Get the unstructured grid from .msh files
+    output: x[:], y[:], z[:]
+    '''
+    f = open(msh_file, 'r')
+    if "$MeshFormat" not in f.readline():
+        raise ValueError("expecting $MeshFormat -  not found")
+    version, fmt, size = f.readline().split()
+    if "$EndMeshFormat" not in f.readline():
+        raise ValueError("expecting $EndMeshFormat -  not found")
+    if "$PhysicalNames" not in f.readline():
+        raise ValueError("expecting $PhysicalNames -  not found")
+    num_physical_names = int(f.readline())
+    for _ in range(num_physical_names):
+        topodim, ident, name = f.readline().split()
+    if "$EndPhysicalNames" not in f.readline():
+        raise ValueError("expecting $EndPhysicalNames -  not found")
+    if "$Nodes" not in f.readline():
+        raise ValueError("expecting $Nodes -  not found")
+    num_nodes = int(f.readline())
+    lines = [f.readline().strip() for n in range(num_nodes)]
+    iccc =np.array([[float(v) for v in line.split()] for line in lines])
+    x, y, z = (iccc[:, 1], iccc[:, 2], iccc[:, 3])
+    if "$EndNodes" not in f.readline():
+        raise ValueError("expecting $EndNodes -  not found")
+    return x, y, z
 
 ##nextsim variable names
 variable_dic = {}
