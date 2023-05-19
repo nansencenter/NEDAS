@@ -1,0 +1,2 @@
+###util func for diagnostics
+
