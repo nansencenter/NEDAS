@@ -21,10 +21,7 @@ DATA_DIR=os.environ['DATA_DIR']
 
 ##reference grid definition
 RE = float(os.environ['RE'])
-ECC = float(os.environ['ECC'])
-LON_0 = float(os.environ['LON_0'])
-LAT_0 = float(os.environ['LAT_0'])
-LAT_TS = float(os.environ['LAT_TS'])
+PROJ = os.environ['PROJ']
 DX = float(os.environ['DX'])
 XSTART = float(os.environ['XSTART'])
 XEND = float(os.environ['XEND'])
