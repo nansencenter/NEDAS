@@ -20,7 +20,6 @@ CODE_DIR=os.environ['CODE_DIR']
 DATA_DIR=os.environ['DATA_DIR']
 
 ##reference grid definition
-RE = float(os.environ['RE'])
 PROJ = os.environ['PROJ']
 DX = float(os.environ['DX'])
 XSTART = float(os.environ['XSTART'])
