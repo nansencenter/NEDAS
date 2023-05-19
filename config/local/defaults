@@ -18,15 +18,12 @@ CODE_DIR=$HOME/code
 DATA_DIR=$SCRATCH/data
 
 ##Reference grid (stereographic proj)
-RE=6378273         ##earth radius
-ECC=0.081816153    ##earth eccentricity
-LON_0=-45.         ##center longitude
-LAT_0=90.          ##center latitude
-LAT_TS=60.         ##true-scale latitude
+##proj.4 definition of map projection
+PROJ="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 DX=3000            ##grid spacing (meter)
-XSTART=-2500000    ##start,end x coord (m)
+XSTART=-2500000    ##start,end x coordinate
 XEND=2500000
-YSTART=-2000000       ##start,end y coord (m)
+YSTART=-2000000    ##start,end y coordinate
 YEND=2500000
 NX=$((($XEND-$XSTART)/$DX))
 NY=$((($YEND-$YSTART)/$DX))
