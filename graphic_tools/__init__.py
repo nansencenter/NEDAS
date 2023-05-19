@@ -58,8 +58,22 @@ def lonlat_grid_xy(proj, dlon, dlat):
 
     return lonlat_grid_xy
 
-def plot_var_on_grid(ax):
-    print(ax)
-    ###ax: matplotlib.pyplot.axes
+##add coastline, land area
+def add_land(ax, proj, facecolor=[.7, .7, .7], linecolor='k', linewidth=1):
+    for coast_xy in coastline_xy(proj):
+        if facecolor != None:
+            ax.fill(*zip(*coast_xy), color=facecolor)
+        if linecolor != None:
+            ax.plot(*zip(*coast_xy), color=linecolor, linewidth=linewidth)
+
+##add lat/lon reference grid
+def add_lonlat_grid(ax, proj, dlon=20, dlat=5, linecolor='k', linewidth=0.5, linestyle=':'):
+        for grid_xy in lonlat_grid_xy(proj, dlon, dlat):
+            ax.plot(*zip(*grid_xy), color=linecolor, linewidth=linewidth, linestyle=linestyle)
 
 
+def set_extent(ax, xstart, xend, ystart, yend):
+    ax.set_xlim(xstart, xend)
+    ax.set_ylim(ystart, yend)
+
+#
