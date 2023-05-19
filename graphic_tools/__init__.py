@@ -1,6 +1,6 @@
-##some basic graphic util without the need for cartopy
 import numpy as np
 
+##some basic map plotting without the need for installing cartopy
 def coastline_xy(proj):
     ##prepare data to show the land area (with plt.fill/plt.plot)
     ##  usage: for xy in coastline_xy:
@@ -58,8 +58,8 @@ def lonlat_grid_xy(proj, dlon, dlat):
 
     return lonlat_grid_xy
 
-
-# def plot_var_on_grid(ax):
+def plot_var_on_grid(ax):
+    print(ax)
     ###ax: matplotlib.pyplot.axes
 
 
