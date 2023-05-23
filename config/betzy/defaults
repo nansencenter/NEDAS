@@ -18,15 +18,13 @@ CODE_DIR=$HOME/code
 DATA_DIR=$SCRATCH/data
 
 ##Reference grid (stereographic proj)
-##proj.4 definition of map projection
+##proj.4 definition of map projection, see https://proj.org/usage/projections.html
 PROJ="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 DX=2500            ##grid spacing (meter)
 XSTART=-2500000    ##start,end x coord (m)
 XEND=3000000
 YSTART=-3000000    ##start,end y coord (m)
 YEND=2500000
-NX=$((($XEND-$XSTART)/$DX))
-NY=$((($YEND-$YSTART)/$DX))
 NZ_ICE=1
 NZ_ATM=35
 NZ_OCE=10

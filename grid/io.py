@@ -1,6 +1,7 @@
 from netCDF4 import Dataset
+import struct
 
-##output grid to nc file
+##netcdf file io
 def nc_write(filename, dim, varname, dat, attr=None):
     '''
     write gridded data to netcdf file
@@ -38,3 +39,4 @@ def nc_read(filename, varname):
     f.close()
     return dat
 
+###binary file io
