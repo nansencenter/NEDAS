@@ -123,28 +123,49 @@ class Grid(object):
         shapes[1233].points = shapes[1233].points + shapes[1234].points
         shapes[1234].points = []
 
+        xmin = np.min(self.x)
+        xmax = np.max(self.x)
+        ymin = np.min(self.y)
+        ymax = np.max(self.y)
+
         self.land_xy= []
         for shape in shapes:
             xy = []
+            inside = []
             for point in shape.points[:]:
                 lon, lat = point
-                if lat>20:  ## only process northern region
-                    xy.append(self.proj(lon, lat))
-            if len(xy)>0:
+                x, y = self.proj(lon, lat)
+                xy.append((x, y))
+                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
+            if len(xy)>0 and any(inside):
                 self.land_xy.append(xy)
 
-    def plot_var_on_map(self, ax, var, vmin, vmax, cmap,
+    def plot_var_on_map(self, ax, var, vmin=None, vmax=None, cmap='jet',
                         showland=True,
                         landcolor=None, landlinecolor='k', landlinewidth=1,
                         showgrid=True,
                         gridlinecolor='k', gridlinewidth=0.5, gridlinestyle=':',
                         dlon=20, dlat=5):
 
-        if self.regular:
-            ax.pcolor(self.x, self.y, var, vmin=vmin, vmax=vmax, cmap=cmap)
+        if vmin == None:
+            vmin = np.min(var)
+        if vmax == None:
+            vmax = np.max(var)
 
-        else:
-            ax.tripcolor(self.tri, var, vmin=vmin, vmax=vmax, cmap=cmap)
+        ##scalar field
+        if var.shape == self.x.shape:
+            if self.regular:
+                c = ax.pcolor(self.x, self.y, var, vmin=vmin, vmax=vmax, cmap=cmap)
+
+            else:
+                c = ax.tripcolor(self.tri, var, vmin=vmin, vmax=vmax, cmap=cmap)
+
+        plt.colorbar(c, fraction=0.025, pad=0.015, location='right')
+
+        ##vector field, use quiver
+        if var.shape == (2,)+self.x.shape:
+            d = 20
+            ax.quiver(self.x[::d, ::d], self.y[::d, ::d], var[0,:][::d, ::d], var[1,:][::d, ::d])
 
         ###plot the coastline to indicate land area
         if showland:
