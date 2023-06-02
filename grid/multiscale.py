@@ -71,16 +71,16 @@ def get_scale(x, kr, s):
 def pwrspec2d(field):
     '''
     horizontal 2D spectrum p(k), k=sqrt(kx^2+ky^2)
-    input: field[nx, ny]
+    input: field[ny, nx]
     output: wn[nk], pwr[nk]
     '''
-    nx, ny = field.shape
+    ny, nx = field.shape
     nupx = int(np.ceil((nx+1)/2))
     nupy = int(np.ceil((ny+1)/2))
     nup = max(nupx, nupy)
     wnx = fft_wn(nx)
     wny = fft_wn(ny)
-    ky, kx = np.meshgrid(wny, wnx)
+    kx, ky = np.meshgrid(wnx, wny)
     k2d = np.sqrt((kx*(nup/nupx))**2 + (ky*(nup/nupy))**2)
     FT = np.fft.fft2(field)
     P = (np.abs(FT)/nx/ny)**2

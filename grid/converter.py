@@ -1,62 +1,73 @@
 import numpy as np
-from pyproj import Proj, Transformer
-from matplotlib.tri import Triangulation
+from pyproj import Transformer
+from .grid import Grid
 
 class Converter(object):
-    def __init__(self, proj1, x1, y1, proj2, x2, y2):
-        ##initialize and check
-        self.proj1 = proj1
-        self.x1 = x1
-        self.y1 = y1
-        self.proj2 = proj2
-        self.x2 = x2
-        self.y2 = y2
-        assert isinstance(proj1, Proj), "proj1 is not pyproj.Proj instance"
-        assert isinstance(proj2, Proj), "proj2 is not pyproj.Proj instance"
-        assert y1.shape == self.x1.shape, "x1, y1 shape does not match"
-        assert y2.shape == self.x2.shape, "x2, y2 shape does not match"
+    def __init__(self, grid1, grid2):
+        assert isinstance(grid1, Grid), "grid1 is not a Grid instance"
+        assert isinstance(grid2, Grid), "grid1 is not a Grid instance"
+        self.grid1 = grid1
+        self.grid2 = grid2
+        self.x1 = grid1.x
+        self.y1 = grid1.y
+        self.x2 = grid2.x
+        self.y2 = grid2.y
 
         ##pyproj.transformer to go forward/backward between proj1 and proj2
-        self.pj_fwd = Transformer.from_proj(proj1, proj2).transform
-        self.pj_bwd = Transformer.from_proj(proj2, proj1).transform
+        self.pj_fwd = Transformer.from_proj(self.grid1.proj, self.grid2.proj).transform
+        self.pj_bwd = Transformer.from_proj(self.grid2.proj, self.grid1.proj).transform
 
-        ##find triangulation of grid in proj1
-        self.tri = Triangulation(x1.flatten(), y1.flatten(), triangles=None)
-        self.tri_finder = self.tri.get_trifinder()
-        self.num_triangles = len(self.tri.triangles)
+        if grid1.cyclic_dim != None:
+            self._pad_cyclic_dim_xy()
 
-        ##get average size of triangles, i.e. grid spacing, used in finding rotate_matrix
-        self._set_grid_spacing()
-
-        ###convert (x1,y1) to corresponding coordinates in proj2, we call it (x,y)
-        self.x, self.y = self.pj_fwd(self.x1, self.y1)
-
-        ###prepare matrix to rotate vectors in proj1 to proj2:
+        ##rotate vector field from proj1 to proj2
         self._set_rotate_matrix()
 
-        ###prepare weights for interpolation from (x,y) to (x2,y2) in proj2:
-        self._set_t_matrix()
-        self._set_interp_weights()
+        ##interpolate field from x1,y1 to x2,y2
+        if grid1.regular:   ###use bilinear interp for regular grid
+            self._set_interp_weights_regular()
 
-    ##utility functions for rotate_vectors
-    def _set_grid_spacing(self):
-        x = self.tri.x
-        y = self.tri.y
-        t = self.tri.triangles
-        dx = np.min(np.sqrt((x[t[:, 0]] - x[t[:, 1]])**2 + (y[t[:, 0]] - y[t[:, 1]])**2))
-        self.grid_spacing = dx
+        else:    ###use barycentric coordinate weights for unstruct mesh interp
+            self.tri = self.grid1.tri
+            self.tri_finder = self.tri.get_trifinder()
+            self.num_triangles = len(self.tri.triangles)
+            self._set_t_matrix()
+            self._set_interp_weights_irregular()
 
+    def _pad_cyclic_dim_xy(self):
+        x_ = self.x1.copy()
+        y_ = self.y1.copy()
+        ny, nx = x_.shape
+        for d in self.grid1.cyclic_dim:
+            if d=='x':
+                Lx = self.grid1.dx * nx
+                x_ = np.vstack((x_[:, -1]-Lx, x_.T, x_[:, 0]+Lx)).T
+                y_ = np.vstack((y_[:, -1]   , y_.T, y_[:, 0]   )).T
+            elif d=='y':
+                Ly = self.grid1.dy * ny
+                x_ = np.vstack((x_[-1, :]   , x_, x_[0, :]))
+                y_ = np.vstack((y_[-1, :]-Ly, y_, y_[0, :]+Ly))
+        self.x1 = x_
+        self.y1 = y_
+
+    def _pad_cyclic_dim(self, fld):
+        for d in self.grid1.cyclic_dim:
+            if d=='x':
+                fld = np.vstack((fld[:, -1], fld.T, fld[:, 0])).T
+            elif d=='y':
+                fld = np.vstack((fld[-1, :], fld, fld[0, :]))
+        return fld
     def _set_rotate_matrix(self):
-        x = self.x
-        y = self.y
+        ##corresponding x1,y1 coordinates in proj2, call them x,y
+        x, y = self.pj_fwd(self.x1, self.y1)
 
-        ###find increments in x, y directions in proj2
-        ##increment is set according to grid spacing of x2, y2 grid
-        eps = 0.1 * self.grid_spacing
+        ##find small increments in x,y due to small changes in x1,y1 in proj2
+        eps = 0.1 * self.grid1.dx    ##grid spacing is specified in Grid object
         xu, yu = self.pj_fwd(self.x1 + eps, self.y1      )  ##move a bit in x dirn
         xv, yv = self.pj_fwd(self.x1      , self.y1 + eps)  ##move a bit in y dirn
 
         self.rotate_matrix = np.zeros((4,)+self.x1.shape)
+        np.seterr(invalid='ignore')  ##will get nan at poles
         dxu = xu-x
         dyu = yu-y
         dxv = xv-x
@@ -68,24 +79,84 @@ class Converter(object):
         self.rotate_matrix[2, :] = dyu/hu
         self.rotate_matrix[3, :] = dyv/hv
 
-    def rotate_vectors(self, vec_fld):
+
+    def _fill_pole_void(self, fld):
+        if self.grid1.pole_dim == 'x':
+            for i in self.grid1.pole_index:
+                if i==0:
+                    fld[:, 0] = np.mean(fld[:, 1])
+                if i==-1:
+                    fld[:, -1] = np.mean(fld[:, -2])
+        if self.grid1.pole_dim == 'y':
+            for i in self.grid1.pole_index:
+                if i==0:
+                    fld[0, :] = np.mean(fld[1, :])
+                if i==-1:
+                    fld[-1, :] = np.mean(fld[-2, :])
+        return fld
+
+    def _rotate_vectors(self, vec_fld):
         u = vec_fld[0, :]
         v = vec_fld[1, :]
-        assert u.shape == self.x1.shape, "vector field shape does not match x1.shape"
-        assert vec_fld.shape[0] == 2, "vector field should have first dim==2, containing u,v"
 
-        vec_fld_rot = vec_fld.copy()
         rw = self.rotate_matrix
-        u_rot = np.full(u.shape, np.nan)
-        v_rot = np.full(u.shape, np.nan)
         u_rot = rw[0, :]*u + rw[1, :]*v
         v_rot = rw[2, :]*u + rw[3, :]*v
+
+        # u_rot = self._fill_pole_void(u_rot)
+        # v_rot = self._fill_pole_void(v_rot)
+
+        vec_fld_rot = np.full(vec_fld.shape, np.nan)
         vec_fld_rot[0, :] = u_rot
         vec_fld_rot[1, :] = v_rot
-
         return vec_fld_rot
 
     ###utility functions for interpolation
+    def _set_interp_weights_regular(self):
+        x, y = self.pj_bwd(self.x2, self.y2)
+        x_ = x.flatten()
+        y_ = y.flatten()
+
+        ###coordinates in x,y direction for grid1, find indices id_x, id_y that x_,y_ falls in
+        xi = self.x1[0, :]
+        yi = self.y1[:, 0]
+        assert np.all(np.diff(xi) >= 0) or np.all(np.diff(xi) <= 0), "x index not monotonic"
+        assert np.all(np.diff(yi) >= 0) or np.all(np.diff(yi) <= 0), "y index not monotonic"
+        if np.all(np.diff(xi) >= 0):
+            id_x = np.searchsorted(xi, x_, side='right')
+        else:
+            id_x = len(xi) - np.searchsorted(xi[::-1], x_, side='left')
+        if np.all(np.diff(yi) >= 0):
+            id_y = np.searchsorted(yi, y_, side='right')
+        else:
+            id_y = len(yi) - np.searchsorted(yi[::-1], y_, side='left')
+
+        self.inside = ~np.logical_or(np.logical_or(id_y==len(yi), id_y==0),
+                                     np.logical_or(id_x==len(xi), id_x==0))
+
+        rectangles = np.zeros((x_.shape[0], 4), dtype=int)
+        nx = len(xi)
+        rectangles[:, 0] =     id_y*nx +   id_x
+        rectangles[:, 1] = (id_y-1)*nx +   id_x
+        rectangles[:, 2] = (id_y-1)*nx + id_x-1
+        rectangles[:, 3] =     id_y*nx + id_x-1
+        self.vertices = rectangles[self.inside, :]
+        x1_ = self.x1.flatten()
+        y1_ = self.y1.flatten()
+        x_o = x_[self.inside]
+        y_o = y_[self.inside]
+        x_1 = x1_[self.vertices][:,3]
+        x_2 = x1_[self.vertices][:,0]
+        y_1 = y1_[self.vertices][:,1]
+        y_2 = y1_[self.vertices][:,0]
+        s = (x_1 - x_2) * (y_1 - y_2)
+        self.interp_weights = np.zeros(x_o.shape+(4,))
+        self.interp_weights[:, 0] =  (x_o - x_1)*(y_o - y_1)/s
+        self.interp_weights[:, 1] = -(x_o - x_1)*(y_o - y_2)/s
+        self.interp_weights[:, 2] =  (x_o - x_2)*(y_o - y_2)/s
+        self.interp_weights[:, 3] = -(x_o - x_2)*(y_o - y_1)/s
+
+
     def _set_t_matrix(self):
         ###Used for getting the barycentric coordinates on a triangle.
         ###For the i-th triangle,
@@ -107,7 +178,7 @@ class Converter(object):
         self.t_matrix[:,2,0] = x[:,2]
         self.t_matrix[:,2,1] = y[:,2]
 
-    def _set_interp_weights(self):
+    def _set_interp_weights_irregular(self):
         x_, y_ = self.pj_bwd(self.x2, self.y2)
         self.dst_points = np.array([x_.flatten(), y_.flatten()]).T
         self.triangle_map = self.tri_finder(x_, y_)
@@ -116,14 +187,11 @@ class Converter(object):
         self.inside = ~self.dst_mask.flatten()
 
         ##get barycentric coords, according to https://en.wikipedia.org/wiki/Barycentric_coordinate_system#Barycentric_coordinates_on_triangles, each row of bary is (lambda_1, lambda_2) for 1 destination point
-        d = 2
         inds = self.triangle_map.flatten()[self.inside]
         self.vertices = np.take(self.tri.triangles, inds, axis=0)
         temp = np.take(self.t_matrix, inds, axis=0)
-        delta = self.dst_points[self.inside] - temp[:, d]
-        bary = np.einsum('njk,nk->nj', temp[:, :d, :], delta)
-
-        # set interpolation weights
+        delta = self.dst_points[self.inside] - temp[:, 2]
+        bary = np.einsum('njk,nk->nj', temp[:, :2, :], delta)
         self.interp_weights = np.hstack((bary, 1 - bary.sum(axis=1, keepdims=True)))
 
     def _interp_elements(self, fld):
@@ -162,26 +230,27 @@ class Converter(object):
         if is_vector:
             ##vector field defined on proj1 needs to rotate to proj2 before interp
             assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
+            if self.grid1.cyclic_dim != None:
+                fld = np.array([self._pad_cyclic_dim(fld[0, :]), self._pad_cyclic_dim(fld[1, :])])
             assert fld.shape[1:] == self.x1.shape, "vector field shape does not match x1"
-            fld_ = self.rotate_vectors(fld)
 
-            ##now perform interpolation from (x,y) to (x2,y2)
+            fld = self._rotate_vectors(fld)
+
             fld_out = np.full((2,)+self.x2.shape, np.nan)
-            fld_out[0, :] = self._interp_nodes(fld_[0, :], method)
-            fld_out[1, :] = self._interp_nodes(fld_[1, :], method)
+            ##now perform interpolation from (x,y) to (x2,y2)
+            fld_out[0, :] = self._interp_nodes(fld[0, :], method)
+            fld_out[1, :] = self._interp_nodes(fld[1, :], method)
 
         else:
             ##if fld is scalar, just interpolate
-            fld_ = fld.flatten()
-            if fld.shape == self.x1.shape:
+            if fld.shape == self.grid1.x.shape:
                 fld_out = self._interp_nodes(fld, method)
 
-            elif len(fld_) == self.num_triangles:
-                fld_out = self._interp_elements(fld_)
+            elif len(fld.flatten()) == self.num_triangles:
+                fld_out = self._interp_elements(fld.flatten())
 
             else:
                 raise ValueError("field shape does not match x1.shape, or number of triangle elements in proj1")
 
         return fld_out
-
 
