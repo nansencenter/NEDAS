@@ -1,5 +1,4 @@
 import numpy as np
-from pyproj import Transformer
 from .grid import Grid
 
 class Converter(object):
@@ -12,10 +11,6 @@ class Converter(object):
         self.y1 = grid1.y
         self.x2 = grid2.x
         self.y2 = grid2.y
-
-        ##pyproj.transformer to go forward/backward between proj1 and proj2
-        self.pj_fwd = Transformer.from_proj(self.grid1.proj, self.grid2.proj).transform
-        self.pj_bwd = Transformer.from_proj(self.grid2.proj, self.grid1.proj).transform
 
         if grid1.cyclic_dim != None:
             self._pad_cyclic_dim_xy()
@@ -31,7 +26,6 @@ class Converter(object):
             self.tri = self.grid1.tri
             self.tri_finder = self.tri.get_trifinder()
             self.num_triangles = len(self.tri.triangles)
-            self._set_t_matrix()
             self._set_interp_weights_irregular()
 
     def _pad_cyclic_dim_xy(self):
@@ -50,6 +44,14 @@ class Converter(object):
         self.x1 = x_
         self.y1 = y_
 
+    def _proj(self, x, y, forward=True):
+        if forward:
+            lon, lat = self.grid1.proj(x, y, inverse=True)
+            return self.grid2.proj(lon, lat)
+        else:
+            lon, lat = self.grid2.proj(x, y, inverse=True)
+            return self.grid1.proj(lon, lat)
+
     def _pad_cyclic_dim(self, fld):
         for d in self.grid1.cyclic_dim:
             if d=='x':
@@ -57,14 +59,15 @@ class Converter(object):
             elif d=='y':
                 fld = np.vstack((fld[-1, :], fld, fld[0, :]))
         return fld
+
     def _set_rotate_matrix(self):
         ##corresponding x1,y1 coordinates in proj2, call them x,y
-        x, y = self.pj_fwd(self.x1, self.y1)
+        x, y = self._proj(self.x1, self.y1)
 
         ##find small increments in x,y due to small changes in x1,y1 in proj2
         eps = 0.1 * self.grid1.dx    ##grid spacing is specified in Grid object
-        xu, yu = self.pj_fwd(self.x1 + eps, self.y1      )  ##move a bit in x dirn
-        xv, yv = self.pj_fwd(self.x1      , self.y1 + eps)  ##move a bit in y dirn
+        xu, yu = self._proj(self.x1 + eps, self.y1      )  ##move a bit in x dirn
+        xv, yv = self._proj(self.x1      , self.y1 + eps)  ##move a bit in y dirn
 
         self.rotate_matrix = np.zeros((4,)+self.x1.shape)
         np.seterr(invalid='ignore')  ##will get nan at poles
@@ -78,7 +81,6 @@ class Converter(object):
         self.rotate_matrix[1, :] = dxv/hv
         self.rotate_matrix[2, :] = dyu/hu
         self.rotate_matrix[3, :] = dyv/hv
-
 
     def _fill_pole_void(self, fld):
         if self.grid1.pole_dim == 'x':
@@ -103,8 +105,8 @@ class Converter(object):
         u_rot = rw[0, :]*u + rw[1, :]*v
         v_rot = rw[2, :]*u + rw[3, :]*v
 
-        # u_rot = self._fill_pole_void(u_rot)
-        # v_rot = self._fill_pole_void(v_rot)
+        u_rot = self._fill_pole_void(u_rot)
+        v_rot = self._fill_pole_void(v_rot)
 
         vec_fld_rot = np.full(vec_fld.shape, np.nan)
         vec_fld_rot[0, :] = u_rot
@@ -113,34 +115,26 @@ class Converter(object):
 
     ###utility functions for interpolation
     def _set_interp_weights_regular(self):
-        x, y = self.pj_bwd(self.x2, self.y2)
+        x, y = self._proj(self.x2, self.y2, forward=False)
         x_ = x.flatten()
         y_ = y.flatten()
 
-        ###coordinates in x,y direction for grid1, find indices id_x, id_y that x_,y_ falls in
-        xi = self.x1[0, :]
-        yi = self.y1[:, 0]
-        assert np.all(np.diff(xi) >= 0) or np.all(np.diff(xi) <= 0), "x index not monotonic"
-        assert np.all(np.diff(yi) >= 0) or np.all(np.diff(yi) <= 0), "y index not monotonic"
-        if np.all(np.diff(xi) >= 0):
-            id_x = np.searchsorted(xi, x_, side='right')
-        else:
-            id_x = len(xi) - np.searchsorted(xi[::-1], x_, side='left')
-        if np.all(np.diff(yi) >= 0):
-            id_y = np.searchsorted(yi, y_, side='right')
-        else:
-            id_y = len(yi) - np.searchsorted(yi[::-1], y_, side='left')
+        ###find indices id_x, id_y that x_,y_ falls in
+        id_x, id_y = self.grid1.find_index(self.x1, self.y1, x_, y_)
 
-        self.inside = ~np.logical_or(np.logical_or(id_y==len(yi), id_y==0),
-                                     np.logical_or(id_x==len(xi), id_x==0))
+        self.inside = ~np.logical_or(np.logical_or(id_y==self.x1.shape[0], id_y==0),
+                                     np.logical_or(id_x==self.x1.shape[1], id_x==0))
 
+        ###indices for the 4 vertices of each rectangular grid cell
         rectangles = np.zeros((x_.shape[0], 4), dtype=int)
-        nx = len(xi)
+        nx = self.x1.shape[1]
         rectangles[:, 0] =     id_y*nx +   id_x
         rectangles[:, 1] = (id_y-1)*nx +   id_x
         rectangles[:, 2] = (id_y-1)*nx + id_x-1
         rectangles[:, 3] =     id_y*nx + id_x-1
         self.vertices = rectangles[self.inside, :]
+
+        ##compute bilinear interp weights
         x1_ = self.x1.flatten()
         y1_ = self.y1.flatten()
         x_o = x_[self.inside]
@@ -156,13 +150,15 @@ class Converter(object):
         self.interp_weights[:, 2] =  (x_o - x_2)*(y_o - y_2)/s
         self.interp_weights[:, 3] = -(x_o - x_2)*(y_o - y_1)/s
 
+    def _set_interp_weights_irregular(self):
+        x_, y_ = self._proj(self.x2, self.y2, forward=False)
+        self.dst_points = np.array([x_.flatten(), y_.flatten()]).T
+        self.triangle_map = self.tri_finder(x_, y_)
+        self.dst_mask = (self.triangle_map < 0)
+        self.triangle_map[self.dst_mask] = 0
+        self.inside = ~self.dst_mask.flatten()
 
-    def _set_t_matrix(self):
-        ###Used for getting the barycentric coordinates on a triangle.
-        ###For the i-th triangle,
-        ###    self.t_matrix[i] = [[a', b'], [c', d'], [x_3, y3]]
-        ###    where the first 2 rows are the inverse of the matrix T in the wikipedia link
-        ###    and (x_3, y_3) are the coordinates of the 3rd vertex of the triangle
+        ##transform matrix for barycentric coords computation
         x = self.tri.x[self.tri.triangles]
         y = self.tri.y[self.tri.triangles]
         a = x[:,0] - x[:,2]
@@ -170,26 +166,20 @@ class Converter(object):
         c = y[:,0] - y[:,2]
         d = y[:,1] - y[:,2]
         det = a*d-b*c
-        self.t_matrix = np.zeros((self.num_triangles, 3, 2))
-        self.t_matrix[:,0,0] = d/det
-        self.t_matrix[:,0,1] = -b/det
-        self.t_matrix[:,1,0] = -c/det
-        self.t_matrix[:,1,1] = a/det
-        self.t_matrix[:,2,0] = x[:,2]
-        self.t_matrix[:,2,1] = y[:,2]
+        t_matrix = np.zeros((self.num_triangles, 3, 2))
+        t_matrix[:,0,0] = d/det
+        t_matrix[:,0,1] = -b/det
+        t_matrix[:,1,0] = -c/det
+        t_matrix[:,1,1] = a/det
+        t_matrix[:,2,0] = x[:,2]
+        t_matrix[:,2,1] = y[:,2]
 
-    def _set_interp_weights_irregular(self):
-        x_, y_ = self.pj_bwd(self.x2, self.y2)
-        self.dst_points = np.array([x_.flatten(), y_.flatten()]).T
-        self.triangle_map = self.tri_finder(x_, y_)
-        self.dst_mask = (self.triangle_map < 0)
-        self.triangle_map[self.dst_mask] = 0
-        self.inside = ~self.dst_mask.flatten()
-
-        ##get barycentric coords, according to https://en.wikipedia.org/wiki/Barycentric_coordinate_system#Barycentric_coordinates_on_triangles, each row of bary is (lambda_1, lambda_2) for 1 destination point
+        ##get barycentric coords, according to https://en.wikipedia.org/wiki/
+        ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
+        ##each row of bary is (lambda_1, lambda_2) for 1 destination point.
         inds = self.triangle_map.flatten()[self.inside]
         self.vertices = np.take(self.tri.triangles, inds, axis=0)
-        temp = np.take(self.t_matrix, inds, axis=0)
+        temp = np.take(t_matrix, inds, axis=0)
         delta = self.dst_points[self.inside] - temp[:, 2]
         bary = np.einsum('njk,nk->nj', temp[:, :2, :], delta)
         self.interp_weights = np.hstack((bary, 1 - bary.sum(axis=1, keepdims=True)))
