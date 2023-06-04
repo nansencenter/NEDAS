@@ -234,6 +234,8 @@ class Converter(object):
         else:
             ##if fld is scalar, just interpolate
             if fld.shape == self.grid1.x.shape:
+                if self.grid1.cyclic_dim != None:
+                    fld = self._pad_cyclic_dim(fld)
                 fld_out = self._interp_nodes(fld, method)
 
             elif len(fld.flatten()) == self.num_triangles:
