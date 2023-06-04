@@ -149,7 +149,8 @@ class Grid(object):
         plt.colorbar(c, fraction=0.025, pad=0.015, location='right')
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
-                     linecolor='k', linewidth=1, showref=False, ref_xy=(0, 0),
+                     linecolor='k', linewidth=1,
+                     showref=False, ref_xy=(0, 0), refcolor='w',
                      showhead=True, headwidth=0.1, headlength=0.3):
         ##plot vector field, replacing quiver
         ##options:
@@ -208,6 +209,20 @@ class Grid(object):
         ##plot the vector lines
         hl = headlength * L
         hw = headwidth * L
+        def arrowhead_xy(x1, x2, y1, y2):
+            ll = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+            sinA = (y2 - y1)/ll
+            cosA = (x2 - x1)/ll
+            h1x = x1 - 0.2*hl*cosA
+            h1y = y1 - 0.2*hl*sinA
+            h2x = x1 + 0.8*hl*cosA - 0.5*hw*sinA
+            h2y = y1 + 0.8*hl*sinA + 0.5*hw*cosA
+            h3x = x1 + 0.5*hl*cosA
+            h3y = y1 + 0.5*hl*sinA
+            h4x = x1 + 0.8*hl*cosA + 0.5*hw*sinA
+            h4y = y1 + 0.8*hl*sinA - 0.5*hw*cosA
+            return [h1x, h2x, h3x, h4x, h1x], [h1y, h2y, h3y, h4y, h1y]
+
         for t in range(xtraj.shape[0]):
             ##plot trajectory at one output location
             ax.plot(xtraj[t, :], ytraj[t, :], color=linecolor, linewidth=linewidth, zorder=4)
@@ -215,26 +230,19 @@ class Grid(object):
             ##add vector head if traj is long and straight enough
             dist = np.sqrt((xtraj[t,0]-xtraj[t,-1])**2 + (ytraj[t,0]-ytraj[t,-1])**2)
             if showhead and hl < leng[t] < 1.6*dist:
-                x1 = xtraj[t, -1]
-                x2 = xtraj[t, -2]
-                y1 = ytraj[t, -1]
-                y2 = ytraj[t, -2]
-                ll = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-                sinA = (y2 - y1)/ll
-                cosA = (x2 - x1)/ll
-                h1x = x1 - 0.2*hl*cosA
-                h1y = y1 - 0.2*hl*sinA
-                h2x = x1 + 0.8*hl*cosA - 0.5*hw*sinA
-                h2y = y1 + 0.8*hl*sinA + 0.5*hw*cosA
-                h3x = x1 + 0.5*hl*cosA
-                h3y = y1 + 0.5*hl*sinA
-                h4x = x1 + 0.8*hl*cosA + 0.5*hw*sinA
-                h4y = y1 + 0.8*hl*sinA - 0.5*hw*cosA
-                ax.fill([h1x, h2x, h3x, h4x, h1x], [h1y, h2y, h3y, h4y, h1y], color=linecolor, zorder=6)
+                ax.fill(*arrowhead_xy(xtraj[t,-1], xtraj[t,-2], ytraj[t,-1],ytraj[t,-2]), color=linecolor, zorder=5)
 
         ##add reference vector
-        # if showref:
-            # ax.plot(*ref_xy, 'k.')
+        if showref:
+            xr, yr = ref_xy
+            ##draw a box
+            xb = [xr-L*1.3, xr-L*1.3, xr+L*1.3, xr+L*1.3, xr-L*1.3]
+            yb = [yr+L/2, yr-L, yr-L, yr+L/2, yr+L/2]
+            ax.fill(xb, yb, color=refcolor, zorder=6)
+            ax.plot(xb, yb, color='k', zorder=6)
+            ##draw the reference vector
+            ax.plot([xr-L/2, xr+L/2], [yr, yr], color=linecolor, zorder=7)
+            ax.fill(*arrowhead_xy(xr+L/2, xr-L/2, yr, yr), color=linecolor, zorder=8)
 
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showgrid=True, dlon=20, dlat=5):
@@ -243,7 +251,7 @@ class Grid(object):
             if color != None:
                 ax.fill(*zip(*xy), color=color, zorder=0)
             if linecolor != None:
-                ax.plot(*zip(*xy), color=linecolor, linewidth=linewidth, zorder=10)
+                ax.plot(*zip(*xy), color=linecolor, linewidth=linewidth, zorder=8)
 
         ###add reference lonlat grid on map
         if showgrid:
@@ -262,7 +270,7 @@ class Grid(object):
                 grid_xy.append(xy)
 
             for xy in grid_xy:
-                ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=9)
+                ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=4)
 
         ax.set_xlim(np.min(self.x), np.max(self.x))
         ax.set_ylim(np.min(self.y), np.max(self.y))
