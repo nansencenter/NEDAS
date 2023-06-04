@@ -1,6 +1,23 @@
+###utility function for multiscale grid
+import numpy as np
+from numba import njit
 
-###MULTISCALE UTILS
-##utility functions: convert between state and spectral spaces
+##A faster FFT solution from styfenschaer/rocket-fft
+from numba.np.numpy_support import as_dtype
+from rocket_fft import numpy_like
+from rocket_fft.overloads import _numpy_cmplx_lut
+numpy_like()
+
+@njit
+def fftn(x, s=None, axes=None, norm=None):
+    return np.fft.fftn(x, s, axes, norm)
+
+@njit
+def ifftn(x, s=None, axes=None, norm=None):
+    return np.fft.ifftn(x, s, axes, norm)
+
+
+##convert between state and spectral spaces
 def grid2spec(f):
     ni, nj = (f.shape[0], f.shape[1])
     return np.fft.fft2(f, axes=(0, 1))

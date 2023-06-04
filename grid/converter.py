@@ -4,7 +4,7 @@ from .grid import Grid
 class Converter(object):
     def __init__(self, grid1, grid2):
         assert isinstance(grid1, Grid), "grid1 is not a Grid instance"
-        assert isinstance(grid2, Grid), "grid1 is not a Grid instance"
+        assert isinstance(grid2, Grid), "grid2 is not a Grid instance"
         self.grid1 = grid1
         self.grid2 = grid2
         self.x1 = grid1.x
