@@ -134,7 +134,8 @@ def get_unstruct_grid_from_msh(msh_file):
 ##nextsim variable names
 variable_dic = {}
 
-def to_grid(var_in):
-    return var_out
-
-
+def get_var(filename, v_name):
+    if v_name == "M_VT":
+        return read_var(filename, v_name).reshape((2, -1))
+    else:
+        return read_var(filename, v_name)

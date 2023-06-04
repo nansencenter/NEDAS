@@ -1,0 +1,13 @@
+numpy
+matplotlib
+os
+sys
+pyproj
+datetime
+numba
+concurrent
+mpi4py
+rocket-fft
+struct
+netCDF4
+
