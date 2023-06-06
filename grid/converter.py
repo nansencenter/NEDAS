@@ -34,31 +34,36 @@ class Converter(object):
         ny, nx = x_.shape
         for d in self.grid1.cyclic_dim:
             if d=='x':
+                ###TODO: Lx doesn't have ::-1 scenario
                 Lx = self.grid1.dx * nx
-                x_ = np.vstack((x_[:, -1]-Lx, x_.T, x_[:, 0]+Lx)).T
-                y_ = np.vstack((y_[:, -1]   , y_.T, y_[:, 0]   )).T
+                x_ = np.vstack((x_.T, x_[:, 0]+Lx)).T
+                y_ = np.vstack((y_.T, y_[:, 0])).T
             elif d=='y':
                 Ly = self.grid1.dy * ny
-                x_ = np.vstack((x_[-1, :]   , x_, x_[0, :]))
-                y_ = np.vstack((y_[-1, :]-Ly, y_, y_[0, :]+Ly))
+                x_ = np.vstack((x_, x_[0, :]))
+                y_ = np.vstack((y_, y_[0, :]+Ly))
         self.x1 = x_
         self.y1 = y_
-
-    def _proj(self, x, y, forward=True):
-        if forward:
-            lon, lat = self.grid1.proj(x, y, inverse=True)
-            return self.grid2.proj(lon, lat)
-        else:
-            lon, lat = self.grid2.proj(x, y, inverse=True)
-            return self.grid1.proj(lon, lat)
 
     def _pad_cyclic_dim(self, fld):
         for d in self.grid1.cyclic_dim:
             if d=='x':
-                fld = np.vstack((fld[:, -1], fld.T, fld[:, 0])).T
+                fld = np.vstack((fld.T, fld[:, 0])).T
             elif d=='y':
-                fld = np.vstack((fld[-1, :], fld, fld[0, :]))
+                fld = np.vstack((fld, fld[0, :]))
         return fld
+
+    def _proj(self, x, y, forward=True):
+        if forward:
+            lon, lat = self.grid1.proj(x, y, inverse=True)
+            x_, y_ = self.grid2.proj(lon, lat)
+            x_, y_ = self.grid2.wrap_cyclic_xy(x_, y_)
+            return x_, y_
+        else:
+            lon, lat = self.grid2.proj(x, y, inverse=True)
+            x_, y_ = self.grid1.proj(lon, lat)
+            x_, y_ = self.grid1.wrap_cyclic_xy(x_, y_)
+            return x_, y_
 
     def _set_rotate_matrix(self):
         ##corresponding x1,y1 coordinates in proj2, call them x,y
@@ -120,7 +125,7 @@ class Converter(object):
         y_ = y.flatten()
 
         ###find indices id_x, id_y that x_,y_ falls in
-        id_x, id_y = self.grid1.find_index(self.x1, self.y1, x_, y_)
+        id_x, id_y = self.grid1.find_index(x_, y_)
 
         self.inside = ~np.logical_or(np.logical_or(id_y==self.x1.shape[0], id_y==0),
                                      np.logical_or(id_x==self.x1.shape[1], id_x==0))
