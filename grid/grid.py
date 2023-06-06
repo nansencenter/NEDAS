@@ -21,6 +21,9 @@ class Grid(object):
         self.pole_dim = pole_dim
         self.pole_index = pole_index
 
+        if self.proj_name() == 'longlat':
+            assert (np.min(x) > -180. and np.max(x) <= 180.), "for interpolation to work, lon should be within (-180, 180]"
+
         if not regular:
             ##Generate triangulation, if tiangles are provided its very quick,
             ##otherwise Triangulation will generate one, but slower.
@@ -105,20 +108,21 @@ class Grid(object):
                     y_ = np.mod(y_ - np.min(yi), Ly) + np.min(yi)
         return x_, y_
 
-    def find_index(self, x_, y_):
+    def find_index(self, x, y, x_, y_):
+        ##find indices of x_,y_ in the coordinates x,y
         assert self.regular, "Grid.find_index only works for regular grids, use triangle_map for irregular"
-        xi = self.x[0, :]
-        yi = self.y[:, 0]
-        assert np.all(np.diff(xi) >= 0) or np.all(np.diff(xi) <= 0), "x index not monotonic"
-        assert np.all(np.diff(yi) >= 0) or np.all(np.diff(yi) <= 0), "y index not monotonic"
+        xi = x[0, :]
+        yi = y[:, 0]
+        assert np.all(np.diff(xi) > 0) or np.all(np.diff(xi) < 0), "x index not monotonic"
+        assert np.all(np.diff(yi) > 0) or np.all(np.diff(yi) < 0), "y index not monotonic"
         ###account for cyclic dim, when points drop "outside" then wrap around
         x_, y_ = self.wrap_cyclic_xy(x_, y_)
         ###find the index, using left/right sided search when index sequence is decreasing/increasing.
-        if np.all(np.diff(xi) >= 0):
+        if np.all(np.diff(xi) > 0):
             id_x = np.searchsorted(xi, x_, side='right')
         else:
             id_x = len(xi) - np.searchsorted(xi[::-1], x_, side='left')
-        if np.all(np.diff(yi) >= 0):
+        if np.all(np.diff(yi) > 0):
             id_y = np.searchsorted(yi, y_, side='right')
         else:
             id_y = len(yi) - np.searchsorted(yi[::-1], y_, side='left')
@@ -239,7 +243,7 @@ class Grid(object):
         for t in range(num_steps):
             ###find velocity ut,vt at traj position for step t
             if self.regular:
-                idx, idy = self.find_index(xtraj[:,t], ytraj[:,t])
+                idx, idy = self.find_index(x, y, xtraj[:,t], ytraj[:,t])
                 inside = ~np.logical_or(np.logical_or(idy==x.shape[0], idy==0),
                                         np.logical_or(idx==x.shape[1], idx==0))
                 ut = u[idy[inside], idx[inside]]
