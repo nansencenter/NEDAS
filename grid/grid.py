@@ -2,11 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation
 
-##TODO:
-###map_factor (mx, my) = (dx, dy)/(grid spacing on earth)
-###landmask (from model)
-##get distance?
-
 class Grid(object):
     def __init__(self,
                  proj,              ##pyproj, from lon,lat to x,y
@@ -45,8 +40,10 @@ class Grid(object):
 
     def _set_grid_spacing(self):
         if self.regular:
-            self.dx = np.mean(np.abs(self.x[:, 1:-1] - self.x[:, 0:-2]))
-            self.dy = np.mean(np.abs(self.y[1:-1, :] - self.y[0:-2, :]))
+            xi = self.x[0, :]
+            yi = self.y[:, 0]
+            self.dx = (np.max(xi) - np.min(xi)) / (len(xi) - 1)
+            self.dy = (np.max(yi) - np.min(yi)) / (len(yi) - 1)
         else:
             t = self.tri.triangles
             s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
@@ -59,12 +56,52 @@ class Grid(object):
             self.dx = dx
             self.dy = dx
 
-    def find_index(self, x, y, x_, y_):
-        assert self.regular, "find_index only for regular grids"
-        xi = x[0, :]
-        yi = y[:, 0]
+    def _set_map_factor(self):
+        ##map factor is (dx, dy)/distance on the earth.
+        ##dx, dy are uniform for the regular grid
+        ##then mx, my will be used in calculating real physical distance
+        self.mx = 0.
+        self.my = 0.
+
+    def _set_theta(self):
+        x = self.x
+        y = self.y
+        ny, nx = x.shape
+        self.theta = np.zeros((ny, nx))
+        for i in range(nx):
+            dx = x[1,i] - x[0,i]
+            dy = y[1,i] - y[0,i]
+            self.theta[0,i] = np.arctan2(dy,dx)
+            for j in range(1, ny-1):
+                dx = x[j+1,i] - x[j-1,i]
+                dy = y[j+1,i] - y[j-1,i]
+                self.theta[j,i] = np.arctan2(dy,dx)
+            dx = x[ny-1,i] - x[ny-2,i]
+            dy = y[ny-1,i] - y[ny-2,i]
+            self.theta[ny-1,i] = np.arctan2(dy,dx)
+
+    def wrap_cyclic_xy(self, x_, y_):
+        if self.cyclic_dim != None:
+            xi = self.x[0, :]
+            yi = self.y[:, 0]
+            for d in self.cyclic_dim:
+                if d=='x':
+                    Lx = self.dx * len(xi)
+                    x_ = np.mod(x_ - np.min(xi), Lx) + np.min(xi)
+                elif d=='y':
+                    Ly = self.dy * len(yi)
+                    y_ = np.mod(y_ - np.min(yi), Ly) + np.min(yi)
+        return x_, y_
+
+    def find_index(self, x_, y_):
+        assert self.regular, "Grid.find_index only works for regular grids, use triangle_map for irregular"
+        xi = self.x[0, :]
+        yi = self.y[:, 0]
         assert np.all(np.diff(xi) >= 0) or np.all(np.diff(xi) <= 0), "x index not monotonic"
         assert np.all(np.diff(yi) >= 0) or np.all(np.diff(yi) <= 0), "y index not monotonic"
+        ###account for cyclic dim, when points drop "outside" then wrap around
+        x_, y_ = self.wrap_cyclic_xy(x_, y_)
+        ###find the index, using left/right sided search when index sequence is decreasing/increasing.
         if np.all(np.diff(xi) >= 0):
             id_x = np.searchsorted(xi, x_, side='right')
         else:
@@ -190,7 +227,7 @@ class Grid(object):
         for t in range(num_steps):
             ###find velocity ut,vt at traj position for step t
             if self.regular:
-                idx, idy = self.find_index(x, y, xtraj[:,t], ytraj[:,t])
+                idx, idy = self.find_index(xtraj[:,t], ytraj[:,t])
                 inside = ~np.logical_or(np.logical_or(idy==x.shape[0], idy==0),
                                         np.logical_or(idx==x.shape[1], idx==0))
                 ut = u[idy[inside], idx[inside]]
