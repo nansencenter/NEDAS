@@ -34,23 +34,36 @@ class Converter(object):
         ny, nx = x_.shape
         for d in self.grid1.cyclic_dim:
             if d=='x':
-                ###TODO: Lx doesn't have ::-1 scenario
                 Lx = self.grid1.dx * nx
-                x_ = np.vstack((x_.T, x_[:, 0]+Lx)).T
-                y_ = np.vstack((y_.T, y_[:, 0])).T
+                if np.all(np.diff(x_[0, :]) > 0):
+                    x_ = np.vstack((x_.T, x_[:, 0]+Lx)).T
+                    y_ = np.vstack((y_.T, y_[:, 0])).T
+                else:
+                    x_ = np.vstack((x_[:, -1]+Lx, x_.T)).T
+                    y_ = np.vstack((y_[:, -1], y_.T)).T
             elif d=='y':
                 Ly = self.grid1.dy * ny
-                x_ = np.vstack((x_, x_[0, :]))
-                y_ = np.vstack((y_, y_[0, :]+Ly))
+                if np.all(np.diff(y_[:, 0]) > 0):
+                    x_ = np.vstack((x_, x_[0, :]))
+                    y_ = np.vstack((y_, y_[0, :]+Ly))
+                else:
+                    x_ = np.vstack((x_[-1, :], x_))
+                    y_ = np.vstack((y_[-1, :]+Ly, y_))
         self.x1 = x_
         self.y1 = y_
 
     def _pad_cyclic_dim(self, fld):
         for d in self.grid1.cyclic_dim:
             if d=='x':
-                fld = np.vstack((fld.T, fld[:, 0])).T
+                if np.all(np.diff(self.grid1.x[0, :]) > 0):
+                    fld = np.vstack((fld.T, fld[:, 0])).T
+                else:
+                    fld = np.vstack((fld[:, -1], fld.T)).T
             elif d=='y':
-                fld = np.vstack((fld, fld[0, :]))
+                if np.all(np.diff(self.grid1.y[:, 0]) > 0):
+                    fld = np.vstack((fld, fld[0, :]))
+                else:
+                    fld = np.vstack((fld[-1, :], fld))
         return fld
 
     def _proj(self, x, y, forward=True):
@@ -125,7 +138,7 @@ class Converter(object):
         y_ = y.flatten()
 
         ###find indices id_x, id_y that x_,y_ falls in
-        id_x, id_y = self.grid1.find_index(x_, y_)
+        id_x, id_y = self.grid1.find_index(self.x1, self.y1, x_, y_)
 
         self.inside = ~np.logical_or(np.logical_or(id_y==self.x1.shape[0], id_y==0),
                                      np.logical_or(id_x==self.x1.shape[1], id_x==0))
