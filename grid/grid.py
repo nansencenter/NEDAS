@@ -27,6 +27,8 @@ class Grid(object):
             self.tri = Triangulation(x, y, triangles=triangles)
         self._set_grid_spacing()
 
+        self._set_map_factor()
+
         # self.landmask
         self._set_land_xy()  ##prepare land data for plot_var_on_map
 
@@ -37,6 +39,19 @@ class Grid(object):
         x += 0.5*dx  ##move coords to center of grid box
         y += 0.5*dx
         return x, y
+
+    def proj_name(self):
+        if hasattr(self.proj, 'name'):
+            return self.proj.name
+        return ''
+
+    def proj_ellps(self):
+        if hasattr(self.proj, 'definition'):
+            for e in self.proj.definition.split():
+                es = e.split('=')
+                if es[0]=='ellps':
+                    return es[1]
+        return 'WGS84'
 
     def _set_grid_spacing(self):
         if self.regular:
@@ -57,28 +72,25 @@ class Grid(object):
             self.dy = dx
 
     def _set_map_factor(self):
-        ##map factor is (dx, dy)/distance on the earth.
-        ##dx, dy are uniform for the regular grid
-        ##then mx, my will be used in calculating real physical distance
-        self.mx = 0.
-        self.my = 0.
-
-    def _set_theta(self):
-        x = self.x
-        y = self.y
-        ny, nx = x.shape
-        self.theta = np.zeros((ny, nx))
-        for i in range(nx):
-            dx = x[1,i] - x[0,i]
-            dy = y[1,i] - y[0,i]
-            self.theta[0,i] = np.arctan2(dy,dx)
-            for j in range(1, ny-1):
-                dx = x[j+1,i] - x[j-1,i]
-                dy = y[j+1,i] - y[j-1,i]
-                self.theta[j,i] = np.arctan2(dy,dx)
-            dx = x[ny-1,i] - x[ny-2,i]
-            dy = y[ny-1,i] - y[ny-2,i]
-            self.theta[ny-1,i] = np.arctan2(dy,dx)
+        if self.regular and self.proj_name() != 'longlat':
+            ##map factor is the ratio of (dx, dy) to their actual distances on the earth.
+            ##dx, dy are uniform for the regular grid, their actual sizes on the earth are not.
+            from pyproj import Geod
+            geod = Geod(ellps=self.proj_ellps())
+            lon, lat = self.proj(self.x, self.y, inverse=True)
+            gcdx = np.ones(self.x.shape)
+            gcdy = np.ones(self.y.shape)
+            _,_,gcdx[:, 0:-1] = geod.inv(lon[:, 0:-1], lat[:, 0:-1], lon[:, 1:], lat[:, 1:])
+            _,_,gcdx[:, -1] = geod.inv(lon[:, -2], lat[:, -2], lon[:, -1], lat[:, -1])
+            _,_,gcdy[0:-1, :] = geod.inv(lon[0:-1, :], lat[0:-1, :], lon[1:, :], lat[1:, :])
+            _,_,gcdy[-1, :] = geod.inv(lon[-2, :], lat[-2, :], lon[-1, :], lat[-1, :])
+            self.mfx = self.dx / gcdx
+            self.mfy = self.dy / gcdy
+        else:
+            ##irregular mesh typically don't need map factors
+            ##long/lat grid doesn't have units in meters, so will not use map factors
+            self.mfx = np.ones(self.x.shape)
+            self.mfy = np.ones(self.x.shape)
 
     def wrap_cyclic_xy(self, x_, y_):
         if self.cyclic_dim != None:
@@ -185,7 +197,7 @@ class Grid(object):
             c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap)
         plt.colorbar(c, fraction=0.025, pad=0.015, location='right')
 
-    def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
+    def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10, 
                      linecolor='k', linewidth=1,
                      showref=False, ref_xy=(0, 0), refcolor='w',
                      showhead=True, headwidth=0.1, headlength=0.3):
@@ -232,12 +244,20 @@ class Grid(object):
                                         np.logical_or(idx==x.shape[1], idx==0))
                 ut = u[idy[inside], idx[inside]]
                 vt = v[idy[inside], idx[inside]]
+                mfx = self.mfx[idy[inside], idx[inside]]
+                mfy = self.mfy[idy[inside], idx[inside]]
             else:
                 tri_finder = self.tri.get_trifinder()
                 triangle_map = tri_finder(xtraj[:, t], ytraj[:, t])
                 inside = (triangle_map >= 0)
                 ut = np.mean(u[self.tri.triangles[triangle_map[inside], :]], axis=1)
                 vt = np.mean(v[self.tri.triangles[triangle_map[inside], :]], axis=1)
+                mfx = np.mean(self.mfx[self.tri.triangles[triangle_map[inside], :]], axis=1)
+                mfy = np.mean(self.mfy[self.tri.triangles[triangle_map[inside], :]], axis=1)
+            ###velocity should be in physical units, to plot the right length on projection
+            ###we use the map factors to scale distance units
+            ut = ut * mfx
+            vt = vt * mfy
             ###update traj position
             xtraj[inside, t+1] = xtraj[inside, t] + ut * dt
             ytraj[inside, t+1] = ytraj[inside, t] + vt * dt
@@ -297,10 +317,10 @@ class Grid(object):
             grid_xy = []
             for lon in np.arange(-180, 180, dlon):
                 xy = []
-                for lat in np.arange(0, 90, 0.1):
+                for lat in np.arange(-89.9, 90, 0.1):
                     xy.append(self.proj(lon, lat))
                 grid_xy.append(xy)
-            for lat in np.arange(0, 90+dlat, dlat):
+            for lat in np.arange(-90, 90+dlat, dlat):
                 xy = []
                 for lon in np.arange(-180, 180, 0.1):
                     xy.append(self.proj(lon, lat))
