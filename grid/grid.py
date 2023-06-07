@@ -75,25 +75,21 @@ class Grid(object):
             self.dy = dx
 
     def _set_map_factor(self):
-        if self.regular and self.proj_name() != 'longlat':
-            ##map factor is the ratio of (dx, dy) to their actual distances on the earth.
-            ##dx, dy are uniform for the regular grid, their actual sizes on the earth are not.
-            from pyproj import Geod
-            geod = Geod(ellps=self.proj_ellps())
-            lon, lat = self.proj(self.x, self.y, inverse=True)
-            gcdx = np.ones(self.x.shape)
-            gcdy = np.ones(self.y.shape)
-            _,_,gcdx[:, 0:-1] = geod.inv(lon[:, 0:-1], lat[:, 0:-1], lon[:, 1:], lat[:, 1:])
-            _,_,gcdx[:, -1] = geod.inv(lon[:, -2], lat[:, -2], lon[:, -1], lat[:, -1])
-            _,_,gcdy[0:-1, :] = geod.inv(lon[0:-1, :], lat[0:-1, :], lon[1:, :], lat[1:, :])
-            _,_,gcdy[-1, :] = geod.inv(lon[-2, :], lat[-2, :], lon[-1, :], lat[-1, :])
-            self.mfx = self.dx / gcdx
-            self.mfy = self.dy / gcdy
-        else:
-            ##irregular mesh typically don't need map factors
+        if self.proj_name() == 'longlat':
             ##long/lat grid doesn't have units in meters, so will not use map factors
             self.mfx = np.ones(self.x.shape)
             self.mfy = np.ones(self.x.shape)
+        else:
+            ##map factor: ratio of (dx, dy) to their actual distances on the earth.
+            from pyproj import Geod
+            geod = Geod(ellps=self.proj_ellps())
+            lon, lat = self.proj(self.x, self.y, inverse=True)
+            lon1x, lat1x = self.proj(self.x+self.dx, self.y, inverse=True)
+            lon1y, lat1y = self.proj(self.x, self.y+self.dy, inverse=True)
+            _,_,gcdx = geod.inv(lon, lat, lon1x, lat1x)
+            _,_,gcdy = geod.inv(lon, lat, lon1y, lat1y)
+            self.mfx = self.dx / gcdx
+            self.mfy = self.dy / gcdy
 
     def wrap_cyclic_xy(self, x_, y_):
         if self.cyclic_dim != None:
@@ -260,8 +256,8 @@ class Grid(object):
                 mfy = np.mean(self.mfy[self.tri.triangles[triangle_map[inside], :]], axis=1)
             ###velocity should be in physical units, to plot the right length on projection
             ###we use the map factors to scale distance units
-            ut = ut * mfx
-            vt = vt * mfy
+            ut = ut / mfx
+            vt = vt / mfy
             ###update traj position
             xtraj[inside, t+1] = xtraj[inside, t] + ut * dt
             ytraj[inside, t+1] = ytraj[inside, t] + vt * dt
@@ -296,14 +292,23 @@ class Grid(object):
         ##add reference vector
         if showref:
             xr, yr = ref_xy
+            ##find the map factor for the ref point
+            if self.regular:
+                ix, iy = self.find_index(x, y, xr, yr)
+                mfxr = self.mfx[ix, iy]
+            else:
+                tri_finder = self.tri.get_trifinder()
+                triangle_map = tri_finder(xr, yr)
+                mfxr = self.mfx[self.tri.triangles[triangle_map, 0]]
+            Lr = L / mfxr
             ##draw a box
-            xb = [xr-L*1.3, xr-L*1.3, xr+L*1.3, xr+L*1.3, xr-L*1.3]
-            yb = [yr+L/2, yr-L, yr-L, yr+L/2, yr+L/2]
+            xb = [xr-Lr*1.3, xr-Lr*1.3, xr+Lr*1.3, xr+Lr*1.3, xr-Lr*1.3]
+            yb = [yr+Lr/2, yr-Lr, yr-Lr, yr+Lr/2, yr+Lr/2]
             ax.fill(xb, yb, color=refcolor, zorder=6)
             ax.plot(xb, yb, color='k', zorder=6)
             ##draw the reference vector
-            ax.plot([xr-L/2, xr+L/2], [yr, yr], color=linecolor, zorder=7)
-            ax.fill(*arrowhead_xy(xr+L/2, xr-L/2, yr, yr), color=linecolor, zorder=8)
+            ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
+            ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
 
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showgrid=True, dlon=20, dlat=5):
