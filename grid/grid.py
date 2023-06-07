@@ -35,14 +35,6 @@ class Grid(object):
         # self.landmask
         self._set_land_xy()  ##prepare land data for plot_var_on_map
 
-    def init_regular_grid(xstart, xend, ystart, yend, dx):
-        xcoord = np.arange(xstart, xend, dx)
-        ycoord = np.arange(ystart, yend, dx)
-        x, y = np.meshgrid(xcoord, ycoord)
-        x += 0.5*dx  ##move coords to center of grid box
-        y += 0.5*dx
-        return x, y
-
     def proj_name(self):
         if hasattr(self.proj, 'name'):
             return self.proj.name
