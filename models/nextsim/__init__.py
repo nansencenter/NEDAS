@@ -50,6 +50,9 @@ def read_var(filename, v_name):
     return v_data
 
 def write_var(filename, v_name, v_rec, v_data):
+    ##write some var to existing nextsim restart file
+    ##only for outputing analysis after DA
+    ##to generate new file, see nextsim model documentation
     v_info = variable_info(filename)
 
     if v_name not in v_info.keys():
@@ -73,10 +76,6 @@ def write_var(filename, v_name, v_rec, v_data):
             raise ValueError('v_data length does not match v_rec length')
         f.seek(v_info[v_name]['pos'])
         f.write(v_data.tobytes())
-
-##nextsim map projection
-from pyproj import Proj
-proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
 ##nextsim mesh info
 def indices(meshfile):
@@ -132,10 +131,24 @@ def get_unstruct_grid_from_msh(msh_file):
     return x, y, z
 
 ##nextsim variable names
-variable_dic = {}
+var_info = {'seaice_conc':{'name':'M_conc', 'is_vector':False, 'nz':1, 'unit':'%'},
+            'seaice_thick':{'name':'M_thick', 'is_vector':False, 'nz':1, 'unit':'m'},
+            'seaice_drift':{'name':'M_VT', 'is_vector':True, 'nz':1, 'unit':'m/s'},
+           }
 
-def get_var(filename, v_name):
-    if v_name == "M_VT":
-        return read_var(filename, v_name).reshape((2, -1))
+def get_var(filename, vname):
+    if var_info[vname]['is_vector']:
+        return read_var(filename, var_info[vname]['name']).reshape((2, -1))
     else:
-        return read_var(filename, v_name)
+        return read_var(filename, var_info[vname]['name'])
+
+##nextsim map projection and grid
+from pyproj import Proj
+proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
+
+def get_grid(meshfile):
+    from grid import Grid
+    x, y = nodes_xy(meshfile)
+    tri = triangulation(meshfile)
+    return Grid(proj, x, y, regular=False, triangles=tri.triangles)
+
