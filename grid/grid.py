@@ -256,8 +256,8 @@ class Grid(object):
                 mfy = np.mean(self.mfy[self.tri.triangles[triangle_map[inside], :]], axis=1)
             ###velocity should be in physical units, to plot the right length on projection
             ###we use the map factors to scale distance units
-            ut = ut / mfx
-            vt = vt / mfy
+            ut = ut * mfx
+            vt = vt * mfy
             ###update traj position
             xtraj[inside, t+1] = xtraj[inside, t] + ut * dt
             ytraj[inside, t+1] = ytraj[inside, t] + vt * dt
@@ -293,14 +293,17 @@ class Grid(object):
         if showref:
             xr, yr = ref_xy
             ##find the map factor for the ref point
+            mfxr = 1.
             if self.regular:
                 ix, iy = self.find_index(x, y, xr, yr)
-                mfxr = self.mfx[ix, iy]
+                if 0<ix<x.shape[0] and 0<iy<y.shape[0]:
+                    mfxr = self.mfx[ix, iy]
             else:
                 tri_finder = self.tri.get_trifinder()
                 triangle_map = tri_finder(xr, yr)
-                mfxr = self.mfx[self.tri.triangles[triangle_map, 0]]
-            Lr = L / mfxr
+                if triangle_map >=0:
+                    mfxr = self.mfx[self.tri.triangles[triangle_map, 0]]
+            Lr = L * mfxr
             ##draw a box
             xb = [xr-Lr*1.3, xr-Lr*1.3, xr+Lr*1.3, xr+Lr*1.3, xr-Lr*1.3]
             yb = [yr+Lr/2, yr-Lr, yr-Lr, yr+Lr/2, yr+Lr/2]
