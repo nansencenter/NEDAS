@@ -7,7 +7,7 @@ datetime
 numba
 concurrent
 mpi4py
-rocket-fft
+rocket-fft, or pyfftw
 struct
 netCDF4
 

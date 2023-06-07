@@ -1,8 +1,9 @@
 from netCDF4 import Dataset
 import struct
+from .state_def import state_info
 
 ##netcdf file io
-def nc_write(filename, dim, varname, dat, attr=None):
+def nc_write_var(filename, dim, varname, dat, attr=None):
     '''
     write gridded data to netcdf file
     filename: path/name of the output file
@@ -29,14 +30,29 @@ def nc_write(filename, dim, varname, dat, attr=None):
             f[varname].setncattr(akey, attr[akey])
     f.close()
 
-def nc_read(filename, varname):
+def nc_read_var(filename, varname):
     '''
     read gridded data from netcdf file
     '''
     f = Dataset(filename, 'r')
     assert(varname in f.variables)
-    dat = f[varname][:]
+    dat = f[varname][:].data
     f.close()
     return dat
 
 ###binary file io
+def create_var(filename, state_info, data):
+    ###write a new bin file for the first time
+
+
+
+def variable_info(filename):
+    return v_info
+
+def read_var(filename):
+    v_info = variable_info(filename)
+    return data
+
+def write_var(filename, data):
+    v_info = variable_info(filename)
+    

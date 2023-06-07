@@ -14,6 +14,7 @@ def fft2(f):
     fh_ = fft_obj(f)
     fh = np.zeros(f.shape, dtype='complex64')
     fh[..., 0:f.shape[1]//2+1] = fh_
+    ##TODO: fill the zero half with conj, so that pwrspec2d will sum correctly
     return fh
 
 def ifft2(fh):
@@ -46,18 +47,6 @@ def get_wn(fld):
         wny[..., j, :] = j
     return wnx, wny
 
-def meshgrid(xi, yi):
-    nx = len(xi)
-    ny = len(yi)
-    x = np.full((ny, nx), np.nan)
-    y = np.full((ny, nx), np.nan)
-    for i in range(nx):
-        y[:, i] = yi
-    for i in range(ny):
-        x[i, :] = xi
-    return x, y
-
-
 ##scale decomposition
 def lowpass_resp(Kh, k1, k2):
     r = np.zeros(Kh.shape)
@@ -79,13 +68,17 @@ def get_scale_resp(Kh, kr, s):
             resp = lowpass_resp(Kh, kr[s], kr[s+1]) - lowpass_resp(Kh, kr[s-1], kr[s])
     return resp
 
-def get_scale(x, kr, s):
-    xk = grid2spec(x)
-    xkout = xk.copy()
-    ns = len(kr)
-    if ns > 1:
-        kx, ky = get_wn(x)
-        Kh = np.sqrt(kx**2 + ky**2)
-        xkout = xk * get_scale_resp(Kh, kr, s)
-    return spec2grid(xkout)
+def get_scale_comp(fld, krange, s):
+    ##compute scale component of fld on the grid
+    ##given kr: list of center wavenumber k defining the scale bands
+    ##       s: the index for scale components
 
+    # xk = grid2spec(x)
+    # xkout = xk.copy()
+    # ns = len(kr)
+    # if ns > 1:
+    #     kx, ky = get_wn(x)
+    #     Kh = np.sqrt(kx**2 + ky**2)
+    #     xkout = xk * get_scale_resp(Kh, kr, s)
+    # return spec2grid(xkout)
+    pass
