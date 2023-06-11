@@ -82,3 +82,10 @@ def get_scale_comp(fld, krange, s):
     #     xkout = xk * get_scale_resp(Kh, kr, s)
     # return spec2grid(xkout)
     pass
+
+##alignment technique
+def optical_flow():
+    pass
+
+def warp():
+    pass

@@ -1,5 +1,5 @@
 import numpy as np
-from grid.multiscale import fft2, ifft2, get_wn, meshgrid
+from assim_tools.multiscale import fft2, ifft2, get_wn, meshgrid
 
 ###generate a random field
 ###  spec: the power spectrum of the field P(k2d)

@@ -3,11 +3,12 @@ matplotlib
 os
 sys
 pyproj
+pyshp
 datetime
 numba
 concurrent
 mpi4py
-rocket-fft, or pyfftw
+pyfftw
 struct
 netCDF4
 

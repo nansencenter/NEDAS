@@ -1,0 +1,4 @@
+seaice_drift models.nextsim 1 1
+seaice_conc models.nextsim 1 1
+seaice_thick models.nextsim 1 1
+seaice_damage models.nextsim 1 1

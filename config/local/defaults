@@ -29,9 +29,13 @@ NZ_ICE=1
 NZ_ATM=35
 NZ_OCE=10
 
+##State definition files
+STATE_DEF_FILE=$HOME/code/NEDAS/config/state_def
+LOCALIZATION_SETUP_FILE=$HOME/code/NEDAS/config/localization_setup
+
 ##initial ensemble perturbation
 PERTURB_PARAM_DIR=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
-PERTURB_VARIABLE=(slp uwind vwind sst sss)  ##list of perturbed variables
+PERTURB_VARIABLE="atmos_surf_wind "  ##list of perturbed variables
 PERTURB_NUM_ENS=5  ##ensemble batch size for perturbation.exe (if memory allows)
 PERTURB_NUM_SCALE=7  ##number of scale components to perturb with separate params.
 
@@ -39,6 +43,7 @@ PERTURB_NUM_SCALE=7  ##number of scale components to perturb with separate param
 
 
 #Observation
+OBS_DEF_FILE=$HOME/code/NEDAS/config/obs_def
 
 
 #DA parameters
@@ -48,5 +53,4 @@ NUM_ENS=100  #ensemble size, number of members/realizations
 ##multiscale
 NUM_SCALE=1
 RUN_ALIGNMENT=false
-
 
