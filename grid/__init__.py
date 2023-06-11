@@ -1,6 +1,8 @@
-import numpy as np
+from .grid import Grid
+from .converter import Converter
 
 def regular_grid(xstart, xend, ystart, yend, dx, centered=False):
+    import numpy as np
     xcoord = np.arange(xstart, xend, dx)
     ycoord = np.arange(ystart, yend, dx)
     x, y = np.meshgrid(xcoord, ycoord)
@@ -9,6 +11,3 @@ def regular_grid(xstart, xend, ystart, yend, dx, centered=False):
         y += 0.5*dx
     return x, y
 
-from .grid import Grid
-from .converter import Converter
-from .multiscale import get_scale_comp

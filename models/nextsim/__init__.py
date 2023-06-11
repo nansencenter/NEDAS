@@ -1,12 +1,17 @@
 import numpy as np
+from datetime import datetime, timedelta
 
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}
 
-def variable_info(filename):
+def filename(path, mem, t):
+    ##t is datetime obj for time of file
+    return path+'/../nextsim_ens_runs/wind10m_err1.0/{:03d}'.format(mem+1)+'/field_'+t.strftime('%Y%m%dT%H%M%SZ')+'.bin'
+
+def variable_info(fname):
     v_info = {}
-    with open(filename.replace('.bin','.dat'), 'r') as f:
+    with open(fname.replace('.bin','.dat'), 'r') as f:
         lines = f.readlines()
         pos = 4
         for recno, lin in enumerate(lines):
@@ -34,14 +39,14 @@ def variable_info(filename):
             pos += (4 + v_len*type_size[v_type])
     return v_info
 
-def read_var(filename, v_name):
+def read_var(fname, v_name):
     import struct
-    v_info = variable_info(filename)
+    v_info = variable_info(fname)
 
     if v_name not in v_info.keys():
-        raise ValueError('variable %s not found in %s' %(v_name, filename))
+        raise ValueError('variable %s not found in %s' %(v_name, fname))
 
-    with open(filename, 'rb') as f:
+    with open(fname, 'rb') as f:
         f.seek(v_info[v_name]['pos'])
         v_len = v_info[v_name]['len']
         v_type = v_info[v_name]['type']
@@ -49,16 +54,16 @@ def read_var(filename, v_name):
                                         f.read(v_len*type_size[v_type])))
     return v_data
 
-def write_var(filename, v_name, v_rec, v_data):
+def write_var(fname, v_name, v_rec, v_data):
     ##write some var to existing nextsim restart file
     ##only for outputing analysis after DA
     ##to generate new file, see nextsim model documentation
-    v_info = variable_info(filename)
+    v_info = variable_info(fname)
 
     if v_name not in v_info.keys():
-        raise ValueError('variable %s not in %s' %(v_name, filename))
+        raise ValueError('variable %s not in %s' %(v_name, fname))
 
-    with open(filename.replace('.bin','.dat'), 'wt') as f:
+    with open(fname.replace('.bin','.dat'), 'wt') as f:
         for v in v_info:
             if v_info[v]['recno'] == v_rec['recno']:
                 if v_info[v]['type'] != v_rec['type'] or v_info[v]['len'] != v_rec['len']:
@@ -71,35 +76,35 @@ def write_var(filename, v_name, v_rec, v_data):
                 ss += ' %g %g' %(v_info[v]['min_val'], v_info[v]['max_val'])
             f.write(ss+'\n')
 
-    with open(filename, 'r+b') as f:
+    with open(fname, 'r+b') as f:
         if len(v_data) != v_rec['len']:
             raise ValueError('v_data length does not match v_rec length')
         f.seek(v_info[v_name]['pos'])
         f.write(v_data.tobytes())
 
 ##nextsim mesh info
-def indices(meshfile):
-    elements = read_var(meshfile, 'Elements')
+def indices(fname):
+    elements = read_var(fname.replace('field','mesh'), 'Elements')
     ne = int(elements.size/3)
     ind = elements.reshape((ne, 3)) - 1
     return ind
 
-def nodes_xy(meshfile):
-    xn = read_var(meshfile, 'Nodes_x')
-    yn = read_var(meshfile, 'Nodes_y')
+def nodes_xy(fname):
+    xn = read_var(fname.replace('field','mesh'), 'Nodes_x')
+    yn = read_var(fname.replace('field','mesh'), 'Nodes_y')
     return xn, yn
 
-def elements_xy(meshfile):
-    xn, yn = nodes_xy(meshfile)
-    ind = indices(meshfile)
+def elements_xy(fname):
+    xn, yn = nodes_xy(fname)
+    ind = indices(fname)
     xe = np.mean(xn[ind], axis=1)
     ye = np.mean(yn[ind], axis=1)
     return xe, ye
 
-def triangulation(meshfile):
+def triangulation(fname):
     from matplotlib.tri import Triangulation
-    xn, yn = nodes_xy(meshfile)
-    ind = indices(meshfile)
+    xn, yn = nodes_xy(fname)
+    ind = indices(fname)
     return Triangulation(xn, yn, ind)
 
 def get_unstruct_grid_from_msh(msh_file):
@@ -131,24 +136,29 @@ def get_unstruct_grid_from_msh(msh_file):
     return x, y, z
 
 ##nextsim variable names
-var_info = {'seaice_conc':{'name':'M_conc', 'is_vector':False, 'nz':1, 'unit':'%'},
-            'seaice_thick':{'name':'M_thick', 'is_vector':False, 'nz':1, 'unit':'m'},
-            'seaice_drift':{'name':'M_VT', 'is_vector':True, 'nz':1, 'unit':'m/s'},
-           }
+variables = {'seaice_conc':     {'name':'M_conc',       'is_vector':False, 'unit':'%'   },
+             'seaice_thick':    {'name':'M_thick',      'is_vector':False, 'unit':'m'   },
+             'seaice_damage':   {'name':'M_damage',     'is_vector':False, 'unit':'%'   },
+             'snow_thick':      {'name':'M_snow_thick', 'is_vector':False, 'unit':'m'   },
+             'seaice_velocity': {'name':'M_VT',         'is_vector':True,  'unit':'m/s' },
+             'seaice_drift':    {'name':'M_UT',         'is_vector':True,  'unit':'m'   },
+            }
 
-def get_var(filename, vname):
-    if var_info[vname]['is_vector']:
-        return read_var(filename, var_info[vname]['name']).reshape((2, -1))
+def get_var(fname, vname):
+    assert vname in variables.keys(), "variable name not listed in variables"
+    name = variables[vname]['name']
+    if variables[vname]['is_vector']:
+        return read_var(fname, name).reshape((2, -1))
     else:
-        return read_var(filename, var_info[vname]['name'])
+        return read_var(fname, name)
 
 ##nextsim map projection and grid
 from pyproj import Proj
 proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
-def get_grid(meshfile):
+def get_grid(fname):
     from grid import Grid
-    x, y = nodes_xy(meshfile)
-    tri = triangulation(meshfile)
+    x, y = nodes_xy(fname)
+    tri = triangulation(fname)
     return Grid(proj, x, y, regular=False, triangles=tri.triangles)
 

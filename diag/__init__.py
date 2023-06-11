@@ -1,6 +1,6 @@
 ###util func for diagnostics
 import numpy as np
-from grid.multiscale import fft2, get_wn, get_scale_comp
+from assim_tools.multiscale import fft2, get_wn, get_scale_comp
 
 def rmse(fld, fld_tr):
     return
@@ -10,10 +10,12 @@ def pattern_corr(fld, fld_tr):
 
 ##some spectral diagnostics
 def pwrspec2d(fld):
-    ##horizontal 2d power spectrum p(k2d)
-    ##input fld[..., ny, nx]
-    ##return wn[0:nup], pwr[..., 0:nup]
-    ##  nup is the max wavenumber given ny,nx
+    ##horizontal 2d power spectrum p(k2d), on a regular Cartesian grid
+    ##for very large grid, the map factors will cause slight errors in grid spacings
+    ##but okay for relatively small grids. Of course for global analysis one shall use
+    ##the spherical harmonics instead
+    ##  input fld[..., ny, nx]
+    ##  return wn[0:nup], pwr[..., 0:nup], nup is the max wavenumber given ny,nx
     nx = fld.shape[-1]
     ny = fld.shape[0]
     kx, ky = get_wn(fld)

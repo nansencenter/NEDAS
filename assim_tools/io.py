@@ -1,6 +1,5 @@
 from netCDF4 import Dataset
 import struct
-from .state_def import state_info
 
 ##netcdf file io
 def nc_write_var(filename, dim, varname, dat, attr=None):
@@ -40,19 +39,14 @@ def nc_read_var(filename, varname):
     f.close()
     return dat
 
-###binary file io
-def create_var(filename, state_info, data):
+###binary file io for state variable fields
+def create_field(filename, state_info, data):
     ###write a new bin file for the first time
 
 
+def read_field(filename, field_info, fid):
+    return field_data
 
-def variable_info(filename):
-    return v_info
-
-def read_var(filename):
-    v_info = variable_info(filename)
-    return data
-
-def write_var(filename, data):
-    v_info = variable_info(filename)
-    
+def write_field(filename, field_info, fid, data):
+    with open(filename, 'r+b') as f:
+        f.seek
