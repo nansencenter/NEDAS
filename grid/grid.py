@@ -289,7 +289,7 @@ class Grid(object):
             if self.regular:
                 ix, iy = self.find_index(x, y, xr, yr)
                 if 0<ix<x.shape[1] and 0<iy<x.shape[0]:
-                    mfxr = self.mfx[ix, iy]
+                    mfxr = self.mfx[iy, ix]
             else:
                 tri_finder = self.tri.get_trifinder()
                 triangle_map = tri_finder(xr, yr)
