@@ -17,11 +17,11 @@ def destagger(dat, v_name):
         dat_[-1, :] = 3*dat[-2, :] - 3*dat[-3, :] + dat[-4, :]
     return dat_
 
-def read_data(filename, v_name, level, tlevel=1):
+def read_data(filename, v_name, level, mask, tlevel=1):
     f = ABFileRestart(filename, 'r', idm=nx, jdm=ny)
     tmp = f.read_field(v_name, level, tlevel)
     v_data = tmp.data
-    v_data[np.where(tmp.mask)] = np.nan
+    v_data[mask] = np.nan
     v_data = destagger(v_data, v_name)
     return v_data
 
