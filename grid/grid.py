@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation
+from pyproj import Geod
+import shapefile
+import os, inspect
 
 class Grid(object):
     def __init__(self,
@@ -73,7 +76,6 @@ class Grid(object):
             self.mfy = np.ones(self.x.shape)
         else:
             ##map factor: ratio of (dx, dy) to their actual distances on the earth.
-            from pyproj import Geod
             geod = Geod(ellps=self.proj_ellps())
             lon, lat = self.proj(self.x, self.y, inverse=True)
             lon1x, lat1x = self.proj(self.x+self.dx, self.y, inverse=True)
@@ -138,15 +140,13 @@ class Grid(object):
     ##some basic map plotting without the need for installing cartopy
     def _set_land_xy(self):
         ##prepare data to show the land area (with plt.fill/plt.plot)
-        import shapefile
-        import os, inspect
+        ##downloaded from https://www.naturalearthdata.com
         path = os.path.split(inspect.getfile(self.__class__))[0]
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_coastline.shp'))
-        ## downloaded from https://www.naturalearthdata.com
         shapes = sf.shapes()
 
-        ##Some cosmetic treaks of the shapefile:
-        ## get rid of the Caspian Sea
+        ##Some cosmetic tweaks of the shapefile:
+        ## get rid of the Caspian Sea (don't know how to fill polygon with holes...)
         shapes[1387].points = shapes[1387].points[391:]
         ## merge some Canadian coastlines shape
         shapes[1200].points = shapes[1200].points + shapes[1199].points[1:]
