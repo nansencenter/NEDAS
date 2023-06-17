@@ -259,6 +259,7 @@ class Grid(object):
         hl = headlength * L
         hw = headwidth * L
         def arrowhead_xy(x1, x2, y1, y2):
+            np.seterr(invalid='ignore')
             ll = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
             sinA = (y2 - y1)/ll
             cosA = (x2 - x1)/ll
