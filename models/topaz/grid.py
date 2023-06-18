@@ -41,9 +41,11 @@ def proj(x, y, inverse=False):
         xo = (i-1)*dx
         yo = (j-1)*dy
     else:
-        i = x/dx + 1
-        j = y/dy + 1
+        i = np.atleast_1d(x/dx + 1)
+        j = np.atleast_1d(y/dy + 1)
         yo, xo = cm.gind2ll(i, j)
+    if xo.size == 1:
+        return xo.item(), yo.item()
     return xo, yo
 
 grid = Grid(proj, x, y)
