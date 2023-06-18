@@ -223,7 +223,7 @@ class Grid(object):
             if any(inside):
                 self.llgrid_xy.append(xy)
 
-    def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='jet'):
+    def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis'):
         if vmin == None:
             vmin = np.nanmin(fld)
         if vmax == None:
@@ -370,7 +370,6 @@ class Grid(object):
                 code = [Path.LINETO] * len(xy[i])
                 for j in parts[i]:  ##make discontinuous patch if multi-parts
                     code[j] = Path.MOVETO
-                    code[j-1] = Path.CLOSEPOLY
                 ax.add_patch(PathPatch(Path(xy[i], code), facecolor=color, edgecolor=color, linewidth=0.1, zorder=zorder))
 
         ###plot the coastline to indicate land area
