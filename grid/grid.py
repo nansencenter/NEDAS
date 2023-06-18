@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
+from matplotlib.patches import PathPatch
 from matplotlib.tri import Triangulation
 from pyproj import Geod
 import shapefile
@@ -25,6 +27,12 @@ class Grid(object):
         self.pole_dim = pole_dim
         self.pole_index = pole_index
 
+        ##boundary corners of the grid
+        self.xmin = np.min(self.x)
+        self.xmax = np.max(self.x)
+        self.ymin = np.min(self.y)
+        self.ymax = np.max(self.y)
+
         if self.proj_name() == 'longlat':
             assert (np.min(x) > -180. and np.max(x) <= 180.), "for interpolation to work, lon should be within (-180, 180]"
 
@@ -36,13 +44,13 @@ class Grid(object):
 
         self._set_map_factor()
 
-        #cache land_xy and grid_xy for plot_land()
+        #cache land,river,lake and llgrid for plot_land()
         self.cache_land = cache_land
         self.dlon = 20
         self.dlat = 5
         if cache_land:
-            self._set_land_xy()  ##prepare land data for plot_var_on_map
-            self._set_grid_xy(20, 5)  ##prepare lon/lat grid data
+            self._set_land()  ##prepare land data for plot_var_on_map
+            self._set_llgrid(self.dlon, self.dlat)  ##prepare lon/lat grid data
 
     def proj_name(self):
         if hasattr(self.proj, 'name'):
@@ -144,18 +152,14 @@ class Grid(object):
         return fld_corners
 
     ##some basic map plotting without the need for installing cartopy
-    def _set_land_xy(self):
+    def _set_land(self):
         ##prepare data to show the land area (with plt.fill/plt.plot)
         ##downloaded from https://www.naturalearthdata.com
         path = os.path.split(inspect.getfile(self.__class__))[0]
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_coastline.shp'))
         shapes = sf.shapes()
 
-        ##Some cosmetic tweaks of the shapefile:
-        ## separate Caspian Sea from Eurasia (ax.fill will not work for this interior polygon...for now)
-        tmp = shapes[1387].points[:391]
-        shapes[1387].points = shapes[1387].points[391:]
-        ## merge some Canadian coastlines shape
+        ##Some cosmetic tweaks of the shapefile for some Canadian coastlines
         shapes[1200].points = shapes[1200].points + shapes[1199].points[1:]
         shapes[1199].points = []
         shapes[1230].points = shapes[1230].points + shapes[1229].points[1:] + shapes[1228].points[1:] + shapes[1227].points[1:]
@@ -164,55 +168,60 @@ class Grid(object):
         shapes[1227].points = []
         shapes[1233].points = shapes[1233].points + shapes[1234].points
         shapes[1234].points = []
-        shapes[1234].points = tmp
+        shapes[1234].points = []
 
-        ##boundary corners of the grid
-        xmin = np.min(self.x)
-        xmax = np.max(self.x)
-        ymin = np.min(self.y)
-        ymax = np.max(self.y)
+        def collect_shapes(shapes):
+            out_xy = []
+            out_parts = []
+            for shape in shapes:
+                if len(shape.points) > 0:
+                    xy = []
+                    inside = []
+                    for lon, lat in shape.points:
+                        x, y = self.proj(lon, lat)
+                        xy.append((x, y))
+                        inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
+                    ##if any point in the polygon lies inside the grid, need to plot it.
+                    if any(inside):
+                        out_xy.append(xy)
+                        out_parts.append(shape.parts)
+            return out_xy, out_parts
 
-        self.land_xy= []
-        for shape in shapes:
-            xy = []
-            inside = []
-            for point in shape.points[:]:
-                lon, lat = point
-                x, y = self.proj(lon, lat)
-                xy.append((x, y))
-                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
-            ##if any point in the polygon lies inside the grid, need to plot it.
-            if len(xy)>0 and any(inside):
-                self.land_xy.append(xy)
+        self.land_xy, self.land_parts = collect_shapes(shapes)
 
-    def _set_grid_xy(self, dlon, dlat):
+        ##lake and river features
+        sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
+        shapes = sf.shapes()
+        self.lake_xy, self.lake_parts = collect_shapes(shapes)
+
+        sf = shapefile.Reader(os.path.join(path, 'ne_50m_rivers.shp'))
+        shapes = sf.shapes()
+        self.river_xy, self.river_parts = collect_shapes(shapes)
+
+    def _set_llgrid(self, dlon, dlat):
         self.dlon = dlon
         self.dlat = dlat
         ##prepare a lat/lon grid to plot as guidelines
         ##  dlon, dlat: spacing of lon/lat grid
-        xmin = np.min(self.x)
-        xmax = np.max(self.x)
-        ymin = np.min(self.y)
-        ymax = np.max(self.y)
-        self.grid_xy = []
+        self.llgrid_xy = []
         for lon in np.arange(-180, 180, dlon):
             xy = []
             inside = []
             for lat in np.arange(-89.9, 90, 0.1):
                 x, y = self.proj(lon, lat)
                 xy.append((x, y))
-                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
+                inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
             if any(inside):
-                self.grid_xy.append(xy)
+                self.llgrid_xy.append(xy)
         for lat in np.arange(-90, 90+dlat, dlat):
             xy = []
             inside = []
             for lon in np.arange(-180, 180, 0.1):
                 x, y = self.proj(lon, lat)
                 xy.append((x, y))
-                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
+                inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
             if any(inside):
-                self.grid_xy.append(xy)
+                self.llgrid_xy.append(xy)
 
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='jet'):
         if vmin == None:
@@ -344,21 +353,40 @@ class Grid(object):
             ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
 
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
+                  showriver=False, rivercolor='c',
                   showgrid=True, dlon=20, dlat=5):
-        ###plot the coastline to indicate land area
+
         if not self.cache_land:
-            self._set_land_xy()
-        for xy in self.land_xy:
-            if color != None:
-                ax.fill(*zip(*xy), color=color, zorder=0)
-            if linecolor != None:
-                ax.plot(*zip(*xy), color=linecolor, linewidth=linewidth, zorder=8)
+            self._set_land()
+
+        def draw_line(ax, xy, parts, linecolor, linewidth, linestyle, zorder):
+            for i in range(len(xy)):
+                for j in range(len(parts[i])-1): ##plot separate segments if multi-parts
+                    ax.plot(*zip(*xy[i][parts[i][j]:parts[i][j+1]]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
+                ax.plot(*zip(*xy[i][parts[i][-1]:]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
+
+        def draw_patch(ax, xy, parts, color, zorder):
+            for i in range(len(xy)):
+                code = [Path.LINETO] * len(xy[i])
+                for j in parts[i]:  ##make discontinuous patch if multi-parts
+                    code[j] = Path.MOVETO
+                    code[j-1] = Path.CLOSEPOLY
+                ax.add_patch(PathPatch(Path(xy[i], code), facecolor=color, edgecolor=color, linewidth=0.1, zorder=zorder))
+
+        ###plot the coastline to indicate land area
+        if color != None:
+            draw_patch(ax, self.land_xy, self.land_parts, color=color, zorder=0)
+        if linecolor != None:
+            draw_line(ax, self.land_xy, self.land_parts, linecolor=linecolor, linewidth=linewidth, linestyle='-', zorder=8)
+        if showriver:
+            draw_line(ax, self.river_xy, self.river_parts, linecolor=rivercolor, linewidth=0.5, linestyle='-', zorder=1)
+            draw_patch(ax, self.lake_xy, self.lake_parts, color=rivercolor, zorder=1)
 
         ###add reference lonlat grid on map
         if showgrid:
             if not self.cache_land or dlon!=self.dlon or dlat!=self.dlat:
-                self._set_grid_xy(dlon, dlat)
-            for xy in self.grid_xy:
+                self._set_llgrid(dlon, dlat)
+            for xy in self.llgrid_xy:
                 ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=4)
 
         ##set the correct extent of plot
