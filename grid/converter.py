@@ -256,7 +256,7 @@ class Converter(object):
                     fld = self._pad_cyclic_dim(fld)
                 fld_out = self._interp_nodes(fld, method)
 
-            elif len(fld.flatten()) == self.num_triangles:
+            elif not self.grid1.regular and len(fld.flatten()) == self.num_triangles:
                 fld_out = self._interp_elements(fld.flatten())
 
             else:

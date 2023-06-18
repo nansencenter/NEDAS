@@ -146,7 +146,8 @@ class Grid(object):
         shapes = sf.shapes()
 
         ##Some cosmetic tweaks of the shapefile:
-        ## get rid of the Caspian Sea (don't know how to fill polygon with holes...)
+        ## separate Caspian Sea from Eurasia (ax.fill will not work for this interior polygon...for now)
+        tmp = shapes[1387].points[:391]
         shapes[1387].points = shapes[1387].points[391:]
         ## merge some Canadian coastlines shape
         shapes[1200].points = shapes[1200].points + shapes[1199].points[1:]
@@ -157,6 +158,7 @@ class Grid(object):
         shapes[1227].points = []
         shapes[1233].points = shapes[1233].points + shapes[1234].points
         shapes[1234].points = []
+        shapes[1234].points = tmp
 
         ##boundary corners of the grid
         xmin = np.min(self.x)
