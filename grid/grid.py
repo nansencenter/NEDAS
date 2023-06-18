@@ -13,7 +13,8 @@ class Grid(object):
                  cyclic_dim=None,   ##cyclic dimension(s): 'x', 'y' or 'xy'
                  pole_dim=None,     ##dimension with poles: 'x' or 'y'
                  pole_index=None,   ##tuple for the pole index(s) in pole_dim
-                 triangles=None     ##triangles for unstructured mesh
+                 triangles=None,    ##triangles for unstructured mesh
+                 cache_land=False,
                  ):
         assert x.shape == y.shape, "x, y shape does not match"
         self.proj = proj
@@ -35,8 +36,13 @@ class Grid(object):
 
         self._set_map_factor()
 
-        # self.landmask
-        self._set_land_xy()  ##prepare land data for plot_var_on_map
+        #cache land_xy and grid_xy for plot_land()
+        self.cache_land = cache_land
+        self.dlon = 20
+        self.dlat = 5
+        if cache_land:
+            self._set_land_xy()  ##prepare land data for plot_var_on_map
+            self._set_grid_xy(20, 5)  ##prepare lon/lat grid data
 
     def proj_name(self):
         if hasattr(self.proj, 'name'):
@@ -179,6 +185,35 @@ class Grid(object):
             if len(xy)>0 and any(inside):
                 self.land_xy.append(xy)
 
+    def _set_grid_xy(self, dlon, dlat):
+        self.dlon = dlon
+        self.dlat = dlat
+        ##prepare a lat/lon grid to plot as guidelines
+        ##  dlon, dlat: spacing of lon/lat grid
+        xmin = np.min(self.x)
+        xmax = np.max(self.x)
+        ymin = np.min(self.y)
+        ymax = np.max(self.y)
+        self.grid_xy = []
+        for lon in np.arange(-180, 180, dlon):
+            xy = []
+            inside = []
+            for lat in np.arange(-89.9, 90, 0.1):
+                x, y = self.proj(lon, lat)
+                xy.append((x, y))
+                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
+            if any(inside):
+                self.grid_xy.append(xy)
+        for lat in np.arange(-90, 90+dlat, dlat):
+            xy = []
+            inside = []
+            for lon in np.arange(-180, 180, 0.1):
+                x, y = self.proj(lon, lat)
+                xy.append((x, y))
+                inside.append((xmin <= x <= xmax) and (ymin <= y <= ymax))
+            if any(inside):
+                self.grid_xy.append(xy)
+
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='jet'):
         if vmin == None:
             vmin = np.nanmin(fld)
@@ -311,6 +346,8 @@ class Grid(object):
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showgrid=True, dlon=20, dlat=5):
         ###plot the coastline to indicate land area
+        if not self.cache_land:
+            self._set_land_xy()
         for xy in self.land_xy:
             if color != None:
                 ax.fill(*zip(*xy), color=color, zorder=0)
@@ -319,23 +356,12 @@ class Grid(object):
 
         ###add reference lonlat grid on map
         if showgrid:
-            ##prepare a lat/lon grid to plot as guidelines
-            ##  dlon, dlat: spacing of lon/lat grid
-            grid_xy = []
-            for lon in np.arange(-180, 180, dlon):
-                xy = []
-                for lat in np.arange(-89.9, 90, 0.1):
-                    xy.append(self.proj(lon, lat))
-                grid_xy.append(xy)
-            for lat in np.arange(-90, 90+dlat, dlat):
-                xy = []
-                for lon in np.arange(-180, 180, 0.1):
-                    xy.append(self.proj(lon, lat))
-                grid_xy.append(xy)
-
-            for xy in grid_xy:
+            if not self.cache_land or dlon!=self.dlon or dlat!=self.dlat:
+                self._set_grid_xy(dlon, dlat)
+            for xy in self.grid_xy:
                 ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=4)
 
+        ##set the correct extent of plot
         ax.set_xlim(np.min(self.x), np.max(self.x))
         ax.set_ylim(np.min(self.y), np.max(self.y))
 
