@@ -1,5 +1,5 @@
 import numpy as np
-from .abfile import ABFileRestart
+from .abfile import ABFileBathy, ABFileRestart
 from .grid import ny, nx
 
 def destagger(dat, v_name):
@@ -24,6 +24,10 @@ def read_data(filename, v_name, level, mask, tlevel=1):
     v_data[mask] = np.nan
     v_data = destagger(v_data, v_name)
     return v_data
+
+def get_mask(depthfile):
+    f = ABFileBathy(depthfile, 'r', idm=nx, jdm=ny)
+    return f.read_field('depth').mask
 
 def write_data(filename, v_name, v_data):
     pass
