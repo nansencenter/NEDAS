@@ -32,7 +32,8 @@ dy = np.median(dist_y)
 
 
 ##the coordinates in topaz model native grid
-x, y = np.meshgrid(np.arange(0., nx*dx, dx), np.arange(0., ny*dy, dy))
+x = ii*dx
+y = jj*dy
 
 ##proj function that mimic what pyproj.Proj object does
 def proj(x, y, inverse=False):
