@@ -46,7 +46,7 @@ type_size = {'double':8, 'float':4, 'int':4}
 
 ##if a model has landmask, we apply the mask to reduce state dimension
 is_masked = {'models.nextsim':True,
-             'models.topaz':False,
+             'models.topaz':True,
              'models.wrf':False, }
 
 def t2h(t):
@@ -69,18 +69,20 @@ def read_field_info(filename):
         nx = int(ss[2])
 
         var_names = lines[1].split()
+        var_sources = lines[2].split()
 
-        ss = lines[2].split()
+        ss = lines[3].split()
         time = h2t(np.float32(ss[0]))
         t_offsets = (np.float32(ss[1]), np.float32(ss[2]))
 
-        ss = lines[3].split()
-        zlevels = [np.float32(z) for z in ss]
+        ss = lines[4].split()
+        zlevels = [np.int32(z) for z in ss]
 
         info.update({'nens':nens,
                      'ny':ny,
                      'nx':nx,
                      'var_names':var_names,
+                     'var_sources':var_sources,
                      'time':time,
                      'time_window':(t_offsets[0], t_offsets[1]),
                      'levels':zlevels,
@@ -88,7 +90,7 @@ def read_field_info(filename):
 
         ##following lines of variable records
         fld_id = 0
-        for lin in lines[4:]:
+        for lin in lines[5:]:
             ss = lin.split()
             var_name = ss[0]
             source = ss[1]
@@ -96,7 +98,7 @@ def read_field_info(filename):
             pos = int(ss[3])
             member = int(ss[4])
             time = h2t(np.float32(ss[5]))
-            level = np.float32(ss[6])
+            level = np.int32(ss[6])
             field = {'var_name':var_name,
                      'source':source,
                      'dtype':dtype,
@@ -112,26 +114,28 @@ def read_field_info(filename):
 def write_field_info(filename, info):
     ##line 1: nens, ny, nx
     ##line 2: list of variable names
-    ##line 3: time (hours since 1900-1-1), offset_left, offset_right (hours)
-    ##line 4: list of vertical levels
-    ##line 5:end: list of variables (one per line):
+    ##line 3: list of variable sources
+    ##line 4: time (hours since 1900-1-1), offset_left, offset_right (hours)
+    ##line 5: list of vertical level indices
+    ##line 6:end: list of variables (one per line):
     ##     var_name, source_module, data_type, seek_position, member, time, level
     with open(filename.replace('.bin','.dat'), 'wt') as f:
         f.write('%i %i %i\n' %(info['nens'], info['ny'], info['nx']))
         f.write(' '.join(info['var_names'])+'\n')
+        f.write(' '.join(info['var_sources'])+'\n')
         f.write('%f %f %f\n' %(t2h(info['time']), *info['time_window']))
         for z in info['levels']:
-            f.write('%f ' %(z))
+            f.write('%i ' %(z))
         f.write('\n')
 
         for i, rec in info['fields'].items():
-            f.write('%s %s %s %i %i %f %f\n' %(rec['var_name'], rec['source'], rec['dtype'], rec['pos'], rec['member'], t2h(rec['time']), rec['level']))
+            f.write('%s %s %s %i %i %f %i\n' %(rec['var_name'], rec['source'], rec['dtype'], rec['pos'], rec['member'], t2h(rec['time']), rec['level']))
 
 ##parse and generate field_info dict
 def field_info(state_def_file, ###state_def filename, see config module
                time,         ##datetime obj for the current analysis time
                t_offsets,    ##analysis window defined by (-a, b) hours
-               zlevels,      ##vertical levels (in meters) in analysis
+               zlevels,      ##vertical levels (indices) in analysis
                nens, ny, nx, ##ensemble size, and 2d field dimensions
                mask,         ##landmask (True for land)
                ):
@@ -140,6 +144,7 @@ def field_info(state_def_file, ###state_def filename, see config module
                  'ny':ny,
                  'nx':nx,
                  'var_names':[],
+                 'var_sources':[],
                  'time':time,
                  'time_window':(t_offsets[0], t_offsets[1]),
                  'levels':[z for z in zlevels],
@@ -153,19 +158,28 @@ def field_info(state_def_file, ###state_def filename, see config module
         for lin in f.readlines():
             ss = lin.split()
             assert len(ss) == 6, 'state_def format error, should be "varname, src, dtype, dt, zmin, zmax"'
-            var_name = ss[0]     ##variable name
-            var_source = ss[1]   ##which module handles i/o for this variable
-            var_dtype = ss[2]    ##data type int/float/double
-            var_dt = np.float32(ss[3])   ##time interval (hours) available from model
-            var_zmin = np.float32(ss[4])
-            var_zmax = np.float32(ss[5])
+            ##variable name
+            var_name = ss[0]
+            ##which module handles i/o for this variable
+            var_source = ss[1]
+            ##data type int/float/double
+            var_dtype = ss[2]
+            ##time interval (hours) available from model
+            var_dt = np.float32(ss[3])
+            ##vertical index min,max
+            ##Note: 0 means surface variables, negative indices for ocean layers
+            ##      positive indices for atmos layers
+            var_zmin = np.int32(ss[4])
+            var_zmax = np.int32(ss[5])
 
             info['var_names'].append(var_name)
+            info['var_sources'].append(var_source)
+
             if variables[var_name]['is_vector']:
                 vlist = (var_name+'_x', var_name+'_y')
             else:
                 vlist = (var_name,)
-            for v in vlist:  ##loop over variables
+            for v in vlist:  ##loop over variable list
                 for m in range(nens):  ##loop over ensemble members
                     for n in np.arange(int(t_offsets[0]/var_dt), int(t_offsets[1]/var_dt)+1):  ##time slices
                         for level in [z for z in zlevels if var_zmin<=z<=var_zmax]:  ##vertical levels
@@ -235,26 +249,4 @@ def write_field(filename, info, mask, fid, fld):
     with open(filename, 'r+b') as f:
         f.seek(rec['pos'])
         f.write(struct.pack(fsize*type_dic[rec['dtype']], *fld_))
-
-##convert bin file state variables [nfield, ny, nx] * nens files
-##to nc files [nens, nt, nz, ny, nx] * num_var files
-def bin2nc(filename):
-    info = read_field_info(filename)
-    mask = read_mask(filename, info)
-    flds = info['fields']
-    nens = info['nens']
-    ny = info['ny']
-    nx = info['nx']
-    for v in list(set(rec['var_name'] for i, rec in info['fields'].items())):
-        times = list(set(rec['time'] for i, rec in flds.items() if rec['var_name']==v))
-        levels = list(set(rec['level'] for i, rec in flds.items() if rec['var_name']==v))
-        dat = np.zeros((nens, len(times), len(levels), ny, nx))
-        for m in range(nens):
-            for n in range(len(times)):
-                for z in range(len(levels)):
-                    fid = list(set(i for i, rec in flds.items() if rec['var_name']==v and rec['member']==m and rec['time']==times[n] and rec['level']==levels[z]))[0]
-                    dat[m, n, z, :, :] = read_field(filename, info, mask, fid)
-        dims = {'member':nens, 'time':len(times), 'level':len(levels), 'y':ny, 'x':nx}
-        outfile = filename.replace('.bin','.'+v+'.nc')
-        nc_write_var(outfile, dims, v, dat)
 
