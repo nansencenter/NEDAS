@@ -2,10 +2,10 @@
 
 #experiment design
 EXP_NAME=test
-DATE_START=202101010000    ##format ccyymmddHHII
-DATE_END=202101310000
-DATE_CYCLE_START=202101020000
-DATE_CYCLE_END=202101300000
+DATE_START=200701010000    ##format ccyymmddHHII
+DATE_END=200702210000
+DATE_CYCLE_START=200701200000
+DATE_CYCLE_END=200702150000
 CYCLE_PERIOD=360           ##in minutes
 
 ##HPC settings, paths, env config
@@ -22,16 +22,20 @@ DATA_DIR=$SCRATCH/data
 PROJ="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 DX=2500            ##grid spacing (meter)
 XSTART=-2500000    ##start,end x coord (m)
-XEND=3000000
-YSTART=-3000000    ##start,end y coord (m)
+XEND=2500000
+YSTART=-2000000    ##start,end y coord (m)
 YEND=2500000
 NZ_ICE=1
 NZ_ATM=35
 NZ_OCE=10
 
+##State definition files
+STATE_DEF_FILE=$HOME/code/NEDAS/config/state_def
+LOCALIZATION_SETUP_FILE=$HOME/code/NEDAS/config/localization_setup
+
 ##initial ensemble perturbation
 PERTURB_PARAM_DIR=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
-PERTURB_VARIABLE=(slp uwind vwind sst sss)  ##list of perturbed variables
+PERTURB_VARIABLE="atmos_surf_wind "  ##list of perturbed variables
 PERTURB_NUM_ENS=5  ##ensemble batch size for perturbation.exe (if memory allows)
 PERTURB_NUM_SCALE=4  ##number of scale components to perturb with separate params.
 
@@ -39,6 +43,7 @@ PERTURB_NUM_SCALE=4  ##number of scale components to perturb with separate param
 
 
 #Observation
+OBS_DEF_FILE=$HOME/code/NEDAS/config/obs_def
 
 
 #DA parameters
@@ -48,5 +53,4 @@ NUM_ENS=100  #ensemble size, number of members/realizations
 ##multiscale
 NUM_SCALE=1
 RUN_ALIGNMENT=false
-
 

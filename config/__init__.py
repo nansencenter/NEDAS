@@ -35,21 +35,13 @@ ref_proj = pyproj.Proj(PROJ)
 ref_x, ref_y = regular_grid(XSTART, XEND, YSTART, YEND, DX, centered=True)
 ref_grid = Grid(ref_proj, ref_x, ref_y)
 
-##state variables
-STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
 ##state variables definition
 ##  one state variable per line, each line contains:
 ##     variable name, string
 ##     source, string, which module takes care of preprocessing
 ##     nz, int, number of vertical layers
 ##     nt, int, number of time slices
-state_def = {}
-with open(STATE_DEF_FILE, 'r') as f:
-    for lin in f.readlines():
-        vname, source, nz, nt = lin.split()
-        state_def.update({vname:{'source':source,
-                                'nz':int(nz),
-                                'nt':int(nt)}})
+STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
 
 ##perturbation
 PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
