@@ -1,4 +1,6 @@
 ##the map projection used in nextsim
+import numpy as np
+from grid import Grid
 import pyproj
 proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
@@ -34,31 +36,3 @@ def get_grid(filename):
     tri = triangulation(filename)
     return Grid(proj, x, y, regular=False, triangles=tri.triangles)
 
-##other funcs
-def get_unstruct_grid_from_msh(msh_file):
-    '''
-    Get the unstructured grid from .msh files
-    output: x[:], y[:], z[:]
-    '''
-    f = open(msh_file, 'r')
-    if "$MeshFormat" not in f.readline():
-        raise ValueError("expecting $MeshFormat -  not found")
-    version, fmt, size = f.readline().split()
-    if "$EndMeshFormat" not in f.readline():
-        raise ValueError("expecting $EndMeshFormat -  not found")
-    if "$PhysicalNames" not in f.readline():
-        raise ValueError("expecting $PhysicalNames -  not found")
-    num_physical_names = int(f.readline())
-    for _ in range(num_physical_names):
-        topodim, ident, name = f.readline().split()
-    if "$EndPhysicalNames" not in f.readline():
-        raise ValueError("expecting $EndPhysicalNames -  not found")
-    if "$Nodes" not in f.readline():
-        raise ValueError("expecting $Nodes -  not found")
-    num_nodes = int(f.readline())
-    lines = [f.readline().strip() for n in range(num_nodes)]
-    iccc =np.array([[float(v) for v in line.split()] for line in lines])
-    x, y, z = (iccc[:, 1], iccc[:, 2], iccc[:, 3])
-    if "$EndNodes" not in f.readline():
-        raise ValueError("expecting $EndNodes -  not found")
-    return x, y, z
