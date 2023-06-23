@@ -24,7 +24,7 @@ def nc_write_var(filename, dim, varname, dat, attr=None):
     if varname in f.variables:
         assert(f.variables[varname].shape==dat.shape)
     else:
-        f.createVariable(varname, float, dim.keys())
+        f.createVariable(varname, np.float32, dim.keys())
     f[varname][...] = dat
     if attr != None:
         for akey in attr:

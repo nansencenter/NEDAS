@@ -77,7 +77,7 @@ def write_data(filename, v_name, v_data):
 
     ##write v_data to the bin file
     with open(filename, 'r+b') as f:
-        if len(v_data) != v_rec['len']:
-            raise ValueError('v_data length does not match v_rec length')
+        if len(v_data) != info[v_name]['len']:
+            raise ValueError('v_data length does not match length on record')
         f.seek(info[v_name]['pos'])
         f.write(v_data.tobytes())
