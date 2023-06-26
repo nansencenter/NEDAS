@@ -79,26 +79,32 @@ class Converter(object):
             return x_, y_
 
     def _set_rotate_matrix(self):
-        ##corresponding x1,y1 coordinates in proj2, call them x,y
-        x, y = self._proj(self.x1, self.y1)
-
-        ##find small increments in x,y due to small changes in x1,y1 in proj2
-        eps = 0.1 * self.grid1.dx    ##grid spacing is specified in Grid object
-        xu, yu = self._proj(self.x1 + eps, self.y1      )  ##move a bit in x dirn
-        xv, yv = self._proj(self.x1      , self.y1 + eps)  ##move a bit in y dirn
-
         self.rotate_matrix = np.zeros((4,)+self.x1.shape)
-        np.seterr(invalid='ignore')  ##will get nan at poles
-        dxu = xu-x
-        dyu = yu-y
-        dxv = xv-x
-        dyv = yv-y
-        hu = np.hypot(dxu, dyu)
-        hv = np.hypot(dxv, dyv)
-        self.rotate_matrix[0, :] = dxu/hu
-        self.rotate_matrix[1, :] = dxv/hv
-        self.rotate_matrix[2, :] = dyu/hu
-        self.rotate_matrix[3, :] = dyv/hv
+        if self.grid1.proj != self.grid2.proj:
+            ##corresponding x1,y1 coordinates in proj2, call them x,y
+            x, y = self._proj(self.x1, self.y1)
+
+            ##find small increments in x,y due to small changes in x1,y1 in proj2
+            eps = 0.1 * self.grid1.dx    ##grid spacing is specified in Grid object
+            xu, yu = self._proj(self.x1 + eps, self.y1      )  ##move a bit in x dirn
+            xv, yv = self._proj(self.x1      , self.y1 + eps)  ##move a bit in y dirn
+
+            np.seterr(invalid='ignore')  ##will get nan at poles
+            dxu = xu-x
+            dyu = yu-y
+            dxv = xv-x
+            dyv = yv-y
+            hu = np.hypot(dxu, dyu)
+            hv = np.hypot(dxv, dyv)
+            self.rotate_matrix[0, :] = dxu/hu
+            self.rotate_matrix[1, :] = dxv/hv
+            self.rotate_matrix[2, :] = dyu/hu
+            self.rotate_matrix[3, :] = dyv/hv
+        else:
+            self.rotate_matrix[0, :] = 1.
+            self.rotate_matrix[1, :] = 0.
+            self.rotate_matrix[2, :] = 0.
+            self.rotate_matrix[3, :] = 1.
 
     def _fill_pole_void(self, fld):
         if self.grid1.pole_dim == 'x':
