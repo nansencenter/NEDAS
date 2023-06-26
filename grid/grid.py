@@ -6,6 +6,7 @@ from matplotlib.tri import Triangulation
 from pyproj import Geod
 import shapefile
 import os, inspect
+from functools import cached_property
 
 class Grid(object):
     def __init__(self,
@@ -16,7 +17,6 @@ class Grid(object):
                  pole_dim=None,     ##dimension with poles: 'x' or 'y'
                  pole_index=None,   ##tuple for the pole index(s) in pole_dim
                  triangles=None,    ##triangles for unstructured mesh
-                 cache_land=False,
                  ):
         assert x.shape == y.shape, "x, y shape does not match"
         self.proj = proj
@@ -40,17 +40,9 @@ class Grid(object):
             ##Generate triangulation, if tiangles are provided its very quick,
             ##otherwise Triangulation will generate one, but slower.
             self.tri = Triangulation(x, y, triangles=triangles)
-        self._set_grid_spacing()
 
-        self._set_map_factor()
-
-        #cache land,river,lake and llgrid for plot_land()
-        self.cache_land = cache_land
         self.dlon = 20
         self.dlat = 5
-        if cache_land:
-            self._set_land()  ##prepare land data for plot_var_on_map
-            self._set_llgrid(self.dlon, self.dlat)  ##prepare lon/lat grid data
 
     def proj_name(self):
         if hasattr(self.proj, 'name'):
@@ -65,39 +57,57 @@ class Grid(object):
                     return es[1]
         return 'WGS84'
 
-    def _set_grid_spacing(self):
+    def _mesh_dx(self):
+        t = self.tri.triangles
+        s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
+        s2 = np.sqrt((self.x[t][:,0]-self.x[t][:,2])**2+(self.y[t][:,0]-self.y[t][:,2])**2)
+        s3 = np.sqrt((self.x[t][:,2]-self.x[t][:,1])**2+(self.y[t][:,2]-self.y[t][:,1])**2)
+        sa = (s1 + s2 + s3)/3
+        e = 0.3
+        inds = np.logical_and(np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa), np.abs(s3-sa) < e*sa)
+        return np.mean(sa[inds])
+
+    @cached_property
+    def dx(self):
         if self.regular:
             xi = self.x[0, :]
-            yi = self.y[:, 0]
-            self.dx = (np.max(xi) - np.min(xi)) / (len(xi) - 1)
-            self.dy = (np.max(yi) - np.min(yi)) / (len(yi) - 1)
+            return (np.max(xi) - np.min(xi)) / (len(xi) - 1)
         else:
-            t = self.tri.triangles
-            s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
-            s2 = np.sqrt((self.x[t][:,0]-self.x[t][:,2])**2+(self.y[t][:,0]-self.y[t][:,2])**2)
-            s3 = np.sqrt((self.x[t][:,2]-self.x[t][:,1])**2+(self.y[t][:,2]-self.y[t][:,1])**2)
-            sa = (s1 + s2 + s3)/3
-            e = 0.3
-            inds = np.logical_and(np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa), np.abs(s3-sa) < e*sa)
-            dx = np.mean(sa[inds])
-            self.dx = dx
-            self.dy = dx
+            return self._mesh_dx()
 
-    def _set_map_factor(self):
+    @cached_property
+    def dy(self):
+        if self.regular:
+            yi = self.y[:, 0]
+            return (np.max(yi) - np.min(yi)) / (len(yi) - 1)
+        else:
+            return self._mesh_dx()
+
+    @cached_property
+    def mfx(self):
         if self.proj_name() == 'longlat':
             ##long/lat grid doesn't have units in meters, so will not use map factors
-            self.mfx = np.ones(self.x.shape)
-            self.mfy = np.ones(self.x.shape)
+            return np.ones(self.x.shape)
         else:
             ##map factor: ratio of (dx, dy) to their actual distances on the earth.
             geod = Geod(ellps=self.proj_ellps())
             lon, lat = self.proj(self.x, self.y, inverse=True)
             lon1x, lat1x = self.proj(self.x+self.dx, self.y, inverse=True)
-            lon1y, lat1y = self.proj(self.x, self.y+self.dy, inverse=True)
             _,_,gcdx = geod.inv(lon, lat, lon1x, lat1x)
+            return self.dx / gcdx
+
+    @cached_property
+    def mfy(self):
+        if self.proj_name() == 'longlat':
+            ##long/lat grid doesn't have units in meters, so will not use map factors
+            return np.ones(self.x.shape)
+        else:
+            ##map factor: ratio of (dx, dy) to their actual distances on the earth.
+            geod = Geod(ellps=self.proj_ellps())
+            lon, lat = self.proj(self.x, self.y, inverse=True)
+            lon1y, lat1y = self.proj(self.x, self.y+self.dy, inverse=True)
             _,_,gcdy = geod.inv(lon, lat, lon1y, lat1y)
-            self.mfx = self.dx / gcdx
-            self.mfy = self.dy / gcdy
+            return self.dy / gcdy
 
     def wrap_cyclic_xy(self, x_, y_):
         if self.cyclic_dim != None:
@@ -152,7 +162,24 @@ class Grid(object):
         return fld_corners
 
     ##some basic map plotting without the need for installing cartopy
-    def _set_land(self):
+    def collect_shape_data(self, shapes):
+        data = {'xy':[], 'parts':[]}
+        for shape in shapes:
+            if len(shape.points) > 0:
+                xy = []
+                inside = []
+                for lon, lat in shape.points:
+                    x, y = self.proj(lon, lat)
+                    xy.append((x, y))
+                    inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
+                ##if any point in the polygon lies inside the grid, need to plot it.
+                if any(inside):
+                    data['xy'].append(xy)
+                    data['parts'].append(shape.parts)
+        return data
+
+    @cached_property
+    def land_data(self):
         ##prepare data to show the land area (with plt.fill/plt.plot)
         ##downloaded from https://www.naturalearthdata.com
         path = os.path.split(inspect.getfile(self.__class__))[0]
@@ -170,40 +197,28 @@ class Grid(object):
         shapes[1234].points = []
         shapes[1234].points = []
 
-        def collect_shapes(shapes):
-            out_xy = []
-            out_parts = []
-            for shape in shapes:
-                if len(shape.points) > 0:
-                    xy = []
-                    inside = []
-                    for lon, lat in shape.points:
-                        x, y = self.proj(lon, lat)
-                        xy.append((x, y))
-                        inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
-                    ##if any point in the polygon lies inside the grid, need to plot it.
-                    if any(inside):
-                        out_xy.append(xy)
-                        out_parts.append(shape.parts)
-            return out_xy, out_parts
+        return self.collect_shape_data(shapes)
 
-        self.land_xy, self.land_parts = collect_shapes(shapes)
-
-        ##lake and river features
-        sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
-        shapes = sf.shapes()
-        self.lake_xy, self.lake_parts = collect_shapes(shapes)
-
+    @cached_property
+    def river_data(self):
+        ##river features
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_rivers.shp'))
         shapes = sf.shapes()
-        self.river_xy, self.river_parts = collect_shapes(shapes)
+        return self.collect_shape_data(shapes)
 
-    def _set_llgrid(self, dlon, dlat):
+    @cached_property
+    def lake_data(self):
+        ##lake features
+        sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
+        shapes = sf.shapes()
+        return self.collect_shape_data(shapes)
+
+    def llgrid_xy(self, dlon, dlat):
         self.dlon = dlon
         self.dlat = dlat
         ##prepare a lat/lon grid to plot as guidelines
         ##  dlon, dlat: spacing of lon/lat grid
-        self.llgrid_xy = []
+        llgrid_xy = []
         for lon in np.arange(-180, 180, dlon):
             xy = []
             inside = []
@@ -212,7 +227,7 @@ class Grid(object):
                 xy.append((x, y))
                 inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
             if any(inside):
-                self.llgrid_xy.append(xy)
+                llgrid_xy.append(xy)
         for lat in np.arange(-90, 90+dlat, dlat):
             xy = []
             inside = []
@@ -221,7 +236,8 @@ class Grid(object):
                 xy.append((x, y))
                 inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
             if any(inside):
-                self.llgrid_xy.append(xy)
+                llgrid_xy.append(xy)
+        return llgrid_xy
 
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis'):
         if vmin == None:
@@ -356,16 +372,17 @@ class Grid(object):
                   showriver=False, rivercolor='c',
                   showgrid=True, dlon=20, dlat=5):
 
-        if not self.cache_land:
-            self._set_land()
-
-        def draw_line(ax, xy, parts, linecolor, linewidth, linestyle, zorder):
+        def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
+            xy = data['xy']
+            parts = data['parts']
             for i in range(len(xy)):
                 for j in range(len(parts[i])-1): ##plot separate segments if multi-parts
                     ax.plot(*zip(*xy[i][parts[i][j]:parts[i][j+1]]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
                 ax.plot(*zip(*xy[i][parts[i][-1]:]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
 
-        def draw_patch(ax, xy, parts, color, zorder):
+        def draw_patch(ax, data, color, zorder):
+            xy = data['xy']
+            parts = data['parts']
             for i in range(len(xy)):
                 code = [Path.LINETO] * len(xy[i])
                 for j in parts[i]:  ##make discontinuous patch if multi-parts
@@ -374,18 +391,16 @@ class Grid(object):
 
         ###plot the coastline to indicate land area
         if color != None:
-            draw_patch(ax, self.land_xy, self.land_parts, color=color, zorder=0)
+            draw_patch(ax, self.land_data, color=color, zorder=0)
         if linecolor != None:
-            draw_line(ax, self.land_xy, self.land_parts, linecolor=linecolor, linewidth=linewidth, linestyle='-', zorder=8)
+            draw_line(ax, self.land_data, linecolor=linecolor, linewidth=linewidth, linestyle='-', zorder=8)
         if showriver:
-            draw_line(ax, self.river_xy, self.river_parts, linecolor=rivercolor, linewidth=0.5, linestyle='-', zorder=1)
-            draw_patch(ax, self.lake_xy, self.lake_parts, color=rivercolor, zorder=1)
+            draw_line(ax, self.river_data, linecolor=rivercolor, linewidth=0.5, linestyle='-', zorder=1)
+            draw_patch(ax, self.lake_data, color=rivercolor, zorder=1)
 
         ###add reference lonlat grid on map
         if showgrid:
-            if not self.cache_land or dlon!=self.dlon or dlat!=self.dlat:
-                self._set_llgrid(dlon, dlat)
-            for xy in self.llgrid_xy:
+            for xy in self.llgrid_xy(dlon, dlat):
                 ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=4)
 
         ##set the correct extent of plot
