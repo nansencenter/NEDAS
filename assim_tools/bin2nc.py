@@ -11,18 +11,18 @@ def bin2nc(filename):
     ny = info['ny']
     nx = info['nx']
     for v in list(set(rec['var_name'] for i, rec in info['fields'].items())):
-        print(v)
+        outfile = filename.replace('.bin','.'+v+'.nc')
         times = list(set(rec['time'] for i, rec in flds.items() if rec['var_name']==v))
         levels = list(set(rec['level'] for i, rec in flds.items() if rec['var_name']==v))
-        dat = np.zeros((nens, len(times), len(levels), ny, nx))
+        dims = {'member':None, 'time':None, 'level':None, 'y':ny, 'x':nx}
         for m in range(nens):
+            print('converting '+v+' for member ', m+1)
             for n in range(len(times)):
                 for z in range(len(levels)):
                     fid = list(set(i for i, rec in flds.items() if rec['var_name']==v and rec['member']==m and rec['time']==times[n] and rec['level']==levels[z]))[0]
-                    dat[m, n, z, :, :] = read_field(filename, info, mask, fid)
-        dims = {'member':nens, 'time':len(times), 'level':len(levels), 'y':ny, 'x':nx}
-        outfile = filename.replace('.bin','.'+v+'.nc')
-        nc_write_var(outfile, dims, v, dat)
+                    dat = read_field(filename, info, mask, fid)
+                    recno = {'member':m, 'time':n, 'level':z}
+                    nc_write_var(outfile, dims, v, dat, recno)
 
 
 if __name__=='__main__':
