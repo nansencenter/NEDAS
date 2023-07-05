@@ -1,15 +1,20 @@
 ###  Yue Ying 2023
 ###  Grid class to handle 2D field defined on a regular grid or unstructured mesh
 ###
-###  "rotate_vector", "interp" methods for converting a field to dst_grid
+###  Regular grid can handle cyclic boundary conditions (longitude, e.g.) and
+###  the existance of poles (latitude)
+###  Irregular mesh variables can be defined on nodal points (vertices of triangles)
+###  or elements (the triangle itself)
+###
+###  "rotate_vector", "interp", "coarsen" methods for converting a field to dst_grid.
 ###  To speed up, the rotate and interpolate weights are computed once and stored.
 ###  Some functions are adapted from nextsim-tools/pynextsim:
 ###  lib.py:transform_vectors, irregular_grid_interpolator.py
 ###
-###  Some basic map plotting to visualize the field
+###  Grid provides some basic map plotting methods to visualize a 2D field:
 ###  "plot_field", "plot_vector", and "plot_land"
 ###
-###  See NEDAS/tutorials/grid_convert for some examples.
+###  See NEDAS/tutorials/grid_convert.ipynb for some examples.
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,7 +38,21 @@ class Grid(object):
                  dst_grid=None      ##Grid obj to convert a field towards
                  ):
         assert x.shape == y.shape, "x, y shape does not match"
+
         self.proj = proj
+        if hasattr(proj, 'name'):
+            self.proj_name = proj.name
+        else:
+            self.proj_name = ''
+
+        ##proj ellps for Geod
+        self.proj_ellps = 'WGS84'
+        if hasattr(proj, 'definition'):
+            for e in proj.definition.split():
+                es = e.split('=')
+                if es[0]=='ellps':
+                    self.proj_ellps = es[1]
+
         self.x = x
         self.y = y
         self.regular = regular
@@ -50,10 +69,22 @@ class Grid(object):
         self.ymin = np.min(self.y)
         self.ymax = np.max(self.y)
 
-        if not regular:
+        if regular:
+            self.nx = self.x.shape[1]
+            self.ny = self.x.shape[0]
+            self.dx = (self.xmax - self.xmin) / (self.nx - 1)
+            self.dy = (self.ymax - self.ymin) / (self.ny - 1)
+            self.Lx = self.nx * self.dx
+            self.Ly = self.ny * self.dy
+        else:
             ##Generate triangulation, if tiangles are provided its very quick,
             ##otherwise Triangulation will generate one, but slower.
             self.tri = Triangulation(x, y, triangles=triangles)
+            dx = self._mesh_dx()
+            self.dx = dx
+            self.dy = dx
+            self.x_elem = np.mean(self.x[self.tri.triangles], axis=1)
+            self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
 
         if dst_grid is not None:
             self.dst_grid = dst_grid
@@ -70,21 +101,6 @@ class Grid(object):
         self.__init__(proj, x, y, regular=True, **kwargs)
         return self
 
-    @cached_property
-    def proj_name(self):
-        if hasattr(self.proj, 'name'):
-            return self.proj.name
-        return ''
-
-    @cached_property
-    def proj_ellps(self):
-        if hasattr(self.proj, 'definition'):
-            for e in self.proj.definition.split():
-                es = e.split('=')
-                if es[0]=='ellps':
-                    return es[1]
-        return 'WGS84'
-
     def _mesh_dx(self):
         t = self.tri.triangles
         s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
@@ -92,45 +108,8 @@ class Grid(object):
         s3 = np.sqrt((self.x[t][:,2]-self.x[t][:,1])**2+(self.y[t][:,2]-self.y[t][:,1])**2)
         sa = (s1 + s2 + s3)/3
         e = 0.3
-        inds = np.logical_and(np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa), np.abs(s3-sa) < e*sa)
+        inds = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
         return np.mean(sa[inds])
-
-    @cached_property
-    def nx(self):
-        return self.x.shape[1]
-
-    @cached_property
-    def ny(self):
-        return self.x.shape[0]
-
-    @cached_property
-    def Lx(self):
-        return self.nx * self.dx
-
-    @cached_property
-    def Ly(self):
-        return self.ny * self.dy
-
-    @cached_property
-    def npoints(self):
-        if self.regular:
-            return self.nx * self.ny
-        else:
-            return self.tri.triangles.shape[0]
-
-    @cached_property
-    def dx(self):
-        if self.regular:
-            return (self.xmax - self.xmin) / (self.nx - 1)
-        else:
-            return self._mesh_dx()
-
-    @cached_property
-    def dy(self):
-        if self.regular:
-            return (self.ymax - self.ymin) / (self.ny - 1)
-        else:
-            return self._mesh_dx()
 
     @cached_property
     def mfx(self):
@@ -176,9 +155,10 @@ class Grid(object):
         x, y = self._proj_from(grid.x, grid.y)
         x_ = x.flatten()
         y_ = y.flatten()
-        inside, vertices, in_coords = self._find_index(x_, y_)
-        self.inside = inside
-        self.vertices = vertices
+        inside, indices, vertices, in_coords = self.find_index(x_, y_)
+        self.interp_inside = inside
+        self.interp_indices = indices
+        self.interp_vertices = vertices
         self.interp_weights = self._interp_weights(inside, vertices, in_coords)
 
     def wrap_cyclic_xy(self, x_, y_):
@@ -193,7 +173,7 @@ class Grid(object):
                     y_ = np.mod(y_ - yi.min(), self.Ly) + yi.min()
         return x_, y_
 
-    def _find_index(self, x_, y_):
+    def find_index(self, x_, y_):
         ##for each point x,y find the grid box vertices that it falls in
         ##and the internal coordinate that pinpoint its location
         x_ = np.array(x_).flatten()
@@ -234,7 +214,8 @@ class Grid(object):
             ##now find the index near the given x_,y_ coordinates
             i = np.array(np.searchsorted(xi_, x_, side='right'))
             j = np.array(np.searchsorted(yi_, y_, side='right'))
-            inside = ~np.logical_or(np.logical_or(i==len(xi_), i==0), np.logical_or(j==len(yi_), j==0))
+            inside = ~np.logical_or(np.logical_or(i==len(xi_), i==0),
+                                    np.logical_or(j==len(yi_), j==0))
 
             ##vertices (A, B, C, D) for the rectangular grid box
             ##internal coordinate (in_x, in_y) pinpoint the x_,y_ location inside the grid box
@@ -242,9 +223,9 @@ class Grid(object):
             ##(0,1) D----+------C (1,1)
             ##      |    |      |
             ##      |    |      |
-            ##      +----*------in_y
-            ##      |    |      |
-            ##(0,0) A---in_x----B (1,0)
+            ##      +in_x*------+
+            ##      |    in_y   |
+            ##(0,0) A----+------B (1,0)
             vertices = np.zeros(x_[inside].shape+(4,), dtype=int)
             vertices[:, 0] = idy_[j[inside]-1] * self.nx + idx_[i[inside]-1]
             vertices[:, 1] = idy_[j[inside]-1] * self.nx + idx_[i[inside]]
@@ -254,20 +235,26 @@ class Grid(object):
             in_coords[:, 0] = (x_[inside] - xi_[i[inside]-1]) / (xi_[i[inside]] - xi_[i[inside]-1])
             in_coords[:, 1] = (y_[inside] - yi_[j[inside]-1]) / (yi_[j[inside]] - yi_[j[inside]-1])
 
+            ##grid indices where (x_,y_) is near
+            idx_r = np.where(in_coords[:,0]<0.5, idx_[i[inside]-1], idx_[i[inside]])
+            idy_r = np.where(in_coords[:,1]<0.5, idy_[j[inside]-1], idy_[j[inside]])
+            indices =  idy_r * self.nx + idx_r
+
         else:
             ##for irregular mesh, use tri_finder to find index
             tri_finder = self.tri.get_trifinder()
             triangle_map = tri_finder(x_, y_)
             inside = ~(triangle_map < 0)
+            indices = triangle_map[inside]
 
             ##internal coords are the barycentric coords (in1, in2, in3) in a triangle
             ##note: in1+in2+in3=1 so only in1 and in2 stored in in_coords
             ##     (0,0,1) C\
             ##            / | \
-            ##          in3 |  .in2
+            ##           / in3. \
             ##          /  :* .   \
-            ##         / .   |   .  \
-            ##(1,0,0) A-----in1------B (0,1,0)
+            ##         /in1  | in2  \
+            ##(1,0,0) A--------------B (0,1,0)
             vertices = self.tri.triangles[triangle_map[inside], :]
 
             ##transform matrix for barycentric coords computation
@@ -287,16 +274,16 @@ class Grid(object):
             # ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
             delta = np.array([x_[inside], y_[inside]]).T - t_matrix[:,2,:]
             in_coords = np.einsum('njk,nk->nj', t_matrix[:,:2,:], delta)
-        return inside, vertices, in_coords
+        return inside, indices, vertices, in_coords
 
     def _proj_to(self, x, y):
         lon, lat = self.proj(x, y, inverse=True)
-        x_, y_ = self._dst_grid.proj(lon, lat)
-        x_, y_ = self._dst_grid.wrap_cyclic_xy(x_, y_)
+        x_, y_ = self.dst_grid.proj(lon, lat)
+        x_, y_ = self.dst_grid.wrap_cyclic_xy(x_, y_)
         return x_, y_
 
     def _proj_from(self, x, y):
-        lon, lat = self._dst_grid.proj(x, y, inverse=True)
+        lon, lat = self.dst_grid.proj(x, y, inverse=True)
         x_, y_ = self.proj(lon, lat)
         x_, y_ = self.wrap_cyclic_xy(x_, y_)
         return x_, y_
@@ -354,85 +341,7 @@ class Grid(object):
         vec_fld_rot[1, :] = v_rot
         return vec_fld_rot
 
-    ###utility functions for interpolation (low->high resolution; refine)
-    def _interp_weights(self, inside, vertices, in_coords):
-        if self.regular:
-            ##compute bilinear interp weights
-            interp_weights = np.zeros(vertices.shape)
-            interp_weights[:, 0] =  (1-in_coords[:, 0]) * (1-in_coords[:, 1])
-            interp_weights[:, 1] =  in_coords[:, 0] * (1-in_coords[:, 1])
-            interp_weights[:, 2] =  in_coords[:, 0] * in_coords[:, 1]
-            interp_weights[:, 3] =  (1-in_coords[:, 0]) * in_coords[:, 1]
-        else:
-            interp_weights = np.hstack((in_coords, 1-in_coords.sum(axis=1, keepdims=True)))
-        return interp_weights
-
-    def interp(self, fld, x, y, calc_weight=True, method='linear'):
-        ##use precalculated weights from _set_interp_weights
-        ##otherwise compute the weights for the given x,y
-        if calc_weight:
-            inside, vertices, in_coords = self._find_index(x, y)
-            weights = self._interp_weights(inside, vertices, in_coords)
-        else:
-            inside = self.inside
-            vertices = self.vertices
-            weights = self.interp_weights
-            x = self._dst_grid.x
-            y = self._dst_grid.y
-
-        fld_interp = np.full(np.array(x).flatten().shape, np.nan)
-
-        if method == 'nearest':
-            # find the node of the triangle with the maximum weight
-            v = vertices[np.arange(len(weights), dtype=int), np.argmax(weights, axis=1)]
-            fld_interp[inside] = fld.flatten()[v]
-
-        elif method == 'linear':
-            # sum over the weights for each node of triangle
-            fld_interp[inside] = np.einsum('nj,nj->n', np.take(fld.flatten(), vertices), weights)
-
-        else:
-            raise ValueError("'method' should be 'nearest' or 'linear'")
-
-        return fld_interp.reshape(np.array(x).shape)
-
-    ###utility functions for convolution/smoothing (high->low resolution; coarsen)
-
-
-    ### Method to convert from self.proj, x, y to dst_grid coordinate systems:
-    ###  Steps: 1. rotate vectors in self.proj to dst_grid.proj
-    ###         2. interpolate fld from (self.x, self.y) to dst_grid.(x, y)->self.proj
-    def convert(self, fld, is_vector=False, method='linear'):
-        x, y = self._proj_from(self._dst_grid.x, self._dst_grid.y)
-
-        if is_vector:
-            assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
-            assert fld.shape[1:] == self.x.shape, "vector field shape does not match x1"
-
-            ##vector field needs to rotate to dst_grid.proj before interp
-            fld = self.rotate_vectors(fld)
-
-            fld_out = np.full((2,)+x.shape, np.nan)
-            ##interp for u, v component
-            fld_out[0, :] = self.interp(fld[0, :], x, y, False, method)
-            fld_out[1, :] = self.interp(fld[1, :], x, y, False, method)
-
-        else:
-            ##if fld is scalar, just interpolate
-            if fld.shape == self.x.shape:
-                fld_out = self.interp(fld, x, y, False, method)
-
-            elif not self.regular and len(fld) == self.npoints:
-                tri_finder = self.tri.get_trifinder()
-                triangle_map = tri_finder(x, y)
-                inside = ~(triangle_map < 0)
-                fld_out = np.full(x.shape, np.nan)
-                fld_out[inside] = fld[triangle_map[inside]]
-
-            else:
-                raise ValueError("field shape does not match x1.shape, or number of triangle elements in proj1")
-        return fld_out
-
+    ###utility functions for interpolation/refining (low->high resolution)
     def get_corners(self, fld):
         assert fld.shape == self.x.shape, "fld shape does not match x,y"
         nx, ny = fld.shape
@@ -452,8 +361,106 @@ class Grid(object):
         fld_corners[:, :, 3] = fld_[1:nx+1, 0:ny]
         return fld_corners
 
+    def _interp_weights(self, inside, vertices, in_coords):
+        if self.regular:
+            ##compute bilinear interp weights
+            interp_weights = np.zeros(vertices.shape)
+            interp_weights[:, 0] =  (1-in_coords[:, 0]) * (1-in_coords[:, 1])
+            interp_weights[:, 1] =  in_coords[:, 0] * (1-in_coords[:, 1])
+            interp_weights[:, 2] =  in_coords[:, 0] * in_coords[:, 1]
+            interp_weights[:, 3] =  (1-in_coords[:, 0]) * in_coords[:, 1]
+        else:
+            interp_weights = np.hstack((in_coords, 1-in_coords.sum(axis=1, keepdims=True)))
+        return interp_weights
+
+    def interp(self, fld, x=None, y=None, method='linear'):
+        if x is None or y is None:
+            ##use precalculated weights for self.dst_grid
+            inside = self.interp_inside
+            indices = self.interp_indices
+            vertices = self.interp_vertices
+            weights = self.interp_weights
+            x = self.dst_grid.x
+        else:
+            ##otherwise compute the weights for the given x,y
+            inside, indices, vertices, in_coords = self.find_index(x, y)
+            weights = self._interp_weights(inside, vertices, in_coords)
+
+        fld_interp = np.full(np.array(x).flatten().shape, np.nan)
+        if fld.shape == self.x.shape:
+            if method == 'nearest':
+                # find the node of the triangle with the maximum weight
+                v = vertices[np.arange(len(weights), dtype=int), np.argmax(weights, axis=1)]
+                fld_interp[inside] = fld.flatten()[v]
+
+            elif method == 'linear':
+                # sum over the weights for each node of triangle
+                fld_interp[inside] = np.einsum('nj,nj->n', np.take(fld.flatten(), vertices), weights)
+
+            else:
+                raise ValueError("'method' should be 'nearest' or 'linear'")
+
+        elif not self.regular and fld.shape == self.x_elem.shape:
+            fld_interp[inside] = fld[indices]
+
+        else:
+            raise ValueError("field shape does not match grid shape, or number of triangle elements")
+
+        return fld_interp.reshape(np.array(x).shape)
+
+    ###utility functions for coarse-graining (high->low resolution)
+    def coarsen(self, fld):
+        ##get the corresponding x_,y_ of self.x,y in dst_grid.proj
+        if fld.shape == self.x.shape:
+            x_, y_ = self._proj_to(self.x, self.y)
+        elif not self.regular and fld.shape == self.x_elem.shape:
+            x_, y_ = self._proj_to(self.x_elem, self.y_elem)
+        else:
+            raise ValueError("field shape does not match grid shape, or number of triangle elements")
+        ##find which location x_,y_ falls in in dst_grid
+        inside, indices, _, _ = self.dst_grid.find_index(x_, y_)
+        ##average the fld points inside each dst_grid box/element
+        fld_coarse = np.zeros(self.dst_grid.x.flatten().shape)
+        count = np.zeros(self.dst_grid.x.flatten().shape)
+        fld_inside = fld.flatten()[inside]
+        valid = ~np.isnan(fld_inside)  ##filter nan values
+        np.add.at(fld_coarse, indices[valid], fld_inside[valid])
+        np.add.at(count, indices[valid], 1)
+        valid = (count>0)
+        fld_coarse[valid] /= count[valid]
+        fld_coarse[~valid] = np.nan
+        return fld_coarse.reshape(self.dst_grid.x.shape)
+
+    ### Method to convert from self.proj, x, y to dst_grid coordinate systems:
+    ###  Steps: 1. rotate vectors in self.proj to dst_grid.proj
+    ###         2.1 interp fld from (self.x, self.y) to dst_grid.(x, y)->self.proj
+    ###         2.2 if dst_grid is low-res, perform coarse-graining
+    def convert(self, fld, is_vector=False, method='linear'):
+        if is_vector:
+            assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
+            ##vector field needs to rotate to dst_grid.proj before interp
+            fld = self.rotate_vectors(fld)
+
+            fld_out = np.full((2,)+self.dst_grid.x.shape, np.nan)
+            for i in range(2):
+                ##interp each component: u, v
+                fld_out[i, :] = self.interp(fld[i, :], method=method)
+                ##coarse-graining if more points fall in one grid
+                fld_coarse = self.coarsen(fld[i, :])
+                ind = ~np.isnan(fld_coarse)
+                fld_out[i, ind] = fld_coarse[ind]
+        else:
+            ##scalar field, just interpolate
+            fld_out = np.full(self.dst_grid.x.shape, np.nan)
+            fld_out = self.interp(fld, method=method)
+            ##coarse-graining if more points fall in one grid
+            fld_coarse = self.coarsen(fld)
+            ind = ~np.isnan(fld_coarse)
+            fld_out[ind] = fld_coarse[ind]
+        return fld_out
+
     ##some basic map plotting without the need for installing cartopy
-    def collect_shape_data(self, shapes):
+    def _collect_shape_data(self, shapes):
         data = {'xy':[], 'parts':[]}
         for shape in shapes:
             if len(shape.points) > 0:
@@ -488,21 +495,21 @@ class Grid(object):
         shapes[1234].points = []
         shapes[1234].points = []
 
-        return self.collect_shape_data(shapes)
+        return self._collect_shape_data(shapes)
 
     @cached_property
     def river_data(self):
         ##river features
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_rivers.shp'))
         shapes = sf.shapes()
-        return self.collect_shape_data(shapes)
+        return self._collect_shape_data(shapes)
 
     @cached_property
     def lake_data(self):
         ##lake features
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
         shapes = sf.shapes()
-        return self.collect_shape_data(shapes)
+        return self._collect_shape_data(shapes)
 
     def llgrid_xy(self, dlon, dlat):
         self.dlon = dlon
