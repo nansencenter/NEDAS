@@ -261,8 +261,7 @@ class Grid(object):
             indices = triangle_map[inside]
 
             ##internal coords are the barycentric coords (in1, in2, in3) in a triangle
-            ##note: in1+in2+in3=1 so only in1 and in2 stored in in_coords
-            ##      larger in1 means closer to the vertice 1!
+            ##note: larger in1 means closer to the vertice 1!
             ##     (0,0,1) C\
             ##            / | \
             ##           / in3. \
@@ -574,7 +573,7 @@ class Grid(object):
             c = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap)
         else:
             c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap)
-        plt.colorbar(c, fraction=0.025, pad=0.015, location='right')
+        return c
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
