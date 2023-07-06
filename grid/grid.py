@@ -103,6 +103,24 @@ class Grid(object):
         self.__init__(proj, x, y, regular=True, **kwargs)
         return self
 
+    @classmethod
+    def random_grid(cls, proj, xstart, xend, ystart, yend, npoints, min_dist=None, **kwargs):
+        self = cls.__new__(cls)
+        points = []
+        while len(points) < npoints:
+            xp = np.random.uniform(0, 1) * (xend - xstart) + xstart
+            yp = np.random.uniform(0, 1) * (yend - ystart) + ystart
+            if min_dist is not None:
+                near = [p for p in points if abs(p[0]-xp) <= min_dist and abs(p[1]-yp) <= min_dist]
+                if not near:
+                    points.append((xp, yp))
+            else:
+                points.append((xp, yp))
+        x = np.array([p[0] for p in points])
+        y = np.array([p[1] for p in points])
+        self.__init__(proj, x, y, regular=False, **kwargs)
+        return self
+
     def _mesh_dx(self):
         t = self.tri.triangles
         s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
