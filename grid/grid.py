@@ -79,7 +79,9 @@ class Grid(object):
         else:
             ##Generate triangulation, if tiangles are provided its very quick,
             ##otherwise Triangulation will generate one, but slower.
-            self.tri = Triangulation(x, y, triangles=triangles)
+            self.x = self.x.flatten()
+            self.y = self.y.flatten()
+            self.tri = Triangulation(self.x, self.y, triangles=triangles)
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
@@ -150,16 +152,27 @@ class Grid(object):
         ##rotation of vector field from self.proj to dst_grid.proj
         self._set_rotation_matrix()
 
-        ##prepare inside, vertices and weights for interpolation
-        ##dst_grid points projected back to self.proj, call it x,y
+        ##prepare indices and weights for interpolation
+        ##when dst_grid is set, these info are prepared and stored to avoid recalculating
+        ##too many times, when applying the same interp to a lot of flds
         x, y = self._proj_from(grid.x, grid.y)
-        x_ = x.flatten()
-        y_ = y.flatten()
-        inside, indices, vertices, in_coords = self.find_index(x_, y_)
+        inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
         self.interp_inside = inside
         self.interp_indices = indices
         self.interp_vertices = vertices
+        self.interp_nearest = nearest
         self.interp_weights = self._interp_weights(inside, vertices, in_coords)
+
+        ##prepare indices for coarse-graining
+        x, y = self._proj_to(self.x, self.y)
+        inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+        self.coarsen_inside = inside
+        self.coarsen_nearest = nearest
+        if not self.regular: ## for irregular mesh, find indices for elements too
+            x, y = self._proj_to(self.x_elem, self.y_elem)
+            inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+            self.coarsen_inside_elem = inside
+            self.coarsen_nearest_elem = nearest
 
     def wrap_cyclic_xy(self, x_, y_):
     ##if input x_,y_ is outside of domain, wrap around for cyclic boundary condition
@@ -222,10 +235,10 @@ class Grid(object):
             ##with values range [0, 1)
             ##(0,1) D----+------C (1,1)
             ##      |    |      |
-            ##      |    |      |
             ##      +in_x*------+
             ##      |    in_y   |
             ##(0,0) A----+------B (1,0)
+            indices = None #for regular grid, the element indices are not used
             vertices = np.zeros(x_[inside].shape+(4,), dtype=int)
             vertices[:, 0] = idy_[j[inside]-1] * self.nx + idx_[i[inside]-1]
             vertices[:, 1] = idy_[j[inside]-1] * self.nx + idx_[i[inside]]
@@ -235,10 +248,10 @@ class Grid(object):
             in_coords[:, 0] = (x_[inside] - xi_[i[inside]-1]) / (xi_[i[inside]] - xi_[i[inside]-1])
             in_coords[:, 1] = (y_[inside] - yi_[j[inside]-1]) / (yi_[j[inside]] - yi_[j[inside]-1])
 
-            ##grid indices where (x_,y_) is near
+            ##index of grid nearest to (x_,y_)
             idx_r = np.where(in_coords[:,0]<0.5, idx_[i[inside]-1], idx_[i[inside]])
             idy_r = np.where(in_coords[:,1]<0.5, idy_[j[inside]-1], idy_[j[inside]])
-            indices =  idy_r * self.nx + idx_r
+            nearest =  idy_r * self.nx + idx_r
 
         else:
             ##for irregular mesh, use tri_finder to find index
@@ -249,6 +262,7 @@ class Grid(object):
 
             ##internal coords are the barycentric coords (in1, in2, in3) in a triangle
             ##note: in1+in2+in3=1 so only in1 and in2 stored in in_coords
+            ##      larger in1 means closer to the vertice 1!
             ##     (0,0,1) C\
             ##            / | \
             ##           / in3. \
@@ -270,11 +284,17 @@ class Grid(object):
             t_matrix[:,1,1] = a/det
             t_matrix[:,2,0] = self.x[vertices[:,2]]
             t_matrix[:,2,1] = self.y[vertices[:,2]]
-            # ##get barycentric coords, according to https://en.wikipedia.org/wiki/
-            # ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
+
+            ##get barycentric coords, according to https://en.wikipedia.org/wiki/
+            ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
             delta = np.array([x_[inside], y_[inside]]).T - t_matrix[:,2,:]
-            in_coords = np.einsum('njk,nk->nj', t_matrix[:,:2,:], delta)
-        return inside, indices, vertices, in_coords
+            in12 = np.einsum('njk,nk->nj', t_matrix[:,:2,:], delta)
+            in_coords = np.hstack((in12, 1.-in12.sum(axis=1, keepdims=True)))
+
+            ##index of grid nearest to (x_,y_)
+            nearest = vertices[np.arange(len(in_coords), dtype=int), np.argmax(in_coords, axis=1)]
+
+        return inside, indices, vertices, in_coords, nearest
 
     def _proj_to(self, x, y):
         lon, lat = self.proj(x, y, inverse=True)
@@ -370,7 +390,8 @@ class Grid(object):
             interp_weights[:, 2] =  in_coords[:, 0] * in_coords[:, 1]
             interp_weights[:, 3] =  (1-in_coords[:, 0]) * in_coords[:, 1]
         else:
-            interp_weights = np.hstack((in_coords, 1-in_coords.sum(axis=1, keepdims=True)))
+            ##use barycentric coordinates as interp weights
+            interp_weights = in_coords
         return interp_weights
 
     def interp(self, fld, x=None, y=None, method='linear'):
@@ -379,56 +400,55 @@ class Grid(object):
             inside = self.interp_inside
             indices = self.interp_indices
             vertices = self.interp_vertices
+            nearest = self.interp_nearest
             weights = self.interp_weights
             x = self.dst_grid.x
         else:
             ##otherwise compute the weights for the given x,y
-            inside, indices, vertices, in_coords = self.find_index(x, y)
+            inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
             weights = self._interp_weights(inside, vertices, in_coords)
 
         fld_interp = np.full(np.array(x).flatten().shape, np.nan)
         if fld.shape == self.x.shape:
             if method == 'nearest':
                 # find the node of the triangle with the maximum weight
-                v = vertices[np.arange(len(weights), dtype=int), np.argmax(weights, axis=1)]
-                fld_interp[inside] = fld.flatten()[v]
-
+                fld_interp[inside] = fld.flatten()[nearest]
             elif method == 'linear':
                 # sum over the weights for each node of triangle
                 fld_interp[inside] = np.einsum('nj,nj->n', np.take(fld.flatten(), vertices), weights)
-
             else:
                 raise ValueError("'method' should be 'nearest' or 'linear'")
-
         elif not self.regular and fld.shape == self.x_elem.shape:
             fld_interp[inside] = fld[indices]
-
         else:
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
-
         return fld_interp.reshape(np.array(x).shape)
 
     ###utility functions for coarse-graining (high->low resolution)
     def coarsen(self, fld):
-        ##get the corresponding x_,y_ of self.x,y in dst_grid.proj
+        ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
-            x_, y_ = self._proj_to(self.x, self.y)
+            inside = self.coarsen_inside
+            nearest = self.coarsen_nearest
         elif not self.regular and fld.shape == self.x_elem.shape:
-            x_, y_ = self._proj_to(self.x_elem, self.y_elem)
+            inside = self.coarsen_inside_elem
+            nearest = self.coarsen_nearest_elem
         else:
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
-        ##find which location x_,y_ falls in in dst_grid
-        inside, indices, _, _ = self.dst_grid.find_index(x_, y_)
-        ##average the fld points inside each dst_grid box/element
+
         fld_coarse = np.zeros(self.dst_grid.x.flatten().shape)
         count = np.zeros(self.dst_grid.x.flatten().shape)
         fld_inside = fld.flatten()[inside]
-        valid = ~np.isnan(fld_inside)  ##filter nan values
-        np.add.at(fld_coarse, indices[valid], fld_inside[valid])
-        np.add.at(count, indices[valid], 1)
-        valid = (count>0)
+        valid = ~np.isnan(fld_inside)  ##filter out nan
+
+        ##average the fld points inside each dst_grid box/element
+        np.add.at(fld_coarse, nearest[valid], fld_inside[valid])
+        np.add.at(count, nearest[valid], 1)
+
+        valid = (count>1)  ##do not coarse grain if only one point near by
         fld_coarse[valid] /= count[valid]
         fld_coarse[~valid] = np.nan
+
         return fld_coarse.reshape(self.dst_grid.x.shape)
 
     ### Method to convert from self.proj, x, y to dst_grid coordinate systems:
