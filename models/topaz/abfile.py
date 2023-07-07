@@ -23,16 +23,16 @@ class AFile(object) :
     huge = 2.0**100
     def __init__(self,idm,jdm,filename,action,mask=False,real4=True,endian="big") :
         self._idm = idm
-        self._jdm = jdm 
-        self._filename = filename 
-        self._action = action 
-        self._mask = mask 
+        self._jdm = jdm
+        self._filename = filename
+        self._action = action
+        self._mask = mask
         self._real4= real4
         self._endian= endian
-        if self._action.lower() not in ["r","w"]  :
-            raise AFileError("action argument must be either r(ead) or w(rite)")
+        if self._action.lower() not in ["r","w","r+"]  :
+            raise AFileError("action argument must be either r(ead) or w(rite) or r+")
         if self._endian.lower() not in ["little","big","native"]  :
-            raise AFileError("action argument must be either native, little ort big")
+            raise AFileError("action argument must be either native, little or big")
 
         if self._endian.lower() == "native" :
             self._endian=sys.byteorder
@@ -76,7 +76,7 @@ class AFile(object) :
             raise AFileError("array shape is (%d,%d),expected (%d,%d)"%(h.shape[0],h.shape[1],self._jdm,self._idm))
 
         # Fill w array
-        w[0:self._idm*self._jdm] = h.flatten() 
+        w[0:self._idm*self._jdm] = h.flatten()
 
         # Seek if provided, otherwise use current position
         if record is not None : self.seekrecord(record)
@@ -84,7 +84,7 @@ class AFile(object) :
         # Calc min and mask
         #print("mask boolean:",self._mask)
         if self._mask :
-            I=numpy.where(mask!=True)
+            I=numpy.where(~mask)
             hmax=h[I].max()
             hmin=h[I].min()
             J=numpy.where(mask.flatten())
@@ -782,7 +782,7 @@ class ABFileRestart(ABFile) :
             iversn=None,iexpt=None,yrflag=None,idm=None,jdm=None) :
 
         super(ABFileRestart,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
-        if self._action == "r" :
+        if self._action[0] == "r" :
             if idm != None and jdm != None:
                 self._idm=idm
                 self._jdm=jdm
@@ -790,7 +790,7 @@ class ABFileRestart(ABFile) :
                 self.read_field_info()
                 self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
             else :
-                raise BFileError("ABFileBathy opened as read, but idm and jdm not provided")
+                raise BFileError("ABFile opened as read, but idm and jdm not provided")
         elif self._action == "w" :
 ##            # Need to test if idm, jdm, etc is set at this stage
 ##            raise NotImplementedError,"ABFileRestart writing not implemented
@@ -833,18 +833,48 @@ class ABFileRestart(ABFile) :
             i+=1
             line=self.readline().strip()
 
-    def read_field(self,fieldname,level,tlevel=1) :
-        """ Read field corresponding to fieldname and level from archive file"""
+    def write_bfile_info(self) :
+        self._fileb.seek(0)
+        ##header
+        self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(self._iexpt,self._iversn,self._yrflag,self._sigver))
+        self._fileb.write("RESTART2: nstep,dtime,thbase = %12d%19.10f%24.13f\n"%(self._nstep,self._dtime,self._thbase))
+        ##field info
+        for i in range(len(self._fields)):
+            fieldname = self._fields[i]["field"]
+            k = self._fields[i]["k"]
+            time = self._fields[i]["tlevel"]
+            hmin = self._fields[i]["min"]
+            hmax = self._fields[i]["max"]
+            fmtstr="%-8s: layer,tlevel,range = %3d%3d%18.7E%16.7E\n"
+            self._fileb.write(fmtstr%(fieldname,k,time,hmin,hmax))
+
+    def find_record(self, fieldname, level, tlevel):
         record = None
         for i,d in self._fields.items() :
             if d["field"] == fieldname and level == d["k"] and d["tlevel"] == tlevel :
                 record=i
+        return record
+
+    def read_field(self,fieldname,level,tlevel=1) :
+        """ Read field corresponding to fieldname and level from archive file"""
+        record = self.find_record(fieldname, level, tlevel)
         if record  is not None :
             w = self._filea.read_record(record)
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
         else :
             w = None
         return w
+
+    def overwrite_field(self, field, mask, fieldname, level, tlevel=1) :
+        assert self._action == "r+"
+        record = self.find_record(fieldname, level, tlevel)
+        assert record is not None, "Do not find record in current file, existing"
+        self._open_filea_if_necessary(field)
+        self.check_dimensions(field)
+        hmin,hmax = self._filea.writerecord(field, mask, record=record)
+        self._fields[record]["min"] = hmin
+        self._fields[record]["max"] = hmax
+        self.write_bfile_info()
 
 # THE RESTART WRITING - a later addition to KAL's original abfile.py
 #  caglar: other classes in abfile.py code call 'write_header' within 'write_field'.
@@ -857,6 +887,8 @@ class ABFileRestart(ABFile) :
 #  ~~ for loop for variables
 #      new_abfile.write_field(field,None,fieldname,k,t)  # None stands for mask
 #  new_abfile.close()
+##YY: the above is suitable for writing a new file from scratch (copy and paste)
+##overwrite_field will be good for rewriting only a field in existing files
 
     def write_header(self,iexpt,iversn,yrflag,sigver,nstep,dtime,thbase) :
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(iexpt,iversn,yrflag,sigver))
