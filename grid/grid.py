@@ -121,6 +121,20 @@ class Grid(object):
         self.__init__(proj, x, y, regular=False, **kwargs)
         return self
 
+    ###size of each edge:
+    #t = grid.tri.triangles
+    #x = grid.x
+    #y = grid.y
+    #s1 = np.sqrt((x[t[:,0]] - x[t[:,1]])**2 + (y[t[:,0]] - y[t[:,1]])**2)
+    #s2 = np.sqrt((x[t[:,0]] - x[t[:,2]])**2 + (y[t[:,0]] - y[t[:,2]])**2)
+    #s3 = np.sqrt((x[t[:,2]] - x[t[:,1]])**2 + (y[t[:,2]] - y[t[:,1]])**2)
+    ###area of element
+    #s = 0.5*(s1+s2+s3)
+    #area = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))
+    ###circumference-to-area ratio (1: equilateral triangle, ~0: very elongated)
+    #ratio =  area / s**2 * 3**(3/2)
+
+
     def _mesh_dx(self):
         t = self.tri.triangles
         s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
@@ -665,14 +679,14 @@ class Grid(object):
             h4y = y1 + 0.8*hl*sinA - 0.5*hw*cosA
             return [h1x, h2x, h3x, h4x, h1x], [h1y, h2y, h3y, h4y, h1y]
 
-        for t in range(xtraj.shape[0]):
+        for i in range(xtraj.shape[0]):
             ##plot trajectory at one output location
-            ax.plot(xtraj[t, :], ytraj[t, :], color=linecolor, linewidth=linewidth, zorder=4)
+            ax.plot(xtraj[i, :], ytraj[i, :], color=linecolor, linewidth=linewidth, zorder=4)
 
             ##add vector head if traj is long and straight enough
-            dist = np.sqrt((xtraj[t,0]-xtraj[t,-1])**2 + (ytraj[t,0]-ytraj[t,-1])**2)
-            if showhead and hl < leng[t] < 1.6*dist:
-                ax.fill(*arrowhead_xy(xtraj[t,-1], xtraj[t,-2], ytraj[t,-1],ytraj[t,-2]), color=linecolor, zorder=5)
+            dist = np.sqrt((xtraj[i,0]-xtraj[i,-1])**2 + (ytraj[i,0]-ytraj[i,-1])**2)
+            if showhead and hl < leng[i] < 1.6*dist:
+                ax.fill(*arrowhead_xy(xtraj[i,-1], xtraj[i,-2], ytraj[i,-1],ytraj[i,-2]), color=linecolor, zorder=5)
 
         ##add reference vector
         if showref:
