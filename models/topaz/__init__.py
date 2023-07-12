@@ -123,7 +123,7 @@ def get_var(path, grid, **kwargs):
         if var_dict[var_name]['nz'] == 0:
             level = 0
         else:
-            level = -1
+            level = 1
     if 'mask' in kwargs:
         mask = kwargs['mask']
     else:
@@ -131,11 +131,11 @@ def get_var(path, grid, **kwargs):
 
     f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
     if variables[var_name]['is_vector']:
-        var1 = f.read_field(var_dict[var_name]['name'][0], level=-level, tlevel=1, mask=mask)
-        var2 = f.read_field(var_dict[var_name]['name'][1], level=-level, tlevel=1, mask=mask)
+        var1 = f.read_field(var_dict[var_name]['name'][0], level=level, tlevel=1, mask=mask)
+        var2 = f.read_field(var_dict[var_name]['name'][1], level=level, tlevel=1, mask=mask)
         var = np.array([var1, var2])
     else:
-        var = f.read_field(var_dict[var_name]['name'], level=-level, tlevel=1, mask=mask)
+        var = f.read_field(var_dict[var_name]['name'], level=level, tlevel=1, mask=mask)
     f.close()
 
     var = units_convert(variables[var_name]['units'], var_dict[var_name]['units'], var)
@@ -155,7 +155,7 @@ def write_var(path, grid, var, **kwargs):
 
     if variables[var_name]['is_vector']:
         for i in range(2):
-            f.overwrite_field(var[i,...], mask, var_dict[var_name]['name'][i], level=-level, tlevel=1)
+            f.overwrite_field(var[i,...], mask, var_dict[var_name]['name'][i], level=level, tlevel=1)
     else:
-        f.overwrite_field(var, mask, var_dict[var_name]['name'], level=-level, tlevel=1)
+        f.overwrite_field(var, mask, var_dict[var_name]['name'], level=level, tlevel=1)
     f.close()
