@@ -1,3 +1,7 @@
 seaice_velocity     models.nextsim  float   24      0  0
 seaice_conc         models.nextsim  float   24      0  0
+seaice_thick        models.nextsim  float   24      0  0
+seaice_damage       models.nextsim  float   24      0  0
 ocean_velocity      models.topaz    float   24    -50 -1
+ocean_temp          models.topaz    float   24    -50 -1
+ocean_surf_height   models.topaz    float   24      0  0

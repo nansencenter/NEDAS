@@ -14,6 +14,8 @@ var_dict = {'seaice_conc': {'name':'M_conc', 'units':'%'},
             'seaice_drift': {'name':'M_UT', 'units':'m'},
            }
 
+levels = [0]
+
 def filename(path, **kwargs):
     if 'time' in kwargs:
         tstr = kwargs['time'].strftime('%Y%m%dT%H%M%SZ')
@@ -30,7 +32,7 @@ def filename(path, **kwargs):
 def get_var(path, **kwargs):
     fname = filename(path, **kwargs)
 
-    assert 'name' in kwargs, 'please specify which variable to get'
+    assert 'name' in kwargs, 'please specify which variable to get, name=?'
     var_name = kwargs['name']
     assert var_name in var_dict, "variable name "+var_name+" not listed in var_dict"
 
@@ -42,3 +44,6 @@ def get_var(path, **kwargs):
     var = units_convert(variables[var_name]['units'], var_dict[var_name]['units'], var)
 
     return var
+
+def write_var(path, var, **kwargs):
+    pass

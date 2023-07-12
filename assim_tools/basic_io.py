@@ -3,7 +3,7 @@ import numpy as np
 from netCDF4 import Dataset
 import struct
 from datetime import datetime, timedelta
-from assim_tools import variables
+from .state import variables
 
 ##netcdf file io
 def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
@@ -19,7 +19,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
     s = ()  ##slice for each dimension
     d = 0
     for i, name in enumerate(dim):
-        if dim[name] == None:
+        if dim[name] is None:
             assert(name in recno), "unlimited dimension "+name+" doesn't have a recno"
             s += (recno[name],)
         else:
@@ -27,7 +27,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
             assert(dat.shape[d] == dim[name]), "dat size for dimension "+name+" mismatch with dim["+name+"]={}".format(dim[name])
             d += 1
         if name in f.dimensions:
-            if dim[name] != None:
+            if dim[name] is not None:
                 assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size mismatch with file"
             else:
                 assert(f.dimensions[name].isunlimited())
@@ -37,7 +37,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
         f.createVariable(varname, np.float32, dim.keys())
 
     f[varname][s] = dat  ##write dat to file
-    if attr != None:
+    if attr is not None:
         for akey in attr:
             f[varname].setncattr(akey, attr[akey])
     f.close()
@@ -75,72 +75,42 @@ def read_field_info(filename):
         lines = f.readlines()
 
         ss = lines[0].split()
-        nens = int(ss[0])
-        ny = int(ss[1])
-        nx = int(ss[2])
-
-        var_names = lines[1].split()
-        var_sources = lines[2].split()
-
-        ss = lines[3].split()
-        time = h2t(np.float32(ss[0]))
-        t_offsets = (np.float32(ss[1]), np.float32(ss[2]))
-
-        ss = lines[4].split()
-        zlevels = [np.int32(z) for z in ss]
-
-        info.update({'nens':nens,
-                     'ny':ny,
-                     'nx':nx,
-                     'var_names':var_names,
-                     'var_sources':var_sources,
-                     'time':time,
-                     'time_window':(t_offsets[0], t_offsets[1]),
-                     'levels':zlevels,
-                     'fields':{}})
+        ny = int(ss[0])
+        nx = int(ss[1])
+        info.update({'ny':ny, 'nx':nx, 'fields':{}})
 
         ##following lines of variable records
         fld_id = 0
-        for lin in lines[5:]:
+        for lin in lines[1:]:
             ss = lin.split()
             var_name = ss[0]
             source = ss[1]
             dtype = ss[2]
-            pos = int(ss[3])
-            member = int(ss[4])
-            time = h2t(np.float32(ss[5]))
-            level = np.int32(ss[6])
+            is_vector = bool(ss[3])
+            pos = int(ss[4])
+            member = int(ss[5])
+            time = h2t(np.float32(ss[6]))
+            level = int(ss[7])
             field = {'var_name':var_name,
                      'source':source,
                      'dtype':dtype,
+                     'is_vector':is_vector,
                      'pos':pos,
                      'member':member,
                      'time':time,
                      'level':level}
             info['fields'].update({fld_id:field})
             fld_id += 1
-
     return info
 
 def write_field_info(filename, info):
-    ##line 1: nens, ny, nx
-    ##line 2: list of variable names
-    ##line 3: list of variable sources
-    ##line 4: time (hours since 1900-1-1), offset_left, offset_right (hours)
-    ##line 5: list of vertical level indices
-    ##line 6:end: list of variables (one per line):
+    ##line 1: ny, nx
+    ##line 2:end: list of variables (one per line):
     ##     var_name, source_module, data_type, seek_position, member, time, level
     with open(filename.replace('.bin','.dat'), 'wt') as f:
-        f.write('%i %i %i\n' %(info['nens'], info['ny'], info['nx']))
-        f.write(' '.join(info['var_names'])+'\n')
-        f.write(' '.join(info['var_sources'])+'\n')
-        f.write('%f %f %f\n' %(t2h(info['time']), *info['time_window']))
-        for z in info['levels']:
-            f.write('%i ' %(z))
-        f.write('\n')
-
+        f.write('%i %i\n' %(info['ny'], info['nx']))
         for i, rec in info['fields'].items():
-            f.write('%s %s %s %i %i %f %i\n' %(rec['var_name'], rec['source'], rec['dtype'], rec['pos'], rec['member'], t2h(rec['time']), rec['level']))
+            f.write('%s %s %s %i %i %i %f %i\n' %(rec['var_name'], rec['source'], rec['dtype'], int(rec['is_vector']), rec['pos'], rec['member'], t2h(rec['time']), rec['level']))
 
 ##parse and generate field_info dict
 def field_info(state_def_file, ###state_def filename, see config module
@@ -151,15 +121,7 @@ def field_info(state_def_file, ###state_def filename, see config module
                mask,         ##landmask (True for land)
                ):
     info = {}
-    info.update({'nens':nens,
-                 'ny':ny,
-                 'nx':nx,
-                 'var_names':[],
-                 'var_sources':[],
-                 'time':time,
-                 'time_window':(t_offsets[0], t_offsets[1]),
-                 'levels':[z for z in zlevels],
-                 'fields':{}})
+    info.update({'ny':ny, 'nx':nx, 'fields':{}})
 
     with open(state_def_file, 'r') as f:
         fields = {}
@@ -183,31 +145,23 @@ def field_info(state_def_file, ###state_def filename, see config module
             var_zmin = np.int32(ss[4])
             var_zmax = np.int32(ss[5])
 
-            info['var_names'].append(var_name)
-            info['var_sources'].append(var_source)
-
-            if variables[var_name]['is_vector']:
-                vlist = (var_name+'_x', var_name+'_y')
-            else:
-                vlist = (var_name,)
-            for v in vlist:  ##loop over variable list
-                for m in range(nens):  ##loop over ensemble members
-                    for n in np.arange(int(t_offsets[0]/var_dt), int(t_offsets[1]/var_dt)+1):  ##time slices
-                        for level in [z for z in zlevels if var_zmin<=z<=var_zmax]:  ##vertical levels
-                            field = {'var_name':v,
-                                     'source':var_source,
-                                     'dtype':var_dtype,
-                                     'pos':pos,
-                                     'member':m,
-                                     'time':time + n*var_dt*timedelta(hours=1),
-                                     'level':level}
-                            info['fields'].update({fld_id:field})  ##add this record to fields
-                            ##f.seek position
-                            if is_masked[var_source]:  ##if there is landmask, only store the ocean area
-                                pos += np.sum((~mask).astype(np.int32)) * type_size[var_dtype]
-                            else:
-                                pos += ny * nx * type_size[var_dtype]
-                            fld_id += 1
+            for m in range(nens):  ##loop over ensemble members
+                for n in np.arange(int(t_offsets[0]/var_dt), int(t_offsets[1]/var_dt)+1):  ##time slices
+                    for level in [z for z in zlevels if var_zmin<=z<=var_zmax]:  ##vertical levels
+                        field = {'var_name':var_name,
+                                 'source':var_source,
+                                 'dtype':var_dtype,
+                                 'is_vector':variables[var_name]['is_vector'],
+                                 'pos':pos,
+                                 'member':m,
+                                 'time':time + n*var_dt*timedelta(hours=1),
+                                 'level':level}
+                        info['fields'].update({fld_id:field})  ##add this record to fields
+                        ##f.seek position
+                        nv = 2 if variables[var_name]['is_vector'] else 1
+                        fsize = np.sum((~mask).astype(np.int32)) if is_masked[var_source] else ny*nx
+                        pos += nv * fsize * type_size[var_dtype]
+                        fld_id += 1
     return info
 
 ##mask off land area, only store data where mask=False
@@ -231,33 +185,39 @@ def read_field(filename, info, mask, fid):
     nx = info['nx']
     ny = info['ny']
     rec = info['fields'][fid]
-    if is_masked[rec['source']]:
-        fsize = np.sum((~mask).astype(np.int32))
-    else:
-        fsize = ny*nx
+    is_vector = rec['is_vector']
+    nv = 2 if is_vector else 1
+    fld_shape = (2, ny, nx) if is_vector else (ny, nx)
+    fsize = np.sum((~mask).astype(np.int32)) if is_masked[rec['source']] else ny*nx
 
     with open(filename, 'rb') as f:
         f.seek(rec['pos'])
-        fld_ = np.array(struct.unpack((fsize*type_dic[rec['dtype']]), f.read(fsize*type_size[rec['dtype']])))
+        fld_ = np.array(struct.unpack((nv*fsize*type_dic[rec['dtype']]),
+                        f.read(nv*fsize*type_size[rec['dtype']])))
         if is_masked[rec['source']]:
-            fld = np.full((ny, nx), np.nan)
-            fld[~mask] = fld_
+            fld = np.full(fld_shape, np.nan)
+            if is_vector:
+                fld[:, ~mask] = fld_.reshape((2,-1))
+            else:
+                fld[~mask] = fld_
         else:
-            fld = fld_.reshape((ny, nx))
+            fld = fld_.reshape(fld_shape)
         return fld
 
 def write_field(filename, info, mask, fid, fld):
-    ny, nx = fld.shape
-    assert ny == info['ny'] and nx == info['nx'], 'fld shape (ny,nx) incorrect'
+    ny = info['ny']
+    nx = info['nx']
     rec = info['fields'][fid]
+    is_vector = rec['is_vector']
+    fld_shape = (2, ny, nx) if is_vector else (ny, nx)
+    assert fld.shape == fld_shape, 'fld shape incorrect'
+
     if is_masked[rec['source']]:
-        fsize = np.sum((~mask).astype(np.int32))
-        fld_ = fld[~mask]
+        fld_ = fld[:, ~mask].flatten() if is_vector else fld[~mask]
     else:
-        fsize = ny*nx
         fld_ = fld.flatten()
 
     with open(filename, 'r+b') as f:
         f.seek(rec['pos'])
-        f.write(struct.pack(fsize*type_dic[rec['dtype']], *fld_))
+        f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
 
