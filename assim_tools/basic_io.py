@@ -86,7 +86,7 @@ def read_field_info(filename):
             var_name = ss[0]
             source = ss[1]
             dtype = ss[2]
-            is_vector = bool(ss[3])
+            is_vector = bool(int(ss[3]))
             pos = int(ss[4])
             member = int(ss[5])
             time = h2t(np.float32(ss[6]))
