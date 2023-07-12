@@ -12,7 +12,8 @@ from grid import Grid
 # --- NB: Python uses reversed indexing rel fortran
 
 ###parse grid.info and generate grid.Grid object
-def get_grid(grid_info_file):
+def get_grid(path, **kwargs):
+    grid_info_file = path+'/topo/grid.info'
     cm = ConformalMapping.init_from_file(grid_info_file)
     nx = cm._ires
     ny = cm._jres

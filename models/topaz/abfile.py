@@ -57,7 +57,7 @@ class AFile(object) :
         # Open .a and .b file
         self._filea = open(self._filename,self._action+"b")
 
-    def writerecord(self,h,mask,record=None) :
+    def writerecord(self,h,mask=None,record=None) :
         """ Write one record to file.
 
         Arguments:    
@@ -84,6 +84,8 @@ class AFile(object) :
         # Calc min and mask
         #print("mask boolean:",self._mask)
         if self._mask :
+            if mask is None:
+                mask = np.isnan(h)
             I=numpy.where(~mask)
             hmax=h[I].max()
             hmin=h[I].min()
@@ -855,15 +857,20 @@ class ABFileRestart(ABFile) :
                 record=i
         return record
 
-    def read_field(self,fieldname,level,tlevel=1) :
+    def read_field(self,fieldname,level,tlevel=1,mask=None) :
         """ Read field corresponding to fieldname and level from archive file"""
         record = self.find_record(fieldname, level, tlevel)
         if record  is not None :
             w = self._filea.read_record(record)
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
+            fld = w.data
+            if mask is None:
+                fld[w.mask] = numpy.nan
+            else:
+                fld[mask] = numpy.nan
         else :
-            w = None
-        return w
+            fld = None
+        return fld
 
     def overwrite_field(self, field, mask, fieldname, level, tlevel=1) :
         assert self._action == "r+"

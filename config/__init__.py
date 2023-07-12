@@ -12,7 +12,7 @@ DATE_START=os.environ['DATE_START']
 DATE_END=os.environ['DATE_END']
 DATE_CYCLE_START=os.environ['DATE_CYCLE_START']
 DATE_CYCLE_END=os.environ['DATE_CYCLE_END']
-CYCLE_PERIOD=int(os.environ['CYCLE_PERIOD'])
+CYCLE_PERIOD=np.float32(os.environ['CYCLE_PERIOD'])
 
 ##HPC settings, paths, env config
 SCRATCH=os.environ['SCRATCH']
@@ -22,26 +22,27 @@ CODE_DIR=os.environ['CODE_DIR']
 DATA_DIR=os.environ['DATA_DIR']
 
 ##reference grid definition
+MESH_FILE = os.environ['MESH_FILE']
 PROJ = os.environ['PROJ']
-DX = float(os.environ['DX'])
-XSTART = float(os.environ['XSTART'])
-XEND = float(os.environ['XEND'])
-YSTART = float(os.environ['YSTART'])
-YEND = float(os.environ['YEND'])
+DX = np.float32(os.environ['DX'])
+XSTART = np.float32(os.environ['XSTART'])
+XEND = np.float32(os.environ['XEND'])
+YSTART = np.float32(os.environ['YSTART'])
+YEND = np.float32(os.environ['YEND'])
 
-from grid import Grid, regular_grid
+from grid import Grid
 import pyproj
-ref_proj = pyproj.Proj(PROJ)
-ref_x, ref_y = regular_grid(XSTART, XEND, YSTART, YEND, DX, centered=True)
-ref_grid = Grid(ref_proj, ref_x, ref_y)
+ref_grid = Grid.regular_grid(pyproj.Proj(PROJ), XSTART, XEND, YSTART, YEND, DX, centered=True)
 
 ##state variables definition
 ##  one state variable per line, each line contains:
 ##     variable name, string
 ##     source, string, which module takes care of preprocessing
-##     nz, int, number of vertical layers
-##     nt, int, number of time slices
+##     dt, hours, how frequently state is available
+##     zmin, zmax, int, vertical layer index start and end
 STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
+NZ_MIN = int(os.environ['NZ_MIN'])
+NZ_MAX = int(os.environ['NZ_MAX'])
 
 ##perturbation
 PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
@@ -79,6 +80,8 @@ with open(OBS_DEF_FILE, 'r') as f:
                             'vroi':vroi,
                             'impact':impact}})
 
+OBS_WINDOW_MIN=np.float32(os.environ['OBS_WINDOW_MIN'])
+OBS_WINDOW_MAX=np.float32(os.environ['OBS_WINDOW_MAX'])
 
 ##DA parameters
 NUM_ENS = int(os.environ['NUM_ENS'])
