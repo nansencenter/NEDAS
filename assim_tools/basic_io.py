@@ -28,7 +28,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
             d += 1
         if name in f.dimensions:
             if dim[name] is not None:
-                assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size mismatch with file"
+                assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size ({}) mismatch with file ({})".format(dim[name], f.dimensions[name].size)
             else:
                 assert(f.dimensions[name].isunlimited())
         else:
