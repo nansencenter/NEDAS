@@ -8,9 +8,7 @@ from .basic_io import get_info, read_data, write_data
 from .gmshlib import read_mshfile, proj
 from grid import Grid
 
-# from .grid import nodes_xy, elements_xy, triangulation, get_grid
-# from .state_variable import var_dict, levels, filename, get_var
-
+##nextsim use moving mesh, so it varies for each member and time
 uniq_grid = ('member', 'time')
 
 def get_grid(path, **kwargs):
@@ -70,5 +68,8 @@ def get_var(path, grid, **kwargs):
 
     return var
 
-def write_var(path, var, **kwargs):
+def write_var(path, grid, var, **kwargs):
+    pass
+
+def write_grid(path, grid, **kwargs):
     pass
