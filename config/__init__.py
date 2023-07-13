@@ -21,8 +21,11 @@ SCRIPT_DIR=os.environ['SCRIPT_DIR']
 CODE_DIR=os.environ['CODE_DIR']
 DATA_DIR=os.environ['DATA_DIR']
 
-##reference grid definition
+MASK_FROM = os.environ['MASK_FROM']
 MESH_FILE = os.environ['MESH_FILE']
+BATHY_FILE = os.environ['BATHY_FILE']
+
+##reference grid definition
 PROJ = os.environ['PROJ']
 DX = np.float32(os.environ['DX'])
 XSTART = np.float32(os.environ['XSTART'])
@@ -41,8 +44,8 @@ ref_grid = Grid.regular_grid(pyproj.Proj(PROJ), XSTART, XEND, YSTART, YEND, DX, 
 ##     dt, hours, how frequently state is available
 ##     zmin, zmax, int, vertical layer index start and end
 STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
-NZ_MIN = int(os.environ['NZ_MIN'])
-NZ_MAX = int(os.environ['NZ_MAX'])
+ZI_MIN = int(os.environ['ZI_MIN'])
+ZI_MAX = int(os.environ['ZI_MAX'])
 
 ##perturbation
 PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']

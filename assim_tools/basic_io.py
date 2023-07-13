@@ -56,9 +56,9 @@ type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'
 type_size = {'double':8, 'float':4, 'int':4}
 
 ##if a model has landmask, we apply the mask to reduce state dimension
-is_masked = {'models.nextsim':True,
-             'models.topaz':True,
-             'models.wrf':False, }
+is_masked = {'nextsim':True,
+             'topaz':True,
+             'wrf':False, }
 
 def t2h(t):
     ##convert datetime obj to hours since 1900-1-1 00:00
@@ -179,8 +179,9 @@ def write_mask(filename, info, mask):
         with open(filename, 'wb'):
             pass
     with open(filename, 'r+b') as f:
-        f.write(struct.pack(ny*nx*type_dic['int'], *mask.flatten().astype(np.int32)))
+        f.write(struct.pack(ny*nx*type_dic['int'], *mask.flatten().astype(int)))
 
+##read/write a 2D field from/to binfile, given fid
 def read_field(filename, info, mask, fid):
     nx = info['nx']
     ny = info['ny']
@@ -188,7 +189,7 @@ def read_field(filename, info, mask, fid):
     is_vector = rec['is_vector']
     nv = 2 if is_vector else 1
     fld_shape = (2, ny, nx) if is_vector else (ny, nx)
-    fsize = np.sum((~mask).astype(np.int32)) if is_masked[rec['source']] else ny*nx
+    fsize = np.sum((~mask).astype(int)) if is_masked[rec['source']] else ny*nx
 
     with open(filename, 'rb') as f:
         f.seek(rec['pos'])
@@ -220,4 +221,89 @@ def write_field(filename, info, mask, fid, fld):
     with open(filename, 'r+b') as f:
         f.seek(rec['pos'])
         f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
+
+##read/write the entire ensemble state[nens, nfields] for a local region
+##corresponding to spatial index inds
+def get_local_dims(info):
+    ##ensemble size
+    nens = len(list(set(rec['member'] for i,rec in info['fields'].items())))
+    ##number of unique fields
+    nfield = 0
+    var_names = []
+    times = []
+    levels = []
+    for rec in [rec for i,rec in info['fields'].items() if rec['member']==0]:
+        if rec['is_vector']:
+            comp = ('_x', '_y')
+            for i in range(2):
+                nfield += 1
+                var_names.append(rec['var_name']+comp[i])
+                times.append(rec['time'])
+                levels.append(rec['level'])
+        else:
+            nfield += 1
+            var_names.append(rec['var_name'])
+            times.append(rec['time'])
+            levels.append(rec['level'])
+    return nens, nfield, var_names, times, levels
+
+def read_local_ens(filename, info, mask, inds):
+    nens, nfield, _, _, _ = get_local_dims(info)
+
+    ny = info['ny']
+    nx = info['nx']
+    ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
+    inds_full = jj * nx + ii
+
+    ##read the local states from corresponding fields
+    state_ens = np.full((nens, nfield), np.nan)
+    with open(filename, 'rb') as f:
+        for m in range(nens):
+            n = 0
+            for rec in [rec for i,rec in info['fields'].items() if rec['member']==m]:
+                if is_masked[rec['source']]:
+                    fsize = np.sum((~mask).astype(int))
+                    seek_inds = np.searchsorted(inds_full[~mask], inds)
+                else:
+                    fsize = ny*nx
+                    seek_inds = inds
+                if rec['is_vector']:
+                    for i in range(2):
+                        f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
+                        state_ens[m, n] = np.array(struct.unpack((1*type_dic[rec['dtype']]), f.read(1*type_size[rec['dtype']])))
+                        n += 1
+                else:
+                    f.seek(rec['pos'] + seek_inds*type_size[rec['dtype']])
+                    state_ens[m, n] = np.array(struct.unpack((1*type_dic[rec['dtype']]), f.read(1*type_size[rec['dtype']])))
+                    n+= 1
+    return state_ens, var_names, times, levels
+
+def write_local_ens(filename, info, mask, idx, state_ens):
+    nens, nfield, _, _, _ = get_local_dims(info)
+    assert dat_ens.shape == (nens, nfield), 'dat_ens shape incorrect: expected ({},{}), got ({},{})'.format(nens, nfield, *dat_ens.shape)
+    ny = info['ny']
+    nx = info['nx']
+    ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
+    inds_full = jj * nx + ii
+
+    ##write the local state_ens to binfiles
+    with open(filename, 'r+b') as f:
+        for m in range(nens):
+            n = 0
+            for rec in [rec for i,rec in info['fields'].items() if rec['member']==m]:
+                if is_masked[rec['source']]:
+                    fsize = np.sum((~mask).astype(int))
+                    seek_inds = np.searchsorted(inds_full[~mask], inds)
+                else:
+                    fsize = ny*nx
+                    seek_inds = inds
+                if rec['is_vector']:
+                    for i in range(2):
+                        f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
+                        f.write(struct.pack((1*type_dic[rec['dtype']]), *state_ens[m, n]))
+                        n += 1
+                else:
+                    f.seek(rec['pos'] + seek_inds*type_size[rec['dtype']])
+                    f.write(struct.pack((1*type_dic[rec['dtype']]), *state_ens[m, n]))
+                    n += 1
 

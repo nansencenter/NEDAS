@@ -83,9 +83,5 @@ def get_scale_comp(fld, krange, s):
     # return spec2grid(xkout)
     pass
 
-##alignment technique
-def optical_flow():
-    pass
-
-def warp():
+def convolve(fld, kern):
     pass
