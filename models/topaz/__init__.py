@@ -2,7 +2,7 @@ import numpy as np
 import glob
 from pyproj import Geod
 from grid import Grid
-from assim_tools import variables, units_convert
+from assim_tools.state_def import variables, units_convert
 from .confmap import ConformalMapping
 from .abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid
 

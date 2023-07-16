@@ -1,8 +1,8 @@
 import numpy as np
 import glob
 
-from assim_tools import variables, units_convert
-from .basic_io import get_info, read_data, write_data
+from assim_tools.state_def import variables, units_convert
+from .bin_io import get_info, read_data, write_data
 
 ##the map projection used in nextsim
 from .gmshlib import read_mshfile, proj

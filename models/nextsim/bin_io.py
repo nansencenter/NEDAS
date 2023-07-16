@@ -1,7 +1,7 @@
 import numpy as np
 import struct
 
-###basic io functions
+###binary file io functions
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}

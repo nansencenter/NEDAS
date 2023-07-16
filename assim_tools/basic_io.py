@@ -3,7 +3,7 @@ import numpy as np
 from netCDF4 import Dataset
 import struct
 from datetime import datetime, timedelta
-from .state import variables
+from .state_def import variables
 
 ##netcdf file io
 def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
@@ -54,11 +54,6 @@ def nc_read_var(filename, varname):
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}
-
-##if a model has landmask, we apply the mask to reduce state dimension
-is_masked = {'nextsim':True,
-             'topaz':True,
-             'wrf':False, }
 
 def t2h(t):
     ##convert datetime obj to hours since 1900-1-1 00:00
@@ -130,7 +125,7 @@ def field_info(state_def_file, ###state_def filename, see config module
         pos += ny * nx * type_size['int']  ##the landmask is the first record
         for lin in f.readlines():
             ss = lin.split()
-            assert len(ss) == 6, 'state_def format error, should be "varname, src, dtype, dt, zmin, zmax"'
+            assert len(ss) == 6, 'state_def format error, should be "varname, src, dtype, dt, zi_min, zi_max"'
             ##variable name
             var_name = ss[0]
             ##which module handles i/o for this variable
@@ -142,24 +137,24 @@ def field_info(state_def_file, ###state_def filename, see config module
             ##vertical index min,max
             ##Note: 0 means surface variables, negative indices for ocean layers
             ##      positive indices for atmos layers
-            var_zmin = np.int32(ss[4])
-            var_zmax = np.int32(ss[5])
+            var_zi_min = np.int32(ss[4])
+            var_zi_max = np.int32(ss[5])
 
             for m in range(nens):  ##loop over ensemble members
                 for n in np.arange(int(t_offsets[0]/var_dt), int(t_offsets[1]/var_dt)+1):  ##time slices
-                    for level in [z for z in zlevels if var_zmin<=z<=var_zmax]:  ##vertical levels
-                        field = {'var_name':var_name,
-                                 'source':var_source,
-                                 'dtype':var_dtype,
-                                 'is_vector':variables[var_name]['is_vector'],
-                                 'pos':pos,
-                                 'member':m,
-                                 'time':time + n*var_dt*timedelta(hours=1),
-                                 'level':level}
-                        info['fields'].update({fld_id:field})  ##add this record to fields
+                    for level in [z for z in zlevels if var_zi_min<=z<=var_zi_max]:  ##vertical levels
+                        rec = {'var_name':var_name,
+                               'source':var_source,
+                               'dtype':var_dtype,
+                               'is_vector':variables[var_name]['is_vector'],
+                               'pos':pos,
+                               'member':m,
+                               'time':time + n*var_dt*timedelta(hours=1),
+                               'level':level}
+                        info['fields'].update({fld_id:rec})  ##add this record to fields
                         ##f.seek position
                         nv = 2 if variables[var_name]['is_vector'] else 1
-                        fsize = np.sum((~mask).astype(np.int32)) if is_masked[var_source] else ny*nx
+                        fsize = np.sum((~mask).astype(np.int32))
                         pos += nv * fsize * type_size[var_dtype]
                         fld_id += 1
     return info
@@ -189,20 +184,17 @@ def read_field(filename, info, mask, fid):
     is_vector = rec['is_vector']
     nv = 2 if is_vector else 1
     fld_shape = (2, ny, nx) if is_vector else (ny, nx)
-    fsize = np.sum((~mask).astype(int)) if is_masked[rec['source']] else ny*nx
+    fsize = np.sum((~mask).astype(int))
 
     with open(filename, 'rb') as f:
         f.seek(rec['pos'])
         fld_ = np.array(struct.unpack((nv*fsize*type_dic[rec['dtype']]),
                         f.read(nv*fsize*type_size[rec['dtype']])))
-        if is_masked[rec['source']]:
-            fld = np.full(fld_shape, np.nan)
-            if is_vector:
-                fld[:, ~mask] = fld_.reshape((2,-1))
-            else:
-                fld[~mask] = fld_
+        fld = np.full(fld_shape, np.nan)
+        if is_vector:
+            fld[:, ~mask] = fld_.reshape((2,-1))
         else:
-            fld = fld_.reshape(fld_shape)
+            fld[~mask] = fld_
         return fld
 
 def write_field(filename, info, mask, fid, fld):
@@ -213,11 +205,7 @@ def write_field(filename, info, mask, fid, fld):
     fld_shape = (2, ny, nx) if is_vector else (ny, nx)
     assert fld.shape == fld_shape, 'fld shape incorrect'
 
-    if is_masked[rec['source']]:
-        fld_ = fld[:, ~mask].flatten() if is_vector else fld[~mask]
-    else:
-        fld_ = fld.flatten()
-
+    fld_ = fld[:, ~mask].flatten() if is_vector else fld[~mask]
     with open(filename, 'r+b') as f:
         f.seek(rec['pos'])
         f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
@@ -261,21 +249,12 @@ def read_local_ens(filename, info, mask, inds):
         for m in range(nens):
             n = 0
             for rec in [rec for i,rec in info['fields'].items() if rec['member']==m]:
-                if is_masked[rec['source']]:
-                    fsize = np.sum((~mask).astype(int))
-                    seek_inds = np.searchsorted(inds_full[~mask], inds)
-                else:
-                    fsize = ny*nx
-                    seek_inds = inds
-                if rec['is_vector']:
-                    for i in range(2):
-                        f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
-                        state_ens[m, n] = np.array(struct.unpack((1*type_dic[rec['dtype']]), f.read(1*type_size[rec['dtype']])))
-                        n += 1
-                else:
-                    f.seek(rec['pos'] + seek_inds*type_size[rec['dtype']])
+                fsize = np.sum((~mask).astype(int))
+                seek_inds = np.searchsorted(inds_full[~mask], inds)
+                for i in range(2 if rec['is_vector'] else 1):
+                    f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
                     state_ens[m, n] = np.array(struct.unpack((1*type_dic[rec['dtype']]), f.read(1*type_size[rec['dtype']])))
-                    n+= 1
+                    n += 1
     return state_ens, var_names, times, levels
 
 def write_local_ens(filename, info, mask, idx, state_ens):
@@ -291,19 +270,10 @@ def write_local_ens(filename, info, mask, idx, state_ens):
         for m in range(nens):
             n = 0
             for rec in [rec for i,rec in info['fields'].items() if rec['member']==m]:
-                if is_masked[rec['source']]:
-                    fsize = np.sum((~mask).astype(int))
-                    seek_inds = np.searchsorted(inds_full[~mask], inds)
-                else:
-                    fsize = ny*nx
-                    seek_inds = inds
-                if rec['is_vector']:
-                    for i in range(2):
-                        f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
-                        f.write(struct.pack((1*type_dic[rec['dtype']]), *state_ens[m, n]))
-                        n += 1
-                else:
-                    f.seek(rec['pos'] + seek_inds*type_size[rec['dtype']])
+                fsize = np.sum((~mask).astype(int))
+                seek_inds = np.searchsorted(inds_full[~mask], inds)
+                for i in range(2 if rec['is_vector'] else 1):
+                    f.seek(rec['pos'] + (i*fsize+seek_inds)*type_size[rec['dtype']])
                     f.write(struct.pack((1*type_dic[rec['dtype']]), *state_ens[m, n]))
                     n += 1
 
