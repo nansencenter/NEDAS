@@ -1,19 +1,19 @@
 import numpy as np
-from mpi4py import MPI
 
 def parallel_start():
+    from mpi4py import MPI
     comm = MPI.COMM_WORLD
     return comm
 
 def parallel_end():
     pass
 
-def divide_load(comm, tasks):
-    ##returns the subset of tasks to work on
-    ##for the processor rank calling this function
+def distribute_tasks(comm, tasks):
+    ##tasks: list of indices to work on
+    ##returns the subset of tasks for the processor rank calling this function to work on
     nproc = comm.Get_size()  ##number of processors
     rank = comm.Get_rank()   ##processor id
-    ntask = len(tasks)       ##number of tasks to work on (list of indices)
+    ntask = len(tasks)       ##number of tasks
 
     chunk = ntask // nproc
     remainder = ntask % nproc

@@ -181,30 +181,31 @@ class Grid(object):
         assert isinstance(grid, Grid), "dst_grid should be a Grid instance"
         self._dst_grid = grid
 
-        ##rotation of vector field from self.proj to dst_grid.proj
-        self._set_rotation_matrix()
+        if grid != self:
+            ##rotation of vector field from self.proj to dst_grid.proj
+            self._set_rotation_matrix()
 
-        ##prepare indices and weights for interpolation
-        ##when dst_grid is set, these info are prepared and stored to avoid recalculating
-        ##too many times, when applying the same interp to a lot of flds
-        x, y = self._proj_from(grid.x, grid.y)
-        inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
-        self.interp_inside = inside
-        self.interp_indices = indices
-        self.interp_vertices = vertices
-        self.interp_nearest = nearest
-        self.interp_weights = self._interp_weights(inside, vertices, in_coords)
+            ##prepare indices and weights for interpolation
+            ##when dst_grid is set, these info are prepared and stored to avoid recalculating
+            ##too many times, when applying the same interp to a lot of flds
+            x, y = self._proj_from(grid.x, grid.y)
+            inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
+            self.interp_inside = inside
+            self.interp_indices = indices
+            self.interp_vertices = vertices
+            self.interp_nearest = nearest
+            self.interp_weights = self._interp_weights(inside, vertices, in_coords)
 
-        ##prepare indices for coarse-graining
-        x, y = self._proj_to(self.x, self.y)
-        inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
-        self.coarsen_inside = inside
-        self.coarsen_nearest = nearest
-        if not self.regular: ## for irregular mesh, find indices for elements too
-            x, y = self._proj_to(self.x_elem, self.y_elem)
+            ##prepare indices for coarse-graining
+            x, y = self._proj_to(self.x, self.y)
             inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
-            self.coarsen_inside_elem = inside
-            self.coarsen_nearest_elem = nearest
+            self.coarsen_inside = inside
+            self.coarsen_nearest = nearest
+            if not self.regular: ## for irregular mesh, find indices for elements too
+                x, y = self._proj_to(self.x_elem, self.y_elem)
+                inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+                self.coarsen_inside_elem = inside
+                self.coarsen_nearest_elem = nearest
 
     def wrap_cyclic_xy(self, x_, y_):
     ##if input x_,y_ is outside of domain, wrap around for cyclic boundary condition
@@ -341,25 +342,31 @@ class Grid(object):
 
     def _set_rotation_matrix(self):
         self.rotate_matrix = np.zeros((4,)+self.x.shape)
-        ##self.x,y corresponding coordinates in dst_proj, call them x,y
-        x, y = self._proj_to(self.x, self.y)
+        if self.proj != self.dst_grid.proj:
+            ##self.x,y corresponding coordinates in dst_proj, call them x,y
+            x, y = self._proj_to(self.x, self.y)
 
-        ##find small increments in x,y due to small changes in self.x,y in dst_proj
-        eps = 0.1 * self.dx    ##grid spacing is specified in Grid object
-        xu, yu = self._proj_to(self.x + eps, self.y      )  ##move a bit in x dirn
-        xv, yv = self._proj_to(self.x      , self.y + eps)  ##move a bit in y dirn
+            ##find small increments in x,y due to small changes in self.x,y in dst_proj
+            eps = 0.1 * self.dx    ##grid spacing is specified in Grid object
+            xu, yu = self._proj_to(self.x + eps, self.y      )  ##move a bit in x dirn
+            xv, yv = self._proj_to(self.x      , self.y + eps)  ##move a bit in y dirn
 
-        np.seterr(invalid='ignore')  ##will get nan at poles
-        dxu = xu-x
-        dyu = yu-y
-        dxv = xv-x
-        dyv = yv-y
-        hu = np.hypot(dxu, dyu)
-        hv = np.hypot(dxv, dyv)
-        self.rotate_matrix[0, :] = dxu/hu
-        self.rotate_matrix[1, :] = dxv/hv
-        self.rotate_matrix[2, :] = dyu/hu
-        self.rotate_matrix[3, :] = dyv/hv
+            np.seterr(invalid='ignore')  ##will get nan at poles
+            dxu = xu-x
+            dyu = yu-y
+            dxv = xv-x
+            dyv = yv-y
+            hu = np.hypot(dxu, dyu)
+            hv = np.hypot(dxv, dyv)
+            self.rotate_matrix[0, :] = dxu/hu
+            self.rotate_matrix[1, :] = dxv/hv
+            self.rotate_matrix[2, :] = dyu/hu
+            self.rotate_matrix[3, :] = dyv/hv
+        else:
+            self.rotate_matrix[0, :] = 1.
+            self.rotate_matrix[1, :] = 0.
+            self.rotate_matrix[2, :] = 0.
+            self.rotate_matrix[3, :] = 1.
 
     def _fill_pole_void(self, fld):
         if self.pole_dim == 'x':
@@ -487,27 +494,30 @@ class Grid(object):
     ###         2.1 interp fld from (self.x, self.y) to dst_grid.(x, y)->self.proj
     ###         2.2 if dst_grid is low-res, perform coarse-graining
     def convert(self, fld, is_vector=False, method='linear'):
-        if is_vector:
-            assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
-            ##vector field needs to rotate to dst_grid.proj before interp
-            fld = self.rotate_vectors(fld)
+        if self.dst_grid != self:
+            if is_vector:
+                assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
+                ##vector field needs to rotate to dst_grid.proj before interp
+                fld = self.rotate_vectors(fld)
 
-            fld_out = np.full((2,)+self.dst_grid.x.shape, np.nan)
-            for i in range(2):
-                ##interp each component: u, v
-                fld_out[i, :] = self.interp(fld[i, :], method=method)
+                fld_out = np.full((2,)+self.dst_grid.x.shape, np.nan)
+                for i in range(2):
+                    ##interp each component: u, v
+                    fld_out[i, :] = self.interp(fld[i, :], method=method)
+                    ##coarse-graining if more points fall in one grid
+                    fld_coarse = self.coarsen(fld[i, :])
+                    ind = ~np.isnan(fld_coarse)
+                    fld_out[i, ind] = fld_coarse[ind]
+            else:
+                ##scalar field, just interpolate
+                fld_out = np.full(self.dst_grid.x.shape, np.nan)
+                fld_out = self.interp(fld, method=method)
                 ##coarse-graining if more points fall in one grid
-                fld_coarse = self.coarsen(fld[i, :])
+                fld_coarse = self.coarsen(fld)
                 ind = ~np.isnan(fld_coarse)
-                fld_out[i, ind] = fld_coarse[ind]
+                fld_out[ind] = fld_coarse[ind]
         else:
-            ##scalar field, just interpolate
-            fld_out = np.full(self.dst_grid.x.shape, np.nan)
-            fld_out = self.interp(fld, method=method)
-            ##coarse-graining if more points fall in one grid
-            fld_coarse = self.coarsen(fld)
-            ind = ~np.isnan(fld_coarse)
-            fld_out[ind] = fld_coarse[ind]
+            fld_out = fld
         return fld_out
 
     ##some basic map plotting without the need for installing cartopy
