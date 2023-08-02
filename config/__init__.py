@@ -40,7 +40,7 @@ ref_grid = Grid.regular_grid(pyproj.Proj(PROJ), XSTART, XEND, YSTART, YEND, DX, 
 ##state variables definition
 ##  one state variable per line, each line contains:
 ##     variable name, string
-##     source, string, which module takes care of preprocessing
+##     source, string, which models.module takes care of processing
 ##     dt, hours, how frequently state is available
 ##     zmin, zmax, int, vertical layer index start and end
 STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
@@ -52,37 +52,15 @@ PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
 PERTURB_NUM_SCALE = int(os.environ['PERTURB_NUM_SCALE'])
 PERTURB_NUM_ENS = int(os.environ['PERTURB_NUM_ENS'])
 
-##Observation
+##observation definition
+##  one observation per line, each line contains:
+##      obs variable name, string
+##      source, string, which dataset.module takes care of processing
+##      horizontal localization distance, float, km
+##      vertical localization distance, number of layers?
+##      obs impact factor, list of state variable 'name=0.9' separated by ','
+##                         unlisted state variables have default impact of 1.
 OBS_DEF_FILE = os.environ['OBS_DEF_FILE']
-##obs variables definition
-##file structure:
-##  one obs variable per line, each line contains:
-##     variable name,  string, see obs_def.variables for available names
-##     source, string, which module takes care of preprocessing
-##     error model, string, to specify obs error
-##     horizontal ROI,   real, localization radius of influence, in meters
-##     vertical ROI,     real, vertical .. .. .., in meters
-##     impact factor on a list of state_def.variables:
-##        state_var_name=factor, factor is real number between 0 and 1.
-obs_def = {}
-with open(OBS_DEF_FILE, 'r') as f:
-    for lin in f.readlines():
-        entry = lin.split()
-        vname = entry[0]
-        source = entry[1]
-        error = np.float32(entry[2])
-        hroi = np.float32(entry[3])
-        vroi = np.float32(entry[4])
-        impact = {}
-        for ilin in entry[5:]:
-            impact_vname, impact_factor = ilin.split('=')
-            impact.update({impact_vname:np.float32(impact_factor)})
-        obs_def.update({vname:{'source':source,
-                            'error':error,
-                            'hroi':hroi,
-                            'vroi':vroi,
-                            'impact':impact}})
-
 OBS_WINDOW_MIN=np.float32(os.environ['OBS_WINDOW_MIN'])
 OBS_WINDOW_MAX=np.float32(os.environ['OBS_WINDOW_MAX'])
 

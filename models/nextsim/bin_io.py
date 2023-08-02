@@ -1,10 +1,6 @@
 import numpy as np
 import struct
-
-###binary file io functions
-type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
-type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
-type_size = {'double':8, 'float':4, 'int':4}
+from assim_tools.common import type_convert, type_dic, type_size
 
 ##basic read/write of data from nextsim bin/dat file
 def get_info(filename):

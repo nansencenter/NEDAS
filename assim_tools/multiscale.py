@@ -83,5 +83,31 @@ def get_scale_comp(fld, krange, s):
     # return spec2grid(xkout)
     pass
 
-def convolve(fld, kern):
-    pass
+def convolve_fft(grid, fld, kernel):
+    assert grid.regular, 'Convolution using FFT approach only works for regular grids'
+    fld_spec = fft2(fld)
+    knl_spec = fft2(kernel)
+    mask = np.isnan(fld)
+    fld[mask] = 0.  ##temporarily put zeros in NaN area
+
+    fld_conv_spec = fld_spec * knl_spec
+    fld_conv = ifft2(fld_conv_spec)
+
+    fld_conv[mask] = np.nan
+
+    return fld_conv
+
+def convolve(grid, fld, kernel):
+    fld_shp = fld.shape
+    assert fld_shp == grid.x.shape, 'fld shape mismatch with grid'
+
+    x = grid.x.flatten()
+    y = grid.y.flatten()
+    fld = fld.flatten()
+    mask = np.isnan(fld)
+    fld_conv = fld.copy()
+
+    for i in np.where(mask):
+        fld_conv[i]
+
+    return fld_conv
