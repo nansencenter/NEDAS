@@ -1,5 +1,5 @@
 import numpy as np
-from assim_tools.basic_io import read_field_info, read_mask, read_field, t2h, nc_write_var
+from assim_tools import read_field_info, read_mask, read_field, t2h, nc_write_var
 
 import sys
 filename = sys.argv[1]

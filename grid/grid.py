@@ -1,4 +1,3 @@
-###  Yue Ying 2023
 ###  Grid class to handle 2D field defined on a regular grid or unstructured mesh
 ###
 ###  Regular grid can handle cyclic boundary conditions (longitude, e.g.) and
@@ -140,7 +139,6 @@ class Grid(object):
         y = np.array([p[1] for p in points])
         self.__init__(proj, x, y, regular=False, **kwargs)
         return self
-
 
     def _mesh_dx(self):
         ##computes averaged edge length for irregular mesh, used in self.dx, dy
@@ -426,8 +424,8 @@ class Grid(object):
         vec_fld_rot[1, :] = v_rot
         return vec_fld_rot
 
-    ###utility functions for interpolation/refining (low->high resolution)
     def get_corners(self, fld):
+        ##given fld defined on a regular grid, obtain its value on the 4 corners/vertices
         assert fld.shape == self.x.shape, "fld shape does not match x,y"
         nx, ny = fld.shape
         fld_ = np.zeros((nx+1, ny+1))
@@ -462,6 +460,7 @@ class Grid(object):
             interp_weights = in_coords
         return interp_weights
 
+    ###utility function for interpolation/refining (low->high resolution)
     def interp(self, fld, x=None, y=None, method='linear'):
         ##apply the interpolation to given fld, fld should have same shape as self.x,y
         ##if x,y are specified, the function computes the weights and apply them
@@ -498,7 +497,7 @@ class Grid(object):
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
         return fld_interp.reshape(np.array(x).shape)
 
-    ###utility functions for coarse-graining (high->low resolution)
+    ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
         ##coarse-graining is needed when the dst_grid is at lower resolution than self
         ##since many points of self.x,y falls in one dst_grid box/element, it is better to

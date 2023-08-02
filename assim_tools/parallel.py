@@ -5,9 +5,6 @@ def parallel_start():
     comm = MPI.COMM_WORLD
     return comm
 
-def parallel_end():
-    pass
-
 def distribute_tasks(comm, tasks):
     ##tasks: list of indices to work on
     ##returns the subset of tasks for the processor rank calling this function to work on

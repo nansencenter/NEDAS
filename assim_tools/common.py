@@ -1,29 +1,6 @@
-##state variable definition
-##available state variable names, and their properties
-variables = {'atmos_surf_wind': {'is_vector':True, 'units':'m/s'},
-             'atmos_surf_temp': {'is_vector':False, 'units':'K'},
-             'atmos_surf_dew_temp': {'is_vector':False, 'units':'K'},
-             'atmos_surf_press': {'is_vector':False, 'units':'Pa'},
-             'atmos_precip': {'is_vector':False, 'units':'kg/m2/s'},
-             'atmos_snowfall': {'is_vector':False, 'units':'kg/m2/s'},
-             'atmos_down_shortwave': {'is_vector':False, 'units':'W/m2'},
-             'atmos_down_longwave': {'is_vector':False, 'units':'W/m2'},
-             'seaice_conc': {'is_vector':False, 'units':'%'},
-             'seaice_thick': {'is_vector':False, 'units':'m'},
-             'snow_thick': {'is_vector':False, 'units':'m'},
-             'seaice_drift': {'is_vector':True, 'units':'m'},
-             'seaice_velocity': {'is_vector':True, 'units':'m/s'},
-             'seaice_damage': {'is_vector':False, 'units':'%'},
-             'ocean_surf_temp': {'is_vector':False, 'units':'K'},
-             'ocean_surf_velocity': {'is_vector':True, 'units':'m/s'},
-             'ocean_surf_height': {'is_vector':False, 'units':'m'},
-             'ocean_temp': {'is_vector':False, 'units':'K'},
-             'ocean_salinity': {'is_vector':False, 'units':'%'},
-             'ocean_velocity': {'is_vector':True, 'units':'m/s'},
-             }
-
+import numpy as np
 ###units converter
-##units: target units used in state variables (defined in variables)
+##units: target units used in state/obs variables
 ##s_units: source units used in models (defined in var_dict in each module)
 def units_convert(units, s_units, var, inverse=False):
     ##  list of available units and methods to convert from/to s_units
@@ -63,4 +40,17 @@ def units_convert(units, s_units, var, inverse=False):
                 var = unit_to[units][s_units](var)
     return var
 
+##binary file io type conversion
+type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
+type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
+type_size = {'double':8, 'float':4, 'int':4}
 
+##convert between datetime obj and abs hours
+from datetime import datetime, timedelta
+def t2h(t):
+    ##convert datetime obj to hours since 1900-1-1 00:00
+    return (t - datetime(1900,1,1))/timedelta(hours=1)
+
+def h2t(h):
+    ##convert hours since 1900-1-1 00:00 to datetime obj
+    return datetime(1900,1,1) + timedelta(hours=1) * h

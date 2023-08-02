@@ -1,2 +1,2 @@
-seaice_drift RGPS 0.05 2e4 1e3 seaice_drift=1.0 seaice_conc=0.5 atmos_surf_wind=1.0
-seaice_deform RGPS 0.01 2e4 1e3 seaice_drift=1.0 seaice_conc=0.8
+ocean_surf_temp   synthetic    200000  1000  0  ocean_velocity=0
+ocean_temp        synthetic    200000  1000  0
