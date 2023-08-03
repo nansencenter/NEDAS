@@ -348,17 +348,19 @@ class Grid(object):
 
     def _proj_to(self, x, y):
         ##transform coordinates from self.proj to dst_grid.proj
-        lon, lat = self.proj(x, y, inverse=True)
-        x_, y_ = self.dst_grid.proj(lon, lat)
-        x_, y_ = self.dst_grid.wrap_cyclic_xy(x_, y_)
-        return x_, y_
+        if self.dst_grid.proj != self.proj:
+            lon, lat = self.proj(x, y, inverse=True)
+            x, y = self.dst_grid.proj(lon, lat)
+            x, y = self.dst_grid.wrap_cyclic_xy(x, y)
+        return x, y
 
     def _proj_from(self, x, y):
         ##transform coordinates from dst_grid.proj to self.proj
-        lon, lat = self.dst_grid.proj(x, y, inverse=True)
-        x_, y_ = self.proj(lon, lat)
-        x_, y_ = self.wrap_cyclic_xy(x_, y_)
-        return x_, y_
+        if self.dst_grid.proj != self.proj:
+            lon, lat = self.dst_grid.proj(x, y, inverse=True)
+            x, y = self.proj(lon, lat)
+            x, y = self.wrap_cyclic_xy(x, y)
+        return x, y
 
     def _set_rotation_matrix(self):
         ##setting the rotation matrix for converting vector fields from self to dst_grid
@@ -533,7 +535,7 @@ class Grid(object):
     ###  Steps: 1. rotate vectors in self.proj to dst_grid.proj
     ###         2.1 interp fld from (self.x, self.y) to dst_grid.(x, y)->self.proj
     ###         2.2 if dst_grid is low-res, perform coarse-graining
-    def convert(self, fld, is_vector=False, method='linear'):
+    def convert(self, fld, is_vector=False, method='linear', coarse_grain=True):
         if self.dst_grid != self:
             if is_vector:
                 assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
@@ -544,18 +546,20 @@ class Grid(object):
                 for i in range(2):
                     ##interp each component: u, v
                     fld_out[i, :] = self.interp(fld[i, :], method=method)
-                    ##coarse-graining if more points fall in one grid
-                    fld_coarse = self.coarsen(fld[i, :])
-                    ind = ~np.isnan(fld_coarse)
-                    fld_out[i, ind] = fld_coarse[ind]
+                    if coarse_grain:
+                        ##coarse-graining if more points fall in one grid
+                        fld_coarse = self.coarsen(fld[i, :])
+                        ind = ~np.isnan(fld_coarse)
+                        fld_out[i, ind] = fld_coarse[ind]
             else:
                 ##scalar field, just interpolate
                 fld_out = np.full(self.dst_grid.x.shape, np.nan)
                 fld_out = self.interp(fld, method=method)
-                ##coarse-graining if more points fall in one grid
-                fld_coarse = self.coarsen(fld)
-                ind = ~np.isnan(fld_coarse)
-                fld_out[ind] = fld_coarse[ind]
+                if coarse_grain:
+                    ##coarse-graining if more points fall in one grid
+                    fld_coarse = self.coarsen(fld)
+                    ind = ~np.isnan(fld_coarse)
+                    fld_out[ind] = fld_coarse[ind]
         else:
             fld_out = fld
         return fld_out
