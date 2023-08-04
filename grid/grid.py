@@ -351,7 +351,7 @@ class Grid(object):
         if self.dst_grid.proj != self.proj:
             lon, lat = self.proj(x, y, inverse=True)
             x, y = self.dst_grid.proj(lon, lat)
-            x, y = self.dst_grid.wrap_cyclic_xy(x, y)
+        x, y = self.dst_grid.wrap_cyclic_xy(x, y)
         return x, y
 
     def _proj_from(self, x, y):
@@ -359,7 +359,7 @@ class Grid(object):
         if self.dst_grid.proj != self.proj:
             lon, lat = self.dst_grid.proj(x, y, inverse=True)
             x, y = self.proj(lon, lat)
-            x, y = self.wrap_cyclic_xy(x, y)
+        x, y = self.wrap_cyclic_xy(x, y)
         return x, y
 
     def _set_rotation_matrix(self):
