@@ -610,6 +610,7 @@ class Grid(object):
     @cached_property
     def river_data(self):
         ##prepare data to show river features
+        path = os.path.split(inspect.getfile(self.__class__))[0]
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_rivers.shp'))
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
@@ -617,6 +618,7 @@ class Grid(object):
     @cached_property
     def lake_data(self):
         ##prepare data to show lake features
+        path = os.path.split(inspect.getfile(self.__class__))[0]
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
