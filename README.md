@@ -2,7 +2,9 @@
 
 initiated by Yue Ying 2022
 
-A unitified ensemble data assimilation scripts/code for NERSC models: HYCOM, neXtSIM, WRF, ECOSMO, NorCPM (potentially). Features: common analysis grid; multiscale (localization, inflation, alignment) DA algorithms; modularized design.
+with contribution from: Anton Korosov, Timothy Williams (pynextsim libraries), NERSC-HYCOM-CICE group (pythonlib for abfile, confmap, etc.), Jiping Xie (enkf-topaz), Tsuyoshi Wakamatsu (BIORAN), Francois Counillon, Yiguo Wang, Tarkeshwar Singh (EnKF in NorCPM)
+
+A unitified ensemble data assimilation scripts/code for NERSC models: HYCOM (TOPAZ), neXtSIM, and (potentially) WRF, ECOSMO, and NorESM. Features: multiscale approach using a common analysis grid with coarse-graining in 4D (x,y,z,t), more flexible localization, inflation for each scale component; a new alignment technique to reduce position/timing mismatch between model forecast and observed features; Overall modular design using Python with MPI parallelization, aiming at scalable algorithms for large dimensional problems.
 
 ## Quick Start
 

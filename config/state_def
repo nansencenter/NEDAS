@@ -1,7 +1,0 @@
-seaice_drift        nextsim  float   24      0  0  1
-seaice_conc         nextsim  float   24      0  0  1
-seaice_thick        nextsim  float   24      0  0  1
-seaice_damage       nextsim  float   24      0  0  1
-ocean_velocity      topaz    float   24    -50 -1  1
-ocean_temp          topaz    float   24    -50 -1  1
-ocean_surf_height   topaz    float   25      0  0  1

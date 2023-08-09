@@ -1,0 +1,10 @@
+#!/bin/bash
+HOST=betzy
+HOSTPPN=128
+
+SCRATCH=/cluster/work/users/yingyue
+
+SCRIPT_DIR=$HOME/code/NEDAS/scripts
+CODE_DIR=$HOME/code
+DATA_DIR=$SCRATCH/data
+WORK_DIR=$SCRATCH/$EXP_NAME
