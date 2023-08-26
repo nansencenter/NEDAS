@@ -1,6 +1,6 @@
-###utility function for multiscale grid
 import numpy as np
-from numba import njit
+
+###utility function for multiscale grid
 
 ###fft implementation using FFTW
 import pyfftw
@@ -17,6 +17,7 @@ def fft2(f):
     ##TODO: fill the zero half with conj, so that pwrspec2d will sum correctly
     return fh
 
+
 def ifft2(fh):
     ##prepare fftw plan
     b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
@@ -26,6 +27,7 @@ def ifft2(fh):
     f = fft_obj(fh[..., 0:fh.shape[1]//2+1])
     return f
 
+
 def fftwn(n):
     ##wavenumber sequence for fft results in 1 dimension
     nup = int(np.ceil((n+1)/2))
@@ -34,6 +36,7 @@ def fftwn(n):
     else:
         wn = np.concatenate((np.arange(0, nup), np.arange(1-nup, 0)))
     return wn
+
 
 def get_wn(fld):
     ##generate meshgrid wavenumber for input field
@@ -56,6 +59,7 @@ def lowpass_resp(Kh, k1, k2):
     r[ind] = np.cos((Kh[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
     return r
 
+
 def get_scale_resp(Kh, kr, s):
     ns = len(kr)
     resp = np.zeros(Kh.shape)
@@ -67,6 +71,7 @@ def get_scale_resp(Kh, kr, s):
         if s > 0 and s < ns-1:
             resp = lowpass_resp(Kh, kr[s], kr[s+1]) - lowpass_resp(Kh, kr[s-1], kr[s])
     return resp
+
 
 def get_scale_comp(fld, krange, s):
     ##compute scale component of fld on the grid
@@ -83,6 +88,7 @@ def get_scale_comp(fld, krange, s):
     # return spec2grid(xkout)
     pass
 
+
 def convolve_fft(grid, fld, kernel):
     assert grid.regular, 'Convolution using FFT approach only works for regular grids'
     fld_spec = fft2(fld)
@@ -96,6 +102,7 @@ def convolve_fft(grid, fld, kernel):
     fld_conv[mask] = np.nan
 
     return fld_conv
+
 
 def convolve(grid, fld, kernel):
     fld_shp = fld.shape

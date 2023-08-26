@@ -1,73 +1,138 @@
-##before starting python, make sure to
-##   set -a; source config_file; set +a
-##to export the env variables
+##before starting python, make sure to run bash command:
+##  set -a; source <config_file>
+##  to export the env variables, so that in python script
+##  "import config as c" will get the env variables
 
-###Parse system environment variables for settings
+###Parse system environment variables, most defined in config_file
+###except for a few runtime variables defined in run scripts
 import numpy as np
 import os
-
-##experiment design
-EXP_NAME=os.environ['EXP_NAME']
-DATE_START=os.environ['DATE_START']
-DATE_END=os.environ['DATE_END']
-DATE_CYCLE_START=os.environ['DATE_CYCLE_START']
-DATE_CYCLE_END=os.environ['DATE_CYCLE_END']
-CYCLE_PERIOD=np.float32(os.environ['CYCLE_PERIOD'])
-
-##HPC settings, paths, env config
-SCRATCH=os.environ['SCRATCH']
-WORK_DIR=os.environ['WORK_DIR']
-SCRIPT_DIR=os.environ['SCRIPT_DIR']
-CODE_DIR=os.environ['CODE_DIR']
-DATA_DIR=os.environ['DATA_DIR']
-
-MASK_FROM = os.environ['MASK_FROM']
-MESH_FILE = os.environ['MESH_FILE']
-BATHY_FILE = os.environ['BATHY_FILE']
-
-##reference grid definition
-PROJ = os.environ['PROJ']
-DX = np.float32(os.environ['DX'])
-XSTART = np.float32(os.environ['XSTART'])
-XEND = np.float32(os.environ['XEND'])
-YSTART = np.float32(os.environ['YSTART'])
-YEND = np.float32(os.environ['YEND'])
-
 from grid import Grid
-import pyproj
-ref_grid = Grid.regular_grid(pyproj.Proj(PROJ), XSTART, XEND, YSTART, YEND, DX, centered=True)
+from pyproj import Proj
 
-##state variables definition
-##  one state variable per line, each line contains:
-##     variable name, string
-##     source, string, which models.module takes care of processing
-##     dt, hours, how frequently state is available
-##     zmin, zmax, int, vertical layer index start and end
-STATE_DEF_FILE = os.environ['STATE_DEF_FILE']
-ZI_MIN = int(os.environ['ZI_MIN'])
-ZI_MAX = int(os.environ['ZI_MAX'])
+exp_name = os.environ.get('exp_name')
 
-##perturbation
-PERTURB_PARAM_DIR = os.environ['PERTURB_PARAM_DIR']
-PERTURB_NUM_SCALE = int(os.environ['PERTURB_NUM_SCALE'])
-PERTURB_NUM_ENS = int(os.environ['PERTURB_NUM_ENS'])
+##directories
+script_dir = os.environ.get('script_dir')
+code_dir = os.environ.get('code_dir')
+data_dir = os.environ.get('data_dir')
+work_dir = os.environ.get('work_dir')
 
-##observation definition
-##  one observation per line, each line contains:
-##      obs variable name, string
-##      source, string, which dataset.module takes care of processing
-##      horizontal localization distance, float, km
-##      vertical localization distance, number of layers?
-##      obs impact factor, list of state variable 'name=0.9' separated by ','
-##                         unlisted state variables have default impact of 1.
-OBS_DEF_FILE = os.environ['OBS_DEF_FILE']
-OBS_WINDOW_MIN=np.float32(os.environ['OBS_WINDOW_MIN'])
-OBS_WINDOW_MAX=np.float32(os.environ['OBS_WINDOW_MAX'])
+##ensemble size
+nens = int(os.environ.get('nens'))
 
-##DA parameters
-NUM_ENS = int(os.environ['NUM_ENS'])
+##DA scheme
+run_filter = os.environ.get('run_filter').lower()=='true'
+run_align_space = os.environ.get('run_align_space').lower()=='true'
+run_align_time = os.environ.get('run_align_time').lower()=='true'
+
+filter_type = os.environ.get('filter_type')
 
 ##multiscale
-NUM_SCALE = int(os.environ['NUM_SCALE'])
+nscale = int(os.environ.get('nscale'))
+scale = int(os.environ.get('scale', '0'))  ##if not defined, use the first index
 
+##localization
+localize_type = os.environ.get('localize_type')
+hroi_factor = np.array(os.environ.get('hroi_factor').split()).astype(np.float32)[scale]
+vroi_factor = np.array(os.environ.get('vroi_factor').split()).astype(np.float32)[scale]
+troi_factor = np.array(os.environ.get('troi_factor').split()).astype(np.float32)[scale]
+
+##inflation
+inflate_type = os.environ.get('inflate_type')
+inflate_factor = np.array(os.environ.get('inflate_factor').split()).astype(np.float32)[scale]
+
+
+##time control for experiment
+time_start=os.environ.get('time_start')
+time_end=os.environ.get('time_end')
+time_assim_start=os.environ.get('time_assim_start')
+time_assim_end=os.environ.get('time_assim_end')
+
+cycle_period=np.float32(os.environ.get('cycle_period'))
+
+time=os.environ.get('time', time_start)  ##time is the current analysis cycle
+prev_time=os.environ.get('prev_time', time_start)
+next_time=os.environ.get('next_time', time_start)
+
+##time scheme for analysis window
+obs_window_min = np.float32(os.environ.get('obs_window_min'))
+obs_window_max = np.float32(os.environ.get('obs_window_max'))
+obs_nt = int(os.environ.get('obs_nt'))
+obs_dt = (obs_window_max - obs_window_min) / obs_nt
+obs_ts = np.arange(obs_window_min + obs_dt/2, obs_window_max, obs_dt)
+
+##time scale for averaging
+t_scale = np.array(os.environ.get('t_scale').split()).astype(np.float32)[scale]
+
+##analysis time slots, typically only [0] at model restart time
+if run_align_time:
+    state_ts = obs_ts
+else:
+    state_ts = np.array([0])
+
+
+##define analysis grid
+proj = Proj(os.environ.get('proj'))
+dx = np.array(os.environ.get('dx').split()).astype(np.float32)[scale]
+xmin = np.float32(os.environ.get('xmin'))
+xmax = np.float32(os.environ.get('xmax'))
+ymin = np.float32(os.environ.get('ymin'))
+ymax = np.float32(os.environ.get('ymax'))
+nx = int((xmax - xmin) / dx)
+ny = int((ymax - ymin) / dx)
+
+grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+
+##mask for nan area in domain, where no i/o or analysis tasks needed
+maskfile = os.environ.get('maskfile')
+if os.path.exists(maskfile):
+    mask_dat = np.load(maskfile, allow_pickle=True)
+    mask_grid = Grid(proj, mask_dat['x'], mask_dat['y'], dst_grid=grid)
+    mask = (mask_grid.convert(mask_dat['mask'])==1)
+    del mask_dat, mask_grid
+else:
+    mask = np.full((ny, nx), False, dtype=bool)  ##no masked area by default
+
+
+##parse state variables definition
+state_def = {}
+for line in os.environ.get('state_def').split('\n'):
+    ss = line.split()
+    assert len(ss) == 3, 'state_def format error, should be "varname, source, err_type"'
+    vname = ss[0]
+    state_def[vname] = {'source': ss[1],
+                        'err_type': ss[2],}
+
+
+##parse observation definition
+obs_def = {}
+for line in os.environ.get('obs_def').split('\n'):
+    ss = line.split()
+    assert len(ss)>=8, 'obs_def format error, should be "varname, source, model, err_type, err, hroi, vroi, troi, impact_factor[list of state=factor, optional]"'
+    vname = ss[0]
+    obs_def[vname] = {'source': ss[1],
+                      'model': ss[2],
+                      'err_type': ss[3],
+                      'err': np.float32(ss[4]),
+                      'hroi': np.float32(ss[5]),
+                      'vroi': np.float32(ss[6]),
+                      'troi': np.float32(ss[7]),
+                      'impact': {}, }
+    ##observation impact factor dict[obs_variable][state_variable]
+    ##first make a list of state variable and default impact as 1.
+    impact = {}
+    for v in state_def:
+        impact[v] = 1.
+    for en in ss[8:]:
+        v, fac = en.split('=')
+        if v in state_def:
+            impact[v] = np.float32(fac)
+    obs_def[vname]['impact'] = impact
+
+use_synthetic_obs = os.environ.get('use_synthetic_obs').lower()=='true'
+
+
+##clean up
+del np,os,Proj,Grid,vname,v,fac,ss,en,
 

@@ -1,11 +1,10 @@
-##ERA5 reanalysis data
 import numpy as np
 import pyproj
 from netCDF4 import Dataset
 import glob
 from datetime import datetime, timedelta
 from grid import Grid
-from assim_tools import variables, units_convert
+from assim_tools import state_variables, units_convert
 
 ##variable dictionary for ERA5 naming convention
 var_dict = {'atmos_surf_wind': {'name':('u10', 'v10'), 'nz':0, 'units':'m/s'},
@@ -61,7 +60,7 @@ def get_var(path, **kwargs):
     else:
         z_index = 0
 
-    if variables[var_name]['is_vector']:
+    if state_variables[var_name]['is_vector']:
         x_name, y_name = var_dict[var_name]['name']
         f = Dataset(filename(path, **kwargs, native_name=x_name))
         var_x = f[x_name][t_index, ...].data
@@ -84,7 +83,7 @@ def get_var(path, **kwargs):
     var = np.take(var, inds, axis=-1)
 
     ##convert units
-    var = units_convert(variables[var_name]['units'], var_dict[var_name]['units'], var)
+    var = units_convert(state_variables[var_name]['units'], var_dict[var_name]['units'], var)
     return var
 
 def get_xy(filename):

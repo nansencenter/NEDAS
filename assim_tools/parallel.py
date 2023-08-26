@@ -1,9 +1,11 @@
 import numpy as np
 
+
 def parallel_start():
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     return comm
+
 
 def distribute_tasks(comm, tasks):
     ##tasks: list of indices to work on

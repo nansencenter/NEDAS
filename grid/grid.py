@@ -103,6 +103,7 @@ class Grid(object):
         if dst_grid is not None:
             self.dst_grid = dst_grid
 
+
     @classmethod
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
         ##making a regular grid with [xstart, xend, ystart, yend] boundary
@@ -117,6 +118,7 @@ class Grid(object):
             y += 0.5*dx
         self.__init__(proj, x, y, regular=True, **kwargs)
         return self
+
 
     @classmethod
     def random_grid(cls, proj, xstart, xend, ystart, yend, npoints, min_dist=None, **kwargs):
@@ -140,6 +142,7 @@ class Grid(object):
         self.__init__(proj, x, y, regular=False, **kwargs)
         return self
 
+
     def _mesh_dx(self):
         ##computes averaged edge length for irregular mesh, used in self.dx, dy
         t = self.tri.triangles
@@ -150,6 +153,7 @@ class Grid(object):
         e = 0.3
         inds = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
         return np.mean(sa[inds])
+
 
     ###map factors in x and y directions, mfx,mfy, since on the projection plane dx,dy is not
     ###  exactly equal to the real distance on earth. This is useful in distance calculation
@@ -179,11 +183,13 @@ class Grid(object):
             _,_,gcdy = geod.inv(lon, lat, lon1y, lat1y)
             return self.dy / gcdy
 
+
     ##destination grid for convert, interp, rotate_vector methods
     ##once specified a dst_grid, the setter will compute corresponding rotation_matrix and interp_weights
     @property
     def dst_grid(self):
         return self._dst_grid
+
 
     @dst_grid.setter
     def dst_grid(self, grid):
@@ -216,6 +222,7 @@ class Grid(object):
                 self.coarsen_inside_elem = inside
                 self.coarsen_nearest_elem = nearest
 
+
     def wrap_cyclic_xy(self, x_, y_):
         ## when interpolating for point x_,y_, if the coordinates falls outside of the domain
         ## we wrap around and make then inside again, if the boundary condition is cyclic (self.cyclic_dim)
@@ -228,6 +235,7 @@ class Grid(object):
                 elif d=='y':
                     y_ = np.mod(y_ - yi.min(), self.Ly) + yi.min()
         return x_, y_
+
 
     def find_index(self, x_, y_):
         ##finding indices of self.x,y corresponding to the given x_,y_
@@ -346,6 +354,7 @@ class Grid(object):
 
         return inside, indices, vertices, in_coords, nearest
 
+
     def _proj_to(self, x, y):
         ##transform coordinates from self.proj to dst_grid.proj
         if self.dst_grid.proj != self.proj:
@@ -354,6 +363,7 @@ class Grid(object):
         x, y = self.dst_grid.wrap_cyclic_xy(x, y)
         return x, y
 
+
     def _proj_from(self, x, y):
         ##transform coordinates from dst_grid.proj to self.proj
         if self.dst_grid.proj != self.proj:
@@ -361,6 +371,7 @@ class Grid(object):
             x, y = self.proj(lon, lat)
         x, y = self.wrap_cyclic_xy(x, y)
         return x, y
+
 
     def _set_rotation_matrix(self):
         ##setting the rotation matrix for converting vector fields from self to dst_grid
@@ -392,6 +403,7 @@ class Grid(object):
             self.rotate_matrix[2, :] = 0.
             self.rotate_matrix[3, :] = 1.
 
+
     def _fill_pole_void(self, fld):
         ##if rotation of vectors (or other reasons) generates nan at the poles
         ##we fill in the void using surrounding values for each pole defined by self.pole_dim and pole_index
@@ -409,6 +421,7 @@ class Grid(object):
                     fld[-1, :] = np.mean(fld[-2, :])
         return fld
 
+
     def rotate_vectors(self, vec_fld):
         ##apply the rotate_matrix to a vector field
         u = vec_fld[0, :]
@@ -425,6 +438,7 @@ class Grid(object):
         vec_fld_rot[0, :] = u_rot
         vec_fld_rot[1, :] = v_rot
         return vec_fld_rot
+
 
     def get_corners(self, fld):
         ##given fld defined on a regular grid, obtain its value on the 4 corners/vertices
@@ -446,6 +460,7 @@ class Grid(object):
         fld_corners[:, :, 3] = fld_[1:nx+1, 0:ny]
         return fld_corners
 
+
     def _interp_weights(self, inside, vertices, in_coords):
         ##compute interpolation weights from the outputs of find_index
         ##the interp_weights are the weights (sums to 1) given to each grid vertex in self.x,y
@@ -461,6 +476,7 @@ class Grid(object):
             ##use barycentric coordinates as interp weights
             interp_weights = in_coords
         return interp_weights
+
 
     ###utility function for interpolation/refining (low->high resolution)
     def interp(self, fld, x=None, y=None, method='linear'):
@@ -499,6 +515,7 @@ class Grid(object):
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
         return fld_interp.reshape(np.array(x).shape)
 
+
     ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
         ##coarse-graining is needed when the dst_grid is at lower resolution than self
@@ -530,6 +547,7 @@ class Grid(object):
         fld_coarse[~valid] = np.nan
 
         return fld_coarse.reshape(self.dst_grid.x.shape)
+
 
     ### Main method to convert from self.proj, x, y to dst_grid coordinate systems:
     ###  Steps: 1. rotate vectors in self.proj to dst_grid.proj
@@ -564,6 +582,7 @@ class Grid(object):
             fld_out = fld
         return fld_out
 
+
     ### Some methods for basic data visulisation and map plotting (without need for cartopy)
     ### plot_field: plots scalar fields using pcolor/tripcolor
     ### plot_vectors: plots vector fields (improved version of quiver)
@@ -586,6 +605,7 @@ class Grid(object):
                     data['parts'].append(shape.parts)
         return data
 
+
     @cached_property
     def land_data(self):
         ##prepare data to show the land area, the shp file ne_50m_coastlines is
@@ -607,6 +627,7 @@ class Grid(object):
 
         return self._collect_shape_data(shapes)
 
+
     @cached_property
     def river_data(self):
         ##prepare data to show river features
@@ -615,6 +636,7 @@ class Grid(object):
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
 
+
     @cached_property
     def lake_data(self):
         ##prepare data to show lake features
@@ -622,6 +644,7 @@ class Grid(object):
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_lakes.shp'))
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
+
 
     def llgrid_xy(self, dlon, dlat):
         ##prepare a lon/lat grid to plot as reference lines
@@ -649,6 +672,7 @@ class Grid(object):
                 llgrid_xy.append(xy)
         return llgrid_xy
 
+
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis'):
         ##plot a scalar field using pcolor/tripcolor
         if vmin is None:
@@ -668,6 +692,7 @@ class Grid(object):
         else:
             c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap)
         return c
+
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
@@ -766,6 +791,7 @@ class Grid(object):
             ##draw the reference vector
             ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
             ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
+
 
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showriver=False, rivercolor='c',
