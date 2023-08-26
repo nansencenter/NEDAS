@@ -4,15 +4,17 @@
 ##   filename: parse arguments and generate name of model state files
 ##   get_grid, write_grid: read/write of model mesh from/to the mesh file
 ##   get_var, write_var: read/write of model state variables from/to the restart file
-##   z_coords: recipe for obtaining z coordinates from model states
 ##   get_obs_var: compute values corresponding to the observation variables (the obs prior)
+##   update_var
+
 ##Common function inputs:
 ##   path: directory where the model restart files are stored
 ##   grid: Grid object from get_grid
+
 ##List of keys in **kwargs:
-##   name: variable name defined in assim_tools.state_variables
-##   time: datetime obj for the valid time for the state
-##   level: vertical level index for the state
+##   name: variable name defined in state_def
+##   t, dt: datetime obj, and duration in hours, defining the time window for the state
+##   z, dz: vertical level index, and interval, defining the vertical layer for the state
 ##   member: index for the ensemble member (0 to nens-1) from which the state is obtained,
 ##           if is None, then obtain the state from a deterministic run
 
@@ -20,27 +22,30 @@ import numpy as np
 import glob
 from datetime import datetime
 
-from assim_tools import state_variables, units_convert
+from assim_tools.common import units_convert
 from .confmap import ConformalMapping
 from .abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid
 
-##dictionary from assim_tools.state_variables to native variable names and properties
+##dictionary from state_def names to native variable names and properties
 ##Note: topaz file has several conventions for units, we only deal with
 ##        restart files here. (check with expert first if you attempt
 ##       to use this for other file types, daily mean, archiv etc.)
 ##List of properties:
 ##   name: native variable name in restart files, tuple of (u-name,v-name) if vector field
 ##         components are stored in separate native variables
-##   levels: list of available vertical level indices from model output (0 indicates single layer)
-##   units: physical units for the native variables
-levels_surf = [0]
-levels = [k for k in range(-50, 0, 1)]  ##note: ocean variables have negative vertical level index
-var_dict = {'ocean_velocity': {'name':('u', 'v'), 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick': {'name':'dp', 'levels':levels, 'units':'Pa'},
-            'ocean_temp': {'name':'temp', 'levels':levels, 'units':'K'},
-            'ocean_salinity': {'name':'saln', 'levels':levels, 'units':'psu'},
-            'ocean_surf_height': {'name':'ssh', 'levels':levels_surf, 'units':'m'},
-            }
+##   dtype: double/flout/int
+##   is_vector: if true the variable contains (u, v) components
+##   dt: how freq model output is available, in hours
+##   levels: vertical level index list
+##         0 for surface variables, negative for ocean, positive for atmos variables
+##   units: native physical units for the variable
+levels = np.arange(-50, 0, 1)  ##ocean levels -50 to -1
+variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':24, 'levels':levels, 'units':'m/s'},
+             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'Pa'},
+             'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'K'},
+             'ocean_salinity': {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'psu'},
+             'ocean_surf_height': {'name':'ssh', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':[0], 'units':'m'},
+             }
 
 ##parse kwargs and find matching filename
 ##for keys in kwargs that are not set, here we define the default values
@@ -103,11 +108,11 @@ def destagger(dat, v_name):
 
 ##keys in kwargs for which the grid obj needs to be redefined
 ##topaz grid is fixed in time/space, so no keys needed
-uniq_grid = ()
+uniq_grid_key = ()
 
 ###parse grid.info and generate grid.Grid object
 ###kwargs here are dummy input since the grid is fixed
-def get_grid(path, **kwargs):
+def read_grid(path, **kwargs):
     grid_info_file = path+'/topo/grid.info'
     cm = ConformalMapping.init_from_file(grid_info_file)
     nx = cm._ires
@@ -143,19 +148,22 @@ def get_grid(path, **kwargs):
 
     return Grid(proj, x, y)
 
+def write_grid(path, **kwargs):
+    pass
+
 ##topaz stored a separate landmask in depth.a file
 ##this function is uniq to topaz
-def get_mask(path, grid):
+def read_mask(path, grid):
     depthfile = path+'/topo/depth.a'
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
     mask = f.read_field('depth').mask
     f.close()
     return mask
 
-##get state variable with name='varname' defined in assim_tools.state_variables
+##get the state variable with name in state_def
 ##and other kwargs: time, level, and member to pinpoint where to get the variable
 ##returns a 2D field defined on grid from get_grid
-def get_var(path, grid, **kwargs):
+def read_var(path, grid, **kwargs):
     ##check name in kwargs and read the variables from file
     assert 'name' in kwargs, 'please specify which variable to get, name=?'
     var_name = kwargs['name']
@@ -174,7 +182,7 @@ def get_var(path, grid, **kwargs):
         mask = None
 
     f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
-    if state_variables[var_name]['is_vector']:
+    if kwargs['is_vector']:
         var1 = f.read_field(var_dict[var_name]['name'][0], level=k, tlevel=1, mask=mask)
         var2 = f.read_field(var_dict[var_name]['name'][1], level=k, tlevel=1, mask=mask)
         var = np.array([var1, var2])
@@ -182,10 +190,10 @@ def get_var(path, grid, **kwargs):
         var = f.read_field(var_dict[var_name]['name'], level=k, tlevel=1, mask=mask)
     f.close()
 
-    var = units_convert(state_variables[var_name]['units'], var_dict[var_name]['units'], var)
+    var = units_convert(kwargs['units'], var_dict[var_name]['units'], var)
     return var
 
-##output updated variable with name='varname' defined in assim_tools.state_variables
+##output updated variable with name='varname' defined in state_def
 ##to the corresponding model restart file
 def write_var(path, grid, var, **kwargs):
     ##check name in kwargs
@@ -209,9 +217,9 @@ def write_var(path, grid, var, **kwargs):
     f = ABFileRestart(fname, 'r+', idm=grid.nx, jdm=grid.ny, mask=True)
 
     ##convert units back if necessary
-    var = units_convert(state_variables[var_name]['units'], var_dict[var_name]['units'], var, inverse=True)
+    var = units_convert(kwargs['units'], var_dict[var_name]['units'], var, inverse=True)
 
-    if state_variables[var_name]['is_vector']:
+    if kwargs['is_vector']:
         for i in range(2):
             f.overwrite_field(var[i,...], mask, var_dict[var_name]['name'][i], level=k, tlevel=1)
     else:
@@ -219,14 +227,14 @@ def write_var(path, grid, var, **kwargs):
     f.close()
 
 ##keys in kwargs for which the z_coords needs to be separately calculated
-##for topaz, the isopycnal coordinates vary for each member, time and vertical level
-uniq_z = ('member', 'time', 'level')
+##for topaz, the isopycnal coordinates vary for member and time
+uniq_z_key = ('member', 'time')
 
 ##calculate vertical coordinates given the 3D model state
 ##inputs: path, grid, **kwargs: same as filename() inputs
-##        z_units: the output units for z_coords ('m' if height/depth, 'Pa' if pressure, etc)
-def z_coords(path, grid, z_units, **kwargs):
-    ##check if level are provided
+##        z_type, defined for each field_info['z_coords']
+def z_coords(path, grid, z_type, **kwargs):
+    ##check if level is provided
     assert 'level' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
     k1 = kwargs['level']  ##save a copy
 
@@ -240,15 +248,13 @@ def z_coords(path, grid, z_units, **kwargs):
             kwargs['name'] = 'ocean_layer_thick'
             kwargs['level'] = k
             d = get_var(path, grid, **kwargs)
-            if z_units == 'm':
+            if kwargs['z_type'] == 'z':
                 onem = 9806.
                 z -= d/onem  ##accumulate depth in meters, negative relative to surface
-            elif z_units == 'Pa':
-                z += d  ##accumulate pressure, increasing with depth
+            elif kwargs['z_type'] == 'rho':
+                z = rho[k]
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+z_units)
         return z
 
-##get obs prior
-def get_obs_var(path, grid, **kwargs):
-    pass
+

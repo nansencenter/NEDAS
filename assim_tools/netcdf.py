@@ -38,6 +38,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
             f[varname].setncattr(akey, attr[akey])
     f.close()
 
+
 def nc_read_var(filename, varname):
     ###read gridded data from netcdf file
     f = Dataset(filename, 'r')

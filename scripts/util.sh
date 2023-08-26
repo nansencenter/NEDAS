@@ -3,8 +3,9 @@ function advance_time {
   ccyymmdd=`echo $1 |cut -c1-8`
   hh=`echo $1 |cut -c9-10`
   mm=`echo $1 |cut -c11-12`
-  inc=$2
-  date -u -d $inc' minutes '$ccyymmdd' '$hh':'$mm +%Y%m%d%H%M
+  inc=$2  ##increment in hours
+  inc_sec=`bc <<< "($inc * 3600 + 0.5)/1"`  ##convert to seconds
+  date -u -d $inc_sec' seconds '$ccyymmdd' '$hh':'$mm +%Y%m%d%H%M
 }
 export -f advance_time
 

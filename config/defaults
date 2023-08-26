@@ -1,132 +1,123 @@
 ####All settings and their default values
-###Note: in bash, everything is treated as strings, and we only do integer arithmetics
 
-##experiment name, the working directory is $SCRATCH/$EXP_NAME
-EXP_NAME=test
+##experiment name
+exp_name=EXP
 
 ##load HPC-specific settings, directory names, env, etc.
 . $HOME/code/NEDAS/config/env/betzy/base.src
 
+script_dir=$HOME/code/NEDAS/scripts
+code_dir=$HOME/code
+data_dir=$SCRATCH/data
+work_dir=$SCRATCH/$exp_name
+
 #ensemble size, number of members (model runs, realizations, etc.)
-NUM_ENS=32
+nens=32
 
 #DA scheme
-RUN_FILTER=true
-FILTER_TYPE=ETKF  ##ETKF, ENSRF, RHF, PF
+run_filter=true  ##if true, run filter/smoother update algorithms
+run_align_space=false  ##if true, run alignment after filter update in space/time
+run_align_time=false
 
-RUN_ALIGNMENT=false  ##if true, run alignment after filter update
+filter_type=ETKF  ##ETKF, ENSRF, RHF, PF
 
 ##number of scale components
 ##if > 1, use multiscale approach:
 ##  1. coarse-graining the analysis 4D grid [t, z, y, x] to save computational cost
 ##    since larger-scale components require smaller-dimensional grid to describe
 ##  2. separately defined smoothing length scales (H,Z,T) and localization, inflation
-NUM_SCALES=1
-## characteristic horizontal H, vertical Z and time T scales (in their own units)
-HSCALE="20000" ##meters
-ZSCALE="100"  ##meters
-TSCALE="360"  ##minutes
+#`scale` indexes the nscale components
+nscale=1
 
 ##localization setting
-LOCAL_TYPE=GC  ##GC, boxcar, adaptive
+localize_type=GC  ##GC, boxcar, adaptive
 ##Note: ROI radius of influence, distance where localization factor goes to zero
 ## ROI=inf means no localization will be applied
 ## each observation variable has an individual set of ROI, defined in OBS_DEF
 ## for multiscale approach, the ROI is multiplied to a scaling factor which is
 ## defined here for each scale
-HROI_FAC="1"
-ZROI_FAC="1"
-TROI_FAC="1"
+hroi_factor="1"
+vroi_factor="1"
+troi_factor="1"
 
 ##inflation setting
-INFL_TYPE=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
-INFL_FAC="1"  ##inflation factor for each scale
+inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
+inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
-DATE_START=200701010000    ##format ccyymmddHHMM
-DATE_END=200702210000
-DATE_CYCLE_START=200701200000
-DATE_CYCLE_END=200702150000
-CYCLE_PERIOD=360 ##in minutes
-##DATE goes from DATE_START to DATE_END, with interval of CYCLE_PERIOD
-##Assimilation (filter update, displacement, etc.) starts at DATE_CYCLE_START
-##NEXTDATE and PREVDATE points to the next/previous cycle DATE
+time_start=200701010000    ##format ccyymmddHHMM
+time_end=200702210000
+time_assim_start=200701200000
+time_assim_end=200702150000
+cycle_period=24 ##in hours
+##Assimilation (filter update, displacement, etc.) starts at time_assim_start
+##`time` points to the current cycle time
+##`next_time`/`prev_time` points to the next/previous cycle time
 
-##define analysis window relative to DATE, in minutes
-##Note: if WINDOW_MAX-WINDOW_MIN > CYCLE_PERIOD, there will be overlaps in observations
+##define analysis window relative to `time`, in hours
+##Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
 ## for each cycle, so watch out for overfitting
-WINDOW_MIN=-240
-WINDOW_MAX=120
-NT="1"  ##number of time slots in analysis window, defined for each scale (NUM_SCALES)
-##Offset time slots provide prior states at time closer to the observations (FGAT);
-##iterative smoother will update states in each time slot with new intermediate forecasts
-##Given NT for one of NUM_SCALES, the following can be derived
-##DT=(WINDOW_MAX-WINDOW_MIN)/NT) is the invertal for each time slot
-##T_LEVELS=`seq WINDOW_MIN DT WINDOW_MAX`
+obs_window_min=-12
+obs_window_max=12
+obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
+t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
+
+state_ts="0"
 
 ##define a reference coordinate system where analysis takes place
 ##map projection is defined as a proj.4 string, see https://proj.org/usage/projections.html
-PROJ="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
+proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 
 ##horizontal grid dimensions
-DX="20000"  ##grid spacing (meter) for each scale (NUM_SCALES)
-XMIN=-2500000  ##start,end x coordinates (meter)
-XMAX=2500000
-YMIN=-2000000  ##start,end y coordinates (meter)
-YMAX=2500000
-##Given DX for one of NUM_SCALES, NX=(XMAX-XMIN)/DX and NY=(YMAX-YMIN)/DX
+xmin=-2500000  ##start,end x coordinates (meter)
+xmax=2500000
+ymin=-2000000  ##start,end y coordinates (meter)
+ymax=2500000
+dx="20000"  ##grid spacing (meter) for each scale (nscale entries)
 
-##vertical dimension
-##Note: index 0 means surface, negative for ocean layers, positive for atmos layers
-DZ="1"  ## interval in z index for each scale (NUM_SCALES)
-ZMIN=-50
-ZMAX=0
-##Given DZ for one of NUM_SCALES, Z_LEVELS=`seq ZMIN DZ ZMAX`
-##after coarse-graining the fields defined on level k will be the
-##averaged fields from level k to k+DZ
+##mask: area in the reference grid that is land or other area that doesn't require analysis,
+##      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
+##      the local analysis routine will also skip masked region to evenly distribute work load.
+## the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
+## and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
+maskfile=$SCRATCH/mask.npz
 
-##define the `state` in a multiline string
+##define the `state` in a multi-line string
 ##  one state variable per line, each line contains:
 ##     variable name, defined in assim_tools/state
 ##     source module, one of the models/ module that provides the state variable
-##     dtype, float/double/int
-##     error type, normal/lognormal/beta
-##     dt, in minutes, model output interval
-##     z index start, native vertical layers in model,
-##     z index end
-STATE_DEF=$(cat << EOF
-seaice_drift        nextsim  double  normal   180    0  0
-seaice_conc         nextsim  double  normal   180    0  0
-seaice_thick        nextsim  double  normal   180    0  0
-seaice_damage       nextsim  double  normal   180    0  0
-ocean_velocity      topaz    float   normal  1440  -50 -1
-ocean_temp          topaz    float   normal  1440  -50 -1
-ocean_surf_height   topaz    float   normal  1440    0  0
+##     error type, normal/lognormal
+state_def=$(cat << EOF
+seaice_drift        nextsim   normal
+seaice_conc         nextsim   normal
+seaice_thick        nextsim   normal
+ocean_velocity      topaz.v4  normal
+ocean_temp          topaz.v4  normal
 EOF
 )
 
-##definite the `obs` in a multiline string
+##definite the `obs` in a multi-line string
 ##  one observation per line, each line contains:
 ##      obs variable name, defined in assim_tools/obs
-##      source module, one of the dataset/ modules that provides the obs variable
-##      dtype, float/double/int
+##      source, dataset module that provides this obs variable
+##      model, models module that provides this obs prior
 ##      error type, normal/lognormal/beta
 ##      error, standard deviation
-##      horizontal localization distance, meter
-##      vertical localization distance, in z_units
-##      time localization distance, hour
+##      horizontal localization distance, in meters
+##      vertical localization distance, in ? units
+##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separately by space
 ##                         unlisted state variables have default impact of 1.
-OBS_DEF=$(cat << EOF
-seaice_deform     synthetic  float  normal  0.01  200000  100  0  ocean_velocity=0 ocean_temp=0
-ocean_surf_temp   synthetic  float  normal   0.1  200000  100  0
-ocean_temp        synthetic  float  normal   0.3  200000  100  0
+obs_def=$(cat << EOF
+seaice_deform_shear  RGPS  nextsim  normal  0.01  200000  inf  inf  ocean_velocity=0 ocean_temp=0
 EOF
 )
+#ocean_temp           Argo  topaz    normal   0.3  200000  inf  inf
+use_synthetic_obs=false
 
 ##ensemble perturbation settings
-PERTURB_VARIABLES="seaice_drift ocean_surf_height"
-#PERTURB_PARAM_DIR=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
+perturb_variables="seaice_drift ocean_surf_height"
+#perturb_param_dir=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
 
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 
