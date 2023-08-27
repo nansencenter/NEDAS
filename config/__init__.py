@@ -79,10 +79,9 @@ xmin = np.float32(os.environ.get('xmin'))
 xmax = np.float32(os.environ.get('xmax'))
 ymin = np.float32(os.environ.get('ymin'))
 ymax = np.float32(os.environ.get('ymax'))
-nx = int((xmax - xmin) / dx)
-ny = int((ymax - ymin) / dx)
-
 grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+nx = grid.nx
+ny = grid.ny
 
 ##mask for nan area in domain, where no i/o or analysis tasks needed
 maskfile = os.environ.get('maskfile')
@@ -132,7 +131,4 @@ for line in os.environ.get('obs_def').split('\n'):
 
 use_synthetic_obs = os.environ.get('use_synthetic_obs').lower()=='true'
 
-
-##clean up
-del np,os,Proj,Grid,vname,v,fac,ss,en,
 

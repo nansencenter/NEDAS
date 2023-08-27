@@ -1,7 +1,7 @@
 ####All settings and their default values
 
 ##experiment name
-exp_name=EXP
+exp_name=exp1
 
 ##load HPC-specific settings, directory names, env, etc.
 . $HOME/code/NEDAS/config/env/betzy/base.src
@@ -45,7 +45,7 @@ inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adapti
 inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
-time_start=200701010000    ##format ccyymmddHHMM
+time_start=200701020000    ##format ccyymmddHHMM
 time_end=200702210000
 time_assim_start=200701200000
 time_assim_end=200702150000
@@ -73,7 +73,7 @@ xmin=-2500000  ##start,end x coordinates (meter)
 xmax=2500000
 ymin=-2000000  ##start,end y coordinates (meter)
 ymax=2500000
-dx="20000"  ##grid spacing (meter) for each scale (nscale entries)
+dx="3000"  ##grid spacing (meter) for each scale (nscale entries)
 
 ##mask: area in the reference grid that is land or other area that doesn't require analysis,
 ##      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
@@ -93,6 +93,7 @@ seaice_conc         nextsim   normal
 seaice_thick        nextsim   normal
 ocean_velocity      topaz.v4  normal
 ocean_temp          topaz.v4  normal
+ocean_saln          topaz.v4  normal
 EOF
 )
 
@@ -109,11 +110,13 @@ EOF
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separately by space
 ##                         unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-seaice_deform_shear  RGPS  nextsim  normal  0.01  200000  inf  inf  ocean_velocity=0 ocean_temp=0
+ocean_temp           Argo  topaz.v4  normal   0.3  200000  inf  inf
+ocean_saln           Argo  topaz.v4  normal   0.3  200000  inf  inf
 EOF
 )
-#ocean_temp           Argo  topaz    normal   0.3  200000  inf  inf
-use_synthetic_obs=false
+#ocean_temp           Argo  topaz.v4  normal   0.3  200000  inf  inf
+#seaice_deform_shear  RGPS  nextsim   normal  0.01  200000  inf  inf  ocean_velocity=0 ocean_temp=0
+use_synthetic_obs=true
 
 ##ensemble perturbation settings
 perturb_variables="seaice_drift ocean_surf_height"
