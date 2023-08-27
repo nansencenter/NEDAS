@@ -1,10 +1,17 @@
 import numpy as np
+import sys
 
 
 def parallel_start():
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     return comm
+
+
+def message(comm, msg, root=None):
+    if root is None or root==comm.Get_rank():
+        print(msg)
+        sys.stdout.flush()
 
 
 def distribute_tasks(comm, tasks):
@@ -26,3 +33,4 @@ def distribute_tasks(comm, tasks):
         task_list.append(tasks[nproc*chunk + rank])
 
     return task_list
+

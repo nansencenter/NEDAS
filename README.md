@@ -28,27 +28,27 @@ or try running the control scripts using one of the test configs in tutorials
 
 ## Documentation
 
-Code structure:
+### Code structure:
 
-`scripts` contains bash runtime control scripts `run_cycle.sh`, `run_forecast.sh` for a typical cycling DA experiment; misc. initialisation scripts `prepare_*.sh`; and misc. postprocessing and diagnosis scripts `diag_*.sh`.
+**scripts** contains bash runtime control scripts `run_cycle.sh`, `run_forecast.sh` for a typical cycling DA experiment; misc. initialisation scripts `prepare_*.sh`; and misc. postprocessing and diagnosis scripts `diag_*.sh`.
 
-`assim_tools` contains the top-level routines `process_state`, `process_obs`, `local_analysis` and `update_restart` in one assimilation cycle; and some misc. i/o tools `read_*` and `write_*`, 
+**assim\_tools** contains the top-level routines `process_state`, `process_obs`, `local_analysis` and `update_restart` for one assimilation cycle, along with some utility functions `field_info`, `obs_info`, `read_*`, `write_*`, etc.
 
-`grid` contains a `Grid` class to handle the conversion between 2D fields.
+**grid** contains a `Grid` class to handle the conversion between 2D fields.
 
-`models` contains modules for each forecast model, each with a set of standard routines to process model restart files into state variables: `read_var`, `read_grid`, `z_coords`, etc.
+**models** contains modules for each forecast model, each with a set of standard routines to process model restart files into state variables: `read_var`, `read_grid`, `z_coords`, etc.
 
-`dataset` contains modules for each dataset file, either providing observations or boundary conditions for model runs. For obs provider modules, the `read_obs` routine converts the raw data to the observation sequence.
+**dataset** contains modules for each dataset file, either providing observations or boundary conditions for model runs. For obs provider modules, the `read_obs` routine converts the raw data to the observation sequence.
 
-`perturb` contains routines for generating initial and boundary perturbations for ensemble model runs.
+**perturb** contains routines for generating initial and boundary perturbations for ensemble model runs.
 
-`diag` contains routines for computing misc. diagnostics for model forecast verification and filter performance evaluation.
+**diag** contains routines for computing misc. diagnostics for model forecast verification and filter performance evaluation.
 
-`config` contains shell environment src files for different HPCs, and configuration files for setting up a particular experiment (`defaults` provides a sample).
+**config** contains shell environment src files for different HPCs, and configuration files for setting up a particular experiment (`defaults` provides a sample).
 
-`tutorials` contains a set of jupyter notebooks to demonstrate the functionalities provided by the system.
+**tutorials** contains a set of jupyter notebooks to demonstrate the functionalities provided by the system.
 
-Flow chart of one assimilation cycle:
+### Flow chart of one assimilation cycle:
 ![](https://github.com/nansencenter/NEDAS/blob/main/tutorials/imgs/flowchart.png "Flow chart of one assimilation cycle")
 
 
