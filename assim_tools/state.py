@@ -9,25 +9,27 @@ from .parallel import distribute_tasks, message
 ##convert to the analysis grid, perform coarse-graining, and save to prior_state.bin
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
-def process_state(c, comm, binfile):
+def process_state(c, comm, prior_binfile, post_binfile):
     message(comm, 'process_state: parsing and generating field_info', 0)
     ##parse config and generate field_info, this is done by the first processor and broadcast
     if comm.Get_rank() == 0:
         info = field_info(c)
-        with open(binfile, 'wb'):  ##initialize the binfile in case it doesn't exist
-            pass
-        write_field_info(binfile, info)
-        write_header(binfile, info, c.grid.x, c.grid.y, c.mask)
+        for binfile in [prior_binfile, post_binfile]:
+            with open(binfile, 'wb'):  ##initialize file in case doesn't exist
+                pass
+            write_field_info(binfile, info)
+            write_header(binfile, info, c.grid.x, c.grid.y, c.mask)
     else:
         info = None
     info = comm.bcast(info, root=0)
 
     grid_bank = {}
+    z_bank = {}
 
     ##now start processing the fields, each processor gets its own workload as a subset of nfield
     message(comm, 'process_state: reading state varaible for each field record', 0)
-    for i in distribute_tasks(comm, np.arange(len(info['fields']))):
-        rec = info['fields'][i]
+    for fld_id in distribute_tasks(comm, np.arange(len(info['fields']))):
+        rec = info['fields'][fld_id]
 
         ##directory storing model output
         path = c.work_dir+'/forecast/'+c.time+'/'+rec['source']
@@ -48,14 +50,23 @@ def process_state(c, comm, binfile):
             grid_bank[grid_key] = grid
 
         if rec['name'] == 'z_coords':
-            var = src.z_coords(path, grid, **rec)
+            ##only need to compute the uniq z_coords, stored them in bank for later use
+            member = rec['member'] if 'member' in src.uniq_z_key else None
+            time = rec['time'] if 'time' in src.uniq_z_key else None
+            z_key = (rec['source'], rec['units'], member, time)
+            if z_key in z_bank:
+                fld = z_bank[z_key]
+            else:
+                var = src.z_coords(path, grid, **rec)
+                fld = grid.convert(var)
         else:
             var = src.read_var(path, grid, **rec)
+            fld = grid.convert(var, is_vector=rec['is_vector'])
 
-        fld = grid.convert(var, is_vector=rec['is_vector'])
+        for binfile in [prior_binfile, post_binfile]:
+            write_field(binfile, info, c.mask, fld_id, fld)
 
-        write_field(binfile, info, c.mask, i, fld)
-        message(comm, '   {} t={} k={} member={} ...complete'.format(rec['name'], rec['time'], rec['k'], rec['member']))
+        message(comm, '   {:15s} t={} k={:5d} member={:3d}'.format(rec['name'], rec['time'], rec['k'], rec['member']+1))
 
 
 ##generate info for the nens*nfield 2D fields in the state
@@ -109,32 +120,25 @@ def field_info(c):
         if z_units is not None:
             z_units_list.add(z_units)
 
-    ##loop over all field records, add z_coords record if needed by the field
+    ##loop over all field records, add z_coords record if uniq
     z_keys = set()
-    for i, rec in info['fields'].copy().items():
-        src = importlib.import_module('models.'+rec['source'])
-
+    for rec in info['fields'].copy().values():
         for z_units in z_units_list:
-            ##uniq z with keys (member, time, k)
-            member = rec['member'] if 'member' in src.uniq_z_key else None
-            time = rec['time'] if 'time' in src.uniq_z_key else None
-            key = (z_units, rec['source'], member, time, rec['k'])
-
+            kwargs = {'name': 'z_coords',
+                      'source': rec['source'],
+                      'dtype': 'float',
+                      'is_vector': False,
+                      'units': z_units,
+                      'err_type': 'normal',
+                      'member': rec['member'],
+                      'time': rec['time'],
+                      'dt' : rec['dt'],
+                      'k': rec['k'],
+                      'pos': pos, }
+            key = (rec['source'], z_units, rec['member'], rec['time'], rec['k'])
             if key not in z_keys:
-                kwargs = {'name': 'z_coords',
-                         'source': rec['source'],
-                         'dtype': 'float',
-                         'is_vector': False,
-                         'units': z_units,
-                         'err_type': 'normal',
-                         'member': member,
-                         'time': time,
-                         'dt' : rec['dt'],
-                         'k': rec['k'],
-                         'pos': pos, }
                 info['fields'][fld_id] = kwargs
                 z_keys.add(key)
-
                 pos += np.sum((~c.mask).astype(int)) * type_size['float']
                 fld_id += 1
 
@@ -237,9 +241,8 @@ def read_field(binfile, info, mask, fld_id):
     nx = info['nx']
     ny = info['ny']
     rec = info['fields'][fld_id]
-    is_vector = rec['is_vector']
-    nv = 2 if is_vector else 1
-    fld_shape = (2, ny, nx) if is_vector else (ny, nx)
+    nv = 2 if rec['is_vector'] else 1
+    fld_shape = (2, ny, nx) if rec['is_vector'] else (ny, nx)
     fld_size = np.sum((~mask).astype(int))
 
     with open(binfile, 'rb') as f:
@@ -247,7 +250,7 @@ def read_field(binfile, info, mask, fld_id):
         fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec['dtype']]),
                         f.read(nv*fld_size*type_size[rec['dtype']])))
         fld = np.full(fld_shape, np.nan)
-        if is_vector:
+        if rec['is_vector']:
             fld[:, ~mask] = fld_.reshape((2,-1))
         else:
             fld[~mask] = fld_
@@ -255,85 +258,132 @@ def read_field(binfile, info, mask, fld_id):
 
 
 ##parallel process prior_state.bin and make a copy to post_state.bin
-# def duplicate_state(comm, y, mask, file_in, file_out):
-#     if comm.Get_rank() == 0:
-#         info = read_field_info(file_in)
-#         x, y, mask = read_header(file_in, info)
-#         with open(file_out, 'wb'):  ##initialize file_out if it doesn't exist
-#             pass
-#         write_field_info(file_out, info)
-#         write_header(file_out, info, x, y, mask)
-#     else:
-#         info = None
-#         mask = None
-#     info = comm.bcast(info, root=0)
-#     mask = comm.bcast(mask, root=0)
+def duplicate_state(comm, file_in, file_out):
+    if comm.Get_rank() == 0:
+        info = read_field_info(file_in)
+        x, y, mask = read_header(file_in, info)
+        with open(file_out, 'wb'):  ##initialize file_out if it doesn't exist
+            pass
+        write_field_info(file_out, info)
+        write_header(file_out, info, x, y, mask)
+    else:
+        info = None
+        mask = None
+    info = comm.bcast(info, root=0)
+    mask = comm.bcast(mask, root=0)
 
-#     for i in distribute_tasks(comm, np.arange(len(info['fields']))):
-#         rec = info['fields'][i]
-#         fld = read_field(file_in, info, mask, i)
-#         write_field(file_out, info, mask, i, fld)
+    for i in distribute_tasks(comm, np.arange(len(info['fields']))):
+        rec = info['fields'][i]
+        fld = read_field(file_in, info, mask, i)
+        write_field(file_out, info, mask, i, fld)
 
 
-##read the entire ensemble in a local state space [nens, nfield, local_inds]
-##local_inds: list of inds for locales [y,x] for a processor to perform local analysis
-##nfield indexes the uniq fields at each locale with key (name, time, k) and
-##
+##unmasked horizontal locale indices
+def xy_inds(mask):
+    ny, nx = mask.shape
+    ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
+    inds = jj * nx + ii
+    return inds[~mask]
+
+
+##uniq field records for one member
+def uniq_fields(info):
+    ufid = 0
+    fields = {}
+    for fid, rec in info['fields'].items():
+        if rec['member'] == 0 and rec['name']!='z_coords':
+            for i in range(2 if rec['is_vector'] else 1):
+                fields[ufid] = rec
+                ufid += 1
+    return fields
+
+
+##read the entire ensemble in a local state space [nens, ufields, local_inds]
+##local_inds: list of inds for horizontal locales [y,x]
+##  Note: when used in parallelization, local_inds shall be continous chuncks of inds
+##        to avoid conflict in read/write of binfile; otherwise in single call, it is
+##        fine to read a discontiguous chunck of field with arbitrary list of local_inds.
+##nfield indexes the uniq fields at each locale with key (name, time, k)
+##return: dict (nfield, local_inds): state[nens], and coordinates name,time,z,y,x
 def read_local_state(binfile, info, mask, local_inds):
-    ##indices for the horizontal locales
-    ii, jj = np.meshgrid(np.arange(info['nx']), np.arange(info['ny']))
-    inds = jj * info['nx'] + ii
 
-    local_state = {'variable':[], 'x':[], 'y':[], 'z':{}, 'time':[]}
+    inds = xy_inds(mask)  ##horizontal locale indices for the entire field
 
+    fld_size = np.sum((~mask).astype(int))  ##size of the field rec in binfile
+    seek_inds = np.searchsorted(inds, local_inds)  ##seek pos in binfile for the local inds
+    chk_size = seek_inds[-1] - seek_inds[0] + 1   ##size of chunck to read from field rec
+
+    ##some dimensions for the local state
+    nens = info['nens']
+    nlocal = len(local_inds)
+    ufields = uniq_fields(info)  ##dict fid: uniq field rec for one member
+    nfield = len(ufields)
+    print(chk_size, nlocal)
+
+    local_state = {'state': np.full((nens, nfield, nlocal), np.nan),
+                   'name': [r['name'] for r in ufields.values()],
+                   'time': [r['time'] for r in ufields.values()],
+                   'k': [r['k'] for r in ufields.values()],
+                   'z': np.full((nens, nfield, nlocal), np.nan), }
     with open(binfile, 'rb') as f:
-        for member in range(info['nens']):
-            nfield = 0
-            for rec in [rec for i,rec in info['fields'].items() if rec['member']==member]:
+        ##loop through each field rec in binfile
+        for rec in info['fields'].values():
 
-                ##reading the fld for this rec
-                fld = np.full((info['nens'], len(local_inds)), np.nan)
-                fld_size = np.sum((~mask).astype(int))
-                seek_inds = np.searchsorted(inds[~mask], local_inds)
-                chk_size = seek_inds[-1] - seek_inds[0] + 1
-                for i in range(2 if rec['is_vector'] else 1):  ##vector fields have 2 components
-                    ##read the chunck from binfile covering local_inds
-                    f.seek(rec['pos'] + (i*fld_size+seek_inds[0])*type_size[rec['dtype']])
-                    chunck = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
-                    ##collect the local_inds from chunck and assign to local_state
-                    local_state[m, n, :] = chunck[seek_inds-seek_inds[0]]
-                    n += 1
+            ##read the chunck covering the local_inds
+            for ic in range(2 if rec['is_vector'] else 1):  ##vector fields have 2 components
+
+                f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
+                chunck = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+
+                if rec['name'] == 'z_coords':
+                    ##if this is a z_coords rec, assign its local_inds chunck to the corresponding z array
+                    for fid in [i for i,r in ufields.items() if r['time']==rec['time'] and r['k']==rec['k']]:
+                        local_state['z'][rec['member'], fid, :] = chunck[seek_inds-seek_inds[0]]
+
+                else:
+                    ##if this is a variable rec, assign the chunck to the state array
+                    fid_list = [i for i,r in ufields.items() if r['name']==rec['name'] and r['time']==rec['time'] and r['k']==rec['k']]
+                    local_state['state'][rec['member'], fid_list[ic], :] = chunck[seek_inds-seek_inds[0]]
+
     return local_state
 
 
 ##write the updated local_state [nens, nfield, local_inds] back to the binfile
 def write_local_state(binfile, info, mask, local_inds, local_state):
-    ny = info['ny']
-    nx = info['nx']
-    nfield = info['nfield']
-    nens = info['nens']
-    assert local_state.shape == (nens, nfield, len(local_inds)), f'local_state shape incorrect: expected {(nens, nfield, len(local_inds))}, got {local_state.shape}'
 
-    ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
-    inds = jj * nx + ii
+    inds = xy_inds(mask) ##horizontal locale indices for the entire field
+
+    fld_size = np.sum((~mask).astype(int))
+    seek_inds = np.searchsorted(inds, local_inds)
+    chk_size = seek_inds[-1] - seek_inds[0] + 1
+
+    nens = info['nens']
+    nlocal = len(local_inds)
+    ufields = uniq_fields(info)  ##dict fid: uniq field rec for one member
+    nfield = len(ufields)
+    local_state_shape = local_state['state'].shape
+    assert local_state_shape==(nens, nfield, nlocal), f'local_state shape incorrect: expected {(nens, nfield, nlocal)}, got {local_state_shape}'
 
     ##write the local local_state to binfiles
     with open(binfile, 'r+b') as f:
-        for m in range(nens):
-            n = 0
-            for rec in [rec for i,rec in info['fields'].items() if rec['member']==m]:
-                fld_size = np.sum((~mask).astype(int))
-                seek_inds = np.searchsorted(inds[~mask], local_inds)
-                chk_size = seek_inds[-1] - seek_inds[0] + 1
-                for i in range(2 if rec['is_vector'] else 1):
-                    ##first read the chunck
-                    f.seek(rec['pos'] + (i*fld_size+seek_inds[0])*type_size[rec['dtype']])
+        for rec in info['fields'].values():
+
+            for ic in range(2 if rec['is_vector'] else 1):
+
+                if chk_size == nlocal:  ##chunck is contiguous, make an empty array
+                    chunck = np.full(nlocal, np.nan)
+                else:   ##chunck is discontiguous, first read the chunck from file
+                    f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
                     chunck = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+
+                if rec['name'] == 'z_coords':
+                    pass ##we don't need to output z_coords, since they are not updated by local analysis
+                else:
                     ##update value in chunck given the new local_state
-                    chunck[seek_inds-seek_inds[0]] = local_state[m, n, :]
+                    fid_list = [i for i,r in ufields.items() if r['name']==rec['name'] and r['time']==rec['time'] and r['k']==rec['k']]
+                    chunck[seek_inds-seek_inds[0]] = local_state['state'][rec['member'], fid_list[ic], :]
                     ##write the chunck back to file
-                    f.seek(rec['pos'] + (i*fld_size+seek_inds[0])*type_size[rec['dtype']])
+                    f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
                     f.write(struct.pack((chk_size*type_dic[rec['dtype']]), *chunck))
-                    n += 1
 
 
