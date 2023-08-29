@@ -58,10 +58,10 @@ def process_state(c, comm, prior_binfile, post_binfile):
                 fld = z_bank[z_key]
             else:
                 var = src.z_coords(path, grid, **rec)
-                fld = grid.convert(var)
+                fld = grid.convert(var, method='linear', coarse_grain=True)
         else:
             var = src.read_var(path, grid, **rec)
-            fld = grid.convert(var, is_vector=rec['is_vector'])
+            fld = grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
 
         for binfile in [prior_binfile, post_binfile]:
             write_field(binfile, info, c.mask, fld_id, fld)
@@ -318,7 +318,6 @@ def read_local_state(binfile, info, mask, local_inds):
     nlocal = len(local_inds)
     ufields = uniq_fields(info)  ##dict fid: uniq field rec for one member
     nfield = len(ufields)
-    print(chk_size, nlocal)
 
     local_state = {'state': np.full((nens, nfield, nlocal), np.nan),
                    'name': [r['name'] for r in ufields.values()],

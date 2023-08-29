@@ -18,8 +18,8 @@ variables = {'seaice_conc': {'name':'M_conc', 'dtype':'float', 'is_vector':False
 def filename(path, **kwargs):
     name = kwargs['name'] if 'name' in kwargs else list(variables.keys())[0]
 
-    if 't' in kwargs:
-        assert isinstance(kwargs['t'], datetime), 'Error: t is not a datetime object'
+    if 'time' in kwargs and kwargs['time'] is not None:
+        assert isinstance(kwargs['time'], datetime), 'Error: time is not a datetime object'
         tstr = kwargs['time'].strftime('%Y%m%dT%H%M%SZ')
     else:
         tstr = '*'
@@ -29,13 +29,13 @@ def filename(path, **kwargs):
         dt = 0
 
     if 'member' in kwargs:
-        assert kwargs['member'] >= 0, 'member index shall be >= 0'
-        mstr = '{:03d}'.format(kwargs['member']+1)
+        if kwargs['member'] is None:
+            mstr = '001'
+        else:
+            assert kwargs['member'] >= 0, 'member index shall be >= 0'
+            mstr = '{:03d}'.format(kwargs['member']+1)
     else:
         mstr = ''
-
-    if 'k' in kwargs:
-        assert kwargs['k'] in variables[kwargs['name']]['levels'], 'level index is not available'
 
     search = path+'/'+mstr+'/field_'+tstr+'.bin'
     flist = glob.glob(search)
@@ -122,7 +122,7 @@ def write_var(path, grid, var, **kwargs):
 ##since all nextsim variables are at surface, there is no need for z_coords calculation
 uniq_z_key = ()
 
-def z_coords(path, grid, z_units, **kwargs):
+def z_coords(path, grid, **kwargs):
     ##for nextsim, just discard inputs and simply return zero as z_coords
     return np.zeros(grid.x.shape)
 

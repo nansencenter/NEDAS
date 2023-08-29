@@ -2,10 +2,8 @@
 ##to obtain a 2D field from model states.
 ##List of functions:
 ##   filename: parse arguments and generate name of model state files
-##   get_grid, write_grid: read/write of model mesh from/to the mesh file
-##   get_var, write_var: read/write of model state variables from/to the restart file
-##   get_obs_var: compute values corresponding to the observation variables (the obs prior)
-##   update_var
+##   read_grid, write_grid: read/write of model mesh from/to the mesh file
+##   read_var, write_var: read/write of model state variables from/to the restart file
 
 ##Common function inputs:
 ##   path: directory where the model restart files are stored
@@ -40,31 +38,27 @@ from .abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid
 ##         0 for surface variables, negative for ocean, positive for atmos variables
 ##   units: native physical units for the variable
 levels = np.arange(-50, 0, 1)  ##ocean levels -50 to -1
-variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':24, 'levels':levels, 'units':'m/s'},
-             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'Pa'},
-             'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'K'},
-             'ocean_salinity': {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':levels, 'units':'psu'},
-             'ocean_surf_height': {'name':'ssh', 'dtype':'float', 'is_vector':False, 'dt':24, 'levels':[0], 'units':'m'},
+variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
+             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
+             'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'K'},
+             'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
+             'ocean_surf_height': {'name':'ssh', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':[0], 'units':'m'},
              }
 
 ##parse kwargs and find matching filename
 ##for keys in kwargs that are not set, here we define the default values
 ##key values in kwargs will also be checked for erroneous values here
 def filename(path, **kwargs):
-    if 'time' in kwargs:
+    if 'time' in kwargs and kwargs['time'] is not None:
         assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
         tstr = kwargs['time'].strftime('%Y_%j_%H')
     else:
         tstr = '????_???_??'
-    if 'member' in kwargs:
+    if 'member' in kwargs and kwargs['member'] is not None:
         assert kwargs['member'] >= 0, 'member index shall be >= 0'
         mstr = '_mem{:03d}'.format(kwargs['member']+1)
     else:
         mstr = ''
-    if 'name' in kwargs:
-        assert kwargs['name'] in var_dict, 'variable name is not defined in var_dict'
-        if 'level' in kwargs:
-            assert kwargs['level'] in var_dict[kwargs['name']]['levels'], 'level index is not available'
 
     ##get a list of filenames with matching kwargs
     search = path+'/'+'TP4restart'+tstr+mstr+'.a'
@@ -106,7 +100,7 @@ def destagger(dat, v_name):
         dat_[-1, :] = 3*dat[-2, :] - 3*dat[-3, :] + dat[-4, :]
     return dat_
 
-##keys in kwargs for which the grid obj needs to be redefined
+##keys in kwargs for which the grid obj needs to be redefined: ('member', 'time', 'k')
 ##topaz grid is fixed in time/space, so no keys needed
 uniq_grid_key = ()
 
@@ -166,16 +160,16 @@ def read_mask(path, grid):
 def read_var(path, grid, **kwargs):
     ##check name in kwargs and read the variables from file
     assert 'name' in kwargs, 'please specify which variable to get, name=?'
-    var_name = kwargs['name']
-    assert var_name in var_dict, 'variable name '+var_name+' not listed in var_dict'
+    name = kwargs['name']
+    assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
-    if 'level' in kwargs:
+    if 'k' in kwargs:
         ##Note: ocean level indices are negative in assim_tools.state
         ##      but in abfiles, they are defined as positive indices
-        k = -kwargs['level']
+        k = -kwargs['k']
     else:
-        k = -var_dict[var_name]['levels'][-1]  ##get the first level if not specified
+        k = -variables[name]['levels'][-1]  ##get the first level if not specified
     if 'mask' in kwargs:
         mask = kwargs['mask']
     else:
@@ -183,14 +177,14 @@ def read_var(path, grid, **kwargs):
 
     f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
     if kwargs['is_vector']:
-        var1 = f.read_field(var_dict[var_name]['name'][0], level=k, tlevel=1, mask=mask)
-        var2 = f.read_field(var_dict[var_name]['name'][1], level=k, tlevel=1, mask=mask)
+        var1 = f.read_field(variables[name]['name'][0], level=k, tlevel=1, mask=mask)
+        var2 = f.read_field(variables[name]['name'][1], level=k, tlevel=1, mask=mask)
         var = np.array([var1, var2])
     else:
-        var = f.read_field(var_dict[var_name]['name'], level=k, tlevel=1, mask=mask)
+        var = f.read_field(variables[name]['name'], level=k, tlevel=1, mask=mask)
     f.close()
 
-    var = units_convert(kwargs['units'], var_dict[var_name]['units'], var)
+    var = units_convert(kwargs['units'], variables[name]['units'], var)
     return var
 
 ##output updated variable with name='varname' defined in state_def
@@ -198,15 +192,15 @@ def read_var(path, grid, **kwargs):
 def write_var(path, grid, var, **kwargs):
     ##check name in kwargs
     assert 'name' in kwargs, 'please specify which variable to write, name=?'
-    var_name = kwargs['name']
-    assert var_name in var_dict, 'variable name '+var_name+' not listed in var_dict'
+    name = kwargs['name']
+    assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
-    ##same logic for setting level indices as in get_var()
-    if 'level' in kwargs:
-        k = -kwargs['level']
+    ##same logic for setting level indices as in read_var()
+    if 'k' in kwargs:
+        k = -kwargs['k']
     else:
-        k = -var_dict[var_name]['levels'][-1]
+        k = -variables[name]['levels'][-1]
     if 'mask' in kwargs:
         mask = kwargs['mask']
     else:
@@ -217,44 +211,43 @@ def write_var(path, grid, var, **kwargs):
     f = ABFileRestart(fname, 'r+', idm=grid.nx, jdm=grid.ny, mask=True)
 
     ##convert units back if necessary
-    var = units_convert(kwargs['units'], var_dict[var_name]['units'], var, inverse=True)
+    var = units_convert(kwargs['units'], variables[name]['units'], var, inverse=True)
 
     if kwargs['is_vector']:
         for i in range(2):
-            f.overwrite_field(var[i,...], mask, var_dict[var_name]['name'][i], level=k, tlevel=1)
+            f.overwrite_field(var[i,...], mask, variables[name]['name'][i], level=k, tlevel=1)
     else:
-        f.overwrite_field(var, mask, var_dict[var_name]['name'], level=k, tlevel=1)
+        f.overwrite_field(var, mask, variables[name]['name'], level=k, tlevel=1)
     f.close()
 
-##keys in kwargs for which the z_coords needs to be separately calculated
+##keys in kwargs for which the z_coords needs to be separately calculated: ('member', 'time')
 ##for topaz, the isopycnal coordinates vary for member and time
 uniq_z_key = ('member', 'time')
 
 ##calculate vertical coordinates given the 3D model state
 ##inputs: path, grid, **kwargs: same as filename() inputs
 ##        z_type, defined for each field_info['z_coords']
-def z_coords(path, grid, z_type, **kwargs):
+def z_coords(path, grid, **kwargs):
     ##check if level is provided
-    assert 'level' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
-    k1 = kwargs['level']  ##save a copy
+    assert 'k' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
 
     z = np.zeros(grid.x.shape)
-    if k1 == 0:
+    if kwargs['k'] == 0:
         ##if level index is 0, this is the surface, so just return zeros
         return z
     else:
-        ##get layer thickness above level k1, convert to m/Pa, and then integrate to total depth
-        for k in [k for k in levels if k>=k1]:
-            kwargs['name'] = 'ocean_layer_thick'
-            kwargs['level'] = k
-            d = get_var(path, grid, **kwargs)
-            if kwargs['z_type'] == 'z':
+        ##get layer thickness above level k, convert to z_units, and integrate to total depth
+        for k in [k for k in levels if k>=kwargs['k']]:
+            rec = kwargs.copy()
+            rec['name'] = 'ocean_layer_thick'
+            rec['units'] = variables['ocean_layer_thick']['units']
+            rec['k'] = k
+            d = read_var(path, grid, **rec)
+            if kwargs['units'] == 'm':
                 onem = 9806.
                 z -= d/onem  ##accumulate depth in meters, negative relative to surface
-            elif kwargs['z_type'] == 'rho':
-                z = rho[k]
             else:
-                raise ValueError('do not know how to calculate z_coords for z_units = '+z_units)
+                raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
         return z
 
 

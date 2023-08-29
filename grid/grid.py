@@ -553,7 +553,7 @@ class Grid(object):
     ###  Steps: 1. rotate vectors in self.proj to dst_grid.proj
     ###         2.1 interp fld from (self.x, self.y) to dst_grid.(x, y)->self.proj
     ###         2.2 if dst_grid is low-res, perform coarse-graining
-    def convert(self, fld, is_vector=False, method='linear', coarse_grain=True):
+    def convert(self, fld, is_vector=False, method='linear', coarse_grain=False):
         if self.dst_grid != self:
             if is_vector:
                 assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
