@@ -15,22 +15,24 @@ def message(comm, msg, root=None):
 
 
 def distribute_tasks(comm, tasks):
-    ##tasks: list of indices to work on
+    ##tasks: list of indices (in a for loop) to work on
     ##returns the subset of tasks for the processor rank calling this function to work on
+    ##       in a dict from rank -> its tasks list
     nproc = comm.Get_size()  ##number of processors
-    rank = comm.Get_rank()   ##processor id
     ntask = len(tasks)       ##number of tasks
-
     chunk = ntask // nproc
     remainder = ntask % nproc
 
-    ##first, divide the tasks into nproc parts, each with size "chunck"
-    task_list = [tasks[i] for i in range(rank*chunk, (rank+1)*chunk)]
+    task_list = {}
 
-    ##if there is remainder after division, the first a few processors
-    ## (with rank from 0 to remainder-1) will each get 1 more task
-    if rank < remainder:
-        task_list.append(tasks[nproc*chunk + rank])
+    for rank in range(nproc):
+        ##first, divide the tasks into nproc parts, each with size "chunck"
+        task_list[rank] = [tasks[i] for i in range(rank*chunk, (rank+1)*chunk)]
+
+        ##if there is remainder after division, the first a few processors
+        ## (with rank from 0 to remainder-1) will each get 1 more task
+        if rank < remainder:
+            task_list[rank].append(tasks[nproc*chunk + rank])
 
     return task_list
 

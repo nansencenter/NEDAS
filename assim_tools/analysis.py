@@ -1,41 +1,22 @@
 import numpy as np
 from numba import njit
-from .parallel import distribute_tasks
+from .parallel import distribute_tasks, message
+from .state import xy_inds, read_field_info, uniq_fields, read_local_state, write_local_state
+from .obs import assign_obs_inds, read_local_obs
 
 ##top-level routine for performing the DA analysis
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallization
-def local_analysis(c, comm):
+def local_analysis(c, comm, prior_state_file, post_state_file, obs_seq_file):
 
-    ##
-    s_dir = f'/s{c.scale+1}' if c.nscale>1 else ''
-    state_file = c.work_dir+'/'+c.time+s_dir+'/state.bin'
-    obs_seq_file = c.work_dir+'/'+c.time+s_dir+'/obs_seq.bin'
+    # inds = xy_inds(c.mask)
 
-    field_info = read_field_info(state_file)
-    x, y, mask = read_header(state_file, field_info)
+    ##read obs_seq
 
-    nens = field_info['nens']
-    nfield = field_info['nfield']
-    nx = field_info['nx']
-    ny = field_info['ny']
+    ##go through obs_seq and assign nlobs to each local_ind
+    obs_local_inds = assign_obs_inds(c, comm, obs_seq_file)
 
-    ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
-    inds = jj*nx + ii
 
-    obs_info = read_obs_info(obs_seq_file)
-    for p, rec in obs_info['obs_seq'].items():
-        vname = rec['name']
-        xo = rec['x']
-        yo = rec['y']
-
-    # # obs_info = read_obs_info(obs_seq_file)
-
-    # ##find locales with nlobs>0
-    # local_inds = distribute_tasks(comm, inds):
-
-    # local_state = read_local_state(state_file, field_info, mask, local_inds)
-    # # local_obs = read_local_obs(obs_seq_file
 
 
 ###two-step solution, Anderson 2003, used in DART
