@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import pyproj
 
 ##variable dictionary for RGPS naming convention
-variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_type':'z', 'units':'m/s'},
-             'seaice_deform_shear': {'dtype':'float', 'is_vector':False, 'z_type':'z', 'units':'1/s'},
-             'seaice_deform_div': {'dtype':'float', 'is_vector':False, 'z_type':'z', 'units':'1/s'},
+variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':None, 'units':'m/s'},
+             'seaice_deform_shear': {'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'1/s'},
+             'seaice_deform_div': {'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'1/s'},
              }
 
 def filename(path, **kwargs):
@@ -75,6 +75,9 @@ def get_traj_pairs(path, grid, **kwargs):
 #         obs_seq.append(rec)
 #     return obs_seq
 
+
+def random_network(path, grid, mask, **kwargs):
+    pass
 
 # from .state_to_obs import state_to_obs
 

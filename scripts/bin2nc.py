@@ -1,5 +1,7 @@
 import numpy as np
-from assim_tools import read_field_info, read_header, read_field, t2h, nc_write_var
+from assim_tools.netcdf import nc_write_var
+from assim_tools.common import t2h, h2t
+from assim_tools.state import read_field_info, read_header, read_field
 
 import sys
 filename = sys.argv[1]
@@ -14,21 +16,21 @@ nx = info['nx']
 nens = info['nens']
 dims = {'member':None, 'time':None, 'level':None, 'y':ny, 'x':nx}
 
-for v in list(set(rec['var_name'] for i, rec in info['fields'].items())):
+for v in list(set(rec['name'] for i, rec in info['fields'].items())):
     print('converting '+v)
     outfile = filename.replace('.bin','.'+v+'.nc')
 
     members = np.arange(nens)
-    times = np.array(list(set(t2h(rec['time']) for i, rec in flds.items() if rec['var_name']==v)))
-    levels = np.array(list(set(rec['level'] for i, rec in flds.items() if rec['var_name']==v)))
+    times = np.array(list(set(t2h(rec['time']) for i, rec in flds.items() if rec['name']==v)))
+    levels = np.array(list(set(rec['k'] for i, rec in flds.items() if rec['name']==v)))
 
-    for i in [i for i, rec in info['fields'].items() if rec['var_name']==v]:
+    for i in [i for i, rec in info['fields'].items() if rec['name']==v]:
         rec = info['fields'][i]
         ##get the field from bin file
         fld = read_field(filename, info, mask, i)
         ##get record number along time,level dimensions
         id_time = [i for i,t in enumerate(times) if t2h(rec['time'])==t][0]
-        id_level = [i for i,z in enumerate(levels) if rec['level']==z][0]
+        id_level = [i for i,z in enumerate(levels) if rec['k']==z][0]
         recno = {'member':rec['member'], 'time':id_time, 'level':id_level}
         if rec['is_vector']:
             comp = ('_x', '_y')
