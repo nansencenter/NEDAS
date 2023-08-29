@@ -10,9 +10,10 @@ from .parallel import distribute_tasks, message
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
 def process_state(c, comm, prior_binfile, post_binfile):
+    rank = comm.Get_rank()
     message(comm, 'process_state: parsing and generating field_info', 0)
     ##parse config and generate field_info, this is done by the first processor and broadcast
-    if comm.Get_rank() == 0:
+    if rank == 0:
         info = field_info(c)
         for binfile in [prior_binfile, post_binfile]:
             with open(binfile, 'wb'):  ##initialize file in case doesn't exist
@@ -28,7 +29,7 @@ def process_state(c, comm, prior_binfile, post_binfile):
 
     ##now start processing the fields, each processor gets its own workload as a subset of nfield
     message(comm, 'process_state: reading state varaible for each field record', 0)
-    for fld_id in distribute_tasks(comm, np.arange(len(info['fields']))):
+    for fld_id in distribute_tasks(comm, np.arange(len(info['fields'])))[rank]:
         rec = info['fields'][fld_id]
 
         ##directory storing model output
@@ -66,7 +67,7 @@ def process_state(c, comm, prior_binfile, post_binfile):
         for binfile in [prior_binfile, post_binfile]:
             write_field(binfile, info, c.mask, fld_id, fld)
 
-        message(comm, '   {:15s} t={} k={:5d} member={:3d}'.format(rec['name'], rec['time'], rec['k'], rec['member']+1))
+        # message(comm, '   {:15s} t={} k={:5d} member={:3d}'.format(rec['name'], rec['time'], rec['k'], rec['member']+1))
 
 
 ##generate info for the nens*nfield 2D fields in the state
@@ -255,27 +256,6 @@ def read_field(binfile, info, mask, fld_id):
         else:
             fld[~mask] = fld_
         return fld
-
-
-##parallel process prior_state.bin and make a copy to post_state.bin
-def duplicate_state(comm, file_in, file_out):
-    if comm.Get_rank() == 0:
-        info = read_field_info(file_in)
-        x, y, mask = read_header(file_in, info)
-        with open(file_out, 'wb'):  ##initialize file_out if it doesn't exist
-            pass
-        write_field_info(file_out, info)
-        write_header(file_out, info, x, y, mask)
-    else:
-        info = None
-        mask = None
-    info = comm.bcast(info, root=0)
-    mask = comm.bcast(mask, root=0)
-
-    for i in distribute_tasks(comm, np.arange(len(info['fields']))):
-        rec = info['fields'][i]
-        fld = read_field(file_in, info, mask, i)
-        write_field(file_out, info, mask, i, fld)
 
 
 ##unmasked horizontal locale indices

@@ -4,7 +4,7 @@ import importlib
 from datetime import datetime, timedelta
 from .common import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from .parallel import distribute_tasks, message
-from .state import read_local_state
+from .state import xy_inds, read_local_state
 
 ##top-level routine to prepare the obs, read dataset files and convert to obs_seq
 ##obs_info contains obs value, err, and coordinates (t, z, y, x); when obs_info is
@@ -12,10 +12,11 @@ from .state import read_local_state
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
 def process_obs(c, comm, prior_state_file, obs_seq_file):
+    rank = comm.Get_rank()
     message(comm, 'process_obs: parsing and generating obs_info', 0)
     ##parse c.obs_def, read_obs from each type and generate obs_seq
     ##this is done by the first processor and broadcast
-    if comm.Get_rank() == 0:
+    if rank == 0:
         info = obs_info(c)
         with open(obs_seq_file, 'wb'):  ##initialize obs_seq.bin in case it doesn't exist
             pass
@@ -26,11 +27,10 @@ def process_obs(c, comm, prior_state_file, obs_seq_file):
     info = comm.bcast(info, root=0)
 
     obs_var_bank = {}
-    z_bank = {}
 
     ##now start processing the obs seq, each processor gets its own workload as a subset of nobs
     message(comm, 'process_obs: getting obs_prior for each obs variable and member', 0)
-    for obs_id, member in distribute_tasks(comm, [(i,m) for i in range(info['nobs']) for m in range(info['nens'])]):
+    for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[rank]:
         rec = info['obs_seq'][obs_id]
 
         ##if variable is in prior_state fields, just read and interp in z
@@ -38,17 +38,19 @@ def process_obs(c, comm, prior_state_file, obs_seq_file):
         ##else try obs_operator
 
         ##tmp solution::
-        obs_var_key = (rec['name'], rec['model'], member, rec['time'])
+        obs_var_key = (rec['name'], rec['model'], member)
         if obs_var_key in obs_var_bank:
             obs_var = obs_var_bank[obs_var_key]
         else:
+            message(comm, 'state_to_obs: getting variable '+rec['name']+' from '+rec['model'])
             src = importlib.import_module('dataset.'+rec['source'])
             obs_var = src.state_to_obs(c.work_dir+'/forecast/'+c.time+'/'+rec['model'], c.grid, **rec, k=-1, member=member)
+            obs_var_bank[obs_var_key] = obs_var
         obs_rec = info['obs_seq'][obs_id]
         obs_rec['value'] = c.grid.interp(obs_var, obs_rec['x'], obs_rec['y'])
         write_obs(obs_seq_file, info, [obs_rec], member=member)
 
-        message(comm, '    {:15s} t={} z={:10.4f} y={:10.4f} x={:10.4f} member={:3d}'.format(obs_rec['name'], obs_rec['time'], obs_rec['z'], obs_rec['y'], obs_rec['x'], member+1))
+         # message(comm, '    {:15s} t={} z={:10.4f} y={:10.4f} x={:10.4f} member={:3d}'.format(obs_rec['name'], obs_rec['time'], obs_rec['z'], obs_rec['y'], obs_rec['x'], member+1))
 
 
 ##parse obs_def in config, read the dataset files to get the needed obs_seq
@@ -174,40 +176,111 @@ def write_obs(binfile, info, obs_seq, member=None):
 
     with open(binfile, 'r+b') as f:
         for rec in obs_seq:
-
             nv = 2 if rec['is_vector'] else 1
-            size = type_size[rec['dtype']]
-
             if member is None:
                 m = 0
             else:
                 assert member<nens, f'member = {member} exceeds the ensemble size {nens}'
                 m = member+1
 
-            f.seek(rec['pos'] + nv*size*m)
-            f.write(struct.pack(nv*type_dic[rec['dtype']], *np.atleast_1d(rec['value'])))
+            f.seek(rec['pos'] + nv*type_size[rec['dtype']]*m)
+            f.write(struct.pack((nv*type_dic[rec['dtype']]), *np.atleast_1d(rec['value'])))
+
+
+def read_obs(binfile, info, obs_seq, member=None):
+    nens = info['nens']
+    obs_seq_out = []
+    with open(binfile, 'rb') as f:
+        for rec in obs_seq:
+            nv = 2 if rec['is_vector'] else 1
+            if member is None:
+                m = 0
+            else:
+                assert member<nens, f'member = {member} exceeds the ensemble size {nens}'
+                m = member+1
+            f.seek(rec['pos'] + nv*type_size[rec['dtype']]*m)
+            rec['value'] = np.array(struct.unpack((nv*type_dic[rec['dtype']]), f.read(nv*type_size[rec['dtype']])))
+            obs_seq_out.append(rec)
+    return obs_seq_out
 
 
 # def obs_operator(path, obs_seq, **kwargs):
-#     src = importlib.import_module('models.'+kwargs['model'])
-
-#     # if kwargs['name'] in src.
-#     ##if obs variables exists in state var_name, get it directly
-
-#     ##otherwise, try getting the obs_variable through model.src.obs_operator
-#     # obs_seq_bank
-
-#     ##else: error, don't know how to get obs_variable from model.src
-
-#     return 1
+#     pass
 
 
-def assign_obs_inds(c, comm, field_info):
+def assign_obs_inds(c, comm, obs_seq_file):
+    rank = comm.Get_rank()
+    nproc = comm.Get_size()
 
-    return obs_inds
+    info = read_obs_info(obs_seq_file)
+    nobs = info['nobs']
+
+    inds = xy_inds(c.mask)
+    x = c.grid.x.flatten()[inds]
+    y = c.grid.y.flatten()[inds]
+
+    ##dict of obs_id:list of local_inds that obs has impact on
+    obs_local_inds = {}
+    for obs_id in range(nobs):
+        obs_local_inds[obs_id] = None  ##initialize for later bcast
+
+    ##parallel process the obs_id records
+    obs_tasks = distribute_tasks(comm, np.arange(nobs))
+    for obs_id in obs_tasks[rank]:
+        rec = info['obs_seq'][obs_id]
+        dist = np.hypot(x-rec['x'], y-rec['y'])
+        hroi = c.obs_def[rec['name']]['hroi']
+        obs_local_inds[obs_id] = inds[dist<hroi]
+
+    ##collect all obs_id records
+    for r in range(nproc):
+        for obs_id in obs_tasks[r]:
+            obs_local_inds[obs_id] = comm.bcast(obs_local_inds[obs_id], root=r)
+
+    return obs_local_inds
 
 
-def read_local_obs(obs_seq_file, obs_inds):
+def uniq_obs(obs_seq):
+    uoid = 0
+    obs = {}
+    for rec in obs_seq:
+        for i in range(2 if rec['is_vector'] else 1):
+            obs[uoid] = rec
+            uoid += 1
+    return obs
 
-    pass
+
+def read_local_obs(binfile, info, obs_inds):
+    obs_seq = [info['obs_seq'][i] for i in obs_inds]
+
+    nens = info['nens']
+    uobs = uniq_obs(obs_seq)
+    nuobs = len(obs_inds)
+
+    local_obs = {'obs': np.full(nuobs, np.nan),
+                 'obs_prior': np.full((nens, nuobs), np.nan),
+                 'err': [r['err'] for r in uobs.values()],
+                 'name': [r['name'] for r in uobs.values()],
+                 'time': [r['time'] for r in uobs.values()],
+                 'z': [r['z'] for r in uobs.values()],
+                 'y': [r['y'] for r in uobs.values()],
+                 'x': [r['x'] for r in uobs.values()],}
+
+    for member in range(nens):
+        obs_seq_member = read_obs(binfile, info, obs_seq, member=member)
+        j = 0
+        for rec in obs_seq_member:
+            for i in range(2 if rec['is_vector'] else 1):
+                local_obs['obs_prior'][member, j] = rec['value'][i]
+                j += 1
+
+    obs_seq_real = read_obs(binfile, info, obs_seq, member=None)
+    j = 0
+    for rec in obs_seq_member:
+        for i in range(2 if rec['is_vector'] else 1):
+            local_obs['obs'][j] = rec['value'][i]
+            j += 1
+
+    return local_obs
+
 
