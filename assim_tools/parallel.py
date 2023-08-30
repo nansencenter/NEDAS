@@ -20,19 +20,24 @@ def distribute_tasks(comm, tasks):
     ##       in a dict from rank -> its tasks list
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks
-    chunk = ntask // nproc
+    chunck = ntask // nproc
     remainder = ntask % nproc
 
-    task_list = {}
-
+    ##figure out how many tasks each rank should have
+    ##first, divide the tasks into nproc parts, each with size chunck
+    ntask_rank = np.full(nproc, chunck, dtype=int)
     for rank in range(nproc):
-        ##first, divide the tasks into nproc parts, each with size "chunck"
-        task_list[rank] = [tasks[i] for i in range(rank*chunk, (rank+1)*chunk)]
-
         ##if there is remainder after division, the first a few processors
         ## (with rank from 0 to remainder-1) will each get 1 more task
         if rank < remainder:
-            task_list[rank].append(tasks[nproc*chunk + rank])
+            ntask_rank[rank] += 1
+
+    ##now divide tasks according to ntask for each rank
+    task_list = {}
+    i = 0
+    for r in range(nproc):
+        task_list[r] = tasks[i:i+ntask_rank[r]]
+        i += ntask_rank[r]
 
     return task_list
 
