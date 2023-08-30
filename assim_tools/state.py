@@ -10,10 +10,10 @@ from .parallel import distribute_tasks, message
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
 def process_state(c, comm, prior_binfile, post_binfile):
-    rank = comm.Get_rank()
+    proc_id = comm.Get_rank()
     message(comm, 'process_state: parsing and generating field_info', 0)
     ##parse config and generate field_info, this is done by the first processor and broadcast
-    if rank == 0:
+    if proc_id == 0:
         info = field_info(c)
         for binfile in [prior_binfile, post_binfile]:
             with open(binfile, 'wb'):  ##initialize file in case doesn't exist
@@ -29,7 +29,7 @@ def process_state(c, comm, prior_binfile, post_binfile):
 
     ##now start processing the fields, each processor gets its own workload as a subset of nfield
     message(comm, 'process_state: reading state varaible for each field record', 0)
-    for fld_id in distribute_tasks(comm, np.arange(len(info['fields'])))[rank]:
+    for fld_id in distribute_tasks(comm, np.arange(len(info['fields'])))[proc_id]:
         rec = info['fields'][fld_id]
 
         ##directory storing model output
@@ -280,9 +280,9 @@ def uniq_fields(info):
 
 ##read the entire ensemble in a local state space [nens, ufields, local_inds]
 ##local_inds: list of inds for horizontal locales [y,x]
-##  Note: when used in parallelization, local_inds shall be continous chuncks of inds
+##  Note: when used in parallelization, local_inds shall be continous chunks of inds
 ##        to avoid conflict in read/write of binfile; otherwise in single call, it is
-##        fine to read a discontiguous chunck of field with arbitrary list of local_inds.
+##        fine to read a discontiguous chunk of field with arbitrary list of local_inds.
 ##nfield indexes the uniq fields at each locale with key (name, time, k)
 ##return: dict (nfield, local_inds): state[nens], and coordinates name,time,z,y,x
 def read_local_state(binfile, info, mask, local_inds):
@@ -291,7 +291,7 @@ def read_local_state(binfile, info, mask, local_inds):
 
     fld_size = np.sum((~mask).astype(int))  ##size of the field rec in binfile
     seek_inds = np.searchsorted(inds, local_inds)  ##seek pos in binfile for the local inds
-    chk_size = seek_inds[-1] - seek_inds[0] + 1   ##size of chunck to read from field rec
+    chk_size = seek_inds[-1] - seek_inds[0] + 1   ##size of chunk to read from field rec
 
     ##some dimensions for the local state
     nens = info['nens']
@@ -301,28 +301,30 @@ def read_local_state(binfile, info, mask, local_inds):
 
     local_state = {'state': np.full((nens, nfield, nlocal), np.nan),
                    'name': [r['name'] for r in ufields.values()],
-                   'time': [r['time'] for r in ufields.values()],
+                   'time': [t2h(r['time']) for r in ufields.values()],
                    'k': [r['k'] for r in ufields.values()],
                    'z': np.full((nens, nfield, nlocal), np.nan), }
+                    ##TODO: there can be more than one z_coords for each uniq z_units
+
     with open(binfile, 'rb') as f:
         ##loop through each field rec in binfile
         for rec in info['fields'].values():
 
-            ##read the chunck covering the local_inds
+            ##read the chunk covering the local_inds
             for ic in range(2 if rec['is_vector'] else 1):  ##vector fields have 2 components
 
                 f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
-                chunck = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+                chunk = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
 
                 if rec['name'] == 'z_coords':
-                    ##if this is a z_coords rec, assign its local_inds chunck to the corresponding z array
+                    ##if this is a z_coords rec, assign its local_inds chunk to the corresponding z array
                     for fid in [i for i,r in ufields.items() if r['time']==rec['time'] and r['k']==rec['k']]:
-                        local_state['z'][rec['member'], fid, :] = chunck[seek_inds-seek_inds[0]]
+                        local_state['z'][rec['member'], fid, :] = chunk[seek_inds-seek_inds[0]]
 
                 else:
-                    ##if this is a variable rec, assign the chunck to the state array
+                    ##if this is a variable rec, assign the chunk to the state array
                     fid_list = [i for i,r in ufields.items() if r['name']==rec['name'] and r['time']==rec['time'] and r['k']==rec['k']]
-                    local_state['state'][rec['member'], fid_list[ic], :] = chunck[seek_inds-seek_inds[0]]
+                    local_state['state'][rec['member'], fid_list[ic], :] = chunk[seek_inds-seek_inds[0]]
 
     return local_state
 
@@ -349,20 +351,20 @@ def write_local_state(binfile, info, mask, local_inds, local_state):
 
             for ic in range(2 if rec['is_vector'] else 1):
 
-                if chk_size == nlocal:  ##chunck is contiguous, make an empty array
-                    chunck = np.full(nlocal, np.nan)
-                else:   ##chunck is discontiguous, first read the chunck from file
+                if chk_size == nlocal:  ##chunk is contiguous, make an empty array
+                    chunk = np.full(nlocal, np.nan)
+                else:   ##chunk is discontiguous, first read the chunk from file
                     f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
-                    chunck = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+                    chunk = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
 
                 if rec['name'] == 'z_coords':
                     pass ##we don't need to output z_coords, since they are not updated by local analysis
                 else:
-                    ##update value in chunck given the new local_state
+                    ##update value in chunk given the new local_state
                     fid_list = [i for i,r in ufields.items() if r['name']==rec['name'] and r['time']==rec['time'] and r['k']==rec['k']]
-                    chunck[seek_inds-seek_inds[0]] = local_state['state'][rec['member'], fid_list[ic], :]
-                    ##write the chunck back to file
+                    chunk[seek_inds-seek_inds[0]] = local_state['state'][rec['member'], fid_list[ic], :]
+                    ##write the chunk back to file
                     f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
-                    f.write(struct.pack((chk_size*type_dic[rec['dtype']]), *chunck))
+                    f.write(struct.pack((chk_size*type_dic[rec['dtype']]), *chunk))
 
 
