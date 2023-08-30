@@ -210,44 +210,33 @@ def read_obs(binfile, info, obs_seq, member=None):
 
 def assign_obs_inds(c, comm, obs_seq_file):
     rank = comm.Get_rank()
-    nproc = comm.Get_size()
 
-    info = read_obs_info(obs_seq_file)
-    nobs = info['nobs']
+    if rank == 0:
+        info = read_obs_info(obs_seq_file)
+        nobs = info['nobs']
 
-    inds = xy_inds(c.mask)
-    x = c.grid.x.flatten()[inds]
-    y = c.grid.y.flatten()[inds]
+        inds = xy_inds(c.mask)   ##list of horizontal locale (grid points) indices
+        x = c.grid.x.flatten()[inds]  ##x, y coords for each index
+        y = c.grid.y.flatten()[inds]
 
-    ##dict of obs_id:list of local_inds that obs has impact on
-    obs_local_inds = {}
-    for obs_id in range(nobs):
-        obs_local_inds[obs_id] = None  ##initialize for later bcast
+        local_obs_inds = {}
+        for i in inds:
+            local_obs_inds[i] = []
 
-    ##parallel process the obs_id records
-    obs_tasks = distribute_tasks(comm, np.arange(nobs))
-    for obs_id in obs_tasks[rank]:
-        rec = info['obs_seq'][obs_id]
-        dist = np.hypot(x-rec['x'], y-rec['y'])
-        hroi = c.obs_def[rec['name']]['hroi']
-        obs_local_inds[obs_id] = inds[dist<hroi]
+        ##go through the list of obs
+        for obs_id in range(nobs):
+            rec = info['obs_seq'][obs_id]
+            dist = np.hypot(x-rec['x'], y-rec['y']) ##horizontal distance from obs to each grid inds
+            hroi = c.obs_def[rec['name']]['hroi']   ##horizontal localization distance for this obs
+            local_inds = inds[dist<hroi]    ##the grid inds within the impact zone of this obs
+            for i in local_inds:
+                local_obs_inds[i].append(obs_id)  ##add this obs to the list of local grid inds
+    else:
+        local_obs_inds = None
 
-    ##collect all obs_id records
-    for r in range(nproc):
-        for obs_id in obs_tasks[r]:
-            obs_local_inds[obs_id] = comm.bcast(obs_local_inds[obs_id], root=r)
+    local_obs_inds = comm.bcast(local_obs_inds, root=0)
 
-    return obs_local_inds
-
-
-def uniq_obs(obs_seq):
-    uoid = 0
-    obs = {}
-    for rec in obs_seq:
-        for i in range(2 if rec['is_vector'] else 1):
-            obs[uoid] = rec
-            uoid += 1
-    return obs
+    return local_obs_inds
 
 
 def read_local_obs(binfile, info, obs_inds):

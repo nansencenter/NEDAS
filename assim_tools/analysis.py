@@ -2,21 +2,41 @@ import numpy as np
 from numba import njit
 from .parallel import distribute_tasks, message
 from .state import xy_inds, read_field_info, uniq_fields, read_local_state, write_local_state
-from .obs import assign_obs_inds, read_local_obs
+from .obs import read_obs_info, assign_obs_inds, read_local_obs
 
 ##top-level routine for performing the DA analysis
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallization
 def local_analysis(c, comm, prior_state_file, post_state_file, obs_seq_file):
+    rank = comm.Get_rank()
 
-    # inds = xy_inds(c.mask)
+    message(comm, 'local_analysis: gathering field_info and obs_info', 0)
+    if rank == 0:
+        field_info = read_field_info(prior_state_file)
+        obs_info = read_obs_info(obs_seq_file)
+    else:
+        field_info = None
+        obs_info = None
+    field_info = comm.bcast(field_info, root=0)
+    obs_info = comm.bcast(obs_info, root=0)
 
-    ##read obs_seq
+    message(comm, 'local_analysis: assigning local observation indices to grid points', 0)
+    inds = xy_inds(c.mask)
+    local_obs_inds = assign_obs_inds(c, comm, obs_seq_file)
+    nlobs = np.array([len(lst) for lst in local_obs_inds.values()])
+    local_inds_tasks = distribute_tasks(comm, inds[nlobs>0])
 
-    ##go through obs_seq and assign nlobs to each local_ind
-    obs_local_inds = assign_obs_inds(c, comm, obs_seq_file)
+    print(rank, ' working on: ',  len(local_inds_tasks[rank]), ' inds')
 
+    message(comm, 'local_analysis: reading in local state ensemble', 0)
+    local_state = read_local_state(prior_state_file, field_info, c.mask, local_inds_tasks[rank])
 
+    # message(comm, 'local_analysis: reading in local observation ensemble', 0)
+    # local_obs = read_local_obs(obs_seq_file, obs_info, obs_inds_tasks[rank])
+
+    # message(comm, 'local_analysis: running ETKF analysis', 0)
+
+    # message(comm, 'local_analysis: writing out the updated local state ensemble', 0)
 
 
 ###two-step solution, Anderson 2003, used in DART
