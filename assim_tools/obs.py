@@ -12,11 +12,11 @@ from .state import xy_inds, read_local_state
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
 def process_obs(c, comm, prior_state_file, obs_seq_file):
-    rank = comm.Get_rank()
+    proc_id = comm.Get_rank()
     message(comm, 'process_obs: parsing and generating obs_info', 0)
     ##parse c.obs_def, read_obs from each type and generate obs_seq
     ##this is done by the first processor and broadcast
-    if rank == 0:
+    if proc_id  == 0:
         info = obs_info(c)
         with open(obs_seq_file, 'wb'):  ##initialize obs_seq.bin in case it doesn't exist
             pass
@@ -30,7 +30,7 @@ def process_obs(c, comm, prior_state_file, obs_seq_file):
 
     ##now start processing the obs seq, each processor gets its own workload as a subset of nobs
     message(comm, 'process_obs: getting obs_prior for each obs variable and member', 0)
-    for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[rank]:
+    for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[proc_id]:
         rec = info['obs_seq'][obs_id]
 
         ##if variable is in prior_state fields, just read and interp in z
@@ -209,9 +209,9 @@ def read_obs(binfile, info, obs_seq, member=None):
 
 
 def assign_obs_inds(c, comm, obs_seq_file):
-    rank = comm.Get_rank()
+    proc_id = comm.Get_rank()
 
-    if rank == 0:
+    if proc_id == 0:
         info = read_obs_info(obs_seq_file)
         nobs = info['nobs']
 
@@ -226,6 +226,7 @@ def assign_obs_inds(c, comm, obs_seq_file):
         ##go through the list of obs
         for obs_id in range(nobs):
             rec = info['obs_seq'][obs_id]
+            ##TODO: mfx,y needed here
             dist = np.hypot(x-rec['x'], y-rec['y']) ##horizontal distance from obs to each grid inds
             hroi = c.obs_def[rec['name']]['hroi']   ##horizontal localization distance for this obs
             local_inds = inds[dist<hroi]    ##the grid inds within the impact zone of this obs
@@ -239,6 +240,15 @@ def assign_obs_inds(c, comm, obs_seq_file):
     return local_obs_inds
 
 
+def uniq_obs(obs_seq):
+    uoid = 0
+    obs = {}
+    for rec in obs_seq:
+        for i in range(2 if rec['is_vector'] else 1):
+            obs[uoid] = rec
+            uoid += 1
+    return obs
+
 def read_local_obs(binfile, info, obs_inds):
     obs_seq = [info['obs_seq'][i] for i in obs_inds]
 
@@ -250,7 +260,7 @@ def read_local_obs(binfile, info, obs_inds):
                  'obs_prior': np.full((nens, nuobs), np.nan),
                  'err': [r['err'] for r in uobs.values()],
                  'name': [r['name'] for r in uobs.values()],
-                 'time': [r['time'] for r in uobs.values()],
+                 'time': [t2h(r['time']) for r in uobs.values()],
                  'z': [r['z'] for r in uobs.values()],
                  'y': [r['y'] for r in uobs.values()],
                  'x': [r['x'] for r in uobs.values()],}
