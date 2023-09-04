@@ -6,14 +6,11 @@ from grid import Grid
 from pyproj import Proj
 
 ##variable dictionary for ERA5 naming convention
-variables = {'atmos_surf_wind': {'name':('u10', 'v10'), 'dtype':'float', 'is_vector':True, 'z_units':None, 'units':'m/s'},
-             'atmos_surf_temp': {'name':'t2m', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'K'},
-             'atmos_surf_dew_temp': {'name':'d2m', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'K'},
-             'atmos_surf_pres': {'name':'msl', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'Pa'},
-             'atmos_precip': {'name':'mtpr', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'kg/m2/s'},
-             'atmos_snowfall': {'name':'msr', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'kg/m2/s'},
-             'atmos_down_shortwave': {'name':'msdwswrf', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'W/m2'},
-             'atmos_down_longwave': {'name':'msdwlwrf', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'W/m2'}, }
+variables = {'atmos_surf_wind': {'name':('10U', '10V'), 'dtype':'float', 'is_vector':True, 'z_units':None, 'units':'m/s'},
+             'atmos_surf_temp': {'name':'2T', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'K'},
+             'atmos_surf_dew_temp': {'name':'2D', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'K'},
+             'atmos_surf_pres': {'name':'MSL', 'dtype':'float', 'is_vector':False, 'z_units':None, 'units':'Pa'},
+             }
 
 ###format filename
 def filename(path, **kwargs):
@@ -32,7 +29,7 @@ def filename(path, **kwargs):
     else:
         var = '*'
 
-    search = path+'/'+mem+'/ERA5_'+var+'_y'+year+'.nc'
+    search = path+'/'+mem+'/6h.'+var+'_'+year+'.nc'
     flist = glob.glob(search)
     assert len(flist) > 0, 'no matching files found'+search
     return flist[0]
@@ -42,7 +39,6 @@ def filename(path, **kwargs):
 def time_index(time_series, time):
     t_ = (time - datetime(1900, 1, 1)) / timedelta(hours=1)
     ind = np.abs(time_series - t_).argmin()
-    assert t_ - time_series[ind] == 0., "time index not found in file"
     return ind
 
 
@@ -73,7 +69,9 @@ def read_var(path, grid, **kwargs):
     else:
         name = variables[name]['name']
         f = Dataset(filename(path, **kwargs, native_name=name))
-        var = f[name][t_index, ...].data
+        tmp = f[name][t_index, ...]
+        var = tmp.data
+        var[tmp.mask] = np.nan
 
     return var
 
