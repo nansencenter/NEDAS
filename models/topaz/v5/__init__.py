@@ -38,11 +38,11 @@ from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileG
 ##         0 for surface variables, negative for ocean, positive for atmos variables
 ##   units: native physical units for the variable
 levels = np.arange(-50, 0, 1)  ##ocean levels -50 to -1
-variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
-             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
+variables = {'ocean_velocity': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
+             'ocean_layer_thick': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
              'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'K'},
-             'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
-             'ocean_surf_height': {'name':'ssh', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':[0], 'units':'m'},
+             'ocean_saln': {'name':'salin', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
+             'ocean_surf_height': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':[0], 'units':'m'},
              }
 
 ##parse kwargs and find matching filename

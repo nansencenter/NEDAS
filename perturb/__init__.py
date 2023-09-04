@@ -7,10 +7,12 @@ from assim_tools.multiscale import fft2, ifft2, get_wn
 ###  tcorr: time correlation length scale
 
 def spectrum_gaussian(hcorr):
-    return spec
+    pass
+
 
 def spectrum_slope(power_law):
     return lambda k: k**((power_law-1)/2)
+
 
 def random_field(grid, pwr_spec):
     kx, ky = get_wn(grid.x)
@@ -21,4 +23,6 @@ def random_field(grid, pwr_spec):
     amplitude[np.where(k2d==1e-10)] = 0.0
     noise1 = np.real(ifft2(noise * amplitude))
     return (noise1 - np.mean(noise1))/np.std(noise1)
+
+
 
