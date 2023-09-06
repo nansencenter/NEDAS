@@ -51,40 +51,47 @@ def get_wn(fld):
     return wnx, wny
 
 ##scale decomposition
-def lowpass_resp(Kh, k1, k2):
-    r = np.zeros(Kh.shape)
-    r[np.where(Kh<k1)] = 1.0
-    r[np.where(Kh>k2)] = 0.0
-    ind = np.where(np.logical_and(Kh>=k1, Kh<=k2))
-    r[ind] = np.cos((Kh[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
+def lowpass_resp(k2d, k1, k2):
+    r = np.zeros(k2d.shape)
+    r[np.where(k2d<k1)] = 1
+    r[np.where(k2d>k2)] = 0
+
+    ind = np.where(np.logical_and(k2d>=k1, k2d<=k2))
+
+    ##linear
+    # r[ind] = (np.log(k2) - np.log(k2d[ind]))/(np.log(k2) - np.log(k1))
+    r[ind] = (k2 - k2d[ind])/(k2 - k1)
+    ##cos-square
+    # r[ind] = np.cos((k2d[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
+
     return r
 
 
-def get_scale_resp(Kh, kr, s):
-    ns = len(kr)
-    resp = np.zeros(Kh.shape)
+def scale_response(k2d, scales, s):
+    ns = len(scales)
+    resp = np.full(k2d.shape, 1.0)  ##default all ones
     if ns > 1:
         if s == 0:
-            resp = lowpass_resp(Kh, kr[s], kr[s+1])
+            resp = lowpass_resp(k2d, scales[s], scales[s+1])
         if s == ns-1:
-            resp = 1 - lowpass_resp(Kh, kr[s-1], kr[s])
+            resp = 1 - lowpass_resp(k2d, scales[s-1], scales[s])
         if s > 0 and s < ns-1:
-            resp = lowpass_resp(Kh, kr[s], kr[s+1]) - lowpass_resp(Kh, kr[s-1], kr[s])
+            resp = lowpass_resp(k2d, scales[s], scales[s+1]) - lowpass_resp(k2d, scales[s-1], scales[s])
     return resp
 
 
-def get_scale_comp(fld, krange, s):
+def get_scale_comp(fld, scales, s):
     ##compute scale component of fld on the grid
-    ##given kr: list of center wavenumber k defining the scale bands
+    ##given scales: list of center wavenumber k defining the scale bands
     ##       s: the index for scale components
 
     # xk = grid2spec(x)
     # xkout = xk.copy()
-    # ns = len(kr)
+    # ns = len(scales)
     # if ns > 1:
     #     kx, ky = get_wn(x)
-    #     Kh = np.sqrt(kx**2 + ky**2)
-    #     xkout = xk * get_scale_resp(Kh, kr, s)
+    #     k2d = np.sqrt(kx**2 + ky**2)
+    #     xkout = xk * get_scale_resp(k2d, scales, s)
     # return spec2grid(xkout)
     pass
 
@@ -118,3 +125,5 @@ def convolve(grid, fld, kernel):
         fld_conv[i]
 
     return fld_conv
+
+

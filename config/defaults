@@ -97,6 +97,9 @@ ocean_saln          topaz.v4  normal
 EOF
 )
 
+##parameter estimation
+#TODO
+
 ##definite the `obs` in a multi-line string
 ##  one observation per line, each line contains:
 ##      obs variable name, defined in assim_tools/obs

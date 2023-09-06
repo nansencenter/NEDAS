@@ -207,8 +207,10 @@ subroutine rand_update(perturb, i_sample, perturb_prev)
         ! Weighting between coriiolis/equator solution
         !!YY: this doesn't look right: wlat is in degrees unit
         !!and there will be devide by zero for wlat=0
-        !wcor = sin(wlat)/wlat*pi*0.5
         wcor = sin(wlat*pi/180.)
+        !wcar = sin(
+       !&      min(abs(plat(ix,jy)),wlat) / wlat
+       !&      *pi*0.5)
 
         uwind = wcor*ucor + (1.-wcor)*ueq
         vwind = wcor*vcor + (1.-wcor)*veq
