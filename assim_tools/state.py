@@ -335,8 +335,8 @@ def write_local_state(binfile, info, mask, local_inds, local_state):
     inds = xy_inds(mask) ##horizontal locale indices for the entire field
 
     fld_size = np.sum((~mask).astype(int))
-    seek_inds = np.searchsorted(inds, local_inds)
-    chk_size = seek_inds[-1] - seek_inds[0] + 1
+    seek_inds = np.searchsorted(inds, local_inds[0])
+    chk_size = len(local_inds) ##seek_inds[-1] - seek_inds[0] + 1
 
     nens = info['nens']
     nlocal = len(local_inds)
@@ -351,20 +351,21 @@ def write_local_state(binfile, info, mask, local_inds, local_state):
 
             for ic in range(2 if rec['is_vector'] else 1):
 
-                if chk_size == nlocal:  ##chunk is contiguous, make an empty array
-                    chunk = np.full(nlocal, np.nan)
-                else:   ##chunk is discontiguous, first read the chunk from file
-                    f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
-                    chunk = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+                # if chk_size == nlocal:  ##chunk is contiguous, make an empty array
+                #     chunk = np.full(nlocal, np.nan)
+                # else:   ##chunk is discontiguous, first read the chunk from file
+                #     f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
+                #     chunk = np.array(struct.unpack((chk_size*type_dic[rec['dtype']]), f.read(chk_size*type_size[rec['dtype']])))
+                chunk = np.empty(nlocal, dtype=type_dic[rec['dtype']])
 
                 if rec['name'] == 'z_coords':
                     pass ##we don't need to output z_coords, since they are not updated by local analysis
                 else:
                     ##update value in chunk given the new local_state
                     fid_list = [i for i,r in ufields.items() if r['name']==rec['name'] and r['time']==rec['time'] and r['k']==rec['k']]
-                    chunk[seek_inds-seek_inds[0]] = local_state['state'][rec['member'], fid_list[ic], :]
+                    chunk = local_state['state'][rec['member'], fid_list[ic], :]
                     ##write the chunk back to file
-                    f.seek(rec['pos'] + (ic*fld_size+seek_inds[0])*type_size[rec['dtype']])
+                    f.seek(rec['pos'] + (ic*fld_size+seek_inds)*type_size[rec['dtype']])
                     f.write(struct.pack((chk_size*type_dic[rec['dtype']]), *chunk))
 
 

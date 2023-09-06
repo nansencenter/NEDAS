@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+# from numba import njit
 from .parallel import distribute_tasks, message
 from .state import xy_inds, read_field_info, uniq_fields, read_local_state, write_local_state
 from .obs import read_obs_info, assign_obs_inds, read_local_obs
@@ -25,12 +25,15 @@ def local_analysis(c, comm, prior_state_file, post_state_file, obs_seq_file):
     message(comm, 'local_analysis: assigning local observation indices to grid points', 0)
     inds = xy_inds(c.mask)
     local_obs_inds = assign_obs_inds(c, comm, obs_seq_file)
-    nlobs = np.array([len(lst) for lst in local_obs_inds.values()])
-    local_inds_tasks = distribute_tasks(comm, inds[nlobs>0])
+
+    local_inds_tasks = distribute_tasks(comm, inds)
+
     nlocal = len(local_inds_tasks[proc_id])
 
     message(comm, 'local_analysis: reading in local state ensemble', 0)
     state_dict = read_local_state(prior_state_file, field_info, c.mask, local_inds_tasks[proc_id])
+
+    comm.Barrier()
 
     message(comm, 'local_analysis: performing local analysis for each local index', 0)
     for i, local_ind in enumerate(local_inds_tasks[proc_id]):

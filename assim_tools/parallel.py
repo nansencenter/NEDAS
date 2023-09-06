@@ -14,14 +14,21 @@ def message(comm, msg, root=None):
         sys.stdout.flush()
 
 
-def distribute_tasks(comm, tasks):
+def distribute_tasks(comm, tasks, count=None):
     ##tasks: list of indices (in a for loop) to work on
+    ##count: amount of workload for each task, if None then tasks have equal workload
     ##returns the subset of tasks for the processor rank calling this function to work on
     ##       in a dict from rank -> its tasks list
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks
-    chunk = ntask // nproc
-    remainder = ntask % nproc
+
+    if count is None:
+        count = np.ones(ntask)
+    assert count.size==ntask, f'count.size = {count.size} not equal to tasks.size'
+
+    ##chunk of workload for each processor
+    chunk = np.sum(count) // nproc
+    remainder = np.sum(count) % nproc
 
     ##figure out how many tasks each rank should have
     ##first, divide the tasks into nproc parts, each with size chunk
@@ -40,5 +47,6 @@ def distribute_tasks(comm, tasks):
         i += ntask_rank[r]
 
     return task_list
+
 
 
