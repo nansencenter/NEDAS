@@ -23,11 +23,12 @@ def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D do
     ##power spectrum given by sigma and weight for each scale
     ns = len(scales_wgt)
     pwr_spec = lambda k: np.sum([scales_wgt[s] * np.exp(-k**2/scales_sig[s]**2) for s in range(ns)], axis=0)
+    ###TODO: normalize for each gauss
 
     ##TODO: find sigma from hradius (zeroin func2D in pseudo2d.f)
 
     pres = random_field(grid, pwr_spec)
-    pres = ampl_pres * (pres - np.mean(pres))/np.std(pres)
+    # pres = ampl_pres * (pres - np.mean(pres))/np.std(pres)
 
     if pres_wind_relate:  ##calc u,v from pres according to pres-wind relation
 
@@ -80,14 +81,15 @@ def random_field(grid, pwr_spec):
 
     kx, ky = get_wn(grid.x)
     k2d = np.sqrt(kx**2 + ky**2)
-    # k2d[np.where(k2d==0.0)] = 1e-10  ##avoid singularity, set wn-0 to small value
+    k2d[np.where(k2d==0.0)] = 1e-10  ##avoid singularity, set wn-0 to small value
 
     ##random phase from white noise
     ph = fft2(np.random.normal(0, 1, grid.x.shape))
 
     ##assemble random field given amplitude from power spectrum, and random phase ph
-    amp = np.sqrt(pwr_spec(k2d))
-    # amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
+    norm = 2 * np.pi * k2d
+    amp = np.sqrt(pwr_spec(k2d) / norm)
+    amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
 
     field = np.real(ifft2(amp * ph))
 

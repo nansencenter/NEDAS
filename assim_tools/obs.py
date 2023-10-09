@@ -11,8 +11,7 @@ from .state import xy_inds, read_local_state
 ##ready, each obs is processed by state_to_obs
 ##inputs: c: config module for parsing env variables
 ##        comm: mpi4py communicator for parallelization
-def process_obs(c, comm, prior_state_file, obs_seq_file):
-    proc_id = comm.Get_rank()
+def process_obs(c, comm, obs_seq_file):
     message(comm, 'process_obs: parsing and generating obs_info', 0)
     ##parse c.obs_def, read_obs from each type and generate obs_seq
     ##this is done by the first processor and broadcast
@@ -26,6 +25,11 @@ def process_obs(c, comm, prior_state_file, obs_seq_file):
         info = None
     info = comm.bcast(info, root=0)
 
+
+def process_obs_prior(c, comm, info, prior_state_file, obs_seq_file):
+    proc_id = comm.Get_rank()
+
+    message(comm, 'process_obs: parsing and generating obs_info', 0)
     obs_var_bank = {}
 
     ##now start processing the obs seq, each processor gets its own workload as a subset of nobs

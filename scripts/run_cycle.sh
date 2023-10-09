@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=nn2993k
-#SBATCH --job-name=NEDAS_run_cycle
+#SBATCH --job-name=run_cycle
 #SBATCH --time=0-00:30:00
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=32
@@ -11,61 +11,62 @@ source ~/.bashrc
 ##other initial environment src code
 
 #load configuration files, functions, parameters
-export SCRIPT_DIR=$HOME/code/NEDAS
-cd $SCRIPT_DIR
-export CONFIG_FILE=$SCRIPT_DIR/config/defaults
-. $CONFIG_FILE
+export script_dir=$HOME/code/NEDAS/scripts
+export config_file=$HOME/code/NEDAS/config/defaults
+. $config_file
+
+cd $script_dir
 . util.sh
 
 #start cycling
 date
-export DATE=$DATE_START
-export PREVDATE=$DATE
-export NEXTDATE=$DATE
+export time=$time_start
+export prev_time=$time
+export next_time=$time
 
-while [[ $NEXTDATE -le $DATE_CYCLE_END ]]; do  #CYCLE LOOP
-    export NEXTDATE=`advance_time $DATE $CYCLE_PERIOD`
+while [[ $next_time -le $time_assim_end ]]; do  #CYCLE LOOP
+    export next_time=`advance_time $time $cycle_period`
 
     echo "----------------------------------------------------------------------"
-    echo "CURRENT CYCLE: $DATE => $NEXTDATE"
-    mkdir -p $WORK_DIR/{run,ens,diag,obs}/$DATE
+    echo "current cycle: $time => $next_time"
+    mkdir -p $WORK_DIR/{forecast,analysis}/$time
 
-    #CLEAR ERROR TAGS
-    for d in `ls run/$DATE/`; do
+    ##clear previous error tags
+    for d in `ls analysis/$time/`; do
         if [[ `cat run/$DATE/$d/stat` != "complete" ]]; then
         echo waiting > run/$DATE/$d/stat
         fi
     done
 
-    #RUN COMPONENTS---------------------------------------
+    ###run components---------------------------------------
 
-    # ICBC
-    $SCRIPT_DIR/module_icbc.sh &
-    $SCRIPT_DIR/module_gen_perturbation.sh &
+    ###icbc
+    $script_dir/module_icbc.sh &
+    $script_dir/module_gen_perturbation.sh &
 
-    # Data assimilation step
+    ###data assimilation step
     if [ $DATE -ge $DATE_CYCLE_START ] && [ $DATE -le $DATE_CYCLE_END ]; then
         if $RUN_ENKF; then
-            $SCRIPT_DIR/module_filter_update.sh &
+            $script_dir/module_filter_update.sh &
         fi
     fi
     wait
 
-    # Forecast step
-    $SCRIPT_DIR/module_forecast.sh &
+    ###model forecast step
+    $script_dir/module_forecast.sh &
     wait
 
 
-    #CHECK ERRORS
-    for d in `ls -t run/$DATE/`; do
-        if [[ `cat run/$DATE/$d/stat` == "error" ]]; then
-        echo CYCLING STOP DUE TO FAILED COMPONENT: $d
+    ###check errors
+    for d in `ls -t run/$time/`; do
+        if [[ `cat run/$time/$d/stat` == "error" ]]; then
+        echo cycling stopped due to failed component: $d
         exit 1
         fi
     done
 
-    #ADVANCE TO NEXT CYCLE
-    export PREVDATE=$DATE
-    export DATE=$NEXTDATE
+    ###advance to next cycle
+    export prev_time=$time
+    export time=$next_time
 done
-echo CYCLING COMPLETE
+echo cycling complete
