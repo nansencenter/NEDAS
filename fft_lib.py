@@ -13,14 +13,18 @@ def fft2(f):
     fh_ = fft_obj(f)
     fh = np.zeros(f.shape, dtype='complex64')
 
+    nup = f.shape[-1]//2+1
+
     ##top half of the spectrum
-    fh[..., 0:f.shape[-1]//2+1] = fh_
+    fh[..., 0:nup] = fh_
 
     ##the bottom half is conj of top half of the spectrum
     if f.shape[-1]%2 == 0:
-        fh[..., :, f.shape[-1]//2+1:] = np.conj(fh_[..., ::-1, ::-1])
+        fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-2:0:-1])
+        fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-2:0:-1])
     else:
-        fh[..., :, f.shape[-1]//2+1:] = np.conj(fh_[..., ::-1, ::-1])
+        fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-1:0:-1])
+        fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-1:0:-1])
 
     return fh
 
