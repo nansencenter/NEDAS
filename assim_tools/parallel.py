@@ -52,7 +52,7 @@ def distribute_tasks(comm, tasks, load=None):
     assert load.size==ntask, f'load.size = {load.size} not equal to tasks.size'
 
     ##normalize to get load distribution function
-    load = load.astype(np.float32) / np.sum(load)
+    load = load / np.sum(load)
 
     ##cumulative load distribution, rounded to 5 decimals
     cum_load = np.round(np.cumsum(load), decimals=5)
