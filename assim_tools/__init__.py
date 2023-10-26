@@ -1,4 +1,4 @@
-from .parallel import parallel_start
+from .parallel import parallel_start, distribute_tasks
 
 from .state import process_state
 

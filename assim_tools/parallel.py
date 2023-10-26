@@ -1,52 +1,76 @@
 import numpy as np
 import sys
+import os
+
+##dummy communicator for serial runs
+class dummy_comm(object):
+    def __init__(self):
+        self.size = 1
+        self.rank = 0
+
+    def Get_size(self):
+        return self.size
+
+    def Get_rank(self):
+        return self.rank
+
+    def bcast(self, obj, root=0):
+        return obj
 
 
 def parallel_start():
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
+    if 'PMI_SIZE' in os.environ:
+        ##program is called from mpi, initialize comm
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+
+    else:
+        ##serial program, use dummy comm
+        comm = dummy_comm()
+
     return comm
 
 
-def message(comm, msg, root=None):
+def message(comm, msg, root=None ):
     if root is None or root==comm.Get_rank():
         print(msg)
         sys.stdout.flush()
 
 
-def distribute_tasks(comm, tasks, count=None):
+def distribute_tasks(comm, tasks, load=None):
     ##tasks: list of indices (in a for loop) to work on
-    ##count: amount of workload for each task, if None then tasks have equal workload
+    ##load: amount of workload for each task, if None then tasks have equal workload
     ##returns the subset of tasks for the processor rank calling this function to work on
-    ##       in a dict from rank -> its tasks list
+    ##       in a dict from rank -> its corresponding task list
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks
 
-    if count is None:
-        count = np.ones(ntask)
-    assert count.size==ntask, f'count.size = {count.size} not equal to tasks.size'
+    ##assume equal load between tasks if not specified
+    if load is None:
+        load = np.ones(ntask)
 
-    ##chunk of workload for each processor
-    chunk = np.sum(count) // nproc
-    remainder = np.sum(count) % nproc
+    assert load.size==ntask, f'load.size = {load.size} not equal to tasks.size'
 
-    ##figure out how many tasks each rank should have
-    ##first, divide the tasks into nproc parts, each with size chunk
-    ntask_rank = np.full(nproc, chunk, dtype=int)
-    for rank in range(nproc):
-        ##if there is remainder after division, the first a few processors
-        ## (with rank from 0 to remainder-1) will each get 1 more task
-        if rank < remainder:
-            ntask_rank[rank] += 1
+    ##normalize to get load distribution function
+    load = load.astype(np.float32) / np.sum(load)
 
-    ##now divide tasks according to ntask for each rank
+    ##cumulative load distribution, rounded to 5 decimals
+    cum_load = np.round(np.cumsum(load), decimals=5)
+
+    ##given the load distribution function, we assign load to processors
+    ##by evenly divide the distribution into nproc parts
+    ##this is done by searching for r/nproc in the cumulative load for rank r
+    ##task_id holds the start/end index of task for each rank in a sequence
+    task_id = np.zeros(nproc+1, dtype=int)
+    task_id[0] = 0
+    task_id[1:-1] = np.searchsorted(cum_load, np.arange(1,nproc)/nproc, side='right')
+    task_id[-1] = ntask
+
+    ##dict for each rank r -> its own task list given start/end index
     task_list = {}
-    i = 0
     for r in range(nproc):
-        task_list[r] = tasks[i:i+ntask_rank[r]]
-        i += ntask_rank[r]
+        task_list[r] = tasks[task_id[r]:task_id[r+1]]
 
     return task_list
-
 
 
