@@ -1,8 +1,8 @@
 import numpy as np
-# from numba import njit
+from numba import njit
 from .parallel import distribute_tasks, message
-from .state import xy_inds, read_field_info, uniq_fields, read_local_state, write_local_state
-from .obs import read_obs_info, assign_obs_inds, read_local_obs
+# from .state import loc_inds, read_field_info, uniq_fields, read_local_state, write_local_state
+# from .obs import read_obs_info, assign_obs_inds, read_local_obs
 
 ##top-level routine for performing the DA analysis
 ##inputs: c: config module for parsing env variables
@@ -23,72 +23,71 @@ def local_analysis(c, comm, prior_state_file, post_state_file, obs_seq_file):
     nfield = len(uniq_fields(field_info))
 
     message(comm, 'local_analysis: assigning local observation indices to grid points', 0)
-    inds = xy_inds(c.mask)
-    local_obs_inds = assign_obs_inds(c, comm, obs_seq_file)
+    inds = loc_inds(c.mask)
+    # local_obs_inds = assign_obs_inds(c, comm, obs_seq_file)
 
     local_inds_tasks = distribute_tasks(comm, inds)
-
     nlocal = len(local_inds_tasks[proc_id])
 
     message(comm, 'local_analysis: reading in local state ensemble', 0)
-    state_dict = read_local_state(prior_state_file, field_info, c.mask, local_inds_tasks[proc_id])
+    state_dict = read_local_state(comm, prior_state_file, field_info, c.mask, local_inds_tasks[proc_id])
 
     comm.Barrier()
 
-    message(comm, 'local_analysis: performing local analysis for each local index', 0)
-    for i, local_ind in enumerate(local_inds_tasks[proc_id]):
-        if i%(len(local_inds_tasks[proc_id])//20) == 0:   ##only output 20 progress messages
-            message(comm, f'   progress ... {(100*(i+1)//nlocal)}%', 0)
+    # message(comm, 'local_analysis: performing local analysis for each local index', 0)
+    # for i, local_ind in enumerate(local_inds_tasks[proc_id]):
+    #     if i%(len(local_inds_tasks[proc_id])//20) == 0:   ##only output 20 progress messages
+    #         message(comm, f'   progress ... {(100*(i+1)//nlocal)}%', 0)
 
-        obs_dict = read_local_obs(obs_seq_file, obs_info, local_obs_inds[local_ind])
-        nlobs = len(obs_dict['obs'])
+    #     obs_dict = read_local_obs(obs_seq_file, obs_info, local_obs_inds[local_ind])
+    #     nlobs = len(obs_dict['obs'])
 
-        #state_ = state_dict['state'][:, :, i]  ##[nens, nfield] at local_ind position
-        name_ = state_dict['name']
-        time_ = state_dict['time']
-        z_ = np.mean(state_dict['z'][:, :, i], axis=0)  ##ens mean z coords at local_ind
-        k_ = state_dict['k']
-        y_ = c.grid.y.flatten()[local_ind]
-        x_ = c.grid.x.flatten()[local_ind]
+    #     #state_ = state_dict['state'][:, :, i]  ##[nens, nfield] at local_ind position
+    #     name_ = state_dict['name']
+    #     time_ = state_dict['time']
+    #     z_ = np.mean(state_dict['z'][:, :, i], axis=0)  ##ens mean z coords at local_ind
+    #     k_ = state_dict['k']
+    #     y_ = c.grid.y.flatten()[local_ind]
+    #     x_ = c.grid.x.flatten()[local_ind]
 
-        ##option1: ETKF
-        if c.filter_type == 'ETKF':
-            weights_bank = {}  ##stored transform weights for a uniq combo of obs local impact factors
-            for n in range(nfield):
-                ##compute local impact factors given hroi,vroi,troi,and cross-variable impact
-                loc_fac = ()
-                for p in range(nlobs):
-                    hdist = np.hypot(obs_dict['x'][p] - x_, obs_dict['y'][p] - y_)
-                    hroi = c.obs_def[obs_dict['name'][p]]['hroi']
-                    ##TODO: add z,t localization and impact factor
-                    ##add loc_fac for obs p to the tuple
-                    # loc_fac += (local_factor(hdist, hroi)[0],)
-                    loc_fac += (1.0,)
+    #     ##option1: ETKF
+    #     if c.filter_type == 'ETKF':
+    #         weights_bank = {}  ##stored transform weights for a uniq combo of obs local impact factors
+    #         for n in range(nfield):
+    #             ##compute local impact factors given hroi,vroi,troi,and cross-variable impact
+    #             loc_fac = ()
+    #             for p in range(nlobs):
+    #                 hdist = np.hypot(obs_dict['x'][p] - x_, obs_dict['y'][p] - y_)
+    #                 hroi = c.obs_def[obs_dict['name'][p]]['hroi']
+    #                 ##TODO: add z,t localization and impact factor
+    #                 ##add loc_fac for obs p to the tuple
+    #                 # loc_fac += (local_factor(hdist, hroi)[0],)
+    #                 loc_fac += (1.0,)
 
-                ##compute transform weight given local obs and state
-                if loc_fac in weights_bank:
-                    ##lookup the existing weights if obs impact factor exists
-                    ##  since sometimes no localization is applied in v, t, or across variables
-                    weights = weights_bank[loc_fac]
-                else:
-                    ##compute ETKF transform weights
-                    weights = transform_weights(obs_dict['obs'], obs_dict['obs_prior'], obs_dict['err'], loc_fac)
-                    weights_bank[loc_fac] = weights
+    #             ##compute transform weight given local obs and state
+    #             if loc_fac in weights_bank:
+    #                 ##lookup the existing weights if obs impact factor exists
+    #                 ##  since sometimes no localization is applied in v, t, or across variables
+    #                 weights = weights_bank[loc_fac]
+    #             else:
+    #                 ##compute ETKF transform weights
+    #                 weights = transform_weights(obs_dict['obs'], obs_dict['obs_prior'], obs_dict['err'], loc_fac)
+    #                 weights_bank[loc_fac] = weights
 
-                ##transform the ensemble
-                state_dict['state'][:, n, i] = ensemble_transform(state_dict['state'][:, n, i], weights)
+    #             ##transform the ensemble
+    #             state_dict['state'][:, n, i] = ensemble_transform(state_dict['state'][:, n, i], weights)
 
-        ##EAKF, square-root filter
-        elif c.filter_type == 'EAKF':
-            pass
+    #     ##EAKF, square-root filter
+    #     elif c.filter_type == 'EAKF':
+    #         pass
 
-        else:
-            if proc_id == 0:
-                raise ValueError('filter_type '+c.filter_type+' is unsupported')
-    message(comm, '   complete', 0)
+    #     else:
+    #         if proc_id == 0:
+    #             raise ValueError('filter_type '+c.filter_type+' is unsupported')
+    # message(comm, '   complete', 0)
 
     message(comm, 'local_analysis: writing out the updated local state ensemble', 0)
-    write_local_state(post_state_file, field_info, c.mask, local_inds_tasks[proc_id], state_dict)
+    write_local_state(comm, post_state_file, field_info, c.mask, local_inds_tasks[proc_id], state_dict)
 
 
 ###(local) ETKF algorithm, similar to Hunt 2007, used in PDAF etc.

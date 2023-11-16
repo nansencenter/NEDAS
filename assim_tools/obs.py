@@ -4,7 +4,7 @@ import importlib
 from datetime import datetime, timedelta
 from .common import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from .parallel import distribute_tasks, message
-from .state import xy_inds, read_local_state
+# from .state import loc_inds, read_local_state
 
 ##top-level routine to prepare the obs, read dataset files and convert to obs_seq
 ##obs_info contains obs value, err, and coordinates (t, z, y, x); when obs_info is
@@ -15,7 +15,7 @@ def process_obs(c, comm, obs_seq_file):
     message(comm, 'process_obs: parsing and generating obs_info', 0)
     ##parse c.obs_def, read_obs from each type and generate obs_seq
     ##this is done by the first processor and broadcast
-    if proc_id  == 0:
+    if comm.Get_rank() == 0:
         info = obs_info(c)
         with open(obs_seq_file, 'wb'):  ##initialize obs_seq.bin in case it doesn't exist
             pass
@@ -213,13 +213,11 @@ def read_obs(binfile, info, obs_seq, member=None):
 
 
 def assign_obs_inds(c, comm, obs_seq_file):
-    proc_id = comm.Get_rank()
-
-    if proc_id == 0:
+    if comm.Get_rank() == 0:
         info = read_obs_info(obs_seq_file)
         nobs = info['nobs']
 
-        inds = xy_inds(c.mask)   ##list of horizontal locale (grid points) indices
+        inds = loc_inds(c.mask)   ##list of horizontal locale (grid points) indices
         x = c.grid.x.flatten()[inds]  ##x, y coords for each index
         y = c.grid.y.flatten()[inds]
 
