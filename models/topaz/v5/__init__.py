@@ -37,12 +37,11 @@ from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileG
 ##   levels: vertical level index list
 ##         0 for surface variables, negative for ocean, positive for atmos variables
 ##   units: native physical units for the variable
-levels = np.arange(-50, 0, 1)  ##ocean levels -50 to -1
-variables = {'ocean_velocity': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
-             'ocean_layer_thick': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
+levels = np.arange(-1, -51, -1)  ##ocean levels -1 to -50
+variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
+             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
              'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'K'},
-             'ocean_saln': {'name':'salin', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
-             'ocean_surf_height': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':[0], 'units':'m'},
+             'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
              }
 
 ##parse kwargs and find matching filename
@@ -51,9 +50,9 @@ variables = {'ocean_velocity': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'i
 def filename(path, **kwargs):
     if 'time' in kwargs and kwargs['time'] is not None:
         assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
-        tstr = kwargs['time'].strftime('%Y_%j_%H')
+        tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
     else:
-        tstr = '????_???_??'
+        tstr = '????_???_??_0000'
     if 'member' in kwargs and kwargs['member'] is not None:
         assert kwargs['member'] >= 0, 'member index shall be >= 0'
         mstr = '_mem{:03d}'.format(kwargs['member']+1)
@@ -61,7 +60,7 @@ def filename(path, **kwargs):
         mstr = ''
 
     ##get a list of filenames with matching kwargs
-    search = path+'/'+'TP4restart'+tstr+mstr+'.a'
+    search = path+'/'+'TP5restart.'+tstr+mstr+'.a'
     flist = glob.glob(search)
     assert len(flist)>0, 'no matching files found: '+search
     ##typically there will be only one matching file given the kwargs,
@@ -175,8 +174,18 @@ def read_var(path, grid, **kwargs):
     else:
         mask = None
 
+    if 'is_vector' in kwargs:
+        is_vector = kwargs['is_vector']
+    else:
+        is_vector = variables[name]['is_vector']
+
+    if 'units' in kwargs:
+        units = kwargs['units']
+    else:
+        units = variables[name]['units']
+
     f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
-    if kwargs['is_vector']:
+    if is_vector:
         var1 = f.read_field(variables[name]['name'][0], level=k, tlevel=1, mask=mask)
         var2 = f.read_field(variables[name]['name'][1], level=k, tlevel=1, mask=mask)
         var = np.array([var1, var2])
@@ -184,7 +193,7 @@ def read_var(path, grid, **kwargs):
         var = f.read_field(variables[name]['name'], level=k, tlevel=1, mask=mask)
     f.close()
 
-    var = units_convert(kwargs['units'], variables[name]['units'], var)
+    var = units_convert(units, variables[name]['units'], var)
     return var
 
 ##output updated variable with name='varname' defined in state_def
@@ -228,6 +237,11 @@ uniq_z_key = ('member', 'time')
 ##inputs: path, grid, **kwargs: same as filename() inputs
 ##        z_type, defined for each field_info['z_coords']
 def z_coords(path, grid, **kwargs):
+    onem = 9806.
+
+    if 'units' not in kwargs:
+        kwargs['units'] = 'm'
+
     ##check if level is provided
     assert 'k' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
 
@@ -244,7 +258,6 @@ def z_coords(path, grid, **kwargs):
             rec['k'] = k
             d = read_var(path, grid, **rec)
             if kwargs['units'] == 'm':
-                onem = 9806.
                 z -= d/onem  ##accumulate depth in meters, negative relative to surface
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])

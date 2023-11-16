@@ -89,6 +89,8 @@ if os.path.exists(maskfile):
     mask_dat = np.load(maskfile, allow_pickle=True)
     mask_grid = Grid(proj, mask_dat['x'], mask_dat['y'], dst_grid=grid)
     mask = (mask_grid.convert(mask_dat['mask'])==1)
+    mask[-1, :] = True  ##TODO: something wrong along the border
+    mask[:, -1] = True
     del mask_dat, mask_grid
 else:
     mask = np.full((ny, nx), False, dtype=bool)  ##no masked area by default

@@ -12,7 +12,7 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=32
+nens=30
 
 #DA scheme
 run_filter=true  ##if true, run filter/smoother update algorithms
@@ -45,10 +45,10 @@ inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adapti
 inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
-time_start=200701020000    ##format ccyymmddHHMM
-time_end=200702210000
-time_assim_start=200701200000
-time_assim_end=200702150000
+time_start=202310230000    ##format ccyymmddHHMM
+time_end=202302240000
+time_assim_start=202310230000
+time_assim_end=202310230000
 cycle_period=24 ##in hours
 ##Assimilation (filter update, displacement, etc.) starts at time_assim_start
 ##`time` points to the current cycle time
@@ -88,12 +88,9 @@ maskfile=$SCRATCH/mask.npz
 ##     source module, one of the models/ module that provides the state variable
 ##     error type, normal/lognormal
 state_def=$(cat << EOF
-seaice_drift        nextsim   normal
-seaice_conc         nextsim   normal
-seaice_thick        nextsim   normal
-ocean_velocity      topaz.v4  normal
-ocean_temp          topaz.v4  normal
-ocean_saln          topaz.v4  normal
+ocean_velocity      topaz.v5  normal
+ocean_temp          topaz.v5  normal
+ocean_saln          topaz.v5  normal
 EOF
 )
 
@@ -113,8 +110,8 @@ EOF
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separately by space
 ##                         unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-ocean_temp           Argo  topaz.v4  normal   0.3  200000  inf  inf
-ocean_saln           Argo  topaz.v4  normal   0.3  200000  inf  inf
+ocean_temp           prep_obs.insitu  topaz.v5  normal   0.3  2000000  inf  inf
+ocean_saln           prep_obs.insitu  topaz.v5  normal   0.3  2000000  inf  inf
 EOF
 )
 #ocean_temp           Argo  topaz.v4  normal   0.3  200000  inf  inf

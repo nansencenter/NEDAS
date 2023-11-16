@@ -17,6 +17,9 @@ class dummy_comm(object):
     def bcast(self, obj, root=0):
         return obj
 
+    def gather(self, obj, root=0):
+        return obj
+
 
 def parallel_start():
     if 'PMI_SIZE' in os.environ:
@@ -33,7 +36,7 @@ def parallel_start():
 
 def message(comm, msg, root=None ):
     if root is None or root==comm.Get_rank():
-        print(msg)
+        sys.stdout.write(msg)
         sys.stdout.flush()
 
 
