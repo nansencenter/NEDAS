@@ -66,13 +66,13 @@ def distribute_tasks(comm, tasks, load=None):
     ##task_id holds the start/end index of task for each rank in a sequence
     task_id = np.zeros(nproc+1, dtype=int)
 
-    tol = 1e-4  ##allow some tolerance for rounding error in comparing cum_load to rank/nproc
-    ind_plus = np.searchsorted(cum_load+tol, np.arange(nproc)/nproc, side='right')
-    ind_minus = np.searchsorted(cum_load-tol, np.arange(nproc)/nproc, side='right')
+    target_cum_load = np.arange(nproc)/nproc  ##we want even distribution of load
+    tol = 1e-4  ##allow some tolerance for rounding error in comparing cum_load to target_cum_load
+    ind1 = np.searchsorted(cum_load+tol, target_cum_load, side='right')
+    ind2 = np.searchsorted(cum_load-tol, target_cum_load, side='right')
 
-    ##take the indices that divides cum_load evenly into 1/nproc parts
-    ##choose between ind_plus,ind_minus, whoever gives best results
-    task_id[0:-1] = np.where(np.abs(cum_load+tol-cum_load[ind_plus-1]) < np.abs(cum_load-tol-cum_load[ind_minus]), ind_plus, ind_minus)
+    ##choose between ind1,ind2, whoever gives best match between cum_load[ind?] and target_cum_load
+    task_id[0:-1] = np.where(np.abs(cum_load[ind1-1]-target_cum_load) < np.abs(cum_load[ind2-1]-target_cum_load), ind1, ind2)
 
     ##make sure the two end points are right
     task_id[0] = 0
