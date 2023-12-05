@@ -4,160 +4,184 @@ from .parallel import distribute_tasks, message
 # from .state import loc_inds, read_field_info, uniq_fields, read_local_state, write_local_state
 # from .obs import read_obs_info, assign_obs_inds, read_local_obs
 
-##top-level routine for performing the DA analysis
-##inputs: c: config module for parsing env variables
-##        comm: mpi4py communicator for parallization
-def local_analysis(c, comm, prior_state_file, post_state_file, obs_seq_file):
-    proc_id = comm.Get_rank()
-
-    message(comm, 'local_analysis: gathering field_info and obs_info', 0)
-    if proc_id == 0:
-        field_info = read_field_info(prior_state_file)
-        obs_info = read_obs_info(obs_seq_file)
-    else:
-        field_info = None
-        obs_info = None
-    field_info = comm.bcast(field_info, root=0)
-    obs_info = comm.bcast(obs_info, root=0)
-
-    nfield = len(uniq_fields(field_info))
-
-    message(comm, 'local_analysis: assigning local observation indices to grid points', 0)
-    inds = loc_inds(c.mask)
-    # local_obs_inds = assign_obs_inds(c, comm, obs_seq_file)
-
-    local_inds_tasks = distribute_tasks(comm, inds)
-    nlocal = len(local_inds_tasks[proc_id])
-
-    message(comm, 'local_analysis: reading in local state ensemble', 0)
-    state_dict = read_local_state(comm, prior_state_file, field_info, c.mask, local_inds_tasks[proc_id])
-
-    comm.Barrier()
-
-    # message(comm, 'local_analysis: performing local analysis for each local index', 0)
-    # for i, local_ind in enumerate(local_inds_tasks[proc_id]):
-    #     if i%(len(local_inds_tasks[proc_id])//20) == 0:   ##only output 20 progress messages
-    #         message(comm, f'   progress ... {(100*(i+1)//nlocal)}%', 0)
-
-    #     obs_dict = read_local_obs(obs_seq_file, obs_info, local_obs_inds[local_ind])
-    #     nlobs = len(obs_dict['obs'])
-
-    #     #state_ = state_dict['state'][:, :, i]  ##[nens, nfield] at local_ind position
-    #     name_ = state_dict['name']
-    #     time_ = state_dict['time']
-    #     z_ = np.mean(state_dict['z'][:, :, i], axis=0)  ##ens mean z coords at local_ind
-    #     k_ = state_dict['k']
-    #     y_ = c.grid.y.flatten()[local_ind]
-    #     x_ = c.grid.x.flatten()[local_ind]
-
-    #     ##option1: ETKF
-    #     if c.filter_type == 'ETKF':
-    #         weights_bank = {}  ##stored transform weights for a uniq combo of obs local impact factors
-    #         for n in range(nfield):
-    #             ##compute local impact factors given hroi,vroi,troi,and cross-variable impact
-    #             loc_fac = ()
-    #             for p in range(nlobs):
-    #                 hdist = np.hypot(obs_dict['x'][p] - x_, obs_dict['y'][p] - y_)
-    #                 hroi = c.obs_def[obs_dict['name'][p]]['hroi']
-    #                 ##TODO: add z,t localization and impact factor
-    #                 ##add loc_fac for obs p to the tuple
-    #                 # loc_fac += (local_factor(hdist, hroi)[0],)
-    #                 loc_fac += (1.0,)
-
-    #             ##compute transform weight given local obs and state
-    #             if loc_fac in weights_bank:
-    #                 ##lookup the existing weights if obs impact factor exists
-    #                 ##  since sometimes no localization is applied in v, t, or across variables
-    #                 weights = weights_bank[loc_fac]
-    #             else:
-    #                 ##compute ETKF transform weights
-    #                 weights = transform_weights(obs_dict['obs'], obs_dict['obs_prior'], obs_dict['err'], loc_fac)
-    #                 weights_bank[loc_fac] = weights
-
-    #             ##transform the ensemble
-    #             state_dict['state'][:, n, i] = ensemble_transform(state_dict['state'][:, n, i], weights)
-
-    #     ##EAKF, square-root filter
-    #     elif c.filter_type == 'EAKF':
-    #         pass
-
-    #     else:
-    #         if proc_id == 0:
-    #             raise ValueError('filter_type '+c.filter_type+' is unsupported')
-    # message(comm, '   complete', 0)
-
-    message(comm, 'local_analysis: writing out the updated local state ensemble', 0)
-    write_local_state(comm, post_state_file, field_info, c.mask, local_inds_tasks[proc_id], state_dict)
-
-
-###(local) ETKF algorithm, similar to Hunt 2007, used in PDAF etc.
-##
-# @njit
-def transform_weights(obs, obs_prior, obs_err, loc_fac):
+##batch assimilation solves the matrix version EnKF analysis for a given local state variable,
+##the local_analysis updates for different variables are computed in parallel
+@njit
+def local_analysis(ens_prior, obs, obs_err, obs_err_corr, obs_prior, loc_func, filter_kind='ETKF'):
+    ##update the local state variable ens_prior[nens] with obs[nlobs]
+    ##
     nens, nlobs = obs_prior.shape
+    assert nens == ens_prior.size, 'ens_prior[{}] size mismatch with obs_prior[{},:]'.format(ens_prior.size, nens)
 
-    obs_prior_mean = np.mean(obs_prior, axis=0)
-    sqrtm = np.sqrt(nens-1)
+    ##don't allow update of ensemble with any missing values
+    if any(np.isnan(ens_prior)):
+        return ens_prior
 
-    S = (obs_prior - np.tile(obs_prior_mean, (nens, 1))) / np.tile(obs_err, (nens, 1)) / sqrtm * np.tile(loc_fac, (nens, 1))
-    dy = (obs - obs_prior_mean) / obs_err / sqrtm * loc_fac
+    ens_post = ens_prior.copy()
 
-    SS = S @ S.T
-    if np.isinf(SS).any() or np.isnan(SS).any():
-        weights = np.eye(nens)
+    ##ensemble weight matrix, weight[:, m] is for the m-th member
+    ##also known as T in Bishop 2001, and X5 in Evensen textbook (and in DEnKF Sakov 2012)
+    weight = np.zeros((nens, nens))
+
+    ##find mean of obs_prior
+    obs_prior_mean = np.zeros(nlobs)
+    for m in range(nens):
+        obs_prior_mean += obs_prior[m, :]
+    obs_prior_mean /= nens
+
+    ##obs_prior_pert and innovation, normalized by sqrt(nens-1) R^-0.2, also known as S and dy in DEnKF
+    S = np.zeros((nlobs, nens))
+    dy = np.zeros((nlobs))
+    for p in range(nlobs):
+        S[p, :] = (obs_prior[:, p] - obs_prior_mean[p]) * loc_func[p] / obs_err / np.sqrt(nens-1)
+        dy[p] = (obs[p] - obs_prior_mean[p]) * loc_func[p] / obs_err / np.sqrt(nens-1)
+
+    ##TODO:factor in the correlated R in obs_err, need another SVD of R
+    # obs_err_corr
+
+    ##find singular values of the inverse variance ratio matrix (I + S^T S)
+    ##note: the added diagonal 1 here actually helps prevent issues if S^T S is not full rank
+    ##      when nlobs<nens, there will be singular values of 0, but the full matrix can still
+    ##      be inverted with singular values of 1.
+    var_ratio_inv = np.eye(nens) + S.T @ S
+    L, sv, Rh = np.linalg.svd(var_ratio_inv)
+
+    ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
+    ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
+    var_ratio = L @ np.diag(sv**-1) @ Rh
+
+    ##the gain matrix
+    gain = var_ratio @ S.T
+
+    for m in range(nens):
+        weight[m, :] = np.sum(gain[m, :] * dy)
+
+    ##the update of ens pert is (I + S^T S)^-0.5, namely sqrt(var_ratio)
+    var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
+    weight += var_ratio_sqrt
+
+    ##now, transform the prior ensemble with the weight matrix
+    for m in range(nens):
+        ens_post[m] = np.sum(ens_prior * weight[:, m])
+
+    return ens_post
+
+
+##serial assimilation goes through the list of observations one by one
+##for each obs the near by state variables are updated one by one.
+##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
+@njit
+def obs_increment(obs_prior, obs, obs_err, filter_kind='EAKF'):
+    ##compute analysis increment for 1 obs
+    ##obs_prior[nens] is the prior ensemble values corresponding to this obs
+    nens = obs_prior.size
+
+    ##obs error variance
+    obs_var = obs_err**2
+
+    ##obs_prior separate into mean+perturbation
+    obs_prior_mean = np.mean(obs_prior)
+    obs_prior_pert = obs_prior - obs_prior_mean
+
+    ##compute prior error variance
+    obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
+
+    if filter_kind == 'EAKF':
+        var_ratio = obs_var / (obs_prior_var + obs_var)
+
+        ##new mean is weighted average between obs_prior_mean and obs
+        obs_post_mean = var_ratio * obs_prior_mean + (1 - var_ratio) * obs
+
+        ##new pert is adjusted by sqrt(var_ratio), a deterministic square-root filter
+        obs_post_pert = np.sqrt(var_ratio) * obs_prior_pert
+
+        ##assemble the increments
+        obs_incr = obs_post_mean + obs_post_pert - obs_prior
+
+    elif filter_kind == 'RHF':
+        pass
+
     else:
-        e, v = np.linalg.eig(np.eye(nens) + SS)
-        e = e.real
-        v = v.real
-        invSS = v @ np.diag(e**-1) @ v.T
-        invSSsqrt = v @ np.diag(e**-0.5) @ v.T
-        weights = invSS @ S @ dy + invSSsqrt
+        raise ValueError('unknown filter_kind: '+filter_kind)
 
-    return weights
+    return obs_incr
 
 
-def ensemble_transform(ens_state, weights):
-    ens_state = ens_state @ weights
-    return ens_state
+@njit
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, reg_kind='linear'):
+    ##update the ensemble for 1 variable using the obs increments
+    ##local_factor is the localization factor to reduce spurious correlation
+    ##ens_prior[nens] is the ensemble values prior to update
+    nens = ens_prior.size
+
+    ens_post = ens_prior.copy()
+
+    ##don't allow update of ensemble with any missing values
+
+    ##obs_prior separate into mean+perturbation
+    ###put some of these in input, to avoid repeated calculation
+    obs_prior_mean = np.mean(obs_prior)
+    obs_prior_pert = obs_prior - obs_prior_mean
+
+    if reg_kind == 'linear':
+        ##linear regression relates the obs_prior with ens_prior
+        obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
+        cov = np.sum(ens_prior * obs_prior_pert) / (nens-1)
+        reg_factor = cov / obs_prior_var
+
+        ##the updated posterior ensemble
+        ens_post = ens_prior + local_factor * reg_factor * obs_incr
+
+    elif reg_kind == 'probit':
+        pass
+
+    else:
+        raise ValueError('unknown regression kind: '+reg_kind)
+
+    return ens_post
 
 
-
-###two-step solution, Anderson 2003, used in DART
-###obs increment
-# def obs_incr
-
-###updating state variable using obs_incr
-# def reg_factor
-    # return state_ens_post
-
-
-
-##location factor and distance calculation
-
-##TODO: quantize distance so that some subrange local_factor are shared, so computation can speed up using look up table
+##distance calculation and localization
+    # hdist = np.hypot(obs_x - state_x, obs_y - state_y)
+    # lfh = local_factor(hdist, hroi)
+    # vdist = np.abs(obs_z - state_z)
+    # lfv = local_factor(vdist, vroi)
+    # lft = 1
+    # impact = 1
+    # return lfh * lfv * lft * impact
 
 
-##localization function
+@njit
 def local_factor(dist, roi, local_type='GC'):
     ## dist: input distance, ndarray
     ## roi: radius of influence, distance beyond which loc=0
     ## returns the localization factor loc
     dist = np.atleast_1d(dist)
-    loc = np.zeros(dist.shape)
+    lfactor = np.zeros(dist.shape)
+
     if roi>0:
-        if local_type == 'GC': ##Gaspari-Cohn localization function
+        if local_type == 'GC': ##Gaspari-Cohn function (default)
             r = dist / (roi / 2)
             loc1 = (((-0.25*r + 0.5)*r + 0.625)*r - 5.0/3.0) * r**2 + 1
             ind1 = np.where(dist<roi/2)
-            loc[ind1] = loc1[ind1]
+            lfactor[ind1] = loc1[ind1]
             r[np.where(r==0)] = 1e-10
             loc2 = ((((r/12.0 - 0.5)*r + 0.625)*r + 5.0/3.0)*r - 5.0)*r + 4 - 2.0/(3.0*r)
             ind2 = np.where(np.logical_and(dist>=roi/2, dist<roi))
-            loc[ind2] = loc2[ind2]
+            lfactor[ind2] = loc2[ind2]
+
+        elif local_type == 'step':  #step function from 1 to 0 at roi
+            ind1 = np.where(dist<=roi)
+            lfactor[ind1] = 1.0
+            ind2 = np.where(dist>roi)
+            lfactor[ind2] = 0.0
+
         else:
             raise ValueError('unknown localization function type: '+local_type)
     else:
-        loc = np.ones(dist.shape)
-    return loc
+        ##no localization, all ones
+        lfactor = np.ones(dist.shape)
+
+    return lfactor
 
 
