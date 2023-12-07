@@ -69,4 +69,3 @@ def t2s(t):
 def s2t(s):
     return datetime.strptime(s, '%Y%m%d%H%M')
 
-

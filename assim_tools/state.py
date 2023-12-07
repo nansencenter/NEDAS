@@ -3,8 +3,9 @@ import sys
 import struct
 import importlib
 from datetime import datetime, timedelta
-from .common import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from .parallel import distribute_tasks, message
+from .conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from .logging import message, progress_bar
+from .parallel import distribute_tasks
 
 ##Note: The analysis is performed on a regular grid.
 ## The entire state has dimensions: member, variable, time,  z,  y,  x
@@ -27,8 +28,8 @@ from .parallel import distribute_tasks, message
 ## while easier to run assimilation algorithms with ensemble-complete state.
 
 
-## parses info for the nens * nrec fields in the ensemble state.
-## input: c: config module for parsing env variables
+## parses info for the nrec fields in the state.
+## input: c: config module with the environment variables
 ## returns: info dict with some dimensions and list of uniq field records
 def parse_state_info(c):
     info = {'nx':c.nx, 'ny':c.ny, 'state_size':0, 'fields':{}}
@@ -67,7 +68,7 @@ def parse_state_info(c):
     return info
 
 
-##write info to a .dat file accompanying the bin file
+##write info to a .dat file accompanying the .bin file
 def write_state_info(binfile, info):
     with open(binfile.replace('.bin','.dat'), 'wt') as f:
         ##first line: some dimension sizes
@@ -116,7 +117,7 @@ def read_state_info(binfile):
     return info
 
 
-##write a field fld with mem_id,rec_id to the binfile
+##write a field fld with mem_id,rec_id to binfile
 def write_field(binfile, info, mask, mem_id, rec_id, fld):
     ny = info['ny']
     nx = info['nx']
@@ -157,33 +158,36 @@ def read_field(binfile, info, mask, mem_id, rec_id):
         return fld
 
 
-##routine to prepare the state variables, getting the fields from model restart
-##files, convert to the analysis grid, perform coarse-graining, save to ens state
-##inputs: c: config module for parsing env variables
-##        comm: mpi4py communicator for parallelization
-##        state_info: info dict from parse_state_info
-##        fld_list_proc: list of field records to work on for each pid,
-##                       each item is (mem_id,rec_id) referring to a uniq field
-##        loc_list_proc: list of spatial locations to work on for each pid,
-##                       each item is (istart,iend,di,jstart,jend,dj) that
-##                       describes a slice of the domain
-##returns: state dict with keys (mem_id, rec_id) pointing to the location
-##         slices in loc_list_proc for each pid
-def prepare_state(c, comm, state_info):
+##functions to prepare the state variables, some common inputs:
+##  c: config module with env variables
+##  comm: mpi4py communicator for multiple processors
+##  state_info: dict with information on field records
+##  fld_list_proc: list of field records to work on for each pid,
+##                 each item is (mem_id,rec_id) referring to a uniq field
+##  loc_list_proc: list of spatial locations to work on for each pid,
+##                 each item is (istart,iend,di,jstart,jend,dj) that
+##                 describes a slice of the domain
+
+##prepare_state collects fields from model restart files, convert them to
+##    the analysis grid, preprocess (coarse-graining etc), save to fields
+##    with key (mem_id, rec_id) pointing to uniq fields
+def prepare_state(c, comm, state_info, fld_list_proc):
     pid = comm.Get_rank()
     nproc = comm.Get_size()
 
-    message(comm, 'process_state: reading state varaible for each field record\n', 0)
-    state = {}
+    message(comm, 'prepare_state: reading state varaible for each field record\n', 0)
+    fields = {}
     grid_bank = {}
     z_bank = {}
 
-    ##now start processing the fields, each proc gets its own workload as a subset of fld_list:
+    ##process the fields, each proc gets its own workload as a subset of fld_list:
     ##fld_list_proc[pid] points to the list of tasks for each pid
     ntask_max = np.max([len(lst) for pid,lst in fld_list_proc.items()])
 
     ##all proc goes through their own task list simultaneously
     for task in range(ntask_max):
+        message(comm, progress_bar(task, ntask_max), 0)
+
         ##1. Do the processing task if not at the end of task list
         if task < len(fld_list_proc[pid]):
             ##this is the field to process in this task
@@ -197,7 +201,7 @@ def prepare_state(c, comm, state_info):
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
 
-            ##only need to generate the uniq grid objs, stored them in bank for later use
+            ##only need to generate the uniq grid objs, stored them in memory bank
             member = mem_id if 'member' in src.uniq_grid_key else None
             time = rec['time'] if 'time' in src.uniq_grid_key else None
             k = rec['k'] if 'k' in src.uniq_grid_key else None
@@ -210,7 +214,7 @@ def prepare_state(c, comm, state_info):
                 grid_bank[grid_key] = grid
 
             # if rec['name'] == 'z_coords':
-            #     ##only need to compute the uniq z_coords, stored them in bank for later use
+            #     ##only need to compute the uniq z_coords, stored them in bank
             #     member = rec['member'] if 'member' in src.uniq_z_key else None
             #     time = rec['time'] if 'time' in src.uniq_z_key else None
             #     z_key = (rec['source'], rec['units'], member, time)
@@ -222,8 +226,32 @@ def prepare_state(c, comm, state_info):
 
             var = src.read_var(path, grid, member=mem_id, **rec)
             fld = grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
+            fields[mem_id, rec_id] = fld
 
-        ##2. transpose the state from field-complete to ensemble-complete
+    message(comm, ' Done.\n', 0)
+
+    return fields
+
+
+##transpose_field_to_state send chunks of field owned by a pid to other pid
+##  so that the field-complete fields get transposed into ensemble-complete state
+##  with keys (mem_id, rec_id) pointing to the slices in loc_list_proc
+def transpose_field_to_state(c, comm, state_info, fld_list_proc, loc_list_proc, fields):
+    pid = comm.Get_rank()
+    nproc = comm.Get_size()
+
+    message(comm, 'transpose state from field-complete to ensemble-complete\n', 0)
+    state = {}
+
+    ntask_max = np.max([len(lst) for pid,lst in fld_list_proc.items()])
+
+    ##all proc goes through their own task list simultaneously
+    for task in range(ntask_max):
+        if task < len(fld_list_proc[pid]):
+            mem_id, rec_id = fld_list_proc[pid][task]
+            rec = state_info['fields'][rec_id]
+            fld = fields[mem_id, rec_id]
+
         ## - for each source proc id (src_pid) with fld_list item (mem_id, rec_id),
         ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to destination
         ##   proc id (dst_pid) with its corresponding slice in loc_list_proc
@@ -248,7 +276,11 @@ def prepare_state(c, comm, state_info):
                     istart,iend,di,jstart,jend,dj = loc_list_proc[dst_pid][loc]
                     ##save the unmasked points in slice to fld_chk for this loc
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                    fld_chk[loc] = fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk]
+                    if rec['is_vector']:
+                        fld_chk[loc] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
+                    else:
+                        fld_chk[loc] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
+
                 if dst_pid == pid:
                     ##same pid, so just write to state
                     state[mem_id, rec_id] = fld_chk
@@ -262,28 +294,21 @@ def prepare_state(c, comm, state_info):
                 src_mem_id, src_rec_id = fld_list_proc[src_pid][task]
                 state[src_mem_id, src_rec_id] = comm.recv(source=src_pid)
 
-        ##show progress
-        message(comm, '\r|{:{}}| {:.0f}%'.format('='*int(np.ceil(task/(ntask_max-1)*50)), 50, (100/(ntask_max-1)*task)), 0)
-
-    message(comm, ' Done.\n', 0)
-    # np.savez('/cluster/work/users/yingyue/dat.{:04d}.npz'.format(pid), state=state)
-
     return state
 
 
-def output_state(c, comm, state_info, fld_list_proc, loc_list_proc, state, state_file):
-    message(comm, 'output_state: save a copy of state to '+state_file+'\n', 0)
+##transpose_state_to_field transposes back the state to field-complete fields
+def transpose_state_to_field(c, comm, state_info, fld_list_proc, loc_list_proc, state):
     pid = comm.Get_rank()
     nproc = comm.Get_size()
 
-    ##if file doesn't exist, create file
-    if pid == 0:
-        open(state_file, 'wb')
+    message(comm, 'transpose state from ensemble-complete to field-complete\n', 0)
+
+    fields = {}
 
     ntask_max = np.max([len(lst) for pid,lst in fld_list_proc.items()])
     for task in range(ntask_max):
 
-        ## TODO: 
         if task < len(fld_list_proc[pid]):
             mem_id, rec_id = fld_list_proc[pid][task]
             rec = state_info['fields'][rec_id]
@@ -305,22 +330,47 @@ def output_state(c, comm, state_info, fld_list_proc, loc_list_proc, state, state
                 else:
                     ##receive fld_chk from src_pid's state
                     fld_chk = comm.recv(source=src_pid)
+
                 ##unpack the fld_chk to form a complete field
                 for loc in range(len(loc_list_proc[src_pid])):
                     istart,iend,di,jstart,jend,dj = loc_list_proc[src_pid][loc]
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[loc]
 
+                fields[mem_id, rec_id] = fld
+
         for dst_pid in np.arange(pid+1, nproc):
             if task < len(fld_list_proc[dst_pid]):
                 dst_mem_id, dst_rec_id = fld_list_proc[dst_pid][task]
                 comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid)
 
-        if task < len(fld_list_proc[pid]):
-            write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
+    return fields
 
-        ##show progress
-        message(comm, '\r|{:{}}| {:.0f}%'.format('='*int(np.ceil(task/(ntask_max-1)*50)), 50, (100/(ntask_max-1)*task)), 0)
+
+def output_state(c, comm, state_info, fld_list_proc, fields, state_file):
+    pid = comm.Get_rank()
+    nproc = comm.Get_size()
+
+    message(comm, 'output_state: save state to '+state_file+'\n', 0)
+
+    if pid == 0:
+        ##if file doesn't exist, create the file
+        open(state_file, 'wb')
+        ##write state_info to the accompanying .dat file
+        write_state_info(state_file, state_info)
+    comm.Barrier()
+
+    ntask_max = np.max([len(lst) for pid,lst in fld_list_proc.items()])
+    for task in range(ntask_max):
+        message(comm, progress_bar(task, ntask_max), 0)
+
+        if task < len(fld_list_proc[pid]):
+            ##get the field record for output
+            mem_id, rec_id = fld_list_proc[pid][task]
+            fld = fields[mem_id, rec_id]
+
+            ##write the data to binary file
+            write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
 
     message(comm, ' Done.\n', 0)
 

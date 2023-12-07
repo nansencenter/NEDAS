@@ -1,5 +1,4 @@
 import numpy as np
-import sys
 import os
 
 ##dummy communicator for serial runs
@@ -32,12 +31,6 @@ def parallel_start():
         comm = dummy_comm()
 
     return comm
-
-
-def message(comm, msg, root=None ):
-    if root is None or root==comm.Get_rank():
-        sys.stdout.write(msg)
-        sys.stdout.flush()
 
 
 def distribute_tasks(comm, tasks, load=None):
