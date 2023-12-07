@@ -1,4 +1,4 @@
-# NEDAS: The NERSC (New) Ensemble Data Assimilation System
+# NEDAS: The Next-generation Ensemble Data Assimilation System
 
 A unitified ensemble data assimilation scripts/code for NERSC models: HYCOM (TOPAZ), neXtSIM, and (potentially) WRF, ECOSMO, and NorESM. Features: multiscale approach using a common analysis grid with coarse-graining in 4D (x,y,z,t), more flexible localization, inflation for each scale component; a new alignment technique to reduce position/timing mismatch between model forecast and observed features; Overall modular design using Python with MPI parallelization, aiming at scalable algorithms for large dimensional problems.
 
