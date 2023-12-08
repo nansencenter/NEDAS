@@ -49,6 +49,10 @@ def fftwn(n):
     return wn
 
 
+##or, if fftw is not available, use np.fft instead
+##from np.fft import fft2, ifft2
+
+
 def get_wn(fld):
     ##generate meshgrid wavenumber for input field
     ## the last two dimensions are horizontal (y, x)

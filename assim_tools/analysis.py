@@ -1,6 +1,6 @@
 import numpy as np
 from numba import njit
-from .parallel import distribute_tasks, message
+from .parallel import distribute_tasks
 # from .state import loc_inds, read_field_info, uniq_fields, read_local_state, write_local_state
 # from .obs import read_obs_info, assign_obs_inds, read_local_obs
 
@@ -90,8 +90,8 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
 ##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
 @njit
 def obs_increment(obs_prior,          ##obs prior [nens]
-                  obs,                ##obs
-                  obs_err,            ##obs err std
+                  obs,                ##obs, scalar
+                  obs_err,            ##obs err std, scalar
                   filter_kind='EAKF', ##kind of filter algorithm
                   ):
     ##compute analysis increment for 1 obs
@@ -131,11 +131,11 @@ def obs_increment(obs_prior,          ##obs prior [nens]
 
 
 @njit
-def update_ensemble(ens_prior,
-                    obs_prior,
-                    obs_incr, 
-                    local_factor, 
-                    regress_kind='linear', 
+def update_ensemble(ens_prior,             ##prior ens [nens] being updated
+                    obs_prior,             ##obs prior ens [nens]
+                    obs_incr,              ##obs increments [nens]
+                    local_factor,          ##localization factor, scalar
+                    regress_kind='linear', ##kind of regression method
                     ):
     ##update the ensemble for 1 variable using the obs increments
     ##local_factor is the localization factor to reduce spurious correlation

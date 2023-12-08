@@ -4,7 +4,7 @@ import struct
 import importlib
 from datetime import datetime, timedelta
 from .conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from .logging import message, progress_bar
+from .log import message, progress_bar
 from .parallel import distribute_tasks
 
 ##Note: The analysis is performed on a regular grid.
@@ -32,12 +32,13 @@ from .parallel import distribute_tasks
 ## input: c: config module with the environment variables
 ## returns: info dict with some dimensions and list of uniq field records
 def parse_state_info(c):
-    info = {'nx':c.nx, 'ny':c.ny, 'state_size':0, 'fields':{}}
+    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec_id
 
     ##loop through variables in state_def
-    for vname, vrec in c.state_def.items():
+    for vrec in c.state_def:
+        vname = vrec['name']
         ##some properties of the variable is defined in its source module
         src = importlib.import_module('models.'+vrec['source'])
         assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['source']+'.variables'
@@ -63,7 +64,7 @@ def parse_state_info(c):
                 pos += nv * fld_size * type_size[rec['dtype']]
                 rec_id += 1
 
-    info['state_size'] = pos ##size of a complete state for one memeber
+    info['size'] = pos ##size of a complete state for one memeber
 
     return info
 
@@ -72,7 +73,7 @@ def parse_state_info(c):
 def write_state_info(binfile, info):
     with open(binfile.replace('.bin','.dat'), 'wt') as f:
         ##first line: some dimension sizes
-        f.write('{} {} {}\n'.format(info['nx'], info['ny'], info['state_size']))
+        f.write('{} {} {}\n'.format(info['nx'], info['ny'], info['size']))
 
         ##followed by nfield lines: each for a field record
         for i, rec in info['fields'].items():
@@ -95,7 +96,7 @@ def read_state_info(binfile):
         lines = f.readlines()
 
         ss = lines[0].split()
-        info = {'nx':int(ss[0]), 'ny':int(ss[1]), 'state_size':int(ss[2]), 'fields':{}}
+        info = {'nx':int(ss[0]), 'ny':int(ss[1]), 'size':int(ss[2]), 'fields':{}}
 
         ##records for uniq fields
         rec_id = 0
@@ -107,10 +108,10 @@ def read_state_info(binfile):
                    'is_vector': bool(int(ss[3])),
                    'units': ss[4],
                    'err_type': ss[5],
-                   'time': h2t(np.float32(ss[7])),
-                   'dt': np.float32(ss[8]),
-                   'k': int(ss[9]),
-                   'pos': int(ss[10]), }
+                   'time': h2t(np.float32(ss[6])),
+                   'dt': np.float32(ss[7]),
+                   'k': int(ss[8]),
+                   'pos': int(ss[9]), }
             info['fields'][rec_id] = rec
             rec_id += 1
 
@@ -132,7 +133,7 @@ def write_field(binfile, info, mask, mem_id, rec_id, fld):
         fld_ = fld[~mask]
 
     with open(binfile, 'r+b') as f:
-        f.seek(mem_id*info['state_size'] + rec['pos'])
+        f.seek(mem_id*info['size'] + rec['pos'])
         f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
 
 
@@ -147,7 +148,7 @@ def read_field(binfile, info, mask, mem_id, rec_id):
     fld_size = np.sum((~mask).astype(int))
 
     with open(binfile, 'rb') as f:
-        f.seek(mem_id*info['state_size'] + rec['pos'])
+        f.seek(mem_id*info['size'] + rec['pos'])
         fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec['dtype']]),
                         f.read(nv*fld_size*type_size[rec['dtype']])))
         fld = np.full(fld_shape, np.nan)
@@ -175,7 +176,7 @@ def prepare_state(c, comm, state_info, fld_list_proc):
     pid = comm.Get_rank()
     nproc = comm.Get_size()
 
-    message(comm, 'prepare_state: reading state varaible for each field record\n', 0)
+    message(comm, 'prepare state by reading fields from model restart\n', 0)
     fields = {}
     grid_bank = {}
     z_bank = {}
@@ -188,7 +189,7 @@ def prepare_state(c, comm, state_info, fld_list_proc):
     for task in range(ntask_max):
         message(comm, progress_bar(task, ntask_max), 0)
 
-        ##1. Do the processing task if not at the end of task list
+        ##process a field record if not at the end of task list
         if task < len(fld_list_proc[pid]):
             ##this is the field to process in this task
             mem_id, rec_id = fld_list_proc[pid][task]
@@ -247,6 +248,8 @@ def transpose_field_to_state(c, comm, state_info, fld_list_proc, loc_list_proc, 
 
     ##all proc goes through their own task list simultaneously
     for task in range(ntask_max):
+
+        ##prepare the fld for sending if not at the end of task list
         if task < len(fld_list_proc[pid]):
             mem_id, rec_id = fld_list_proc[pid][task]
             rec = state_info['fields'][rec_id]
@@ -294,6 +297,9 @@ def transpose_field_to_state(c, comm, state_info, fld_list_proc, loc_list_proc, 
                 src_mem_id, src_rec_id = fld_list_proc[src_pid][task]
                 state[src_mem_id, src_rec_id] = comm.recv(source=src_pid)
 
+        if task < len(fld_list_proc[pid]):
+            del fields[mem_id, rec_id]   ##free up memory
+
     return state
 
 
@@ -303,12 +309,14 @@ def transpose_state_to_field(c, comm, state_info, fld_list_proc, loc_list_proc, 
     nproc = comm.Get_size()
 
     message(comm, 'transpose state from ensemble-complete to field-complete\n', 0)
-
     fields = {}
 
     ntask_max = np.max([len(lst) for pid,lst in fld_list_proc.items()])
+
+    ##all proc goes through their own task list simultaneously
     for task in range(ntask_max):
 
+        ##prepare an empty fld for receiving if not at the end of task list
         if task < len(fld_list_proc[pid]):
             mem_id, rec_id = fld_list_proc[pid][task]
             rec = state_info['fields'][rec_id]
@@ -317,11 +325,19 @@ def transpose_state_to_field(c, comm, state_info, fld_list_proc, loc_list_proc, 
             else:
                 fld = np.full((c.ny, c.nx), np.nan)
 
+        ##this is just the reverse transpose, see comments in transpose_field_to_state
+        ## here, we take the exact steps, but swap send and recv operations
+        ##
+        ## 1) send my fld_chk to dst_pid, for dst_pid<pid first
         for dst_pid in np.arange(0, pid):
             if task < len(fld_list_proc[dst_pid]):
                 dst_mem_id, dst_rec_id = fld_list_proc[dst_pid][task]
                 comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid)
+                del state[dst_mem_id, dst_rec_id]   ##free up memory
 
+        ## 2) receive fld_chk from a list of src_pid, receive from src_pid>=pid first
+        ##    because they wait to send stuff before being able to receive themselves,
+        ##    cycle back to receive from src_pid<pid then.
         if task < len(fld_list_proc[pid]):
             for src_pid in np.mod(np.arange(0, nproc)+pid, nproc):
                 if src_pid == pid:
@@ -339,10 +355,12 @@ def transpose_state_to_field(c, comm, state_info, fld_list_proc, loc_list_proc, 
 
                 fields[mem_id, rec_id] = fld
 
+        ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
         for dst_pid in np.arange(pid+1, nproc):
             if task < len(fld_list_proc[dst_pid]):
                 dst_mem_id, dst_rec_id = fld_list_proc[dst_pid][task]
                 comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid)
+                del state[dst_mem_id, dst_rec_id]   ##free up memory
 
     return fields
 
@@ -351,7 +369,7 @@ def output_state(c, comm, state_info, fld_list_proc, fields, state_file):
     pid = comm.Get_rank()
     nproc = comm.Get_size()
 
-    message(comm, 'output_state: save state to '+state_file+'\n', 0)
+    message(comm, 'save state to '+state_file+'\n', 0)
 
     if pid == 0:
         ##if file doesn't exist, create the file

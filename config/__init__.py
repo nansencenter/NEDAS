@@ -97,39 +97,82 @@ else:
 
 
 ##parse state variables definition
-state_def = {}
-for line in os.environ.get('state_def').split('\n'):
-    ss = line.split()
+state_def = []
+lines = os.environ.get('state_def').split('\n')
+for r in range(len(lines)):
+    ss = lines[r].split()
     assert len(ss) == 3, 'state_def format error, should be "varname, source, err_type"'
-    vname = ss[0]
-    state_def[vname] = {'source': ss[1],
-                        'err_type': ss[2],}
+    state_def.append({'name': ss[0], 'source': ss[1], 'err_type': ss[2]})
 
 
 ##parse observation definition
-obs_def = {}
-for line in os.environ.get('obs_def').split('\n'):
-    ss = line.split()
-    assert len(ss)>=8, 'obs_def format error, should be "varname, source, model, err_type, err, hroi, vroi, troi, impact_factor[list of state=factor, optional]"'
-    vname = ss[0]
-    obs_def[vname] = {'source': ss[1],
-                      'model': ss[2],
-                      'err_type': ss[3],
-                      'err': np.float32(ss[4]),
-                      'hroi': np.float32(ss[5]),
-                      'vroi': np.float32(ss[6]),
-                      'troi': np.float32(ss[7]),
-                      'impact': {}, }
-    ##observation impact factor dict[obs_variable][state_variable]
-    ##first make a list of state variable and default impact as 1.
-    impact = {}
-    for v in state_def:
-        impact[v] = 1.
-    for en in ss[8:]:
-        v, fac = en.split('=')
-        if v in state_def:
-            impact[v] = np.float32(fac)
-    obs_def[vname]['impact'] = impact
+obs_def = []
+lines = os.environ.get('obs_def').split('\n')
+for r in range(len(lines)):
+    ss = lines[r].split()
+
+    ##check line format is correct
+    assert len(ss)==13, 'obs_def format error, should be "varname, source, model, err_type, err_std, err_hcorr, err_vcorr, err_tcorr, cross_corr[list of variable=corr_coef,...], hroi, vroi, troi, impact_on_state[list of state_variable=impact_factor,...]"'
+
+    obs_def.append({'name': ss[0],
+                    'source': ss[1],
+                    'model': ss[2],
+                    'err_type': ss[3],
+                    'err_std': np.float32(ss[4]),
+                    'err_hcorr': np.float32(ss[5]),
+                    'err_vcorr': np.float32(ss[6]),
+                    'err_tcorr': np.float32(ss[7]),
+                    'hroi': np.float32(ss[9]),
+                    'vroi': np.float32(ss[10]),
+                    'troi': np.float32(ss[11]),
+                    })
+
+##update obs_impact_on_state
+for r in range(len(lines)):
+    ss = lines[r].split()
+
+    ##default is 1 for all state variables
+    obs_def[r]['impact_on_state'] = np.ones(len(state_def))
+
+    for en in ss[12].split(','):
+        if '=' in en:
+            v, fac = en.split('=')
+            ##check if v is one of the defined state variables
+            p = [s for s,srec in enumerate(state_def) if srec['name']==v]
+            assert len(p)>0, 'obs impact_on_state: '+v+' not defined in state_def'
+
+            ##update the impact factor for this state variable
+            obs_def[r]['impact_on_state'][p] = np.float32(fac)
+
+##update obs_err_cross_corr
+for r in range(len(lines)):
+    ##default is uncorrelated (identity matrix)
+    obs_def[r]['err_cross_corr'] = np.zeros(len(lines))
+    obs_def[r]['err_cross_corr'][r] = 1
+
+for r in range(len(lines)):
+    ss = lines[r].split()
+    name = ss[0]
+    source = ss[1]
+
+    for en in ss[8].split(','):
+        if '=' in en:
+            v, coef = en.split('=')
+            ##check if v is one of the defined obs variables
+            p = [s for s,srec in enumerate(obs_def) if srec['name']==v and srec['source']==source]
+            assert len(p)==1, 'obs err_cross_corr: '+v+' either not defined in obs_def or there are duplicates with same name and source'
+            p1 = p[0]
+            coef1 = np.float32(coef)
+
+            ##check if provided coef makes sense
+            if p1 == r:
+                assert coef1==1.0, 'obs err_cross_corr: corr btw '+v+' and itself should be 1, got '+coef
+            if p1 < r:
+                coef1old = obs_def[r]['err_cross_corr'][p1]
+                assert coef1old==coef1, 'obs err_cross_corr: corr btw '+v+' and '+name+' is {}'.format(coef1old)+', got a new conflicting value '+coef
+            obs_def[r]['err_cross_corr'][p1] = coef1
+            obs_def[p1]['err_cross_corr'][r] = coef1
+
 
 use_synthetic_obs = os.environ.get('use_synthetic_obs').lower()=='true'
 
