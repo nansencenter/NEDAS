@@ -12,14 +12,14 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=30
+nens=100
 
 #DA scheme
 run_filter=true  ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
 
-filter_type=ETKF  ##ETKF, ENSRF, RHF, PF
+filter_type=ETKF
 
 ##number of scale components
 ##if > 1, use multiscale approach:
@@ -31,9 +31,9 @@ nscale=1
 
 ##localization setting
 localize_type=GC  ##GC, boxcar, adaptive
-##Note: ROI radius of influence, distance where localization factor goes to zero
-## ROI=inf means no localization will be applied
-## each observation variable has an individual set of ROI, defined in OBS_DEF
+##Note: radius of influence (roi), distance where localization factor goes to zero
+## roi=inf means no localization will be applied
+## each observation variable has an individual set of roi, defined in obs_def
 ## for multiscale approach, the ROI is multiplied to a scaling factor which is
 ## defined here for each scale
 hroi_factor="1"
@@ -84,7 +84,7 @@ maskfile=$SCRATCH/mask.npz
 
 ##define the `state` in a multi-line string
 ##  one state variable per line, each line contains:
-##     variable name, defined in assim_tools/state
+##     variable name
 ##     source module, one of the models/ module that provides the state variable
 ##     error type, normal/lognormal
 state_def=$(cat << EOF
@@ -97,26 +97,28 @@ EOF
 ##parameter estimation
 #TODO
 
-##definite the `obs` in a multi-line string
+##define the `obs` in a multi-line string
 ##  one observation per line, each line contains:
-##      obs variable name, defined in assim_tools/obs
+##      obs variable name
 ##      source, dataset module that provides this obs variable
 ##      model, models module that provides this obs prior
 ##      error type, normal/lognormal/beta
-##      error, standard deviation
+##      error standard deviation
+##      error horizontal correlation length, in meters
+##      error vertical correlation length, in meters
+##      error time correlation length, in hours
+##      error correlation among variables, list of "<variable name>=<corr coef>" separated by ',', if not specified, default is uncorrelated
 ##      horizontal localization distance, in meters
-##      vertical localization distance, in ? units
+##      vertical localization distance, in meters
 ##      time localization distance, in hours
-##      obs impact factor, list of "<state variable name>=<its impact factor>" separately by space
-##                         unlisted state variables have default impact of 1.
+##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-ocean_temp           prep_obs.insitu  topaz.v5  normal   0.3  2000000  inf  inf
-ocean_saln           prep_obs.insitu  topaz.v5  normal   0.3  2000000  inf  inf
+ocean_temp   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  none
+ocean_saln   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  ocean_velocity=0,ocean_temp=0.5
 EOF
 )
-#ocean_temp           Argo  topaz.v4  normal   0.3  200000  inf  inf
-#seaice_deform_shear  RGPS  nextsim   normal  0.01  200000  inf  inf  ocean_velocity=0 ocean_temp=0
-use_synthetic_obs=true
+
+use_synthetic_obs=false
 
 ##ensemble perturbation settings
 perturb_variables="seaice_drift ocean_surf_height"

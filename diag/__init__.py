@@ -33,7 +33,8 @@ def pwrspec2d(fld):
     wn = np.arange(0., nup)
     pwr = np.zeros(fld.shape[:-2] + (nup,))
     for w in range(nup):
-        pwr[..., w] = np.sum(P[np.where(np.ceil(k2d)==w)])
+        pwr[..., w] = np.mean(P[np.where(np.ceil(k2d)==w)])
+        ###TODO mean, or sum?
     return wn, pwr
 
 

@@ -1,5 +1,5 @@
 import numpy as np
-from assim_tools.multiscale import fft2, ifft2, get_wn
+from fft_lib import fft2, ifft2, get_wn
 
 ###generate a random perturbation for wind u,v and pressure
 def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D domain; dt: time interval (hours)

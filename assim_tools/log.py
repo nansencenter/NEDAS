@@ -12,7 +12,7 @@ def message(comm, msg, root=None):
 
 
 ##generate a progress bar based on task_id and ntask
-def progress_bar(task_id, ntask, width=50):
+def progress_bar(task_id, ntask, width=30):
     ##the progress bar looks like this: |====   |
     pstr = '\r|{:{}}| '.format('='*int(np.ceil(task_id/(ntask-1)*width)), width)
     ##add the percentage completed at the end

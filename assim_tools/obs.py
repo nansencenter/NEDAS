@@ -2,136 +2,124 @@ import numpy as np
 import struct
 import importlib
 from datetime import datetime, timedelta
-from .common import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from .parallel import distribute_tasks, message
-# from .state import loc_inds, read_local_state
+from .conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from .log import message, progress_bar
+from .parallel import distribute_tasks
 
-##top-level routine to prepare the obs, read dataset files and convert to obs_seq
-##obs_info contains obs value, err, and coordinates (t, z, y, x); when obs_info is
-##ready, each obs is processed by state_to_obs
-##inputs: c: config module for parsing env variables
-##        comm: mpi4py communicator for parallelization
-def process_obs(c, comm, obs_seq_file):
-    message(comm, 'process_obs: parsing and generating obs_info', 0)
-    ##parse c.obs_def, read_obs from each type and generate obs_seq
-    ##this is done by the first processor and broadcast
-    if comm.Get_rank() == 0:
-        info = obs_info(c)
-        with open(obs_seq_file, 'wb'):  ##initialize obs_seq.bin in case it doesn't exist
-            pass
-        write_obs_info(obs_seq_file, info)
-        write_obs(obs_seq_file, info, info['obs_seq'].values(), member=None)
-    else:
-        info = None
-    info = comm.bcast(info, root=0)
-
-
-def process_obs_prior(c, comm, info, prior_state_file, obs_seq_file):
-    proc_id = comm.Get_rank()
-
-    message(comm, 'process_obs: parsing and generating obs_info', 0)
-    obs_var_bank = {}
-
-    ##now start processing the obs seq, each processor gets its own workload as a subset of nobs
-    message(comm, 'process_obs: getting obs_prior for each obs variable and member', 0)
-    for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[proc_id]:
-        rec = info['obs_seq'][obs_id]
-
-        ##if variable is in prior_state fields, just read and interp in z
-
-        ##else try obs_operator
-
-        ##tmp solution::
-        obs_var_key = (rec['name'], rec['model'], member)
-        if obs_var_key in obs_var_bank:
-            obs_var = obs_var_bank[obs_var_key]
-        else:
-            message(comm, 'state_to_obs: getting variable '+rec['name']+' from '+rec['model'])
-            src = importlib.import_module('dataset.'+rec['source'])
-            obs_var = src.state_to_obs(c.work_dir+'/forecast/'+c.time+'/'+rec['model'], c.grid, **rec, k=-1, member=member)
-            obs_var_bank[obs_var_key] = obs_var
-        obs_rec = info['obs_seq'][obs_id]
-        obs_rec['value'] = c.grid.interp(obs_var, obs_rec['x'], obs_rec['y'])
-        write_obs(obs_seq_file, info, [obs_rec], member=member)
-
-         # message(comm, '    {:15s} t={} z={:10.4f} y={:10.4f} x={:10.4f} member={:3d}'.format(obs_rec['name'], obs_rec['time'], obs_rec['z'], obs_rec['y'], obs_rec['x'], member+1))
+##Note:
+## The observation has dimensions: variable, time, z, y, x
+## Since the observation network is typically irregular, we store the obs record
+## for each variable in a 1d sequence, with coordinates (t,z,y,x), and size nobs
+##
+## To parallelize workload, we distribute each obs record over all the processors
+## - for batch assimilation mode, each pid stores the list of local obs within the
+##   hroi of its tiles, with size nlobs (number of local obs)
+## - for serial mode, each pid stores a non-overlapping subset of the obs list,
+##   here 'local' obs (in storage sense) is broadcast to all pid before computing
+##   its update to the state/obs near that obs.
+##
+## The hroi is separately defined for each obs record.
+## For very large hroi, the serial mode is more parallel efficient option, since
+## in batch mode the same obs may need to be stored in multiple pids
+##
+## To compare to the observation, obs_prior simulated by the model needs to be
+## computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
 
 
-##parse obs_def in config, read the dataset files to get the needed obs_seq
-##for each obs indexed by obs_id, obtain its coordinates and properties in info
-##Note: this is run by the root processor
-def obs_info(c):
-    ##initialize
-    info = {'nobs':0, 'nens':c.nens, 'obs_seq':{}}
-    obs_id = 0  ##obs index in sequence
-    pos = 0     ##f.seek position
+## parse config.obs_def, read the dataset files to get the obs records
+## for each obs_id in record, obtain coordinates and properties for that obs_id
+## input: c: config module with the environment variables
+## return: info dict with some dimensions and list of uniq obs records
+def parse_obs_info(c):
+    info = {'size':0, 'records':{}}
+    rec_id = 0  ##record id for an obs sequence
+    pos = 0     ##seek position for rec_id
 
-    if c.use_synthetic_obs:
-        network_bank = {}
+    ##loop through obs variables defined in obs_def
+    for vname, vrec in c.obs_def.items():
+        ##some properties of the variable is defined in its source module
+        src = importlib.import_module('dataset.'+vrec['source'])
+        assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['source']+'.variables'
 
-    ##loop through time slots in obs window
-    for time in s2t(c.time) + c.obs_ts*timedelta(hours=1):
-
-        ##loop through obs variables defined in config
-        for name, rec in c.obs_def.items():
+        ##loop through time steps in obs window
+        for time in s2t(c.time) + c.obs_ts*timedelta(hours=1):
+            rec = {'name': vname,
+                   'dtype': src.variables[vname]['dtype'],
+                   'is_vector': src.variables[vname]['is_vector'],
+                   'units': src.variables[vname]['units'],
+                   'z_units': src.variables[vname]['z_units'],
+                   'err':{'type': vrec['err_type'],
+                          'std': vrec['err_std'],
+                          'hcorr': vrec['err_hcorr'],
+                          'vcorr': vrec['err_vcorr'],
+                          'tcorr': vrec['err_tcorr'],
+                          'cross_corr': vrec['err_cross_corr'],
+                          },
+                   'hroi': vrec['hroi'],
+                   'vroi': vrec['vroi'],
+                   'troi': vrec['troi'],
+                   'impact_on_state': vrec['impact_on_state'],
+                   }
 
             ##load the dataset module
-            src = importlib.import_module('dataset.'+rec['source'])
-            assert name in src.variables, 'variable '+name+' not defined in dataset.'+rec['source']+'.variables'
+            src = importlib.import_module('dataset.'+vrec['source'])
+            assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['source']+'.variables'
 
-            ##directory storing the dataset files for this variable
-            path = c.data_dir+'/'+rec['source']
-
-            kwargs = {'name': name,
-                      'source': rec['source'],
-                      'model': rec['model'],
-                      'err_type': rec['err_type'],
-                      'err': rec['err'],
-                      'dtype': src.variables[name]['dtype'],
-                      'is_vector': src.variables[name]['is_vector'],
-                      'z_units': src.variables[name]['z_units'],
-                      'units': src.variables[name]['units'], }
+            #directory storing the dataset files for this variable
+            path = c.data_dir+'/'+vrec['source']
 
             if c.use_synthetic_obs:
-                ##generate synthetic obs network
-                network_key = (rec['source'], time)
-                if network_key not in network_bank:
-                    obs_seq = src.random_network(c.grid, c.mask)
-                else:
-                    obs_seq = network_bank[network_key]
+                pass
+            #     ##generate synthetic obs network
+            #     network_key = (rec['source'], time)
+            #     if network_key not in network_bank:
+            #         obs_seq = src.random_network(c.grid, c.mask)
+            #     else:
+            #         obs_seq = network_bank[network_key]
 
-                ##read truth file and find obs value
-                obs_var = src.state_to_obs(c.data_dir+'/truth/'+c.time+'/'+rec['model'], c.grid, **kwargs, k=-1, time=s2t(c.time))
+            #     ##read truth file and find obs value
+            #     obs_var = src.state_to_obs(c.data_dir+'/truth/'+c.time+'/'+rec['model'], c.grid, **kwargs, k=-1, time=s2t(c.time))
 
-                for i in obs_seq.keys():
-                    obs_seq[i]['name'] = kwargs['name']
-                    obs_seq[i]['time'] = s2t(c.time)
-                    ##interp to obs location
-                    obs_seq[i]['value'] = c.grid.interp(obs_var, obs_seq[i]['x'], obs_seq[i]['y'])
+            #     for i in obs_seq.keys():
+            #         obs_seq[i]['name'] = kwargs['name']
+            #         obs_seq[i]['time'] = s2t(c.time)
+            #         ##interp to obs location
+            #         obs_seq[i]['value'] = c.grid.interp(obs_var, obs_seq[i]['x'], obs_seq[i]['y'])
 
-                    ##z_interp?
+            #         ##z_interp?
 
-                    ##perturb with obs err
-                    # obs_seq[i]['value'] += np.random.normal(0, 1) * kwargs['err']
+            #         ##perturb with obs err
+            #         # obs_seq[i]['value'] += np.random.normal(0, 1) * kwargs['err']
 
             else:
-                ##read dataset files and obtain a list of obs
-                obs_seq = src.read_obs(path, c.grid, c.mask, **kwargs)
+                ##read dataset files and obtain a record of obs
+                # obs = src.read_obs(path, c.grid, c.mask, **rec)
+                pass
+                # obs
+                # x
+                # y
+                # z
+                # time
 
-            ##loop through individual obs
-            for obs_rec in obs_seq.values():
-                ##add properties specific to this obs, then add the rec to the full obs_seq
-                info['obs_seq'][obs_id] = {'pos':pos}
-                info['obs_seq'][obs_id].update(kwargs)
-                info['obs_seq'][obs_id].update(obs_rec)
 
-                ##update f.seek position
-                nv = 2 if src.variables[name]['is_vector'] else 1
-                size = type_size[src.variables[name]['dtype']]
-                pos += nv * size * (c.nens+1)
-                obs_id += 1
+            # #loop through individual obs
+            # for obs_rec in obs_seq.values():
+            #     ##add properties specific to this obs, then add the rec to the full obs_seq
+            #     info['obs_seq'][obs_id] = {'pos':pos}
+            #     info['obs_seq'][obs_id].update(kwargs)
+            #     info['obs_seq'][obs_id].update(obs_rec)
 
-    info['nobs'] = obs_id
+            #     ##update f.seek position
+            #     nv = 2 if src.variables[name]['is_vector'] else 1
+            #     size = type_size[src.variables[name]['dtype']]
+            #     pos += nv * size * (c.nens+1)
+            #     obs_id += 1
+
+            info['records'][rec_id] = rec
+
+            rec_id += 1
+
+    info['size'] = 0
 
     return info
 
@@ -285,3 +273,52 @@ def read_local_obs(binfile, info, obs_inds):
     return local_obs
 
 
+##top-level routine to prepare the obs, read dataset files and convert to obs_seq
+##obs_info contains obs value, err, and coordinates (t, z, y, x); when obs_info is
+##ready, each obs is processed by state_to_obs
+##inputs: c: config module for parsing env variables
+##        comm: mpi4py communicator for parallelization
+def prepare_obs(c, comm, obs_seq_file):
+    message(comm, 'process_obs: parsing and generating obs_info', 0)
+    ##parse c.obs_def, read_obs from each type and generate obs_seq
+    ##this is done by the first processor and broadcast
+    if comm.Get_rank() == 0:
+        info = obs_info(c)
+        with open(obs_seq_file, 'wb'):  ##initialize obs_seq.bin in case it doesn't exist
+            pass
+        write_obs_info(obs_seq_file, info)
+        write_obs(obs_seq_file, info, info['obs_seq'].values(), member=None)
+    else:
+        info = None
+    info = comm.bcast(info, root=0)
+
+
+def prepare_obs_prior(c, comm, info, prior_state_file, obs_seq_file):
+    pid = comm.Get_rank()
+
+    message(comm, 'process_obs: parsing and generating obs_info', 0)
+    obs_var_bank = {}
+
+    ##now start processing the obs seq, each processor gets its own workload as a subset of nobs
+    message(comm, 'process_obs: getting obs_prior for each obs variable and member', 0)
+    for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[pid]:
+        rec = info['obs_seq'][obs_id]
+
+        ##if variable is in prior_state fields, just read and interp in z
+
+        ##else try obs_operator
+
+        ##tmp solution::
+        obs_var_key = (rec['name'], rec['model'], member)
+        if obs_var_key in obs_var_bank:
+            obs_var = obs_var_bank[obs_var_key]
+        else:
+            message(comm, 'state_to_obs: getting variable '+rec['name']+' from '+rec['model'])
+            src = importlib.import_module('dataset.'+rec['source'])
+            obs_var = src.state_to_obs(c.work_dir+'/forecast/'+c.time+'/'+rec['model'], c.grid, **rec, k=-1, member=member)
+            obs_var_bank[obs_var_key] = obs_var
+        obs_rec = info['obs_seq'][obs_id]
+        obs_rec['value'] = c.grid.interp(obs_var, obs_rec['x'], obs_rec['y'])
+        write_obs(obs_seq_file, info, [obs_rec], member=member)
+
+         # message(comm, '    {:15s} t={} z={:10.4f} y={:10.4f} x={:10.4f} member={:3d}'.format(obs_rec['name'], obs_rec['time'], obs_rec['z'], obs_rec['y'], obs_rec['x'], member+1))
