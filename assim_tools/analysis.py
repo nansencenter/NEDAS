@@ -12,7 +12,7 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
                    obs_err,            ##obs err std [nlobs]
                    obs_prior,          ##ensemble obs values [nens, nlobs]
                    local_factor,       ##localization factor [nlobs]
-                   filter_kind='ETKF', ##kind of filter algorithm to apply
+                   filter_type='ETKF', ##type of filter algorithm to apply
                    obs_err_corr=None,  ##obs err corr matrix, if None, uncorrelated
                    ):
     ##update the local state variable ens_prior with the obs
@@ -76,9 +76,6 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
             raise ValueError('sum of weights is not 1')
 
     ##finally, transform the prior ensemble with the weight matrix
-    ##in textbook, the weights are typically applied to the ens pert matrix
-    ##but since weights sum to 1, it is okay to just applied the weights
-    ##to the full ens_prior directly
     for m in range(nens):
         ens_post[m] = np.sum(ens_prior * weight[:, m])
 
@@ -92,7 +89,7 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
 def obs_increment(obs_prior,          ##obs prior [nens]
                   obs,                ##obs, scalar
                   obs_err,            ##obs err std, scalar
-                  filter_kind='EAKF', ##kind of filter algorithm
+                  filter_type='EAKF', ##kind of filter algorithm
                   ):
     ##compute analysis increment for 1 obs
     ##obs_prior[nens] is the prior ensemble values corresponding to this obs
@@ -109,7 +106,7 @@ def obs_increment(obs_prior,          ##obs prior [nens]
     obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
 
     ##ensemble adjustment Kalman filter (Anderson 2003)
-    if filter_kind == 'EAKF':
+    if filter_type == 'EAKF':
         var_ratio = obs_var / (obs_prior_var + obs_var)
 
         ##new mean is weighted average between obs_prior_mean and obs
@@ -121,11 +118,11 @@ def obs_increment(obs_prior,          ##obs prior [nens]
         ##assemble the increments
         obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
-    elif filter_kind == 'RHF':
+    elif filter_type == 'RHF':
         pass
 
     else:
-        raise ValueError('unknown filter_kind: '+filter_kind)
+        raise ValueError('unknown filter_type: '+filter_type)
 
     return obs_incr
 
@@ -179,6 +176,7 @@ def update_ensemble(ens_prior,             ##prior ens [nens] being updated
     # return lfh * lfv * lft * impact
 
 
+##localization factor based on distance and roi
 @njit
 def local_factor(dist, roi, local_type='GC'):
     ## dist: input distance, ndarray
