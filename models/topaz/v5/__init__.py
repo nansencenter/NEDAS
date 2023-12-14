@@ -18,9 +18,10 @@
 
 import numpy as np
 import glob
+from functools import cache
 from datetime import datetime
 
-from assim_tools.common import units_convert
+from assim_tools.conversion import units_convert
 from models.topaz.confmap import ConformalMapping
 from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 
@@ -35,14 +36,16 @@ from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileG
 ##   is_vector: if true the variable contains (u, v) components
 ##   dt: how freq model output is available, in hours
 ##   levels: vertical level index list
-##         0 for surface variables, negative for ocean, positive for atmos variables
 ##   units: native physical units for the variable
-levels = np.arange(-1, -51, -1)  ##ocean levels -1 to -50
+levels = np.arange(1, 51, 1)  ##ocean levels, from top to bottom
 variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
              'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
              'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'K'},
              'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
              }
+
+##some constants
+ONEM = 9806.  ##pressure (Pa) in 1 meter water
 
 ##parse kwargs and find matching filename
 ##for keys in kwargs that are not set, here we define the default values
@@ -55,7 +58,7 @@ def filename(path, **kwargs):
         tstr = '????_???_??_0000'
     if 'member' in kwargs and kwargs['member'] is not None:
         assert kwargs['member'] >= 0, 'member index shall be >= 0'
-        mstr = '_mem{:03d}'.format(kwargs['member']+1)
+        mstr = '_mem{:03d}'.format(kwargs['member'])
     else:
         mstr = ''
 
@@ -153,6 +156,15 @@ def read_mask(path, grid):
     f.close()
     return mask
 
+
+def read_depth(path, grid):
+    depthfile = path+'/topo/depth.a'
+    f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
+    depth = f.read_field('depth').data
+    f.close()
+    return -depth
+
+
 ##get the state variable with name in state_def
 ##and other kwargs: time, level, and member to pinpoint where to get the variable
 ##returns a 2D field defined on grid from get_grid
@@ -164,11 +176,9 @@ def read_var(path, grid, **kwargs):
     fname = filename(path, **kwargs)
 
     if 'k' in kwargs:
-        ##Note: ocean level indices are negative in assim_tools.state
-        ##      but in abfiles, they are defined as positive indices
-        k = -kwargs['k']
+        k = kwargs['k']
     else:
-        k = -variables[name]['levels'][-1]  ##get the first level if not specified
+        k = variables[name]['levels'][0]  ##get the first level if not specified
     if 'mask' in kwargs:
         mask = kwargs['mask']
     else:
@@ -207,9 +217,9 @@ def write_var(path, grid, var, **kwargs):
 
     ##same logic for setting level indices as in read_var()
     if 'k' in kwargs:
-        k = -kwargs['k']
+        k = kwargs['k']
     else:
-        k = -variables[name]['levels'][-1]
+        k = variables[name]['levels'][0]
     if 'mask' in kwargs:
         mask = kwargs['mask']
     else:
@@ -229,38 +239,41 @@ def write_var(path, grid, var, **kwargs):
         f.overwrite_field(var, mask, variables[name]['name'], level=k, tlevel=1)
     f.close()
 
-##keys in kwargs for which the z_coords needs to be separately calculated: ('member', 'time')
+##keys in kwargs for which the z_coords needs to be separately calculated.
 ##for topaz, the isopycnal coordinates vary for member and time
 uniq_z_key = ('member', 'time')
 
 ##calculate vertical coordinates given the 3D model state
 ##inputs: path, grid, **kwargs: same as filename() inputs
 ##        z_type, defined for each field_info['z_coords']
+@cache
 def z_coords(path, grid, **kwargs):
-    onem = 9806.
-
+    ##some defaults if not set in kwargs
     if 'units' not in kwargs:
         kwargs['units'] = 'm'
-
-    ##check if level is provided
-    assert 'k' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
+    if 'k' not in kwargs:
+        kwargs['k'] = 0
 
     z = np.zeros(grid.x.shape)
+
     if kwargs['k'] == 0:
         ##if level index is 0, this is the surface, so just return zeros
         return z
     else:
-        ##get layer thickness above level k, convert to z_units, and integrate to total depth
-        for k in [k for k in levels if k>=kwargs['k']]:
-            rec = kwargs.copy()
-            rec['name'] = 'ocean_layer_thick'
-            rec['units'] = variables['ocean_layer_thick']['units']
-            rec['k'] = k
-            d = read_var(path, grid, **rec)
-            if kwargs['units'] == 'm':
-                z -= d/onem  ##accumulate depth in meters, negative relative to surface
-            else:
-                raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
-        return z
+        ##get layer thickness and convert to units
+        rec = kwargs.copy()
+        rec['name'] = 'ocean_layer_thick'
+        rec['units'] = variables['ocean_layer_thick']['units'] ##should be Pa
+        if kwargs['units'] == 'm':
+            dz = - read_var(path, grid, **rec) / ONEM ##in meters, negative relative to surface
+        elif kwargs['units'] == 'Pa':
+            dz = read_var(path, grid, **rec)
+        else:
+            raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
+
+        ##use recursive func, get previous layer z and add dz
+        kwargs['k'] -= 1
+        z_prev = z_coords(path, grid, **kwargs)
+        return z_prev + dz
 
 
