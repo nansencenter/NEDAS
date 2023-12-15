@@ -13,10 +13,22 @@ class dummy_comm(object):
     def Get_rank(self):
         return self.rank
 
+    def Split(self, color=0, key=0):
+        return self
+
     def bcast(self, obj, root=0):
         return obj
 
+    def allgather(self, obj):
+        return obj
+
     def gather(self, obj, root=0):
+        return obj
+
+    def allreduce(self, obj):
+        return obj
+
+    def reduce(self, obj, root=0):
         return obj
 
 

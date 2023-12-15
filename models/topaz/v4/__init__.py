@@ -20,7 +20,7 @@ import numpy as np
 import glob
 from datetime import datetime
 
-from assim_tools.common import units_convert
+from assim_tools.conversion import units_convert
 from models.topaz.confmap import ConformalMapping
 from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 
@@ -175,8 +175,18 @@ def read_var(path, grid, **kwargs):
     else:
         mask = None
 
+    if 'is_vector' in kwargs:
+        is_vector = kwargs['is_vector']
+    else:
+        is_vector = variables[name]['is_vector']
+
+    if 'units' in kwargs:
+        units = kwargs['units']
+    else:
+        units = variables[name]['units']
+
     f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
-    if kwargs['is_vector']:
+    if is_vector:
         var1 = f.read_field(variables[name]['name'][0], level=k, tlevel=1, mask=mask)
         var2 = f.read_field(variables[name]['name'][1], level=k, tlevel=1, mask=mask)
         var = np.array([var1, var2])
@@ -184,7 +194,7 @@ def read_var(path, grid, **kwargs):
         var = f.read_field(variables[name]['name'], level=k, tlevel=1, mask=mask)
     f.close()
 
-    var = units_convert(kwargs['units'], variables[name]['units'], var)
+    var = units_convert(units, variables[name]['units'], var)
     return var
 
 ##output updated variable with name='varname' defined in state_def

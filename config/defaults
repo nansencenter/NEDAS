@@ -12,7 +12,7 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=100
+nens=96
 
 #DA scheme
 run_filter=true  ##if true, run filter/smoother update algorithms
