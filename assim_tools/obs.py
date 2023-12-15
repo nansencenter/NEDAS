@@ -36,30 +36,35 @@ def parse_obs_info(c):
     pos = 0     ##seek position for rec_id
 
     ##loop through obs variables defined in obs_def
-    for vname, vrec in c.obs_def.items():
+    for vrec in c.obs_def:
+        vname = vrec['name']
         ##some properties of the variable is defined in its source module
         src = importlib.import_module('dataset.'+vrec['source'])
         assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['source']+'.variables'
 
+        rec = {'name': vname,
+                'source': vrec['source'],
+                'model': vrec['model'],
+                'dtype': src.variables[vname]['dtype'],
+                'is_vector': src.variables[vname]['is_vector'],
+                'units': src.variables[vname]['units'],
+                'z_units': src.variables[vname]['z_units'],
+                'pos': pos,
+                'err':{'type': vrec['err_type'],
+                        'std': vrec['err_std'],
+                        'hcorr': vrec['err_hcorr'],
+                        'vcorr': vrec['err_vcorr'],
+                        'tcorr': vrec['err_tcorr'],
+                        'cross_corr': vrec['err_cross_corr'],
+                        },
+                'hroi': vrec['hroi'],
+                'vroi': vrec['vroi'],
+                'troi': vrec['troi'],
+                'impact_on_state': vrec['impact_on_state'],
+                }
+
         ##loop through time steps in obs window
         for time in s2t(c.time) + c.obs_ts*timedelta(hours=1):
-            rec = {'name': vname,
-                   'dtype': src.variables[vname]['dtype'],
-                   'is_vector': src.variables[vname]['is_vector'],
-                   'units': src.variables[vname]['units'],
-                   'z_units': src.variables[vname]['z_units'],
-                   'err':{'type': vrec['err_type'],
-                          'std': vrec['err_std'],
-                          'hcorr': vrec['err_hcorr'],
-                          'vcorr': vrec['err_vcorr'],
-                          'tcorr': vrec['err_tcorr'],
-                          'cross_corr': vrec['err_cross_corr'],
-                          },
-                   'hroi': vrec['hroi'],
-                   'vroi': vrec['vroi'],
-                   'troi': vrec['troi'],
-                   'impact_on_state': vrec['impact_on_state'],
-                   }
 
             ##load the dataset module
             src = importlib.import_module('dataset.'+vrec['source'])
@@ -92,34 +97,27 @@ def parse_obs_info(c):
             #         # obs_seq[i]['value'] += np.random.normal(0, 1) * kwargs['err']
 
             else:
+                # model_z = np.zeros((
+                # z_key = (rec['model'], time, k)
+                # model_z = c.grid_z[z_key]
+
                 ##read dataset files and obtain a record of obs
-                # obs = src.read_obs(path, c.grid, c.mask, **rec)
-                pass
-                # obs
-                # x
-                # y
-                # z
-                # time
-
-
-            # #loop through individual obs
-            # for obs_rec in obs_seq.values():
-            #     ##add properties specific to this obs, then add the rec to the full obs_seq
-            #     info['obs_seq'][obs_id] = {'pos':pos}
-            #     info['obs_seq'][obs_id].update(kwargs)
-            #     info['obs_seq'][obs_id].update(obs_rec)
-
-            #     ##update f.seek position
-            #     nv = 2 if src.variables[name]['is_vector'] else 1
-            #     size = type_size[src.variables[name]['dtype']]
-            #     pos += nv * size * (c.nens+1)
-            #     obs_id += 1
+                obs_seq = src.read_obs(path, c.grid, c.mask, model_z, time=time, **rec)
+                rec['obs'] = np.array(obs_seq['obs'])
+                rec['x'] = np.array(obs_seq['x'])
+                rec['y'] = np.array(obs_seq['y'])
+                rec['z'] = np.array(obs_seq['z'])
+                rec['time'] = np.array([t2h(t) for t in obs_seq['time'] ])
 
             info['records'][rec_id] = rec
 
+            ##update seek position
+            nv = 2 if rec['is_vector'] else 1
+            nobs = len(rec['obs'])
+            pos += nv * nobs * type_size[rec['dtype']]
             rec_id += 1
 
-    info['size'] = 0
+    info['size'] = pos  ##size of the entire obs
 
     return info
 

@@ -7,6 +7,7 @@
 ###except for a few runtime variables defined in run scripts
 import numpy as np
 import os
+import importlib
 from grid import Grid
 from pyproj import Proj
 
@@ -73,6 +74,8 @@ else:
 
 
 ##define analysis grid
+grid_type = os.environ.get('grid_type')
+# if grid_type == '
 proj = Proj(os.environ.get('proj'))
 dx = np.array(os.environ.get('dx').split()).astype(np.float32)[scale]
 xmin = np.float32(os.environ.get('xmin'))

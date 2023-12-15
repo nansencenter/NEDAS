@@ -240,8 +240,9 @@ def write_var(path, grid, var, **kwargs):
     f.close()
 
 ##keys in kwargs for which the z_coords needs to be separately calculated.
-##for topaz, the isopycnal coordinates vary for member and time
-uniq_z_key = ('member', 'time')
+##for topaz, the isopycnal coordinates vary for member, time, and level k
+uniq_z_key = ('member', 'time', 'k')
+z_units = 'm'
 
 ##calculate vertical coordinates given the 3D model state
 ##inputs: path, grid, **kwargs: same as filename() inputs
@@ -250,7 +251,7 @@ uniq_z_key = ('member', 'time')
 def z_coords(path, grid, **kwargs):
     ##some defaults if not set in kwargs
     if 'units' not in kwargs:
-        kwargs['units'] = 'm'
+        kwargs['units'] = z_units
     if 'k' not in kwargs:
         kwargs['k'] = 0
 
