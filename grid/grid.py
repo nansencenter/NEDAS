@@ -284,6 +284,7 @@ class Grid(object):
                             idy_ = np.hstack((idy_, idy_[0]))
 
             ##now find the index near the given x_,y_ coordinates
+            ##TODO: put a tiny tolerance here! nearest neighbor is sensitive to rounding errors in x,y, linear interpolation should be fine
             i = np.array(np.searchsorted(xi_, x_, side='right'))
             j = np.array(np.searchsorted(yi_, y_, side='right'))
             inside = ~np.logical_or(np.logical_or(i==len(xi_), i==0),

@@ -7,7 +7,6 @@
 ###except for a few runtime variables defined in run scripts
 import numpy as np
 import os
-import importlib
 from grid import Grid
 from pyproj import Proj
 
@@ -23,6 +22,9 @@ work_dir = os.environ.get('work_dir')
 nens = int(os.environ.get('nens'))
 
 ##DA scheme
+assim_mode = os.environ.get('assim_mode')
+assert assim_mode in ('batch', 'serial'), 'unknown assimilation mode: '+assim_mode
+
 run_filter = os.environ.get('run_filter').lower()=='true'
 run_align_space = os.environ.get('run_align_space').lower()=='true'
 run_align_time = os.environ.get('run_align_time').lower()=='true'
@@ -104,8 +106,8 @@ state_def = []
 lines = os.environ.get('state_def').split('\n')
 for r in range(len(lines)):
     ss = lines[r].split()
-    assert len(ss) == 3, 'state_def format error, should be "varname, source, err_type"'
-    state_def.append({'name': ss[0], 'source': ss[1], 'err_type': ss[2]})
+    assert len(ss) == 4, 'state_def format error, should be "varname, source, var_type, err_type"'
+    state_def.append({'name': ss[0], 'source': ss[1], 'state_type': ss[2], 'err_type': ss[3]})
 
 
 ##parse observation definition
@@ -178,5 +180,21 @@ for r in range(len(lines)):
 
 
 use_synthetic_obs = os.environ.get('use_synthetic_obs').lower()=='true'
+
+
+##setup parallel scheme
+from parallel import parallel_start
+comm = parallel_start()
+
+pid = comm.Get_rank()
+nproc = comm.Get_size()
+
+nproc_mem = int(os.environ.get('nproc_mem'))
+assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
+
+pid_mem = pid % nproc_mem
+pid_rec = pid // nproc_mem
+comm_mem = comm.Split(pid_rec, pid_mem)
+comm_rec = comm.Split(pid_mem, pid_rec)
 
 
