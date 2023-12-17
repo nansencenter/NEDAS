@@ -1,8 +1,5 @@
 import numpy as np
 from numba import njit
-from .parallel import distribute_tasks
-# from .state import loc_inds, read_field_info, uniq_fields, read_local_state, write_local_state
-# from .obs import read_obs_info, assign_obs_inds, read_local_obs
 
 ##batch assimilation solves the matrix version EnKF analysis for a given local state
 ##the local_analysis updates for different variables are computed in parallel
@@ -65,8 +62,17 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
     for m in range(nens):
         weight[m, :] = np.sum(gain[m, :] * dy)
 
-    ##the update of ens pert is (I + S^T S)^-0.5, namely sqrt(var_ratio)
-    var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
+    if filter_type == 'ETKF':
+        ##the update of ens pert is (I + S^T S)^-0.5, namely sqrt(var_ratio)
+        var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
+
+    elif filter_type == 'DEnKF':
+        ##take Taylor approx. of var_ratio_sqrt (Sakov 2008)
+        var_ratio_sqrt = np.eye(nens) - 0.5 * gain @ S
+
+    else:
+        raise ValueError('unknown filter type '+filter_type+' for local analysis')
+
     weight += var_ratio_sqrt
 
     ##check if weights sum to 1
@@ -164,16 +170,6 @@ def update_ensemble(ens_prior,             ##prior ens [nens] being updated
         raise ValueError('unknown regression kind: '+reg_kind)
 
     return ens_post
-
-
-##distance calculation and localization
-    # hdist = np.hypot(obs_x - state_x, obs_y - state_y)
-    # lfh = local_factor(hdist, hroi)
-    # vdist = np.abs(obs_z - state_z)
-    # lfv = local_factor(vdist, vroi)
-    # lft = 1
-    # impact = 1
-    # return lfh * lfv * lft * impact
 
 
 ##localization factor based on distance and roi

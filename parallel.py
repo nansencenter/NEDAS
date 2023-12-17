@@ -1,7 +1,7 @@
 import numpy as np
 import os
 
-##dummy communicator for serial runs
+##dummy communicator for python without mpi
 class dummy_comm(object):
     def __init__(self):
         self.size = 1
@@ -12,6 +12,9 @@ class dummy_comm(object):
 
     def Get_rank(self):
         return self.rank
+
+    def Barrier(self):
+        pass
 
     def Split(self, color=0, key=0):
         return self
@@ -32,23 +35,38 @@ class dummy_comm(object):
         return obj
 
 
+##initialize the communicator for mpi
 def parallel_start():
     if 'PMI_SIZE' in os.environ:
         ##program is called from mpi, initialize comm
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
-
     else:
         ##serial program, use dummy comm
         comm = dummy_comm()
-
     return comm
 
 
+##decorator for func() to be run only by rank 0 in comm
+##and result of func() is then broadcasted to all other ranks
+def bcast_by_root(comm):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if comm.Get_rank() == 0:
+                result = func(*args, **kwargs)
+            else:
+                result = None
+            result = comm.bcast(result, root=0)
+            return result
+        return wrapper
+    return decorator
+
+
+##divide a list of task indices and assign a subset to each rank in comm
 def distribute_tasks(comm, tasks, load=None):
     ##tasks: list of indices (in a for loop) to work on
     ##load: amount of workload for each task, if None then tasks have equal workload
-    ##returns the subset of tasks for the processor rank calling this function to work on
+    ##returns the subset of tasks for the proc rank calling this function to work on
     ##       in a dict from rank -> its corresponding task list
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks

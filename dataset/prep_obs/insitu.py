@@ -140,7 +140,10 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                         flag1[p] = 0
                         flag2[p,:] = 0
 
-        ##6. thinning/superobing in vertical
+        ##thinning in horizontal TODO
+
+
+        ##thinning in vertical
         if NUM_OBS_PER_LAYER is not None and model_z is not None:
             nz, ny, nx = model_z.shape
             for p in range(nprof):
@@ -191,8 +194,6 @@ def random_network():
 
 
 ##
-def obs_operator():
-    pass
-
+obs_operator = {}
 
 

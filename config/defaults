@@ -12,9 +12,13 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=96
+nens=4
+
+##parallel scheme
+nproc_mem=4
 
 #DA scheme
+assim_mode=batch ##batch or serial
 run_filter=true  ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
@@ -88,11 +92,12 @@ maskfile=$SCRATCH/mask.npz
 ##     source module, one of the models/ module that provides the state variable
 ##     error type, normal/lognormal
 state_def=$(cat << EOF
-ocean_velocity      topaz.v5  normal
-ocean_temp          topaz.v5  normal
-ocean_saln          topaz.v5  normal
+ocean_velocity      topaz.v5    field  normal
+ocean_temp          topaz.v5    field  normal
+ocean_saln          topaz.v5    field  normal
 EOF
 )
+#drag_coef           topaz.v5   scalar  normal
 
 ##parameter estimation
 #TODO

@@ -21,7 +21,7 @@ import glob
 from functools import cache
 from datetime import datetime
 
-from assim_tools.conversion import units_convert
+from conversion import units_convert
 from models.topaz.confmap import ConformalMapping
 from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 
@@ -204,6 +204,7 @@ def read_var(path, grid, **kwargs):
     f.close()
 
     var = units_convert(units, variables[name]['units'], var)
+
     return var
 
 ##output updated variable with name='varname' defined in state_def
@@ -260,6 +261,7 @@ def z_coords(path, grid, **kwargs):
     if kwargs['k'] == 0:
         ##if level index is 0, this is the surface, so just return zeros
         return z
+
     else:
         ##get layer thickness and convert to units
         rec = kwargs.copy()
