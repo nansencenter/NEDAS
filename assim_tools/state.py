@@ -34,7 +34,6 @@ from parallel import bcast_by_root, distribute_tasks
 ## returns: info dict with some dimensions and list of uniq field records
 @bcast_by_root(c.comm)
 def parse_state_info(c):
-    print(c.pid, 'parse_state_info')
     info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}, 'scalars':[]}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
@@ -186,7 +185,9 @@ def build_state_tasks(c):
     c.mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
 
     ##list rec_id as tasks
-    c.rec_list = distribute_tasks(c.comm_rec, [r for r in c.state_info['fields'].keys()])
+    rec_list_full = [i for i in c.state_info['fields'].keys()]
+    rec_size = np.array([2 if r['is_vector'] else 1 for i,r in c.state_info['fields'].items()])
+    c.rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
 
     ##collect (mem_id, rec_id) together in field_list
     ##to make the task loop easier to read
@@ -214,7 +215,7 @@ def prepare_state(c):
 
     ##process the fields, each proc gets its own workload as a subset of
     ##field_list[pid] pointing to the list of tasks for each pid
-    ##all proc goes through their own task list simultaneously
+    ##all pid goes through their own task list simultaneously
     for task in range(c.field_ntask_max):
 
         ##process a field record if not at the end of task list
@@ -222,7 +223,7 @@ def prepare_state(c):
             ##this is the field to process in this task
             mem_id, rec_id = c.field_list[c.pid][task]
             rec = c.state_info['fields'][rec_id]
-            # message(c.comm, '   {:15s} t={} k={:5d} member={:3d} on proc{}\n'.format(rec['name'], rec['time'], rec['k'], mem_id+1, c.pid))
+            # message(c.comm, '   {:15s} t={} k={:5d} member={:3d} on proc{}\n'.format(rec['name'], rec['time'], rec['k'], mem_id+1, c.pid), c.pid)
 
             ##directory storing model output
             path = c.work_dir+'/forecast/'+c.time+'/'+rec['source']
@@ -282,7 +283,7 @@ def transpose_field_to_state(c, fields):
     message(c.comm, 'transpose field to state\n', 0)
     state = {}
 
-    ##all proc goes through their own task list simultaneously
+    ##all pid goes through their own task list simultaneously
     for task in range(c.field_ntask_max):
 
         ##prepare the fld for sending if not at the end of task list
@@ -349,7 +350,7 @@ def transpose_state_to_field(c, state):
     message(c.comm, 'transpose state to field\n', 0)
     fields = {}
 
-    ##all proc goes through their own task list simultaneously
+    ##all pid goes through their own task list simultaneously
     for task in range(c.field_ntask_max):
 
         ##prepare an empty fld for receiving if not at the end of task list

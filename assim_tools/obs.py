@@ -7,6 +7,7 @@ from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from log import message, progress_bar
 from parallel import bcast_by_root, distribute_tasks
 from perturb import random_field
+from grid import Grid
 from .state import read_field
 
 ##Note:
@@ -129,14 +130,14 @@ def build_obs_tasks(c):
 
     ##collect (mem_id, obs_rec_id) to make the obs_list
     ##to make the task loop easier to read
-    c.obs_field_list = {}
+    c.obs_list = {}
     ntask = []
     for p in range(c.nproc):
         lst = [(m, r)
                for m in c.mem_list[p%c.nproc_mem]
                for r in c.obs_rec_list[p//c.nproc_mem] ]
         ntask.append(len(lst))
-        c.obs_field_list[p] = lst
+        c.obs_list[p] = lst
     c.obs_ntask_max = np.max(ntask)
 
 
@@ -327,7 +328,6 @@ def build_loc_tasks(c):
                               for loc in range(len(c.loc_list_full))] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        print(workload)
         loc_list = distribute_tasks(c.comm, c.loc_list_full, workload)
 
     if c.assim_mode == 'serial':
@@ -337,86 +337,216 @@ def build_loc_tasks(c):
     return loc_list
 
 
-def state_to_obs(c, obs_info, fields, z_coords, mem_id, obs_rec_id):
+##prepare the obs_prior in parallel, run state_to_obs to obtain obs_seq
+def prepare_obs_prior(c, obs_seq, fields, z_fields):
 
-    obs_rec = obs_info['records'][obs_rec_id]
-    obs_src = importlib.import_module('dataset.'+obs_rec['source'])
-    model_src = importlib.import_module('models.'+obs_rec['model'])
-
-    ##if obs variable is one of the state variable, or can be computed by the model,
-    ## then we just need to collect the 3D variable and interpolate in x,y,z
-    if obs_rec['name'] in model_src.variables:
-
-        ##collect all fields
-        levels = model_src.variables[obs_rec['name']]['levels']
-        obs_field = np.zeros((len(levels), c.ny, c.nx))
-        for k in range(len(levels)):
-            levels[k]
-            ##if the current pid stores this field
-            # if 
-
-            ##or read from state_file to get the field
-            # else:
-
-
-        ##horizontal interp using grid.convert
-        ##vertical interp
-        obs_seq = []
-
-
-    ##or, if dataset module provides an obs_operator, we try to compute it by obs_src
-    elif obs_rec['model'] in obs_src.obs_operator:
-        path = c.work_dir+'/forecast/'+c.time+'/'+obs_rec['model']
-        operator = obs_src.obs_operator[obs_rec['model']]
-        obs_seq = operator(path, c.grid, c.mask, **obs_rec)
-
-    else:
-        raise ValueError('unable to obtain obs prior for '+obs_rec['name'])
-
-    return obs_seq
-
-
-def prepare_obs_prior(c):
-
-    message(c.comm, 'prepare obs priors:\n', 0)
+    message(c.comm, 'compute obs priors\n', 0)
+    obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
-    ##obs_list[pid] pointing to the list of tasks for each pid
-    ntask_max = np.max([len(lst) for p,lst in c.obs_list.items()])
-
     ##all proc goes through their own task list simultaneously
-    for task in range(ntask_max):
+    for task in range(c.obs_ntask_max):
 
         ##process an obs record if not at the end of task list
         if task < len(c.obs_list[c.pid]):
             ##this is the obs record to process
             mem_id, obs_rec_id = c.obs_list[c.pid][task]
-            # obs_rec = c.obs_info[]
+            obs_rec = c.obs_info['records'][obs_rec_id]
+            # message(c.comm, '   {:15s} t={} member={:3d} on proc{}\n'.format(obs_rec['name'], obs_rec['time'], mem_id+1, c.pid), c.pid)
 
-    # message(comm, 'process_obs: getting obs_prior for each obs variable and member', 0)
-    # for member,obs_id in distribute_tasks(comm, [(m,i) for m in range(info['nens']) for i in range(info['nobs'])])[pid]:
-    #     rec = info['obs_seq'][obs_id]
+            seq = state_to_obs(c, member=mem_id, model_fld=fields, model_z=z_fields, **obs_rec, **obs_seq[obs_rec_id])
 
-        ##if variable is in prior_state just interp to obs location
+            obs_prior_seq[mem_id, obs_rec_id] = seq
 
-        ##else try auxilary variables in state_obs
+        message(c.comm, progress_bar(task, c.obs_ntask_max), 0)
 
-        ##else try obs_operator from model src
+    message(c.comm, ' done.\n', 0)
 
-        ##tmp solution::
-        # obs_var_key = (rec['name'], rec['model'], member)
-        # if obs_var_key in obs_var_bank:
-        #     obs_var = obs_var_bank[obs_var_key]
-        # else:
-        #     message(comm, 'state_to_obs: getting variable '+rec['name']+' from '+rec['model'])
-        #     src = importlib.import_module('dataset.'+rec['source'])
-        #     obs_var = src.state_to_obs(c.work_dir+'/forecast/'+c.time+'/'+rec['model'], c.grid, **rec, k=-1, member=member)
-        #     obs_var_bank[obs_var_key] = obs_var
-        # obs_rec = info['obs_seq'][obs_id]
-        # obs_rec['value'] = c.grid.interp(obs_var, obs_rec['x'], obs_rec['y'])
-        # write_obs(obs_seq_file, info, [obs_rec], member=member)
+    return obs_prior_seq
 
-         # message(comm, '    {:15s} t={} z={:10.4f} y={:10.4f} x={:10.4f} member={:3d}'.format(obs_rec['name'], obs_rec['time'], obs_rec['z'], obs_rec['y'], obs_rec['x'], member+1))
+
+##the top-level obs forward operator routine
+##provides several ways to compute obs_prior from state fields
+def state_to_obs(c, **kwargs):
+
+    mem_id = kwargs['member']  ##if None, try to get variable from truth_file
+    time = kwargs['time']  ##obs time step
+    obs_name = kwargs['name']
+    is_vector = kwargs['is_vector']
+
+    obs_x = np.array(kwargs['x'])   ##from obs_seq the x, y, z coordinates
+    obs_y = np.array(kwargs['y'])
+    obs_z = np.array(kwargs['z'])
+    nobs = len(obs_x)
+
+    obs_grid = Grid(c.proj, obs_x, obs_y, regular=False)
+    c.grid.dst_grid = obs_grid
+
+    if is_vector:
+        obs_seq = np.full((2, nobs), np.nan)
+    else:
+        obs_seq = np.full(nobs, np.nan)
+
+    ##obs dataset source module
+    obs_src = importlib.import_module('dataset.'+kwargs['source'])
+    ##model source module
+    model_src = importlib.import_module('models.'+kwargs['model'])
+
+    ##if obs variable is one of the state variable, or can be computed by the model,
+    ## then we just need to collect the 3D variable and interpolate in x,y,z
+    if obs_name in model_src.variables:
+
+        levels = model_src.variables[obs_name]['levels']
+        for k in range(len(levels)):
+            if obs_name in [r['name'] for r in c.state_def]:
+                ##the obs is one of the state variables
+                ##find its corresponding rec_id
+                rec_id = [i for i,r in c.state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
+
+                ##if the current pid stores this field, just read it
+                if rec_id in c.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem] and 'model_fld' in kwargs and 'model_z' in kwargs:
+                    zfld = kwargs['model_z'][mem_id, rec_id]
+                    fld = kwargs['model_fld'][mem_id, rec_id]
+
+                else:  ##or read field from state binfile
+                    path = c.work_dir+'/analysis/'+t2s(time)+c.s_dir
+                    zfld = read_field(path+'/z_coords.bin', c.state_info, c.mask, 0, rec_id)
+                    fld = read_field(path+'/prior_state.bin', c.state_info, c.mask, mem_id, rec_id)
+
+            else:  ##or get the field from model_src.read_var
+                if k == 0:  ##initialize grid obj for convert
+                    path = c.work_dir+'/forecast/'+t2s(time)+'/'+kwargs['model']
+                    grid = model_src.read_grid(path, **kwargs)
+                    grid.dst_grid = c.grid
+                z = grid.convert(model_src.z_coords(path, grid, **kwargs))
+                zfld = np.array([z, z]) if is_vector else z
+                fld = grid.convert(model_src.read_var(path, grid, **kwargs), is_vector=is_vector)
+
+            ##horizontal interp field to obs_x,y, for current layer k
+            if is_vector:
+                z1 = c.grid.convert(zfld[0, ...], coarse_grain=False)
+                zc = np.array([z1, z1])
+            else:
+                zc = c.grid.convert(zfld, coarse_grain=False)
+
+            vc = c.grid.convert(fld, is_vector=is_vector, coarse_grain=False)
+
+            ##vertical interp to obs_z, take ocean depth as example:
+            ##    -------------------------------------------
+            ##k-1 -  -  -  -  v[k-1], vp  }dzp  prevous layer
+            ##    ----------  z[k-1], zp --------------------
+            ##k   -  -  -  -  v[k],   vc  }dzc  current layer
+            ##    ----------  z[k],   zc --------------------
+            ##k+1 -  -  -  -  v[k+1]
+            ##
+            ##z at current level k denoted as zc, previous level as zp
+            ##variables are considered layer averages, so they are at layer centers
+            if k == 0:
+                dzc = zc  ##layer thickness for first level
+
+                ##the first level: constant vc from z=0 to dzc/2
+                inds = np.where(np.logical_and(obs_z >= np.minimum(0, 0.5*dzc),
+                                               obs_z <= np.maximum(0, 0.5*dzc)) )
+                obs_seq[..., inds] = vc[..., inds]
+
+            if k > 0:
+                dzc = zc - zp  ##layer thickness for level k
+
+                ##in between levels: linear interp between vp and vc
+                z_vp = zp - 0.5*dzp
+                z_vc = zp + 0.5*dzc
+                inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
+                                               obs_z <= np.maximum(z_vp, z_vc)) )
+                vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp)
+                obs_seq[..., inds] = vi[..., inds]
+
+            if k == len(levels)-1:
+                ##the last level: constant vc from z=zc-dzc/2 to zc
+                inds = np.where(np.logical_and(obs_z >= np.minimum(zc-0.5*dzc, zc),
+                                               obs_z <= np.maximum(zc-0.5*dzc, zc)) )
+                obs_seq[..., inds] = vc[..., inds]
+
+            if k < len(levels)-1:
+                ##make a copy of current layer as 'previous' for next k
+                zp = zc.copy()
+                vp = vc.copy()
+                dzp = dzc.copy()
+
+    ##or, if dataset module provides an obs_operator, use it to compute obs
+    elif kwargs['model'] in obs_src.obs_operator:
+        path = c.work_dir+'/forecast/'+c.time+'/'+obs_rec['model']
+        operator = obs_src.obs_operator[kwargs['model']]
+        obs_seq = operator(path, c.grid, c.mask, **kwargs)
+
+    else:
+        raise ValueError('unable to obtain obs prior for '+obs_name)
+
+    return obs_seq
+
+
+##transpose obs from field-complete to ensemble-complete:
+##given obs_list[pid] -> list of (mem_id, obs_rec_id)
+##      loc_list[pid] -> list of tile loc
+##      obs_inds[obs_rec_id][loc] -> inds of subset of obs_seq
+##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
+##to the destination proc (dst_pid)
+def transpose_obs_to_lobs(c, obs_seq, ensemble=True):
+    ##if ensemble, we are transposing the obs_prior_seq with [mem_id,obs_rec_id]
+    ##otherwise, we are only transposing the obs_seq with [obs_rec_id],
+    ##           by the group pid_mem==0
+
+    message(c.comm, 'transpose obs to local obs\n', 0)
+    lobs = {}
+
+    ##all pid goes through their own task list simultaneously
+    for task in range(c.obs_ntask_max):
+
+        ##see detailed explanation of the coreographed send/recv
+        ##in state.transpose_field_to_state
+
+        if task < len(c.obs_list[c.pid]):
+            mem_id, obs_rec_id = c.obs_list[c.pid][task]
+            seq = obs_seq[mem_id, obs_rec_id]
+
+        for src_pid in np.arange(0, c.pid):
+            if task < len(c.obs_list[src_pid]):
+                src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
+                lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+
+        if task < len(c.obs_list[c.pid]):
+            for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
+                obs_chk = {}
+                for loc in range(len(c.loc_list[dst_pid])):
+                    inds = c.obs_inds[obs_rec_id][loc]
+                    obs_chk[loc] = seq[:, inds]
+
+            if dst_pid == c.pid:
+                lobs[mem_id, obs_rec_id] = obs_chk
+            else:
+                c.comm.send(obs_chk, dest=dst_pid)
+
+        for src_pid in np.arange(c.pid+1, c.nproc):
+            if task < len(c.obs_list[src_pid]):
+                src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
+                lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+
+        if task < len(c.obs_list[c.pid]):
+            del obs_seq[mem_id, obs_rec_id]   ##free up memory
+
+        message(c.comm, progress_bar(task, c.obs_ntask_max), 0)
+
+    message(c.comm, ' done.\n', 0)
+
+    return lobs
+
+
+##transpose local obs back to obs sequences
+##only be useful if you want to output the obs for diagnostics
+def transpose_lobs_to_obs(c, lobs, lobs_prior):
+    obs_seq = {}
+    obs_prior_seq = {}
+
+    return obs_seq, obs_prior_seq
 
 
 ##output an obs values to the binfile for a member (obs_prior), if member=None it is the actual obs
