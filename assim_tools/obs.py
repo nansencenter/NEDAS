@@ -490,10 +490,7 @@ def state_to_obs(c, **kwargs):
 ##      obs_inds[obs_rec_id][loc] -> inds of subset of obs_seq
 ##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
 ##to the destination proc (dst_pid)
-def transpose_obs_to_lobs(c, obs_seq, ensemble=True):
-    ##if ensemble, we are transposing the obs_prior_seq with [mem_id,obs_rec_id]
-    ##otherwise, we are only transposing the obs_seq with [obs_rec_id],
-    ##           by the group pid_mem==0
+def transpose_obs_to_lobs(c, obs_seq, ensemble=False):
 
     message(c.comm, 'transpose obs to local obs\n', 0)
     lobs = {}
@@ -506,32 +503,66 @@ def transpose_obs_to_lobs(c, obs_seq, ensemble=True):
 
         if task < len(c.obs_list[c.pid]):
             mem_id, obs_rec_id = c.obs_list[c.pid][task]
-            seq = obs_seq[mem_id, obs_rec_id]
+
+            ##this logic is uniq to the obs:
+            ##(we have the actual obs_seq and obs_prior_seq)
+            if ensemble:
+                ##this is one of the obs_prior_seq[mem_id, obs_rec_id]-> array[nv,nobs]
+                seq = obs_seq[mem_id, obs_rec_id]
+            else:
+                ##this is the actual obs_seq with keys 'obs','x','y','z','t'->array[nv,nobs]
+                ##it only need to be sent by pid_mem=0
+                if c.pid_mem == 0 and mem_id == 0:
+                    seq = obs_seq[obs_rec_id]
 
         for src_pid in np.arange(0, c.pid):
             if task < len(c.obs_list[src_pid]):
                 src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
-                lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                if ensemble:
+                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                else:
+                    if src_pid % c.nproc_mem == 0 and src_mem_id == 0:
+                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid)
 
         if task < len(c.obs_list[c.pid]):
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 obs_chk = {}
                 for loc in range(len(c.loc_list[dst_pid])):
                     inds = c.obs_inds[obs_rec_id][loc]
-                    obs_chk[loc] = seq[:, inds]
+                    if ensemble:
+                        obs_chk[loc] = seq[..., inds]
+                    else:
+                        if c.pid_mem == 0 and mem_id == 0:
+                            subseq = {}
+                            for k,v in seq.items():
+                                subseq[k] = v[..., inds]
+                            obs_chk[loc] = subseq
 
-            if dst_pid == c.pid:
-                lobs[mem_id, obs_rec_id] = obs_chk
-            else:
-                c.comm.send(obs_chk, dest=dst_pid)
+                if dst_pid == c.pid:
+                    if ensemble:
+                        lobs[mem_id, obs_rec_id] = obs_chk
+                    else:
+                        if c.pid_mem == 0 and mem_id == 0:
+                            lobs[obs_rec_id] = obs_chk
+                else:
+                    c.comm.send(obs_chk, dest=dst_pid)
 
         for src_pid in np.arange(c.pid+1, c.nproc):
             if task < len(c.obs_list[src_pid]):
                 src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
-                lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                if ensemble:
+                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                else:
+                    if src_pid % c.nproc_mem == 0 and src_mem_id == 0:
+                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid)
 
         if task < len(c.obs_list[c.pid]):
-            del obs_seq[mem_id, obs_rec_id]   ##free up memory
+            ##free up memory
+            if ensemble:
+                del obs_seq[mem_id, obs_rec_id]
+            else:
+                if mem_id == 0:
+                    del obs_seq[obs_rec_id]
 
         message(c.comm, progress_bar(task, c.obs_ntask_max), 0)
 

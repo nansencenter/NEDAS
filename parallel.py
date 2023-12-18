@@ -37,7 +37,9 @@ class dummy_comm(object):
 
 ##initialize the communicator for mpi
 def parallel_start():
-    if 'PMI_SIZE' in os.environ:
+    ##possible environ variable names from mpi calls
+    mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
+    if any([ev in os.environ for ev in mpi_env_var]):
         ##program is called from mpi, initialize comm
         from mpi4py import MPI
         comm = MPI.COMM_WORLD

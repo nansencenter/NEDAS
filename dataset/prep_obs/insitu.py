@@ -185,6 +185,9 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 obs_seq['y'].append(y[p])
                 obs_seq['x'].append(x[p])
 
+    for key in obs_seq.keys():
+        obs_seq[key] = np.array(obs_seq[key])
+
     return obs_seq
 
 

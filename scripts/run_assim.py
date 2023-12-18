@@ -65,11 +65,6 @@ c.loc_list = build_loc_tasks(c)
 ##compute obs prior, each pid compute a subset of obs
 obs_prior_seq = prepare_obs_prior(c, obs_seq, fields, z_fields)
 
-if c.pid==0:
-    print(obs_seq)
-    print(obs_prior_seq)
-
-exit()
 timer3 = time.time()
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(timer3-timer2), 0)
 
@@ -88,96 +83,69 @@ z_state = transpose_field_to_state(c, z_fields)
 ##global scalar state variables to be updated
 
 ##obs and obs_prior
-# message(c.comm, 'obs sequences: ', 0)
-# lobs = transpose_obs_to_lobs(c, obs_seq)
+message(c.comm, 'obs sequences: ', 0)
+lobs = transpose_obs_to_lobs(c, obs_seq)
 message(c.comm, 'obs prior sequences: ', 0)
-lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq)
-
-# if c.pid == 4:
-    # print(lobs_prior)
+lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
 
 timer4 = time.time()
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(timer4-timer3), 0)
 
-exit()
 ##--------------------------
 ##4.Assimilate obs to update state variables
 message(c.comm, '4.Assimilation\n', 0)
 
-# if c.assim_mode == 'batch':
-##loop through location list on pid
-for loc in range(len(c.loc_list[c.pid])):
+if c.assim_mode == 'batch':
 
-    istart,iend,di,jstart,jend,dj = c.loc_list[pid][loc]
-    ii, jj = np.meshgrid(np.arange(istart,iend,di), np.arange(jstart,jend,dj))
-    mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+    ##loop through tiles stored on pid
+    for loc in range(len(c.loc_list[c.pid])):
+        ist,ied,di,jst,jed,dj = c.loc_list[c.pid][loc]
+        ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
+        mask_chk = c.mask[jst:jed:dj, ist:ied:di]
 
-    ##loop through unmasked grid points in the tile fld_chk
-    for l in range(len(ii[~mask_chk])):
+        ##fetch local obs seq and obs_prior seq on tile
+        # obs = []
+        # obs_prior = []
+        # obs_err = []
+        # nlobs = 0
+        # for obs_rec_id, obs_rec in c.obs_info['records'].items():
+        #     if obs_rec['is_vector']:
+        #         for v in range(2):
+        #             obs.append(lobs[obs_rec_id][loc]['obs'][v, :])
+        #     else:
+        #         obs.append(lobs[obs_rec_id][loc]['obs'])
 
-        ##l is the index of fld_chk locally stored in state[mem_id,rec_id][loc]
-        ##i,j are the indices in the full grid
-        i = ii[~mask_chk][l]
-        j = jj[~mask_chk][l]
-        x = c.grid.x[j, i]
-        y = c.grid.y[j, i]
+        #     #obs err and correlation matrix
+        #     obs_err.append([obs_rec['err']['std'] for i in range(len(obs))])
+        #     nlobs += len(obs)
+        # obs_err_corr = np.eye(nlobs)
+        # print(obs)
 
-        ##loop through each field record
-        for rec_id in range(len(state_info['fields'])):
-            rec = state_info['fields'][rec_id]
-            name = rec['name']
-            t = rec['time']
-            # z = c.
+        ##loop through unmasked grid points in the tile
+        for l in range(len(ii[~mask_chk])):
+            ##loop through each field record
+            for rec_id, rec in c.state_info['fields'].items():
+                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
 
-            # ens_prior = np.full(c.nens, np.nan)
-            # for mem_id in range(c.nens):
-            #     ens_prior[mem_id] = state[mem_id, rec_id][loc][l]
+                # for key in keys:
+                    # ens_prior = np.array([state[m, rec_id][loc][key] for m in range(c.nens)])
 
-            # if np.isnan(ens_prior).any():
-            #     ##we don't want to update if any member is missing
-            #     continue
+                    ##localization factor
+                    # local_factor = np.ones(nlobs)
 
-            # ##form the obs sequence
-            # for obs_rec_id in range(len(obs_info['records'])):
+                    # ens_post = local_analysis(ens_prior, local_obs, obs_err, obs_prior,
+                                              # local_factor, c.filter_kind, obs_err_corr)
 
-            #     obs_rec = obs_info['records'][obs_rec_id]
-            #     ##compute obs distance to state
-            #     hdist = 
-            #     vdist = 
-            #     tdist = 
+                    ##save the posterior ensemble to the state
+                    # for m in range(c.nens):
+                        # state[m, rec_id][loc][key] = ens_post[m]
 
-            #     ##collect local obs seq
-            #     lo_ind = 
-            #     lobs = 
+            # message(c.comm, progress_bar(), 0)
 
-            #     hlfac = 
-            #     vlfac = 
-            #     tlfac = 
-            #     impact = 
+    message(c.comm, ' done.\n', 0)
 
-            #     ##the full localization factor
-            #     local_factor = hlfac * vlfac
-
-            #     ##obs err and correlation matrix
-            #     obs_err = 
-                
-            #     obs['name']
-
-            #     obs_err_corr = 
-
-            #     ##obs prior ensemble
-            #     obs_prior = 
-
-            ##perform the batch assimilation using local_analysis
-            ens_post = local_analysis(ens_prior, local_obs, obs_err, obs_prior, local_factor, c.filter_kind, obs_err_corr)
-
-            ##save the posterior ensemble to the state
-            for mem_id in range(c.nens):
-                state[mem_id, rec_id][loc][l] = ens_post[mem_id]
-
-# elif c.assim_mode == 'serial':
-
-
+elif c.assim_mode == 'serial':
+    pass
 
 timer5 = time.time()
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(timer5-timer4), 0)
