@@ -16,6 +16,8 @@ if c.nscale > 1:
 else:
     c.s_dir = ''
 
+##--------------------------
+##1.Prepare state variables
 ##analysis grid in 2D is prepared based on config file
 ##c.grid obj has information on x,y coordinates
 timer1 = time.time()
@@ -29,22 +31,23 @@ c.state_info = parse_state_info(c)
 build_state_tasks(c)
 
 ##prepare the ensemble state and z coordinates
-# fields, z_fields = prepare_state(c)
+fields, z_fields = prepare_state(c)
 
 ##save a copy of the prior state
 state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_state.bin'
-# output_state(c, fields, state_file)
+output_state(c, fields, state_file)
 
 ##collect ensemble mean z fields as analysis grid z coordinates
 ##for obs preprocessing later
 message(c.comm, 'collect model z coordinates, ', 0)
-# z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
-# output_ens_mean(c, z_fields, z_file)
+z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
+output_ens_mean(c, z_fields, z_file)
 
 timer2 = time.time()
 message(c.comm, 'Step 1 took {} seconds\n\n'.format(timer2-timer1), 0)
 
-##Prepare observations
+##--------------------------
+## 2.Prepare observations
 message(c.comm, '2.Prepare obs and obs priors\n', 0)
 
 c.obs_info = parse_obs_info(c)
@@ -58,16 +61,21 @@ c.loc_list_full = partition_grid(c)
 c.obs_inds = assign_obs_to_loc(c, obs_seq)
 
 c.loc_list = build_loc_tasks(c)
-exit()
 
 ##compute obs prior, each pid compute a subset of obs
-obs_prior = prepare_obs_prior(c)
+obs_prior_seq = prepare_obs_prior(c, obs_seq, fields, z_fields)
 
+if c.pid==0:
+    print(obs_seq)
+    print(obs_prior_seq)
+
+exit()
 timer3 = time.time()
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(timer3-timer2), 0)
 
-##transposing fields to local ensemble-complete states:
-message(c.comm, '3.Transpose state from field-complete to ensemble-complete\n', 0)
+##--------------------------
+##3.Transposing fields to local ensemble-complete states:
+message(c.comm, '3.Transpose from field-complete to ensemble-complete\n', 0)
 
 ##the local state variables to be updated
 message(c.comm, 'state variable fields: ', 0)
@@ -79,13 +87,24 @@ z_state = transpose_field_to_state(c, z_fields)
 
 ##global scalar state variables to be updated
 
+##obs and obs_prior
+# message(c.comm, 'obs sequences: ', 0)
+# lobs = transpose_obs_to_lobs(c, obs_seq)
+message(c.comm, 'obs prior sequences: ', 0)
+lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq)
+
+# if c.pid == 4:
+    # print(lobs_prior)
+
 timer4 = time.time()
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(timer4-timer3), 0)
 
 exit()
-##assimilate obs to update state variables
+##--------------------------
+##4.Assimilate obs to update state variables
 message(c.comm, '4.Assimilation\n', 0)
 
+# if c.assim_mode == 'batch':
 ##loop through location list on pid
 for loc in range(len(c.loc_list[c.pid])):
 
@@ -156,10 +175,15 @@ for loc in range(len(c.loc_list[c.pid])):
             for mem_id in range(c.nens):
                 state[mem_id, rec_id][loc][l] = ens_post[mem_id]
 
+# elif c.assim_mode == 'serial':
+
+
+
 timer5 = time.time()
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(timer5-timer4), 0)
 
-##transposing state back to field-complete
+##--------------------------
+##5.Transposing state back to field-complete
 message(c.comm, '5.Transpose state from ensemble-complete to field-complete\n', 0)
 
 message(c.comm, 'state variable fields: ', 0)
@@ -171,7 +195,8 @@ output_state(c, fields, state_file)
 timer6 = time.time()
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(timer6-timer5), 0)
 
-##Post-processing
+##--------------------------
+##6.Post-processing
 message(c.comm, '6.Post-processing\n', 0)
 
 ##if c.grid != model_grid

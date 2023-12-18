@@ -70,6 +70,7 @@ def filename(path, **kwargs):
     ##if there is a list of matching files, then we return the first one
     return flist[0]
 
+
 from pyproj import Geod
 from grid import Grid
 
@@ -91,6 +92,7 @@ def stagger(dat, v_name):
         dat_[0, :] = 3*dat[1, :] - 3*dat[2, :] + dat[3, :]
     return dat_
 
+
 def destagger(dat, v_name):
     ##destagger u,v from C-grid
     dat_ = dat.copy()
@@ -101,6 +103,7 @@ def destagger(dat, v_name):
         dat_[:-1, :] = 0.5*(dat[:-1, :] + dat[1:, :])
         dat_[-1, :] = 3*dat[-2, :] - 3*dat[-3, :] + dat[-4, :]
     return dat_
+
 
 ##keys in kwargs for which the grid obj needs to be redefined: ('member', 'time', 'k')
 ##topaz grid is fixed in time/space, so no keys needed
@@ -144,8 +147,10 @@ def read_grid(path, **kwargs):
 
     return Grid(proj, x, y)
 
+
 def write_grid(path, **kwargs):
     pass
+
 
 ##topaz stored a separate landmask in depth.a file
 ##this function is uniq to topaz
@@ -207,6 +212,7 @@ def read_var(path, grid, **kwargs):
 
     return var
 
+
 ##output updated variable with name='varname' defined in state_def
 ##to the corresponding model restart file
 def write_var(path, grid, var, **kwargs):
@@ -239,6 +245,7 @@ def write_var(path, grid, var, **kwargs):
     else:
         f.overwrite_field(var, mask, variables[name]['name'], level=k, tlevel=1)
     f.close()
+
 
 ##keys in kwargs for which the z_coords needs to be separately calculated.
 ##for topaz, the isopycnal coordinates vary for member, time, and level k

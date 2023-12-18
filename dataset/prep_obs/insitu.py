@@ -33,7 +33,7 @@ def read_obs(path, grid, mask, model_z, **kwargs):
     assert 'name' in kwargs, 'prep_obs.insitu.read_obs: missing obs variable name=?'
     obs_name = kwargs['name']
 
-    obs_seq = {'obs':[], 'time':[], 'z':[], 'y':[], 'x':[]}
+    obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[]}
 
     ONEM = 9806.           ##press (Pa) for 1 m depth
     NUM_OBS_PER_LAYER = 1  ##for vertical superobing
@@ -180,7 +180,7 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 if flag2[p,l] == 0:
                     continue
                 obs_seq['obs'].append(obs[p,l])
-                obs_seq['time'].append(t_prof)
+                obs_seq['t'].append(t_prof)
                 obs_seq['z'].append(z[p,l])
                 obs_seq['y'].append(y[p])
                 obs_seq['x'].append(x[p])

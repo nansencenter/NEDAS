@@ -92,9 +92,9 @@ maskfile=$SCRATCH/mask.npz
 ##     source module, one of the models/ module that provides the state variable
 ##     error type, normal/lognormal
 state_def=$(cat << EOF
-ocean_velocity      topaz.v5    field  normal
 ocean_temp          topaz.v5    field  normal
 ocean_saln          topaz.v5    field  normal
+ocean_velocity      topaz.v5    field  normal
 EOF
 )
 #drag_coef           topaz.v5   scalar  normal
