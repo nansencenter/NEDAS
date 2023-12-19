@@ -62,8 +62,8 @@ next_time=os.environ.get('next_time', time_start)
 obs_window_min = np.float32(os.environ.get('obs_window_min'))
 obs_window_max = np.float32(os.environ.get('obs_window_max'))
 obs_nt = int(os.environ.get('obs_nt'))
-obs_dt = (obs_window_max - obs_window_min) / obs_nt
-obs_ts = np.arange(obs_window_min + obs_dt/2, obs_window_max, obs_dt)
+obs_dt = 12   #(obs_window_max - obs_window_min) / obs_nt
+obs_ts = np.array([0]) #np.arange(obs_window_min, obs_window_max, obs_dt)
 
 ##time scale for averaging
 t_scale = np.array(os.environ.get('t_scale').split()).astype(np.float32)[scale]

@@ -10,14 +10,25 @@ variables = {'ocean_temp':{'dtype':'float', 'is_vector':False, 'z_units':'m', 'u
 
 
 def filename(path, **kwargs):
-    if 'time' in kwargs:
-        t = kwargs['time']
-        tstr = t.strftime('%Y%m%d')
-    else:
+    if 'time' not in kwargs:
         tstr = '????????'
+        search = path+'/'+tstr+'_?_prof.nc'
+        file_list = glob.glob(search)
 
-    search = path+'/'+tstr+'_?_prof.nc'
-    file_list = glob.glob(search)
+    else:
+        if 'obs_window_min' in kwargs and 'obs_window_max' in kwargs:
+            d_range = np.arange(kwargs['obs_window_min'], kwargs['obs_window_max'])
+        else:
+            d_range = [0]
+
+        file_list = []
+        for d in d_range:
+            t = kwargs['time'] + d * timedelta(hours=1)
+            tstr = t.strftime('%Y%m%d')
+            search = path+'/'+tstr+'_?_prof.nc'
+            for result in glob.glob(search):
+                if result not in file_list:
+                    file_list.append(result)
 
     assert len(file_list)>0, 'no matching files found: '+search
 

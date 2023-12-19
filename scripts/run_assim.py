@@ -90,8 +90,8 @@ message(c.comm, 'obs prior sequences: ', 0)
 lobs_prior = transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_prior_seq, ensemble=True)
 
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-start), 0)
+c.comm.Barrier()
 start = time.time()
-
 
 ##--------------------------
 ##4.Assimilate obs to update state variables
@@ -106,22 +106,22 @@ if c.assim_mode == 'batch':
         mask_chk = c.mask[jst:jed:dj, ist:ied:di]
 
         ##fetch local obs seq and obs_prior seq on tile
-        # obs = []
-        # obs_prior = []
-        # obs_err = []
-        # nlobs = 0
-        # for obs_rec_id, obs_rec in obs_info['records'].items():
-        #     if obs_rec['is_vector']:
-        #         for v in range(2):
-        #             obs.append(lobs[obs_rec_id][loc]['obs'][v, :])
-        #     else:
-        #         obs.append(lobs[obs_rec_id][loc]['obs'])
+        nlobs = np.sum([len(lobs[r][loc]['obs'].flatten()) for r in obs_info['records'].keys()])
+        if nlobs == 0:
+            continue
 
-        #     #obs err and correlation matrix
-        #     obs_err.append([obs_rec['err']['std'] for i in range(len(obs))])
-        #     nlobs += len(obs)
-        # obs_err_corr = np.eye(nlobs)
-        # print(obs)
+        obs = np.full(nlobs, np.nan)
+        obs_prior = np.full((c.nens, nlobs), np.nan)
+        obs_err = np.full(nlobs, np.nan)
+        obs_err_corr = np.eye(nlobs)
+        i = 0
+        for r, obs_rec in obs_info['records'].items():
+            d = len(lobs[r][loc]['obs'].flatten())
+            obs[i:i+d] = lobs[r][loc]['obs'].flatten()
+            obs_err[i:i+d] = np.ones(d) * obs_info['records'][r]['err']['std']
+            for m in range(c.nens):
+                obs_prior[m, i:i+d] = lobs_prior[m,r][loc].flatten()
+            i += d
 
         ##loop through unmasked grid points in the tile
         for l in range(len(ii[~mask_chk])):
@@ -129,20 +129,20 @@ if c.assim_mode == 'batch':
             for rec_id, rec in state_info['fields'].items():
                 keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
 
-                # for key in keys:
-                    # ens_prior = np.array([state[m, rec_id][loc][key] for m in range(c.nens)])
+                for key in keys:
+                    ens_prior = np.array([state[m, rec_id][loc][key] for m in range(c.nens)])
 
                     ##localization factor
-                    # local_factor = np.ones(nlobs)
+                    local_factor = np.ones(nlobs)
 
-                    # ens_post = local_analysis(ens_prior, local_obs, obs_err, obs_prior,
-                                              # local_factor, c.filter_kind, obs_err_corr)
+                    ens_post = local_analysis(ens_prior, np.array(obs), obs_err, obs_prior,
+                                              local_factor, c.filter_type, obs_err_corr)
 
                     ##save the posterior ensemble to the state
-                    # for m in range(c.nens):
-                        # state[m, rec_id][loc][key] = ens_post[m]
+                    for m in range(c.nens):
+                        state[m, rec_id][loc][key] = ens_post[m]
 
-            # message(c.comm, progress_bar(), 0)
+        # message(c.comm, progress_bar(,), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -150,6 +150,7 @@ elif c.assim_mode == 'serial':
     pass
 
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-start), 0)
+c.comm.Barrier()
 start = time.time()
 
 ##--------------------------
