@@ -180,32 +180,30 @@ def read_field(binfile, info, mask, mem_id, rec_id):
 
 ##functions to prepare the state variables
 
-def build_state_tasks(c):
+def build_state_tasks(c, state_info):
     ##list of mem_id as tasks
-    c.mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
+    mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
 
     ##list rec_id as tasks
-    rec_list_full = [i for i in c.state_info['fields'].keys()]
-    rec_size = np.array([2 if r['is_vector'] else 1 for i,r in c.state_info['fields'].items()])
-    c.rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
+    rec_list_full = [i for i in state_info['fields'].keys()]
+    rec_size = np.array([2 if r['is_vector'] else 1 for i,r in state_info['fields'].items()])
+    rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
 
     ##collect (mem_id, rec_id) together in field_list
     ##to make the task loop easier to read
-    c.field_list = {}
-    ntask = []
+    field_list = {}
     for p in range(c.nproc):
-        lst = [(m, r)
-               for m in c.mem_list[p%c.nproc_mem]
-               for r in c.rec_list[p//c.nproc_mem] ]
-        ntask.append(len(lst))
-        c.field_list[p] = lst
-    c.field_ntask_max = np.max(ntask)
+        field_list[p] = [(m, r)
+                         for m in mem_list[p%c.nproc_mem]
+                         for r in rec_list[p//c.nproc_mem] ]
+
+    return field_list
 
 
 ##prepare_state collects fields from model restart files, convert them to
 ##    the analysis grid, preprocess (coarse-graining etc), save to fields
 ##    with key (mem_id, rec_id) pointing to uniq fields
-def prepare_state(c):
+def prepare_state(c, state_info, field_list):
 
     message(c.comm, 'prepare state by reading fields from model restart\n', 0)
     fields = {}
@@ -213,16 +211,18 @@ def prepare_state(c):
     grid_bank = {}
     z_bank = {}
 
+    field_ntask_max = np.max([len(lst) for p,lst in field_list.items()])
+
     ##process the fields, each proc gets its own workload as a subset of
     ##field_list[pid] pointing to the list of tasks for each pid
     ##all pid goes through their own task list simultaneously
-    for task in range(c.field_ntask_max):
+    for task in range(field_ntask_max):
 
         ##process a field record if not at the end of task list
-        if task < len(c.field_list[c.pid]):
+        if task < len(field_list[c.pid]):
             ##this is the field to process in this task
-            mem_id, rec_id = c.field_list[c.pid][task]
-            rec = c.state_info['fields'][rec_id]
+            mem_id, rec_id = field_list[c.pid][task]
+            rec = state_info['fields'][rec_id]
             # message(c.comm, '   {:15s} t={} k={:5d} member={:3d} on proc{}\n'.format(rec['name'], rec['time'], rec['k'], mem_id+1, c.pid), c.pid)
 
             ##directory storing model output
@@ -268,7 +268,7 @@ def prepare_state(c):
             else:
                 z_coords[mem_id, rec_id] = z
 
-        message(c.comm, progress_bar(task, c.field_ntask_max), 0)
+        message(c.comm, progress_bar(task, field_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -278,19 +278,21 @@ def prepare_state(c):
 ##transpose_field_to_state send chunks of field owned by a pid to other pid
 ##  so that the field-complete fields get transposed into ensemble-complete state
 ##  with keys (mem_id, rec_id) pointing to the slices in loc_list
-def transpose_field_to_state(c, fields):
+def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
 
     message(c.comm, 'transpose field to state\n', 0)
     state = {}
 
     ##all pid goes through their own task list simultaneously
-    for task in range(c.field_ntask_max):
+    field_ntask_max = np.max([len(lst) for p,lst in field_list.items()])
+
+    for task in range(field_ntask_max):
 
         ##prepare the fld for sending if not at the end of task list
-        if task < len(c.field_list[c.pid]):
-            mem_id, rec_id = c.field_list[c.pid][task]
-            rec = c.state_info['fields'][rec_id]
-            fld = fields[mem_id, rec_id]
+        if task < len(field_list[c.pid]):
+            mem_id, rec_id = field_list[c.pid][task]
+            rec = state_info['fields'][rec_id]
+            fld = fields[mem_id, rec_id].copy()
 
         ## - for each source proc id (src_pid) with field_list item (mem_id, rec_id),
         ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to destination
@@ -300,20 +302,20 @@ def transpose_field_to_state(c, fields):
 
         ## 1) receive fld_chk from src_pid, for src_pid<pid first
         for src_pid in np.arange(0, c.pid):
-            if task < len(c.field_list[src_pid]):
-                src_mem_id, src_rec_id = c.field_list[src_pid][task]
-                state[src_mem_id, src_rec_id] = c.comm.recv(source=src_pid)
+            if task < len(field_list[src_pid]):
+                src_mem_id, src_rec_id = field_list[src_pid][task]
+                state[src_mem_id, src_rec_id] = c.comm.recv(source=src_pid, tag=task)
 
         ## 2) send my fld chunk to a list of dst_pid, send to dst_pid>=pid first
         ##    because they wait to receive before being able to send their own stuff;
         ##    when finished with dst_pid>=pid, cycle back to send to dst_pid<pid,
         ##    i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
-        if task < len(c.field_list[c.pid]):
+        if task < len(field_list[c.pid]):
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 fld_chk = {}
-                for loc in range(len(c.loc_list[dst_pid])):
+                for loc in range(len(loc_list[dst_pid])):
                     ##slice for this loc
-                    istart,iend,di,jstart,jend,dj = c.loc_list[dst_pid][loc]
+                    istart,iend,di,jstart,jend,dj = loc_list[dst_pid][loc]
                     ##save the unmasked points in slice to fld_chk for this loc
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     if rec['is_vector']:
@@ -326,18 +328,18 @@ def transpose_field_to_state(c, fields):
                     state[mem_id, rec_id] = fld_chk
                 else:
                     ##send fld_chk to dst_pid's state
-                    c.comm.send(fld_chk, dest=dst_pid)
+                    c.comm.send(fld_chk, dest=dst_pid, tag=task)
 
         ## 3) finish receiving fld_chk from src_pid, for src_pid>pid now
         for src_pid in np.arange(c.pid+1, c.nproc):
-            if task < len(c.field_list[src_pid]):
-                src_mem_id, src_rec_id = c.field_list[src_pid][task]
-                state[src_mem_id, src_rec_id] = c.comm.recv(source=src_pid)
+            if task < len(field_list[src_pid]):
+                src_mem_id, src_rec_id = field_list[src_pid][task]
+                state[src_mem_id, src_rec_id] = c.comm.recv(source=src_pid, tag=task)
 
-        if task < len(c.field_list[c.pid]):
+        if task < len(field_list[c.pid]):
             del fields[mem_id, rec_id]   ##free up memory
 
-        message(c.comm, progress_bar(task, c.field_ntask_max), 0)
+        message(c.comm, progress_bar(task, field_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -345,18 +347,20 @@ def transpose_field_to_state(c, fields):
 
 
 ##transpose_state_to_field transposes back the state to field-complete fields
-def transpose_state_to_field(c, state):
+def transpose_state_to_field(c, state_info, field_list, loc_list, state):
 
     message(c.comm, 'transpose state to field\n', 0)
     fields = {}
 
     ##all pid goes through their own task list simultaneously
-    for task in range(c.field_ntask_max):
+    field_ntask_max = np.max([len(lst) for p,lst in field_list.items()])
+
+    for task in range(field_ntask_max):
 
         ##prepare an empty fld for receiving if not at the end of task list
-        if task < len(c.field_list[c.pid]):
-            mem_id, rec_id = c.field_list[c.pid][task]
-            rec = c.state_info['fields'][rec_id]
+        if task < len(field_list[c.pid]):
+            mem_id, rec_id = field_list[c.pid][task]
+            rec = state_info['fields'][rec_id]
             if rec['is_vector']:
                 fld = np.full((2, c.ny, c.nx), np.nan)
             else:
@@ -367,26 +371,26 @@ def transpose_state_to_field(c, state):
         ##
         ## 1) send my fld_chk to dst_pid, for dst_pid<pid first
         for dst_pid in np.arange(0, c.pid):
-            if task < len(c.field_list[dst_pid]):
-                dst_mem_id, dst_rec_id = c.field_list[dst_pid][task]
-                c.comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid)
+            if task < len(field_list[dst_pid]):
+                dst_mem_id, dst_rec_id = field_list[dst_pid][task]
+                c.comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid, tag=task)
                 del state[dst_mem_id, dst_rec_id]   ##free up memory
 
         ## 2) receive fld_chk from a list of src_pid, receive from src_pid>=pid first
         ##    because they wait to send stuff before being able to receive themselves,
         ##    cycle back to receive from src_pid<pid then.
-        if task < len(c.field_list[c.pid]):
+        if task < len(field_list[c.pid]):
             for src_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 if src_pid == c.pid:
                     ##same pid, so just copy fld_chk from state
-                    fld_chk = state[mem_id, rec_id]
+                    fld_chk = state[mem_id,rec_id].copy()
                 else:
                     ##receive fld_chk from src_pid's state
-                    fld_chk = c.comm.recv(source=src_pid)
+                    fld_chk = c.comm.recv(source=src_pid, tag=task)
 
                 ##unpack the fld_chk to form a complete field
-                for loc in range(len(c.loc_list[src_pid])):
-                    istart,iend,di,jstart,jend,dj = c.loc_list[src_pid][loc]
+                for loc in range(len(loc_list[src_pid])):
+                    istart,iend,di,jstart,jend,dj = loc_list[src_pid][loc]
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[loc]
 
@@ -394,12 +398,12 @@ def transpose_state_to_field(c, state):
 
         ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
         for dst_pid in np.arange(c.pid+1, c.nproc):
-            if task < len(c.field_list[dst_pid]):
-                dst_mem_id, dst_rec_id = c.field_list[dst_pid][task]
-                c.comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid)
+            if task < len(field_list[dst_pid]):
+                dst_mem_id, dst_rec_id = field_list[dst_pid][task]
+                c.comm.send(state[dst_mem_id, dst_rec_id], dest=dst_pid, tag=task)
                 del state[dst_mem_id, dst_rec_id]   ##free up memory
 
-        message(c.comm, progress_bar(task, c.field_ntask_max), 0)
+        message(c.comm, progress_bar(task, field_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -407,7 +411,7 @@ def transpose_state_to_field(c, state):
 
 
 ##parallel output the fields to the binary state_file
-def output_state(c, fields, state_file):
+def output_state(c, state_info, field_list, fields, state_file):
 
     message(c.comm, 'save state to '+state_file+'\n', 0)
 
@@ -415,44 +419,47 @@ def output_state(c, fields, state_file):
         ##if file doesn't exist, create the file
         open(state_file, 'wb')
         ##write state_info to the accompanying .dat file
-        write_field_info(state_file, c.state_info)
+        write_field_info(state_file, state_info)
     c.comm.Barrier()
 
-    for task in range(c.field_ntask_max):
+    field_ntask_max = np.max([len(lst) for p,lst in field_list.items()])
+    for task in range(field_ntask_max):
 
-        if task < len(c.field_list[c.pid]):
+        if task < len(field_list[c.pid]):
             ##get the field record for output
-            mem_id, rec_id = c.field_list[c.pid][task]
+            mem_id, rec_id = field_list[c.pid][task]
             fld = fields[mem_id, rec_id]
 
             ##write the data to binary file
-            write_field(state_file, c.state_info, c.mask, mem_id, rec_id, fld)
+            write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
 
-        message(c.comm, progress_bar(task, c.field_ntask_max), 0)
+        message(c.comm, progress_bar(task, field_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
 
 ##compute ensemble mean of a field stored distributively on all pid_mem
 ##collect means on pid_mem=0, and output to mean_file
-def output_ens_mean(c, fields, mean_file):
+def output_ens_mean(c, state_info, field_list, fields, mean_file):
 
     message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', 0)
     if c.pid == 0:
         open(mean_file, 'wb')
-        write_field_info(mean_file, c.state_info)
+        write_field_info(mean_file, state_info)
     c.comm.Barrier()
 
-    for rec_id in c.rec_list[c.pid_rec]:
+    rec_list = set([r for m,r in field_list[c.pid]])
+    for i,rec_id in enumerate(rec_list):
 
         ##initialize a zero field with right dimensions for rec_id
-        if c.state_info['fields'][rec_id]['is_vector']:
+        if state_info['fields'][rec_id]['is_vector']:
             sum_fld_pid = np.zeros((2, c.ny, c.nx))
         else:
             sum_fld_pid = np.zeros((c.ny, c.nx))
 
         ##sum over all fields locally stored on pid
-        for mem_id in c.mem_list[c.pid_mem]:
+        mem_list = [m for m,r in field_list[c.pid] if r==rec_id]
+        for mem_id in mem_list:
             sum_fld_pid += fields[mem_id, rec_id]
 
         ##sum over all field sums on different pids together to get the total sum
@@ -460,9 +467,9 @@ def output_ens_mean(c, fields, mean_file):
 
         if c.pid_mem == 0:
             mean_fld = sum_fld / c.nens
-            write_field(mean_file, c.state_info, c.mask, 0, rec_id, mean_fld)
+            write_field(mean_file, state_info, c.mask, 0, rec_id, mean_fld)
 
-        message(c.comm, progress_bar(rec_id, len(c.rec_list[c.pid_rec])), 0)
+        message(c.comm, progress_bar(i, len(rec_list)), 0)
 
     message(c.comm, ' done.\n', 0)
 

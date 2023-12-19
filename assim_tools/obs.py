@@ -121,30 +121,27 @@ def read_obs_info(binfile):
         return info
 
 
-def build_obs_tasks(c):
-    ##this is called after build_state_tasks()
-    ##so c.mem_list should be already set
+def build_obs_tasks(c, obs_info):
+    ##member list
+    mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
 
-    ##obs_rec_id list as tasks
-    c.obs_rec_list = distribute_tasks(c.comm_rec, [i for i in c.obs_info['records'].keys()])
+    ##obs_rec_id list
+    obs_rec_list = distribute_tasks(c.comm_rec, [i for i in obs_info['records'].keys()])
 
     ##collect (mem_id, obs_rec_id) to make the obs_list
-    ##to make the task loop easier to read
-    c.obs_list = {}
-    ntask = []
+    obs_list = {}
     for p in range(c.nproc):
-        lst = [(m, r)
-               for m in c.mem_list[p%c.nproc_mem]
-               for r in c.obs_rec_list[p//c.nproc_mem] ]
-        ntask.append(len(lst))
-        c.obs_list[p] = lst
-    c.obs_ntask_max = np.max(ntask)
+        obs_list[p] = [(m, r)
+                       for m in mem_list[p%c.nproc_mem]
+                       for r in obs_rec_list[p//c.nproc_mem] ]
+
+    return obs_list
 
 
 ##read ens-mean z coords from z_file at obs time
-def mean_z_coords(c, time):
+def mean_z_coords(c, state_info, time):
     ##first, get a list of indices k
-    k_list = list(set([r['k'] for i,r in c.state_info['fields'].items() if r['time']==time]))
+    k_list = list(set([r['k'] for i,r in state_info['fields'].items() if r['time']==time]))
 
     ##get z coords for each level
     z = np.zeros((len(k_list), c.ny, c.nx))
@@ -153,14 +150,14 @@ def mean_z_coords(c, time):
         ##the rec_id in z_file corresponding to this level
         ##there can be multiple records (different state variables)
         ##we take the first one
-        rec_id = [i for i,r in c.state_info['fields'].items() if r['time']==time and r['k']==k_list[k]][0]
+        rec_id = [i for i,r in state_info['fields'].items() if r['time']==time and r['k']==k_list[k]][0]
 
         ##read the z field with (mem_id=0, rec_id) from z_file
         z_file = c.work_dir+'/analysis/'+t2s(time)+c.s_dir+'/z_coords.bin'
-        z_fld = read_field(z_file, c.state_info, c.mask, 0, rec_id)
+        z_fld = read_field(z_file, state_info, c.mask, 0, rec_id)
 
         ##assign the coordinates to z(k)
-        if c.state_info['fields'][rec_id]['is_vector']:
+        if state_info['fields'][rec_id]['is_vector']:
             z[k, ...] = z_fld[0, ...]
         else:
             z[k, ...] = z_fld
@@ -173,15 +170,16 @@ def mean_z_coords(c, time):
 ##since this is the actual obs (1 copy), only pid_mem==0 will do the work
 ##and broadcast to all pid_mem in comm_mem
 @bcast_by_root(c.comm_mem)
-def prepare_obs(c):
+def prepare_obs(c, state_info, obs_info, obs_list):
 
     message(c.comm_rec, 'reading obs_seq from dataset\n', 0)
     obs_seq = {}
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload
     ##as a subset of obs_rec_list
-    for obs_rec_id in c.obs_rec_list[c.pid_rec]:
-        obs_rec = c.obs_info['records'][obs_rec_id]
+    obs_rec_list = [r for m,r in obs_list[c.pid] if m==0]
+    for obs_rec_id in obs_rec_list:
+        obs_rec = obs_info['records'][obs_rec_id]
 
         ##load the dataset module
         src = importlib.import_module('dataset.'+obs_rec['source'])
@@ -191,7 +189,7 @@ def prepare_obs(c):
         path = c.data_dir+'/'+obs_rec['source']
 
         ##read ens-mean z coords from z_file for this obs network
-        z = mean_z_coords(c, obs_rec['time'])
+        z = mean_z_coords(c, state_info, obs_rec['time'])
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
@@ -255,20 +253,21 @@ def partition_grid(c):
 
 
 @bcast_by_root(c.comm_mem)
-def assign_obs_to_loc(c, obs_seq):
+def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
 
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
-    for obs_rec_id in c.obs_rec_list[c.pid_rec]:
+    obs_rec_list = [r for m,r in obs_list[c.pid] if m==0]
+    for obs_rec_id in obs_rec_list:
         obs_rec = obs_seq[obs_rec_id]
         obs_inds_pid[obs_rec_id] = {}
 
         if c.assim_mode == 'batch':
-            ##loop over tiles in c.loc_list_full given by partition_grid
-            for loc in range(len(c.loc_list_full)):
-                ist,ied,di,jst,jed,dj = c.loc_list_full[loc]
+            ##loop over tiles in loc_list_full given by partition_grid
+            for loc in range(len(loc_list_full)):
+                ist,ied,di,jst,jed,dj = loc_list_full[loc]
 
-                hroi = c.obs_info['records'][obs_rec_id]['hroi']
+                hroi = obs_info['records'][obs_rec_id]['hroi']
                 xo = np.array(obs_rec['x'])  ##obs x,y
                 yo = np.array(obs_rec['y'])
                 x = c.grid.x[0,:]            ##grid x,y
@@ -314,51 +313,54 @@ def assign_obs_to_loc(c, obs_seq):
 
 
 @bcast_by_root(c.comm)
-def build_loc_tasks(c):
+def build_loc_tasks(c, loc_list_full, obs_info, obs_inds):
     if c.assim_mode == 'batch':
         ##distribute the loc_list_full according to workload to each pid
         ##number of unmasked grid points in each tile
         nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
-                              for ist,ied,di,jst,jed,dj in c.loc_list_full] )
+                              for ist,ied,di,jst,jed,dj in loc_list_full] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
-        nlobs_loc = np.array([np.sum([len(c.obs_inds[r][loc])
-                                      for r in c.obs_info['records'].keys()])
-                              for loc in range(len(c.loc_list_full))] )
+        nlobs_loc = np.array([np.sum([len(obs_inds[r][loc])
+                                      for r in obs_info['records'].keys()])
+                              for loc in range(len(loc_list_full))] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        loc_list = distribute_tasks(c.comm, c.loc_list_full, workload)
+        loc_list = distribute_tasks(c.comm, loc_list_full, workload)
 
     if c.assim_mode == 'serial':
         ##just assign each loc slice to each pid
-        loc_list = {pid:c.loc_list_full[pid] for pid in range(c.nproc)}
+        loc_list = {p:loc_list_full[p] for p in range(c.nproc)}
 
     return loc_list
 
 
 ##prepare the obs_prior in parallel, run state_to_obs to obtain obs_seq
-def prepare_obs_prior(c, obs_seq, fields, z_fields):
+def prepare_obs_prior(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields):
 
     message(c.comm, 'compute obs priors\n', 0)
     obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
     ##all proc goes through their own task list simultaneously
-    for task in range(c.obs_ntask_max):
+    obs_ntask_max = np.max([len(lst) for p,lst in obs_list.items()])
+    for task in range(obs_ntask_max):
 
         ##process an obs record if not at the end of task list
-        if task < len(c.obs_list[c.pid]):
+        if task < len(obs_list[c.pid]):
             ##this is the obs record to process
-            mem_id, obs_rec_id = c.obs_list[c.pid][task]
-            obs_rec = c.obs_info['records'][obs_rec_id]
+            mem_id, obs_rec_id = obs_list[c.pid][task]
+            obs_rec = obs_info['records'][obs_rec_id]
             # message(c.comm, '   {:15s} t={} member={:3d} on proc{}\n'.format(obs_rec['name'], obs_rec['time'], mem_id+1, c.pid), c.pid)
 
-            seq = state_to_obs(c, member=mem_id, model_fld=fields, model_z=z_fields, **obs_rec, **obs_seq[obs_rec_id])
+            seq = state_to_obs(c, state_info, field_list, member=mem_id,
+                               model_fld=fields, model_z=z_fields,
+                               **obs_rec, **obs_seq[obs_rec_id])
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
 
-        message(c.comm, progress_bar(task, c.obs_ntask_max), 0)
+        message(c.comm, progress_bar(task, obs_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -367,7 +369,9 @@ def prepare_obs_prior(c, obs_seq, fields, z_fields):
 
 ##the top-level obs forward operator routine
 ##provides several ways to compute obs_prior from state fields
-def state_to_obs(c, **kwargs):
+def state_to_obs(c, state_info, field_list, **kwargs):
+    mem_list = set([m for m,r in field_list[c.pid]])
+    rec_list = set([r for m,r in field_list[c.pid]])
 
     mem_id = kwargs['member']  ##if None, try to get variable from truth_file
     time = kwargs['time']  ##obs time step
@@ -401,33 +405,33 @@ def state_to_obs(c, **kwargs):
             if obs_name in [r['name'] for r in c.state_def]:
                 ##the obs is one of the state variables
                 ##find its corresponding rec_id
-                rec_id = [i for i,r in c.state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
+                rec_id = [i for i,r in state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
 
                 ##if the current pid stores this field, just read it
-                if rec_id in c.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem] and 'model_fld' in kwargs and 'model_z' in kwargs:
-                    zfld = kwargs['model_z'][mem_id, rec_id]
+                if rec_id in rec_list and mem_id in mem_list and 'model_fld' in kwargs and 'model_z' in kwargs:
+                    z = kwargs['model_z'][mem_id, rec_id]
                     fld = kwargs['model_fld'][mem_id, rec_id]
 
                 else:  ##or read field from state binfile
                     path = c.work_dir+'/analysis/'+t2s(time)+c.s_dir
-                    zfld = read_field(path+'/z_coords.bin', c.state_info, c.mask, 0, rec_id)
-                    fld = read_field(path+'/prior_state.bin', c.state_info, c.mask, mem_id, rec_id)
+                    z = read_field(path+'/z_coords.bin', state_info, c.mask, 0, rec_id)
+                    fld = read_field(path+'/prior_state.bin', state_info, c.mask, mem_id, rec_id)
 
             else:  ##or get the field from model_src.read_var
                 if k == 0:  ##initialize grid obj for convert
                     path = c.work_dir+'/forecast/'+t2s(time)+'/'+kwargs['model']
                     grid = model_src.read_grid(path, **kwargs)
                     grid.dst_grid = c.grid
-                z = grid.convert(model_src.z_coords(path, grid, **kwargs))
-                zfld = np.array([z, z]) if is_vector else z
+                z_ = grid.convert(model_src.z_coords(path, grid, **kwargs))
+                z = np.array([z_, z_]) if is_vector else z_
                 fld = grid.convert(model_src.read_var(path, grid, **kwargs), is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
-                z1 = c.grid.convert(zfld[0, ...], coarse_grain=False)
-                zc = np.array([z1, z1])
+                z = c.grid.convert(z[0, ...], coarse_grain=False)
+                zc = np.array([z, z])
             else:
-                zc = c.grid.convert(zfld, coarse_grain=False)
+                zc = c.grid.convert(z, coarse_grain=False)
 
             vc = c.grid.convert(fld, is_vector=is_vector, coarse_grain=False)
 
@@ -490,94 +494,100 @@ def state_to_obs(c, **kwargs):
 ##      obs_inds[obs_rec_id][loc] -> inds of subset of obs_seq
 ##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
 ##to the destination proc (dst_pid)
-def transpose_obs_to_lobs(c, obs_seq, ensemble=False):
+##ensemble = True: process the obs_prior_seq[mem_id, obs_rec_id]=array
+##ensemble = False: process the obs_seq[obs_rec_id]={'obs':array,'x':array,'y':...}
+def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=False):
 
     message(c.comm, 'transpose obs to local obs\n', 0)
     lobs = {}
 
     ##all pid goes through their own task list simultaneously
-    for task in range(c.obs_ntask_max):
+    obs_ntask_max = np.max([len(lst) for p,lst in obs_list.items()])
 
-        ##see detailed explanation of the coreographed send/recv
-        ##in state.transpose_field_to_state
+    for task in range(obs_ntask_max):
 
-        if task < len(c.obs_list[c.pid]):
-            mem_id, obs_rec_id = c.obs_list[c.pid][task]
-
-            ##this logic is uniq to the obs:
-            ##(we have the actual obs_seq and obs_prior_seq)
-            if ensemble:
-                ##this is one of the obs_prior_seq[mem_id, obs_rec_id]-> array[nv,nobs]
-                seq = obs_seq[mem_id, obs_rec_id]
+        ##prepare the obs seq for sending if not at the end of task list
+        if task < len(obs_list[c.pid]):
+            mem_id, obs_rec_id = obs_list[c.pid][task]
+            if ensemble:  ##this is the obs prior seq
+                seq = obs_seq[mem_id, obs_rec_id].copy()
             else:
-                ##this is the actual obs_seq with keys 'obs','x','y','z','t'->array[nv,nobs]
-                ##it only need to be sent by pid_mem=0
-                if c.pid_mem == 0 and mem_id == 0:
-                    seq = obs_seq[obs_rec_id]
+                if mem_id == 0:  ##this is the obs seq, just let mem_id=0 send it
+                    seq = obs_seq[obs_rec_id].copy()
 
+        ##the collective send/recv follows the same idea under state.transpose_field_to_state
+        ##1) receive obs_chk from src_pid, for src_pid<pid first
         for src_pid in np.arange(0, c.pid):
-            if task < len(c.obs_list[src_pid]):
-                src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
+            if task < len(obs_list[src_pid]):
+                src_mem_id, src_obs_rec_id = obs_list[src_pid][task]
                 if ensemble:
-                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid, tag=task)
                 else:
-                    if src_pid % c.nproc_mem == 0 and src_mem_id == 0:
-                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid)
+                    if src_mem_id == 0:
+                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid, tag=task)
 
-        if task < len(c.obs_list[c.pid]):
+        ##2) send my obs chunk to a list of dst_pid, send to dst_pid>=pid first
+        ##   then cycle back to send to dst_pid<pid. i.e. the dst_pid sequence is
+        ##   [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
+        if task < len(obs_list[c.pid]):
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
-                obs_chk = {}
-                for loc in range(len(c.loc_list[dst_pid])):
-                    inds = c.obs_inds[obs_rec_id][loc]
-                    if ensemble:
+                if ensemble:
+                    ##this is the obs prior seq for mem_id, obs_rec_id
+                    ##for each loc, assemble the subset of seq with obs_inds
+                    obs_chk = {}
+                    for loc in range(len(loc_list[dst_pid])):
+                        inds = obs_inds[obs_rec_id][loc]
                         obs_chk[loc] = seq[..., inds]
-                    else:
-                        if c.pid_mem == 0 and mem_id == 0:
-                            subseq = {}
-                            for k,v in seq.items():
-                                subseq[k] = v[..., inds]
-                            obs_chk[loc] = subseq
 
-                if dst_pid == c.pid:
-                    if ensemble:
+                    if dst_pid == c.pid:
+                        ##pid already stores the obs_chk, just copy
                         lobs[mem_id, obs_rec_id] = obs_chk
                     else:
-                        if c.pid_mem == 0 and mem_id == 0:
+                        ##send obs_chk to dst_pid's lobs
+                        c.comm.send(obs_chk, dest=dst_pid, tag=task)
+
+                else:
+                    if mem_id == 0:
+                        ##this is the obs seq with keys 'obs','x','y','z','t'
+                        ##assemble the obs_chk dict with same keys but subset obs_inds
+                        ##do this for each loc to get the full obs_chk
+                        obs_chk = {}
+                        for loc in range(len(loc_list[dst_pid])):
+                            obs_chk[loc] = {}
+                            inds = obs_inds[obs_rec_id][loc]
+                            for key, value in seq.items():
+                                obs_chk[loc][key] = value[..., inds]
+
+                        if dst_pid == c.pid:
+                            ##pid already stores the obs_chk, just copy
                             lobs[obs_rec_id] = obs_chk
-                else:
-                    c.comm.send(obs_chk, dest=dst_pid)
+                        else:
+                            ##send obs_chk to dst_pid's lobs
+                            c.comm.send(obs_chk, dest=dst_pid, tag=task)
 
+        ##3) finish receiving obs_chk from src_pid, for src_pid>pid now
         for src_pid in np.arange(c.pid+1, c.nproc):
-            if task < len(c.obs_list[src_pid]):
-                src_mem_id, src_obs_rec_id = c.obs_list[src_pid][task]
+            if task < len(obs_list[src_pid]):
+                src_mem_id, src_obs_rec_id = obs_list[src_pid][task]
                 if ensemble:
-                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid)
+                    lobs[src_mem_id, src_obs_rec_id] = c.comm.recv(source=src_pid, tag=task)
                 else:
-                    if src_pid % c.nproc_mem == 0 and src_mem_id == 0:
-                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid)
+                    if src_mem_id == 0:
+                        lobs[src_obs_rec_id] = c.comm.recv(source=src_pid, tag=task)
 
-        if task < len(c.obs_list[c.pid]):
-            ##free up memory
+        if task < len(obs_list[c.pid]):
             if ensemble:
                 del obs_seq[mem_id, obs_rec_id]
             else:
                 if mem_id == 0:
-                    del obs_seq[obs_rec_id]
+                    del obs_seq[obs_rec_id]  ##free up memory
 
-        message(c.comm, progress_bar(task, c.obs_ntask_max), 0)
+        message(c.comm, progress_bar(task, obs_ntask_max), 0)
 
     message(c.comm, ' done.\n', 0)
 
     return lobs
 
-
-##transpose local obs back to obs sequences
-##only be useful if you want to output the obs for diagnostics
-def transpose_lobs_to_obs(c, lobs, lobs_prior):
-    obs_seq = {}
-    obs_prior_seq = {}
-
-    return obs_seq, obs_prior_seq
 
 
 ##output an obs values to the binfile for a member (obs_prior), if member=None it is the actual obs
