@@ -43,6 +43,7 @@ message(c.comm, 'collect model z coordinates, ', 0)
 z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
 output_ens_mean(c, state_info, field_list, z_fields, z_file)
 
+c.comm.Barrier()
 message(c.comm, 'Step 1 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
@@ -65,6 +66,7 @@ loc_list = build_loc_tasks(c, loc_list_full, obs_info, obs_inds)
 ##compute obs prior, each pid compute a subset of obs
 obs_prior_seq = prepare_obs_prior(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields)
 
+c.comm.Barrier()
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
@@ -89,8 +91,8 @@ lobs = transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq)
 message(c.comm, 'obs prior sequences: ', 0)
 lobs_prior = transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_prior_seq, ensemble=True)
 
-message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-start), 0)
 c.comm.Barrier()
+message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
 ##--------------------------
@@ -149,8 +151,8 @@ if c.assim_mode == 'batch':
 elif c.assim_mode == 'serial':
     pass
 
-message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-start), 0)
 c.comm.Barrier()
+message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
 ##--------------------------
@@ -163,6 +165,7 @@ fields = transpose_state_to_field(c, state_info, field_list, loc_list, state)
 state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/post_state.bin'
 output_state(c, state_info, field_list, fields, state_file)
 
+c.comm.Barrier()
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
@@ -174,6 +177,7 @@ message(c.comm, '6.Post-processing\n', 0)
 ##else
 ## just copy output state to model restart files
 
+c.comm.Barrier()
 message(c.comm, 'Step 6 took {} seconds\n\n'.format(time.time()-start), 0)
 start = time.time()
 
