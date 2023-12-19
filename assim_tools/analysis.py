@@ -13,14 +13,7 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
                    obs_err_corr=None,  ##obs err corr matrix, if None, uncorrelated
                    ):
     ##update the local state variable ens_prior with the obs
-
     nens, nlobs = obs_prior.shape
-    assert nens == ens_prior.size, 'ens_prior[{}] size mismatch with obs_prior[{},:]'.format(ens_prior.size, nens)
-
-    ##don't allow update of ensemble with any missing values
-    if any(np.isnan(ens_prior)):
-        return ens_prior
-
     ens_post = ens_prior.copy()
 
     ##ensemble weight matrix, weight[:, m] is for the m-th member
@@ -37,8 +30,8 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
     S = np.zeros((nlobs, nens))
     dy = np.zeros((nlobs))
     for p in range(nlobs):
-        S[p, :] = (obs_prior[:, p] - obs_prior_mean[p]) * local_factor[p] / obs_err
-        dy[p] = (obs[p] - obs_prior_mean[p]) * local_factor[p] / obs_err
+        S[p, :] = (obs_prior[:, p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
+        dy[p] = (obs[p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
 
     ##TODO:factor in the correlated R in obs_err, need another SVD of R
     # obs_err_corr
@@ -70,16 +63,16 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
         ##take Taylor approx. of var_ratio_sqrt (Sakov 2008)
         var_ratio_sqrt = np.eye(nens) - 0.5 * gain @ S
 
-    else:
-        raise ValueError('unknown filter type '+filter_type+' for local analysis')
+    # else:
+    #     raise ValueError('unknown filter type '+filter_type+' for local analysis')
 
     weight += var_ratio_sqrt
 
     ##check if weights sum to 1
     for m in range(nens):
         sum_wgts = np.sum(weight[:, m])
-        if np.abs(sum_wgts - 1) > 1e-5:
-            raise ValueError('sum of weights is not 1')
+        # if np.abs(sum_wgts - 1) > 1e-5:
+        #     raise ValueError('sum of weights is not 1')
 
     ##finally, transform the prior ensemble with the weight matrix
     for m in range(nens):
@@ -124,11 +117,11 @@ def obs_increment(obs_prior,          ##obs prior [nens]
         ##assemble the increments
         obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
-    elif filter_type == 'RHF':
-        pass
+    # elif filter_type == 'RHF':
+    #     pass
 
-    else:
-        raise ValueError('unknown filter_type: '+filter_type)
+    # else:
+    #     raise ValueError('unknown filter_type: '+filter_type)
 
     return obs_incr
 
@@ -163,11 +156,11 @@ def update_ensemble(ens_prior,             ##prior ens [nens] being updated
         ##the updated posterior ensemble
         ens_post = ens_prior + local_factor * reg_factor * obs_incr
 
-    elif reg_kind == 'probit':
-        pass
+    # elif reg_kind == 'probit':
+    #     pass
 
-    else:
-        raise ValueError('unknown regression kind: '+reg_kind)
+    # else:
+    #     raise ValueError('unknown regression kind: '+reg_kind)
 
     return ens_post
 
@@ -198,8 +191,8 @@ def local_factor(dist, roi, local_type='GC'):
             ind2 = np.where(dist>roi)
             lfactor[ind2] = 0.0
 
-        else:
-            raise ValueError('unknown localization function type: '+local_type)
+        # else:
+        #     raise ValueError('unknown localization function type: '+local_type)
     else:
         ##no localization, all ones
         lfactor = np.ones(dist.shape)

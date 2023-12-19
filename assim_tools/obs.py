@@ -58,6 +58,8 @@ def parse_obs_info(c):
                        'units': src.variables[vname]['units'],
                        'z_units': src.variables[vname]['z_units'],
                        'time': time,
+                       'obs_window_min': c.obs_window_min,
+                       'obs_window_max': c.obs_window_max,
                        'pos': pos,
                        'err':{'type': vrec['err_type'],
                               'std': vrec['err_std'],
@@ -172,7 +174,7 @@ def mean_z_coords(c, state_info, time):
 @bcast_by_root(c.comm_mem)
 def prepare_obs(c, state_info, obs_info, obs_list):
 
-    message(c.comm_rec, 'reading obs_seq from dataset\n', 0)
+    message(c.comm_rec, 'reading obs sequences from dataset\n', 0)
     obs_seq = {}
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload
