@@ -224,7 +224,7 @@ def partition_grid(c):
         ##the workload on each tile is uneven since there are masked points
         ##so we divide into 3*nproc tiles so that they can be distributed
         ##according to their load (number of unmasked points)
-        nx_tile = int(np.round(np.sqrt(c.nx * c.ny / c.nproc / 3)))
+        nx_tile = np.minimum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc / 3))), 20)
 
         ##a list of (istart, iend, di, jstart, jend, dj) for tiles
         ##note: we have 3*nproc entries in the list
@@ -308,8 +308,8 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
     ##gather all obs_rec_id from pid_rec to form the complete obs_inds dict
     obs_inds = {}
     for entry in c.comm_rec.allgather(obs_inds_pid):
-        for obs_rec_id,inds in entry.items():
-            obs_inds[obs_rec_id] = inds
+        for obs_rec_id, data in entry.items():
+            obs_inds[obs_rec_id] = data   ##each collected data is a dict {loc:inds}
 
     return obs_inds
 
@@ -463,7 +463,11 @@ def state_to_obs(c, state_info, field_list, **kwargs):
                 z_vc = zp + 0.5*dzc
                 inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
                                                obs_z <= np.maximum(z_vp, z_vc)) )
-                vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp)
+                ##there can be collapsed layers if z_vc=z_vp, just take previous vp
+                u = np.where(z_vp!=z_vc)
+                vi = vp.copy()  ##for collapsed position just take previous vp value
+                ##otherwise linear interp between layer
+                vi[u] = ((z_vc[u] - obs_z[u])*vc[u] + (obs_z[u] - z_vp[u])*vp[u])/(z_vc[u] - z_vp[u])
                 obs_seq[..., inds] = vi[..., inds]
 
             if k == len(levels)-1:

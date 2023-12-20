@@ -188,13 +188,14 @@ comm = parallel_start()
 
 pid = comm.Get_rank()
 nproc = comm.Get_size()
-
 nproc_mem = int(os.environ.get('nproc_mem'))
-assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
+if nproc == 1:  ##likely run by jupyter, so we reset nproc_mem and avoid the below message
+    nproc_mem = 1
+else:
+    assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
 
 pid_mem = pid % nproc_mem
 pid_rec = pid // nproc_mem
 comm_mem = comm.Split(pid_rec, pid_mem)
 comm_rec = comm.Split(pid_mem, pid_rec)
-
 

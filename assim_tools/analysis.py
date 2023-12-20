@@ -1,16 +1,121 @@
 import numpy as np
 from numba import njit
+from log import message, progress_bar
+from conversion import t2h, h2t
 
 ##batch assimilation solves the matrix version EnKF analysis for a given local state
 ##the local_analysis updates for different variables are computed in parallel
+def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, lobs_prior):
+
+    state_post = state_prior.copy() ##save a copy for posterior states
+
+    ##a small dummy call to local_analysis to compile it with njit
+    _ = local_analysis(np.ones(5), np.ones(10), np.ones(10), None, np.ones((5,10)), 'ETKF', np.ones(10))
+
+    ##pid with most obs to work with will print out progress
+    pid_show = 0
+
+    ##loop through tiles stored on pid
+    for loc in range(len(loc_list[c.pid])):
+        ist,ied,di,jst,jed,dj = loc_list[c.pid][loc]
+        ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
+        mask_chk = c.mask[jst:jed:dj, ist:ied:di]
+
+        ##fetch local obs seq and obs_prior seq on tile
+        nlobs = np.sum([len(lobs[r][loc]['obs'].flatten()) for r in obs_info['records'].keys()])
+        if nlobs == 0:
+            continue
+
+        obs = np.full(nlobs, np.nan)
+        obs_name = np.full(nlobs, np.nan)
+        obs_x = np.full(nlobs, np.nan)
+        obs_y = np.full(nlobs, np.nan)
+        obs_z = np.full(nlobs, np.nan)
+        obs_t = np.full(nlobs, np.nan)
+        obs_err = np.full(nlobs, np.nan)
+        hroi = np.ones(nlobs)
+        vroi = np.ones(nlobs)
+        troi = np.ones(nlobs)
+        obs_prior = np.full((c.nens, nlobs), np.nan)
+        i = 0
+        for r, obs_rec in obs_info['records'].items():
+            d = len(lobs[r][loc]['obs'].flatten())
+            obs[i:i+d] = lobs[r][loc]['obs'].flatten()
+            obs_x[i:i+d] = lobs[r][loc]['x'].flatten()
+            obs_y[i:i+d] = lobs[r][loc]['y'].flatten()
+            obs_z[i:i+d] = lobs[r][loc]['z'].flatten()
+            obs_t[i:i+d] = np.array([t2h(t) for t in lobs[r][loc]['t'].flatten()])
+            # obs_name[i:i+d] = np.array([obs_info['records'][r]['name'] for 
+            obs_err[i:i+d] = np.ones(d) * obs_info['records'][r]['err']['std']
+            hroi[i:i+d] = np.ones(d) * obs_info['records'][r]['hroi']
+            vroi[i:i+d] = np.ones(d) * obs_info['records'][r]['vroi']
+            troi[i:i+d] = np.ones(d) * obs_info['records'][r]['troi']
+            for m in range(c.nens):
+                obs_prior[m, i:i+d] = lobs_prior[m,r][loc].flatten()
+            i += d
+
+        ##loop through unmasked grid points in the tile
+        for l in range(len(ii[~mask_chk])):
+
+            ##loop through each field record
+            for rec_id, rec in state_info['fields'].items():
+                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
+
+                for key in keys:
+                    ens_prior = np.array([state_prior[m, rec_id][loc][key] for m in range(c.nens)])
+
+                    ##localization factor
+                    state_x = c.grid.x[0, ii[~mask_chk][l]]
+                    state_y = c.grid.y[jj[~mask_chk][l], 0]
+                    state_z = z_state[m, rec_id][loc][key]
+                    state_t = t2h(state_info['fields'][rec_id]['time'])
+                    hdist = np.hypot(obs_x-state_x, obs_y-state_y)
+                    vdist = np.abs(obs_z-state_z)
+                    tdist = np.abs(obs_t-state_t)
+                    lfactor = local_factor(hdist, hroi, c.localize_type)
+                    if (lfactor==0).all():
+                        continue
+                    inds = np.where(lfactor>0)
+
+                    obs_prior_sub = np.zeros((c.nens, len(inds[0])))
+                    for m in range(c.nens):
+                        obs_prior_sub[m, :] = obs_prior[m, :][inds]
+
+                    ens_post = local_analysis(ens_prior, obs[inds], obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
+
+                    ##save the posterior ensemble to the state
+                    for m in range(c.nens):
+                        state_post[m, rec_id][loc][key] = ens_post[m]
+
+        message(c.comm, progress_bar(loc, len(loc_list[c.pid])), pid_show)
+
+    message(c.comm, ' done.\n', pid_show)
+
+    return state_post
+
+
+##serial assimilation goes through the list of observations one by one
+##for each obs the near by state variables are updated one by one.
+##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
+def serial_assim(c, state_info, obs_info, loc_list, state_prior, lobs, lobs_prior):
+
+    state_post = state_prior.copy()  ##make a copy for posterior states
+
+    ##go through the entire obs list one at a time
+    # for 
+
+    return state_post
+
+
+##core algorithms for ensemble data assimilation:
 @njit
 def local_analysis(ens_prior,          ##ensemble state [nens]
                    obs,                ##obs [nlobs]
                    obs_err,            ##obs err std [nlobs]
+                   obs_err_corr,       ##obs err corr matrix, if None, uncorrelated
                    obs_prior,          ##ensemble obs values [nens, nlobs]
+                   filter_type,        ##type of filter algorithm to apply
                    local_factor,       ##localization factor [nlobs]
-                   filter_type='ETKF', ##type of filter algorithm to apply
-                   obs_err_corr=None,  ##obs err corr matrix, if None, uncorrelated
                    ):
     ##update the local state variable ens_prior with the obs
     nens, nlobs = obs_prior.shape
@@ -63,16 +168,17 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
         ##take Taylor approx. of var_ratio_sqrt (Sakov 2008)
         var_ratio_sqrt = np.eye(nens) - 0.5 * gain @ S
 
-    # else:
-    #     raise ValueError('unknown filter type '+filter_type+' for local analysis')
+    else:
+        print('Error: unknown filter type: '+filter_type)
+        raise ValueError
 
     weight += var_ratio_sqrt
 
     ##check if weights sum to 1
     for m in range(nens):
         sum_wgts = np.sum(weight[:, m])
-        # if np.abs(sum_wgts - 1) > 1e-5:
-        #     raise ValueError('sum of weights is not 1')
+        if np.abs(sum_wgts - 1) > 1e-5:
+            print('Warning: sum of weights != 1 detected!')
 
     ##finally, transform the prior ensemble with the weight matrix
     for m in range(nens):
@@ -81,14 +187,11 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
     return ens_post
 
 
-##serial assimilation goes through the list of observations one by one
-##for each obs the near by state variables are updated one by one.
-##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
 @njit
 def obs_increment(obs_prior,          ##obs prior [nens]
                   obs,                ##obs, scalar
                   obs_err,            ##obs err std, scalar
-                  filter_type='EAKF', ##kind of filter algorithm
+                  filter_type,        ##kind of filter algorithm
                   ):
     ##compute analysis increment for 1 obs
     ##obs_prior[nens] is the prior ensemble values corresponding to this obs
@@ -117,11 +220,11 @@ def obs_increment(obs_prior,          ##obs prior [nens]
         ##assemble the increments
         obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
-    # elif filter_type == 'RHF':
-    #     pass
+    elif filter_type == 'RHF':
+        pass
 
-    # else:
-    #     raise ValueError('unknown filter_type: '+filter_type)
+    else:
+        print('Error: unknown filter type: '+filter_type)
 
     return obs_incr
 
@@ -159,43 +262,43 @@ def update_ensemble(ens_prior,             ##prior ens [nens] being updated
     # elif reg_kind == 'probit':
     #     pass
 
-    # else:
-    #     raise ValueError('unknown regression kind: '+reg_kind)
 
     return ens_post
 
 
 ##localization factor based on distance and roi
 @njit
-def local_factor(dist, roi, local_type='GC'):
-    ## dist: input distance, ndarray
+def local_factor(dist, roi, localize_type='GC'):
+    ## dist: distance
     ## roi: radius of influence, distance beyond which loc=0
     ## returns the localization factor loc
     dist = np.atleast_1d(dist)
     lfactor = np.zeros(dist.shape)
 
-    if roi>0:
-        if local_type == 'GC': ##Gaspari-Cohn function (default)
-            r = dist / (roi / 2)
-            loc1 = (((-0.25*r + 0.5)*r + 0.625)*r - 5.0/3.0) * r**2 + 1
-            ind1 = np.where(dist<roi/2)
-            lfactor[ind1] = loc1[ind1]
-            r[np.where(r==0)] = 1e-10
-            loc2 = ((((r/12.0 - 0.5)*r + 0.625)*r + 5.0/3.0)*r - 5.0)*r + 4 - 2.0/(3.0*r)
-            ind2 = np.where(np.logical_and(dist>=roi/2, dist<roi))
-            lfactor[ind2] = loc2[ind2]
+    if localize_type == 'GC': ##Gaspari-Cohn function (default)
+        r = dist / (roi / 2)
+        loc1 = (((-0.25*r + 0.5)*r + 0.625)*r - 5.0/3.0) * r**2 + 1
+        ind1 = np.where(r<0.5)
+        lfactor[ind1] = loc1[ind1]
+        r[np.where(r==0)] = 1e-10
+        loc2 = ((((r/12.0 - 0.5)*r + 0.625)*r + 5.0/3.0)*r - 5.0)*r + 4 - 2.0/(3.0*r)
+        ind2 = np.where(np.logical_and(r>=0.5, r<1))
+        lfactor[ind2] = loc2[ind2]
 
-        elif local_type == 'step':  #step function from 1 to 0 at roi
-            ind1 = np.where(dist<=roi)
-            lfactor[ind1] = 1.0
-            ind2 = np.where(dist>roi)
-            lfactor[ind2] = 0.0
+    elif localize_type == 'step':  #step function from 1 to 0 at roi
+        r = dist / roi
+        ind1 = np.where(r<=1)
+        lfactor[ind1] = 1.0
+        ind2 = np.where(r>1)
+        lfactor[ind2] = 0.0
 
-        # else:
-        #     raise ValueError('unknown localization function type: '+local_type)
+    elif localize_type == 'exp':  ##exponential decay
+        r = dist / roi
+        lfactor = np.exp(-r)
+
     else:
-        ##no localization, all ones
-        lfactor = np.ones(dist.shape)
+        print('Error: unknown localization function type: '+localize_type)
+        raise ValueError
 
     return lfactor
 
