@@ -1,0 +1,6 @@
+#!/bin/bash
+
+host=localhost
+hostppn=4
+
+SCRATCH=/Users/yueng/scratch

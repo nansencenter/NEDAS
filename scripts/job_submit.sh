@@ -9,8 +9,14 @@ shift 3
 exe_command=$@
 
 
+###this is local computer (with a few processors):
+if [[ $host == "localhost" ]]; then
+    mpiexec -np $ncpus $exe_command
+fi
+
+
 ###this works on Betzy
-if [[ $HOSTTYPE == "betzy" ]]; then
+if [[ $host == "betzy" ]]; then
     offset_node=$((offset_batch/$SLURM_NTASKS_PER_NODE))
     srun -N $nnodes -n $ncpus -r $offset_node --exact $exe_command
 fi
