@@ -57,11 +57,16 @@ def get_wn(fld):
     ##generate meshgrid wavenumber for input field
     ## the last two dimensions are horizontal (y, x)
     ny, nx = fld.shape[-2:]
+
     wnx = np.zeros(fld.shape)
     wny = np.zeros(fld.shape)
-    for i in fftwn(fld.shape[-1]):
-        wnx[..., i] = i
-    for j in fftwn(fld.shape[-2]):
-        wny[..., j, :] = j
+
+    nup = int(max(nx, ny))
+
+    for i in fftwn(nx):
+        wnx[..., i] = i * nup / nx
+    for j in fftwn(ny):
+        wny[..., j, :] = j * nup / ny
+
     return wnx, wny
 
