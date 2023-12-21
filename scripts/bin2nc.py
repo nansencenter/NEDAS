@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 import config as c
 from netcdf_lib import nc_write_var
@@ -6,6 +8,7 @@ from assim_tools.state import read_field_info, read_field
 
 import sys
 filename = sys.argv[1]
+nens = int(sys.argv[2])
 
 ##convert bin file state variables [nfield, ny, nx] * nens
 ##to nc files [nens, nt, nz, ny, nx] * num_var files
@@ -16,12 +19,12 @@ for v in list(set(rec['name'] for i, rec in info['fields'].items())):
     print('converting '+v)
     outfile = filename.replace('.bin','.'+v+'.nc')
 
-    members = np.arange(c.nens)
+    members = np.arange(nens)
     times = np.array(list(set(t2h(rec['time']) for i, rec in info['fields'].items() if rec['name']==v)))
     levels = np.array(list(set(rec['k'] for i, rec in info['fields'].items() if rec['name']==v)))
 
     for rec_id, rec in [(i,r) for i,r in info['fields'].items() if r['name']==v]:
-        for mem_id in range(c.nens):
+        for mem_id in range(nens):
             ##get the field from bin file
             fld = read_field(filename, info, c.mask, mem_id, rec_id)
             ##get record number along time,level dimensions
