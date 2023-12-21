@@ -1,0 +1,141 @@
+####All settings and their default values
+
+##experiment name
+exp_name=exp1
+
+##load HPC-specific settings, directory names, env, etc.
+. $HOME/code/NEDAS/config/env/betzy/base.src
+
+script_dir=$HOME/code/NEDAS/scripts
+code_dir=$HOME/code
+data_dir=$SCRATCH/data
+work_dir=$SCRATCH/$exp_name
+
+#ensemble size, number of members (model runs, realizations, etc.)
+nens=100
+
+##parallel scheme
+nproc=1024
+nproc_mem=32
+
+#DA scheme
+assim_mode=batch ##batch or serial
+run_filter=true  ##if true, run filter/smoother update algorithms
+run_align_space=false  ##if true, run alignment after filter update in space/time
+run_align_time=false
+
+filter_type=ETKF
+
+##number of scale components
+##if > 1, use multiscale approach:
+##  1. coarse-graining the analysis 4D grid [t, z, y, x] to save computational cost
+##    since larger-scale components require smaller-dimensional grid to describe
+##  2. separately defined smoothing length scales (H,Z,T) and localization, inflation
+#`scale` indexes the nscale components
+nscale=1
+
+##localization setting
+localize_type=GC  ##GC, boxcar, adaptive
+##Note: radius of influence (roi), distance where localization factor goes to zero
+## roi=inf means no localization will be applied
+## each observation variable has an individual set of roi, defined in obs_def
+## for multiscale approach, the ROI is multiplied to a scaling factor which is
+## defined here for each scale
+hroi_factor="1"
+vroi_factor="1"
+troi_factor="1"
+
+##inflation setting
+inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
+inflate_factor="1"  ##inflation factor for each scale
+
+##time period and cycling
+time_start=202310230000    ##format ccyymmddHHMM
+time_end=202302240000
+time_assim_start=202310230000
+time_assim_end=202310230000
+cycle_period=168  ##in hours
+##Assimilation (filter update, displacement, etc.) starts at time_assim_start
+##`time` points to the current cycle time
+##`next_time`/`prev_time` points to the next/previous cycle time
+
+##define analysis window relative to `time`, in hours
+##Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
+## for each cycle, so watch out for overfitting
+obs_window_min=-168
+obs_window_max=0
+obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
+t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
+
+state_ts="0"
+
+##define a reference coordinate system where analysis takes place
+##you can use model modules to provide the grid (analysis grid is same as model grid)
+grid_type=topaz.v5  ##model module
+
+##or, you can defined a grid yourself with parameters:
+#grid_type=new
+##map projection is defined as a proj.4 string, see https://proj.org/usage/projections.html
+#proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
+
+###horizontal grid dimensions
+#xmin=-2500000  ##start,end x coordinates (meter)
+#xmax=2500000
+#ymin=-2000000  ##start,end y coordinates (meter)
+#ymax=2500000
+#dx="6000"  ##grid spacing (meter) for each scale (nscale entries)
+##mask: area in the reference grid that is land or other area that doesn't require analysis,
+##      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
+##      the local analysis routine will also skip masked region to evenly distribute work load.
+## the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
+## and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
+
+##define the `state` in a multi-line string
+##  one state variable per line, each line contains:
+##     variable name
+##     source module, one of the models/ module that provides the state variable
+##     error type, normal/lognormal
+state_def=$(cat << EOF
+ocean_velocity      topaz.v5    field  normal
+ocean_temp          topaz.v5    field  normal
+ocean_saln          topaz.v5    field  normal
+ocean_layer_thick   topaz.v5    field  normal
+ocean_mixl_depth    topaz.v5    field  normal
+ocean_b_velocity    topaz.v5    field  normal
+ocean_b_press       topaz.v5    field  normal
+EOF
+)
+#drag_coef           topaz.v5   scalar  normal
+
+##parameter estimation
+##just add model parameters as scalar state variables above
+
+##define the `obs` in a multi-line string
+##  one observation per line, each line contains:
+##      obs variable name
+##      source, dataset module that provides this obs variable
+##      model, models module that provides this obs prior
+##      error type, normal/lognormal/beta
+##      error standard deviation
+##      error horizontal correlation length, in meters
+##      error vertical correlation length, in meters
+##      error time correlation length, in hours
+##      error correlation among variables, list of "<variable name>=<corr coef>" separated by ',', if not specified, default is uncorrelated
+##      horizontal localization distance, in meters
+##      vertical localization distance, in meters
+##      time localization distance, in hours
+##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
+obs_def=$(cat << EOF
+ocean_temp   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  none
+ocean_saln   prep_obs.insitu  topaz.v5  normal  0.6  0  0  0  none  200000  inf  inf  ocean_velocity=0.5,ocean_temp=0.8
+EOF
+)
+
+use_synthetic_obs=false
+
+##ensemble perturbation settings
+perturb_variables="seaice_drift ocean_surf_height"
+#perturb_param_dir=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
+
+##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
+

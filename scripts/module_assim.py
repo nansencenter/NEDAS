@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 import config as c
 import sys
@@ -53,10 +55,10 @@ output_ens_mean(c, state_info, field_list, fields, mean_file)
 ##for obs preprocessing later
 message(c.comm, 'collect model z coordinates, ', 0)
 z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
-# output_ens_mean(c, state_info, field_list, z_fields, z_file)
+output_ens_mean(c, state_info, field_list, z_fields, z_file)
 ##topaz5 use the first member as mean z coords, so output the full z ens
 ##mean_z_coords will read mem_id=0 anyway
-output_state(c, state_info, field_list, z_fields, z_file)
+# output_state(c, state_info, field_list, z_fields, z_file)
 
 c.comm.Barrier()
 message(c.comm, 'Step 1 took {} seconds\n\n'.format(time.time()-runtime), 0)

@@ -7,7 +7,7 @@
 
 ##Common function inputs:
 ##   path: directory where the model restart files are stored
-##   grid: Grid object from get_grid
+##   grid: Grid object from read_grid
 
 ##List of keys in **kwargs:
 ##   name: variable name defined in state_def
@@ -20,6 +20,7 @@ import numpy as np
 import glob
 from functools import cache
 from datetime import datetime
+from netCDF4 import Dataset
 
 from conversion import units_convert
 from models.topaz.confmap import ConformalMapping
@@ -30,18 +31,25 @@ from models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileG
 ##        restart files here. (check with expert first if you attempt
 ##       to use this for other file types, daily mean, archiv etc.)
 ##List of properties:
-##   name: native variable name in restart files, tuple of (u-name,v-name) if vector field
-##         components are stored in separate native variables
+##   name: native variable name in restart files, tuple of (u-name,v-name)
+##         if vector field components are stored in separate native variables
 ##   dtype: double/flout/int
 ##   is_vector: if true the variable contains (u, v) components
-##   dt: how freq model output is available, in hours
+##   restart_dt: how freq model output is available, in hours
 ##   levels: vertical level index list
 ##   units: native physical units for the variable
-levels = np.arange(1, 51, 1)  ##ocean levels, from top to bottom
-variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':24, 'levels':levels, 'units':'m/s'},
-             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'Pa'},
-             'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'K'},
-             'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'restart_dt':24, 'levels':levels, 'units':'psu'},
+levels = np.arange(1, 51, 1)  ##ocean levels, from top to bottom, k=1..nz
+level_sfc = np.array([0])    ##some variables are only defined on surface level k=0
+variables = {'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vector':True,  'restart_dt':168, 'levels':levels, 'units':'m/s'},
+             'ocean_layer_thick': {'name':'dp',       'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':levels, 'units':'Pa'},
+             'ocean_temp':        {'name':'temp',     'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':levels, 'units':'K'},
+             'ocean_saln':        {'name':'saln',     'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':levels, 'units':'psu'},
+             'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'restart_dt':168, 'levels':level_sfc, 'units':'m/s'},
+             'ocean_b_press':     {'name':'pbavg',    'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':level_sfc, 'units':'Pa'},
+             'ocean_mixl_depth':  {'name':'dpmixl',   'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':level_sfc, 'units':'Pa'},
+             'seaice_velocity':   {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'restart_dt':168, 'levels':level_sfc, 'units':'m/s'},
+             'seaice_conc_cat1':  {'name':'aicen', 'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':level_sfc, 'units':'%'},
+             'seaice_thick':      {'name':'vicen', 'dtype':'float', 'is_vector':False, 'restart_dt':168, 'levels':level_sfc, 'units':'m'},
              }
 
 ##some constants
@@ -153,7 +161,6 @@ def write_grid(path, **kwargs):
 
 
 ##topaz stored a separate landmask in depth.a file
-##this function is uniq to topaz
 def read_mask(path, grid):
     depthfile = path+'/topo/depth.a'
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
@@ -172,7 +179,7 @@ def read_depth(path, grid):
 
 ##get the state variable with name in state_def
 ##and other kwargs: time, level, and member to pinpoint where to get the variable
-##returns a 2D field defined on grid from get_grid
+##returns a 2D field defined on grid from read_grid
 def read_var(path, grid, **kwargs):
     ##check name in kwargs and read the variables from file
     assert 'name' in kwargs, 'please specify which variable to get, name=?'
