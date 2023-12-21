@@ -1,5 +1,63 @@
 import numpy as np
+from scipy.optimize import fsolve
 from fft_lib import fft2, ifft2, get_wn
+
+##draw a 2D random field given its power spectrum
+##two types of power spectra available: gaussian, or fixed power law (slope)
+def random_field_gaussian(nx, ny, amp, hcorr):
+    ##Gaussian spectrum with parameter sigma determined by
+    ##the decorrelation distance hcorr (number of grid points)
+
+    fld = np.zeros((ny, nx))
+    kx, ky = get_wn(fld)
+    k2d = np.hypot(kx, ky)
+
+    def gaussian(k, sig):
+        return np.exp(-2.0 * k / sig**2)
+
+    def func2d(sig):
+        sum1 = np.sum(gaussian(k2d, sig)**2 * np.cos(2*np.pi * kx/nx * hcorr))
+        sum2 = np.sum(gaussian(k2d, sig)**2)
+        return sum1/sum2 - np.exp(-1)
+
+    ##solve for sig given hcorr so that func2d=0
+    sig_out = np.abs(fsolve(func2d, 1)[0])
+    print(sig_out, func2d(sig_out))
+
+    ##draw random phase from a white noise field
+    ph = fft2(np.random.normal(0, 1, fld.shape))
+
+    ##scaling factor to get the right amplitude
+    norm2 = np.sum(gaussian(k2d, sig_out)**2) / (nx*ny)
+    sf = amp / np.sqrt(norm2)
+
+    return np.real(ifft2(sf * gaussian(k2d, sig_out) * ph))
+
+
+def random_field_powerlaw(nx, ny, amp, pwr_spec):
+
+    fld = np.zeros((ny, nx))
+    kx, ky = get_wn(fld)
+    k2d = np.hypot(kx, ky)
+
+    k2d[np.where(k2d==0.0)] = 1e-10  ##avoid singularity, set wn-0 to small value
+
+    ##draw random phase from a white noise field
+    ph = fft2(np.random.normal(0, 1, fld.shape))
+
+    ##assemble random field given amplitude from power spectrum, and random phase ph
+    norm = 2 * np.pi * k2d
+    amp = np.sqrt(pwr_spec(k2d) / norm)
+    amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
+
+    return np.real(ifft2(amp * ph))
+
+
+###some more complicated random perturbation with physical constraints
+def random_displace():
+    ##TODO
+    pass
+
 
 ###generate a random perturbation for wind u,v and pressure
 def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D domain; dt: time interval (hours)
@@ -76,23 +134,5 @@ def grady(fld, dy):
     grady_fld[..., 1:, :] = (fld[..., 1:, :] - fld[..., :-1, :]) / dy
     return grady_fld
 
-
-def random_field(grid, pwr_spec):
-
-    kx, ky = get_wn(grid.x)
-    k2d = np.sqrt(kx**2 + ky**2)
-    k2d[np.where(k2d==0.0)] = 1e-10  ##avoid singularity, set wn-0 to small value
-
-    ##random phase from white noise
-    ph = fft2(np.random.normal(0, 1, grid.x.shape))
-
-    ##assemble random field given amplitude from power spectrum, and random phase ph
-    norm = 2 * np.pi * k2d
-    amp = np.sqrt(pwr_spec(k2d) / norm)
-    amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
-
-    field = np.real(ifft2(amp * ph))
-
-    return field
 
 
