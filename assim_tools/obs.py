@@ -385,7 +385,7 @@ def state_to_obs(c, state_info, field_list, **kwargs):
     obs_z = np.array(kwargs['z'])
     nobs = len(obs_x)
 
-    obs_grid = Grid(c.proj, obs_x, obs_y, regular=False)
+    obs_grid = Grid(c.grid.proj, obs_x, obs_y, regular=False)
     c.grid.dst_grid = obs_grid
 
     if is_vector:
@@ -463,11 +463,11 @@ def state_to_obs(c, state_info, field_list, **kwargs):
                 z_vc = zp + 0.5*dzc
                 inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
                                                obs_z <= np.maximum(z_vp, z_vc)) )
-                ##there can be collapsed layers if z_vc=z_vp, just take previous vp
-                u = np.where(z_vp!=z_vc)
-                vi = vp.copy()  ##for collapsed position just take previous vp value
-                ##otherwise linear interp between layer
-                vi[u] = ((z_vc[u] - obs_z[u])*vc[u] + (obs_z[u] - z_vp[u])*vp[u])/(z_vc[u] - z_vp[u])
+                ##there can be collapsed layers if z_vc=z_vp
+                np.seterr(invalid='ignore')  ##ignore divide by zero warnings
+                vi = np.where(z_vp==z_vc,
+                              vp,   ##for collapsed layers just use previous value
+                              ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp)  ##otherwise linear interp between layer
                 obs_seq[..., inds] = vi[..., inds]
 
             if k == len(levels)-1:
