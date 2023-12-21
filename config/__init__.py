@@ -7,6 +7,7 @@
 ###except for a few runtime variables defined in run scripts
 import numpy as np
 import os
+import importlib
 from grid import Grid
 from pyproj import Proj
 
@@ -77,28 +78,36 @@ else:
 
 ##define analysis grid
 grid_type = os.environ.get('grid_type')
-# if grid_type == '
-proj = Proj(os.environ.get('proj'))
-dx = np.array(os.environ.get('dx').split()).astype(np.float32)[scale]
-xmin = np.float32(os.environ.get('xmin'))
-xmax = np.float32(os.environ.get('xmax'))
-ymin = np.float32(os.environ.get('ymin'))
-ymax = np.float32(os.environ.get('ymax'))
-grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+if grid_type == 'new':
+    proj = Proj(os.environ.get('proj'))
+    dx = np.array(os.environ.get('dx').split()).astype(np.float32)[scale]
+    xmin = np.float32(os.environ.get('xmin'))
+    xmax = np.float32(os.environ.get('xmax'))
+    ymin = np.float32(os.environ.get('ymin'))
+    ymax = np.float32(os.environ.get('ymax'))
+    grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+
+    ##mask for nan area in domain, where no i/o or analysis tasks needed
+    maskfile = os.environ.get('maskfile')
+    if os.path.exists(maskfile):
+        mask_dat = np.load(maskfile, allow_pickle=True)
+        mask_grid = Grid(proj, mask_dat['x'], mask_dat['y'], dst_grid=grid)
+        mask = (mask_grid.convert(mask_dat['mask'])==1)
+        mask[-1, :] = True  ##TODO: something wrong along the border
+        mask[:, -1] = True
+        del mask_dat, mask_grid
+    else:
+        mask = np.full((grid.ny, grid.nx), False, dtype=bool)  ##no masked area by default
+
+else:
+    model = grid_type
+    src = importlib.import_module('models.'+model)
+    path = data_dir+'/'+model
+    grid = src.read_grid(path)
+    mask = src.read_mask(path, grid)
+
 nx = grid.nx
 ny = grid.ny
-
-##mask for nan area in domain, where no i/o or analysis tasks needed
-maskfile = os.environ.get('maskfile')
-if os.path.exists(maskfile):
-    mask_dat = np.load(maskfile, allow_pickle=True)
-    mask_grid = Grid(proj, mask_dat['x'], mask_dat['y'], dst_grid=grid)
-    mask = (mask_grid.convert(mask_dat['mask'])==1)
-    mask[-1, :] = True  ##TODO: something wrong along the border
-    mask[:, -1] = True
-    del mask_dat, mask_grid
-else:
-    mask = np.full((ny, nx), False, dtype=bool)  ##no masked area by default
 
 
 ##parse state variables definition
@@ -186,13 +195,17 @@ use_synthetic_obs = os.environ.get('use_synthetic_obs').lower()=='true'
 from parallel import parallel_start
 comm = parallel_start()
 
-pid = comm.Get_rank()
-nproc = comm.Get_size()
+nproc = int(os.environ.get('nproc'))
 nproc_mem = int(os.environ.get('nproc_mem'))
-if nproc == 1:  ##likely run by jupyter, so we reset nproc_mem and avoid the below message
+if comm.Get_size() == 1:
+    ##likely run by jupyter, so we reset nproc_mem to avoid the check below
+    nproc = 1
     nproc_mem = 1
 else:
+    assert nproc == comm.Get_size(), "nproc is not the same as defined in config"
     assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
+
+pid = comm.Get_rank()  ##processor id
 
 pid_mem = pid % nproc_mem
 pid_rec = pid // nproc_mem
