@@ -10,9 +10,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
     ###dat: data for output, number of dimensions must match dim (excluding unlimited dims)
     ###recno: dict{'dimension name': record_number, ...}, each unlimited dim should have a recno entry
     ###attr: attribute dict{'name of attr':'value of attr'}
-    f = Dataset(filename, 'w', format='NETCDF4')
-    f.close()
-    f = Dataset(filename, 'r+', format='NETCDF4')
+    f = Dataset(filename, 'a', format='NETCDF4')
     ndim = len(dim)
     s = ()  ##slice for each dimension
     d = 0
