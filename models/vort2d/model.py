@@ -1,85 +1,112 @@
 import numpy as np
-from perturb import random_field
+from perturb import random_field_powerlaw
 from fft_lib import fft2, ifft2, get_wn
-from .param import *
 
-def initialize(,
-               loc_sprd=0,  ##the spread in center location
-              ):
-    fld = np.zeros(
-    return fld
+##initial condition for model: a rankine vortex embedded in a random wind flow
+def initialize(grid,
+               Vmax,        ##maximum wind speed, m/s
+               Rmw,         ##radius of maximum wind, m
+               Vbg,         ##background flow wind speed, m/s
+               Vslope,
+               loc_sprd=0,  ##the spread in center location, m
+               ):
 
-##generate a rankine vortex velocity field.
-def gen_vortex(grid,    ##model grid obj
-               Vmax,    ##maximum wind speed
-               Rmw,     ##radius of max wind
-              ):
+    ##the vortex is randomly placed in the domain
+    center_x = 0.5*(grid.xmin+grid.xmax) + np.random.normal(0, loc_sprd)
+    center_y = 0.5*(grid.ymin+grid.ymax) + np.random.normal(0, loc_sprd)
+
+    vortex = rankine_vortex(grid, Vmax, Rmw, center_x, center_y)
+
+    ##the background wind field is randomly drawn
+    bkg_flow = random_flow(grid, Vbg, Vslope)
+
+    return vortex + bkg_flow
+
+
+##generate a rankine vortex velocity field
+def rankine_vortex(grid,    ##model grid obj
+                   Vmax,    ##maximum wind speed
+                   Rmw,     ##radius of max wind
+                   center_x, center_y,  ##vortex center coords x,y
+                  ):
+
+    ##radius from vortex center
+    r = np.hypot(grid.x - center_x, grid.y - center_y)
+    r[np.where(r==0)] = 1e-10  ##avoid divide by 0
+
+    ##wind speed profile with radius
+    wspd = np.zeros(r.shape)
+    ind = np.where(r <= Rmw)
+    wspd[ind] = Vmax * r[ind] / Rmw
+    ind = np.where(r > Rmw)
+    wspd[ind] = Vmax * (Rmw / r[ind])**1.5
+    wspd[np.where(r==0)] = 0
+
+    u = -wspd * (grid.y - center_y) / r
+    v = wspd * (grid.x - center_x) / r
+
+    return np.array([u, v])
+
+
+##random background flow wind field is given by
+def random_flow(grid,
+                amp,         ##wind speed amplitude
+                power_law,   ##wind field power spectrum slope: 0=white noise; -1=red noise
+                ):
     ny, nx = grid.x.shape
-    fld = np.zeros((2,ny,nx))
-    x, y = np.meshgrid(np.arange(nx), np.arange(ny))
-    center_x = 0.5*nx + np.random.normal(0, loc_sprd)
-    center_y = 0.5*ny + np.random.normal(0, loc_sprd)
-    dist = np.sqrt((x-center_x)**2 + (y-center_y)**2)
-    dist[np.where(dist==0)] = 1e-10  ##avoid divide by 0
-    wspd = np.zeros(dist.shape)
-    ind = np.where(dist <= Rmw)
-    wspd[ind] = Vmax * dist[ind] / Rmw
-    ind = np.where(dist > Rmw)
-    wspd[ind] = Vmax * (Rmw / dist[ind])**1.5
-    wspd[np.where(dist==0)] = 0
-    fld[0, :] = -wspd * (y - center_y) / dist  ##u component
-    fld[1, :] = wspd * (x - center_x) / dist   ##v component
-    return fld
-
-
-##random realization of model initial condition
-##amp: wind speed amplitude; power_law: wind field power spectrum slope
-
-def gen_random_flow(grid, amp, power_law):
-    fld = np.zeros((2,)+grid.x.shape)
+    fld = np.zeros((2, ny, nx))
     dx = grid.dx
+
     ##generate random streamfunction for the wind
-    psi = random_field(grid, lambda k: k**((power_law-3)/2))
+    ##note: streamfunc powerlaw = wind powerlaw - 2
+    psi = random_field_powerlaw(nx, ny, 1, power_law-2)
+
     ##convert to wind
     u = -(np.roll(psi, -1, axis=0) - np.roll(psi, 1, axis=0)) / (2.0*dx)
     v = (np.roll(psi, -1, axis=1) - np.roll(psi, 1, axis=1)) / (2.0*dx)
-    ##normalize and scale to required amp
+
+    ##normalize and scale to the required wind amp
     u = amp * (u - np.mean(u)) / np.std(u)
     v = amp * (v - np.mean(v)) / np.std(v)
-    fld[0, :] = u
-    fld[1, :] = v
-    return fld
+
+    return np.array([u, v])
 
 
-def advance_time(X, dx, dt, smalldt, gen, diss):
+def advance_time(fld, dx, t_intv, dt, gen, diss):
     ##input wind components, convert to spectral space
-    u = fft2(X[0, :, :])
-    v = fft2(X[1, :, :])
+    uh = fft2(fld[0, :, :])
+    vh = fft2(fld[1, :, :])
+
     ##convert to zeta
-    ki, kj = get_scaled_wn(u, dx)
-    zeta = 1j * (ki*v - kj*u)
+    ki, kj = get_scaled_wn(uh, dx)
+    zetah = 1j * (ki*vh - kj*uh)
     k2 = ki**2 + kj**2
     k2[0, 0] = 1.
     #k2 = np.where(k2!=0, k2, np.ones_like(k2)) #avoid singularity in inversion
+
     ##run time loop:
-    for n in range(int(dt/smalldt)):
+    ##t_intv is run period in hours
+    ##dt is model time step in seconds
+    for n in range(int(t_intv*3600/dt)):
         ##use rk4 numeric scheme to integrate forward in time:
-        rhs1 = forcing(u, v, zeta, dx, gen, diss)
-        zeta1 = zeta + 0.5*smalldt*rhs1
-        rhs2 = forcing(u, v, zeta1, dx, gen, diss)
-        zeta2 = zeta + 0.5*smalldt*rhs2
-        rhs3 = forcing(u, v, zeta2, dx, gen, diss)
-        zeta3 = zeta + smalldt*rhs3
-        rhs4 = forcing(u, v, zeta3, dx, gen, diss)
-        zeta = zeta + smalldt*(rhs1/6.0 + rhs2/3.0 + rhs3/3.0 + rhs4/6.0)
+        rhs1 = forcing(uh, vh, zetah, dx, gen, diss)
+        zetah1 = zetah + 0.5*dt*rhs1
+        rhs2 = forcing(uh, vh, zetah1, dx, gen, diss)
+        zetah2 = zetah + 0.5*dt*rhs2
+        rhs3 = forcing(uh, vh, zetah2, dx, gen, diss)
+        zetah3 = zetah + dt*rhs3
+        rhs4 = forcing(uh, vh, zetah3, dx, gen, diss)
+        zetah = zetah + dt*(rhs1/6.0 + rhs2/3.0 + rhs3/3.0 + rhs4/6.0)
+
         ##inverse zeta to get u, v
-        psi = -zeta / k2
-        u = -1j * kj * psi
-        v = 1j * ki * psi
-    X1 = X.copy()
-    X1[0, :, :] = ifft2(u)
-    X1[1, :, :] = ifft2(v)
-    return X1
+        psih = -zetah / k2
+        uh = -1j * kj * psih
+        vh = 1j * ki * psih
+
+    u = ifft2(uh)
+    v = ifft2(vh)
+
+    return np.array([u, v])
 
 
 ##scaled wavenumber k for pseudospectral method

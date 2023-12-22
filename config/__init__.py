@@ -212,3 +212,5 @@ pid_rec = pid // nproc_mem
 comm_mem = comm.Split(pid_rec, pid_mem)
 comm_rec = comm.Split(pid_mem, pid_rec)
 
+
+
