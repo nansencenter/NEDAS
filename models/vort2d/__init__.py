@@ -1,10 +1,10 @@
 import numpy as np
 import glob
-from datetime import datetime
+from datetime import datetime, timedelta
 from netcdf_lib import nc_read_var, nc_write_var
 
 from .model import initialize, advance_time
-from .param import *  ##model parameters are configured here
+from .param import *
 
 ##dictionary from state_def names to native variable names and properties
 ##List of properties:
@@ -15,30 +15,18 @@ from .param import *  ##model parameters are configured here
 ##   restart_dt: how freq model output is available, in hours
 ##   levels: vertical level index list
 ##   units: native physical units for the variable
-variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':6, 'levels':np.array([0]), 'units':'m/s'}, }
+variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':np.array([0]), 'units':'m/s'}, }
+
 
 ##parse kwargs and find matching filename
-##for keys in kwargs that are not set, here we define the default values
-##key values in kwargs will also be checked for erroneous values here
 def filename(path, **kwargs):
-    if 'time' in kwargs and kwargs['time'] is not None:
-        assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
-        tstr = kwargs['time'].strftime('%Y%m%d_%H')
-    else:
-        tstr = '????????_??'
-    if 'member' in kwargs and kwargs['member'] is not None:
-        assert kwargs['member'] >= 0, 'member index shall be >= 0'
-        mstr = '_mem{:03d}'.format(kwargs['member'])
-    else:
-        mstr = ''
+    assert 'member' in kwargs, 'missing member in kwargs'
+    mstr = 'mem{:03d}'.format(kwargs['member'])
 
-    ##get a list of filenames with matching kwargs
-    search = path+'/'+tstr+mstr+'.nc'
-    flist = glob.glob(search)
-    assert len(flist)>0, 'no matching files found: '+search
-    ##typically there will be only one matching file given the kwargs,
-    ##if there is a list of matching files, then we return the first one
-    return flist[0]
+    assert 'time' in kwargs, 'missing time in kwargs'
+    tstr = kwargs['time'].strftime('%Y%m%d_%H')
+
+    return path+'/'+tstr+'_'+mstr+'.nc'
 
 
 from pyproj import Proj
@@ -51,12 +39,15 @@ uniq_grid_key = ()
 def read_grid(path, **kwargs):
     ##any map projection will work, just define one arbitrarily
     proj = Proj('+proj=stere')
+
     ##define the coordinates
     ii, jj = np.meshgrid(np.arange(nx), np.arange(ny))
     x = ii*dx
     y = jj*dx
+
     ##the domain is doubly periodic
-    grid = Grid(proj, x, y, cyclic_dim=('x','y'))
+    grid = Grid(proj, x, y, cyclic_dim='xy')
+
     return grid
 
 
@@ -92,17 +83,18 @@ def read_var(path, grid, **kwargs):
 ##output updated variable with name='varname' defined in state_def
 ##to the corresponding model restart file
 def write_var(path, grid, var, **kwargs):
-    ##check name in kwargs
-    assert 'name' in kwargs, 'please specify which variable to write, name=?'
+    ##check kwargs
+    assert 'name' in kwargs, 'missing name in kwargs'
     name = kwargs['name']
     assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
+    assert 'is_vector' in kwargs, 'missing is_vector in kwargs'
     if kwargs['is_vector']:
         for i in range(2):
-            nc_write_var(fname, ('y', 'x'), variables[name]['name'][i], var[i,...])
+            nc_write_var(fname, {'t':None, 'y':ny, 'x':nx}, variables[name]['name'][i], var[i,...], recno={'t':0})
     else:
-        nc_write_var(fname, ('y', 'x'), var, variables[name]['name'], var)
+        nc_write_var(fname, {'t':None, 'y':ny, 'x':nx}, var, variables[name]['name'], var, recno={'t':0})
 
 
 ##for z coordinates, nothing to do here other than return all zeros

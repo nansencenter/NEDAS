@@ -34,7 +34,7 @@ def random_field_gaussian(nx, ny, amp, hcorr):
     return np.real(ifft2(sf * gaussian(k2d, sig_out) * ph))
 
 
-def random_field_powerlaw(nx, ny, amp, pwr_spec):
+def random_field_powerlaw(nx, ny, amp, pwrlaw):
 
     fld = np.zeros((ny, nx))
     kx, ky = get_wn(fld)
@@ -47,7 +47,7 @@ def random_field_powerlaw(nx, ny, amp, pwr_spec):
 
     ##assemble random field given amplitude from power spectrum, and random phase ph
     norm = 2 * np.pi * k2d
-    amp = np.sqrt(pwr_spec(k2d) / norm)
+    amp = np.sqrt(k2d**(pwrlaw+1) / norm)
     amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
 
     return np.real(ifft2(amp * ph))

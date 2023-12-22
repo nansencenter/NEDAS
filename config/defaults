@@ -1,7 +1,7 @@
 ####All settings and their default values
 
 ##experiment name
-exp_name=exp1
+exp_name=default
 
 ##load HPC-specific settings, directory names, env, etc.
 . $HOME/code/NEDAS/config/env/betzy/base.src
@@ -15,7 +15,8 @@ work_dir=$SCRATCH/$exp_name
 nens=6
 
 ##parallel scheme
-nproc_mem=1
+nproc=4
+nproc_mem=2
 
 #DA scheme
 assim_mode=batch ##batch or serial
@@ -69,6 +70,11 @@ t_scale="6"  ##characteristic time scale, hours, averaging window for the state 
 state_ts="0"
 
 ##define a reference coordinate system where analysis takes place
+##you can use model modules to provide the grid (when only assimilating for a single model)
+#grid_type=topaz.v5   ##model module name
+
+##or, you can define a grid yourself with parameters:
+grid_type=new
 ##map projection is defined as a proj.4 string, see https://proj.org/usage/projections.html
 proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 
@@ -92,15 +98,15 @@ maskfile=$SCRATCH/mask.npz
 ##     source module, one of the models/ module that provides the state variable
 ##     error type, normal/lognormal
 state_def=$(cat << EOF
+ocean_velocity      topaz.v5    field  normal
 ocean_temp          topaz.v5    field  normal
 ocean_saln          topaz.v5    field  normal
-ocean_velocity      topaz.v5    field  normal
 EOF
 )
-#drag_coef           topaz.v5   scalar  normal
 
 ##parameter estimation
-#TODO
+##just add model parameters as scalar state variables above, e.g.:
+#drag_coef           topaz.v5   scalar  normal
 
 ##define the `obs` in a multi-line string
 ##  one observation per line, each line contains:
@@ -119,7 +125,7 @@ EOF
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
 ocean_temp   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  none
-ocean_saln   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  ocean_velocity=0,ocean_temp=0.5
+ocean_saln   prep_obs.insitu  topaz.v5  normal  0.6  0  0  0  none  200000  inf  inf  ocean_velocity=0,ocean_temp=0.5
 EOF
 )
 
