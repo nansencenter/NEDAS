@@ -92,7 +92,7 @@ def distribute_tasks(comm, tasks, load=None):
     task_id = np.zeros(nproc+1, dtype=int)
 
     target_cum_load = np.arange(nproc)/nproc  ##we want even distribution of load
-    tol = 1e-4  ##allow some tolerance for rounding error in comparing cum_load to target_cum_load
+    tol = 0.1/nproc  ##allow some tolerance for rounding error in comparing cum_load to target_cum_load
     ind1 = np.searchsorted(cum_load+tol, target_cum_load, side='right')
     ind2 = np.searchsorted(cum_load-tol, target_cum_load, side='right')
 
