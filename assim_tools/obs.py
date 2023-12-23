@@ -6,7 +6,7 @@ import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from log import message, progress_bar
 from parallel import bcast_by_root, distribute_tasks
-from perturb import random_field
+from perturb import random_field_gaussian
 from grid import Grid
 from .state import read_field
 
@@ -265,9 +265,9 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
         obs_inds_pid[obs_rec_id] = {}
 
         if c.assim_mode == 'batch':
-            ##loop over tiles in loc_list_full given by partition_grid
-            for loc in range(len(loc_list_full)):
-                ist,ied,di,jst,jed,dj = loc_list_full[loc]
+            ##loop over tiles with par_id in loc_list_full given by partition_grid
+            for par_id in range(len(loc_list_full)):
+                ist,ied,di,jst,jed,dj = loc_list_full[par_id]
 
                 hroi = obs_info['records'][obs_rec_id]['hroi']
                 xo = np.array(obs_rec['x'])  ##obs x,y
@@ -295,21 +295,22 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
                                                       yo <= y[jed-1]) )
 
                 ##if any of the 3 condition satisfies, the obs is within
-                ##hroi of any points in tile[loc]
+                ##hroi of any points in tile[par_id]
                 inds = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))
-                obs_inds_pid[obs_rec_id][loc] = inds
+                obs_inds_pid[obs_rec_id][par_id] = inds
 
         elif c.assim_mode == 'serial':
-            ##locality doesn't matter, we just divide obs_rec into nproc parts
+            ##locality doesn't matter, we just divide obs_rec into nproc partitions
+            ##with par_id from 0 to nproc-1
             inds = distribute_tasks(c.comm, np.arange(len(obs_rec['obs'])))
-            for p in range(c.nproc):
-                obs_inds_pid[obs_rec_id][p] = inds[p]
+            for par_id in range(c.nproc):
+                obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
 
     ##gather all obs_rec_id from pid_rec to form the complete obs_inds dict
     obs_inds = {}
     for entry in c.comm_rec.allgather(obs_inds_pid):
         for obs_rec_id, data in entry.items():
-            obs_inds[obs_rec_id] = data   ##each collected data is a dict {loc:inds}
+            obs_inds[obs_rec_id] = data   ##each collected data is a dict {par_id:inds}
 
     return obs_inds
 
@@ -324,9 +325,9 @@ def build_loc_tasks(c, loc_list_full, obs_info, obs_inds):
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
-        nlobs_loc = np.array([np.sum([len(obs_inds[r][loc])
+        nlobs_loc = np.array([np.sum([len(obs_inds[r][p])
                                       for r in obs_info['records'].keys()])
-                              for loc in range(len(loc_list_full))] )
+                              for p in range(len(loc_list_full))] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
         loc_list = distribute_tasks(c.comm, loc_list_full, workload)
@@ -338,8 +339,8 @@ def build_loc_tasks(c, loc_list_full, obs_info, obs_inds):
     return loc_list
 
 
-##prepare the obs_prior in parallel, run state_to_obs to obtain obs_seq
-def prepare_obs_prior(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields):
+##prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_seq
+def prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields):
 
     message(c.comm, 'compute obs priors\n', 0)
     obs_prior_seq = {}
@@ -464,10 +465,10 @@ def state_to_obs(c, state_info, field_list, **kwargs):
                 inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
                                                obs_z <= np.maximum(z_vp, z_vc)) )
                 ##there can be collapsed layers if z_vc=z_vp
-                np.seterr(invalid='ignore')  ##ignore divide by zero warnings
-                vi = np.where(z_vp==z_vc,
-                              vp,   ##for collapsed layers just use previous value
-                              ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp)  ##otherwise linear interp between layer
+                with np.errstate(divide='ignore'):
+                    vi = np.where(z_vp==z_vc,
+                                  vp,   ##for collapsed layers just use previous value
+                                  ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
                 obs_seq[..., inds] = vi[..., inds]
 
             if k == len(levels)-1:
@@ -496,8 +497,8 @@ def state_to_obs(c, state_info, field_list, **kwargs):
 
 ##transpose obs from field-complete to ensemble-complete:
 ##given obs_list[pid] -> list of (mem_id, obs_rec_id)
-##      loc_list[pid] -> list of tile loc
-##      obs_inds[obs_rec_id][loc] -> inds of subset of obs_seq
+##      loc_list[pid] -> list of par_id -> (ist,ied,di,jst,jed,dj)
+##      obs_inds[obs_rec_id][par_id] -> inds of subset of obs_seq
 ##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
 ##to the destination proc (dst_pid)
 ##ensemble = True: process the obs_prior_seq[mem_id, obs_rec_id]=array
@@ -541,9 +542,9 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=Fal
                     ##this is the obs prior seq for mem_id, obs_rec_id
                     ##for each loc, assemble the subset of seq with obs_inds
                     obs_chk = {}
-                    for loc in range(len(loc_list[dst_pid])):
-                        inds = obs_inds[obs_rec_id][loc]
-                        obs_chk[loc] = seq[..., inds]
+                    for par_id in range(len(loc_list[dst_pid])):
+                        inds = obs_inds[obs_rec_id][par_id]
+                        obs_chk[par_id] = seq[..., inds]
 
                     if dst_pid == c.pid:
                         ##pid already stores the obs_chk, just copy
@@ -556,13 +557,13 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=Fal
                     if mem_id == 0:
                         ##this is the obs seq with keys 'obs','x','y','z','t'
                         ##assemble the obs_chk dict with same keys but subset obs_inds
-                        ##do this for each loc to get the full obs_chk
+                        ##do this for each par_id to get the full obs_chk
                         obs_chk = {}
-                        for loc in range(len(loc_list[dst_pid])):
-                            obs_chk[loc] = {}
-                            inds = obs_inds[obs_rec_id][loc]
+                        for par_id in range(len(loc_list[dst_pid])):
+                            obs_chk[par_id] = {}
+                            inds = obs_inds[obs_rec_id][par_id]
                             for key, value in seq.items():
-                                obs_chk[loc][key] = value[..., inds]
+                                obs_chk[par_id][key] = value[..., inds]
 
                         if dst_pid == c.pid:
                             ##pid already stores the obs_chk, just copy

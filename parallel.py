@@ -23,7 +23,7 @@ class dummy_comm(object):
         return obj
 
     def allgather(self, obj):
-        return obj
+        return [obj]
 
     def gather(self, obj, root=0):
         return obj

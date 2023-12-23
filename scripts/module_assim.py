@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import numpy as np
 import config as c
 import sys
@@ -81,7 +79,7 @@ obs_inds = assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq)
 loc_list = build_loc_tasks(c, loc_list_full, obs_info, obs_inds)
 
 ##compute obs prior, each pid compute a subset of obs
-obs_prior_seq = prepare_obs_prior(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields)
+obs_prior_seq = prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields)
 
 c.comm.Barrier()
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(time.time()-runtime), 0)
@@ -116,10 +114,11 @@ runtime = time.time()
 ##4.Assimilate obs to update state variables
 message(c.comm, '4.Assimilation\n', 0)
 if c.assim_mode == 'batch':
-    state_post = batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, lobs_prior)
-
+    assim = batch_assim
 elif c.assim_mode == 'serial':
-    state_post = serial_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, lobs_prior)
+    assim = serial_assim
+
+state_post = assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_state, lobs, lobs_prior)
 
 c.comm.Barrier()
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-runtime), 0)
@@ -149,6 +148,9 @@ message(c.comm, '6.Post-processing\n', 0)
 ##if c.grid != model_grid
 ##else
 ## just copy output state to model restart files
+##optional: output posterior obs for diag
+# obs_post_seq = prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields)
+# output_obs(c, obs_info, obs_post_seq)
 
 c.comm.Barrier()
 message(c.comm, 'Step 6 took {} seconds\n\n'.format(time.time()-runtime), 0)

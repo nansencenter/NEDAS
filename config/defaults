@@ -12,11 +12,11 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=6
+nens=2
 
 ##parallel scheme
-nproc=4
-nproc_mem=2
+nproc=1
+nproc_mem=1
 
 #DA scheme
 assim_mode=batch ##batch or serial
@@ -62,7 +62,7 @@ cycle_period=168  ##in hours
 ##define analysis window relative to `time`, in hours
 ##Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
 ## for each cycle, so watch out for overfitting
-obs_window_min=-168
+obs_window_min=-24
 obs_window_max=0
 obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
 t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
@@ -71,26 +71,26 @@ state_ts="0"
 
 ##define a reference coordinate system where analysis takes place
 ##you can use model modules to provide the grid (when only assimilating for a single model)
-#grid_type=topaz.v5   ##model module name
+grid_type=topaz.v5   ##model module name
 
 ##or, you can define a grid yourself with parameters:
-grid_type=new
+#grid_type=new
 ##map projection is defined as a proj.4 string, see https://proj.org/usage/projections.html
-proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
+#proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
 
 ##horizontal grid dimensions
-xmin=-2500000  ##start,end x coordinates (meter)
-xmax=2500000
-ymin=-2000000  ##start,end y coordinates (meter)
-ymax=2500000
-dx="100000"  ##grid spacing (meter) for each scale (nscale entries)
+#xmin=-2500000  ##start,end x coordinates (meter)
+#xmax=2500000
+#ymin=-2000000  ##start,end y coordinates (meter)
+#ymax=2500000
+#dx="100000"  ##grid spacing (meter) for each scale (nscale entries)
 
 ##mask: area in the reference grid that is land or other area that doesn't require analysis,
 ##      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
 ##      the local analysis routine will also skip masked region to evenly distribute work load.
 ## the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
 ## and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
-maskfile=$SCRATCH/mask.npz
+#maskfile=$SCRATCH/mask.npz
 
 ##define the `state` in a multi-line string
 ##  one state variable per line, each line contains:
