@@ -18,12 +18,14 @@ from parallel import bcast_by_root, distribute_tasks
 ## rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
 ##          for different variables, we stack these dimensions in the 'record'
 ##          dimension with size nrec
-## loc_id indexes the location (j, i) in the 2D field.
+## par_id indexes the spatial partitions, which are subset of the 2D grid
+##          given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
+##          the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
 ##
 ## The entire state is distributed across the memory of many processors,
 ## at any moment, a processor only stores a subset of state in its memory:
-## either having all the mem_id,rec_id but only a subset of loc_id (we call this
-## ensemble-complete), or having all the loc_id but a subset of mem_id,rec_id
+## either having all the mem_id,rec_id but only a subset of par_id (we call this
+## ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
 ## (we call this field-complete).
 ## It is easier to perform i/o and pre/post processing on field-complete state,
 ## while easier to run assimilation algorithms with ensemble-complete state.
@@ -313,15 +315,15 @@ def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
         if task < len(field_list[c.pid]):
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 fld_chk = {}
-                for loc in range(len(loc_list[dst_pid])):
-                    ##slice for this loc
-                    istart,iend,di,jstart,jend,dj = loc_list[dst_pid][loc]
-                    ##save the unmasked points in slice to fld_chk for this loc
+                for par_id in range(len(loc_list[dst_pid])):
+                    ##slice for this par_id
+                    istart,iend,di,jstart,jend,dj = loc_list[dst_pid][par_id]
+                    ##save the unmasked points in slice to fld_chk for this par_id
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     if rec['is_vector']:
-                        fld_chk[loc] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
+                        fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
                     else:
-                        fld_chk[loc] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
+                        fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
 
                 if dst_pid == c.pid:
                     ##same pid, so just write to state
@@ -389,10 +391,10 @@ def transpose_state_to_field(c, state_info, field_list, loc_list, state):
                     fld_chk = c.comm.recv(source=src_pid, tag=task)
 
                 ##unpack the fld_chk to form a complete field
-                for loc in range(len(loc_list[src_pid])):
-                    istart,iend,di,jstart,jend,dj = loc_list[src_pid][loc]
+                for par_id in range(len(loc_list[src_pid])):
+                    istart,iend,di,jstart,jend,dj = loc_list[src_pid][par_id]
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                    fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[loc]
+                    fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
 
                 fields[mem_id, rec_id] = fld
 

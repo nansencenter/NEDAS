@@ -52,3 +52,17 @@ or try running the control scripts using one of the test configs in tutorials
 ![](https://github.com/nansencenter/NEDAS/blob/main/tutorials/imgs/flowchart.png "Flow chart of one assimilation cycle")
 
 
+
+### Design considerations
+Intermediate data format: just binary file for easy multiple processor read/write
+
+Parallel achieved by old-fashioned mpi4py
+
+Computational heavy function optimized by numba.njit
+
+Control script in bash (easier to pass environment variables and integrate in HPC systems)
+
+Call sequence: executable script (run\_\*) - config - module (models, dataset funcs)
+Don't call upperlevel functions to avoid creating cyclic dependency
+
+### How to add your own model and/or dataset

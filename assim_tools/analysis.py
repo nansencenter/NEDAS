@@ -5,7 +5,7 @@ from conversion import t2h, h2t
 
 ##batch assimilation solves the matrix version EnKF analysis for a given local state
 ##the local_analysis updates for different variables are computed in parallel
-def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, lobs_prior):
+def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_state, lobs, lobs_prior):
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
@@ -16,13 +16,13 @@ def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, l
     pid_show = 0
 
     ##loop through tiles stored on pid
-    for loc in range(len(loc_list[c.pid])):
-        ist,ied,di,jst,jed,dj = loc_list[c.pid][loc]
+    for par_id in range(len(loc_list[c.pid])):
+        ist,ied,di,jst,jed,dj = loc_list[c.pid][par_id]
         ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
         mask_chk = c.mask[jst:jed:dj, ist:ied:di]
 
         ##fetch local obs seq and obs_prior seq on tile
-        nlobs = np.sum([len(lobs[r][loc]['obs'].flatten()) for r in obs_info['records'].keys()])
+        nlobs = np.sum([len(lobs[r][par_id]['obs'].flatten()) for r in obs_info['records'].keys()])
         if nlobs == 0:
             continue
 
@@ -39,19 +39,19 @@ def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, l
         obs_prior = np.full((c.nens, nlobs), np.nan)
         i = 0
         for r, obs_rec in obs_info['records'].items():
-            d = len(lobs[r][loc]['obs'].flatten())
-            obs[i:i+d] = lobs[r][loc]['obs'].flatten()
-            obs_x[i:i+d] = lobs[r][loc]['x'].flatten()
-            obs_y[i:i+d] = lobs[r][loc]['y'].flatten()
-            obs_z[i:i+d] = lobs[r][loc]['z'].flatten()
-            obs_t[i:i+d] = np.array([t2h(t) for t in lobs[r][loc]['t'].flatten()])
+            d = len(lobs[r][par_id]['obs'].flatten())
+            obs[i:i+d] = lobs[r][par_id]['obs'].flatten()
+            obs_x[i:i+d] = lobs[r][par_id]['x'].flatten()
+            obs_y[i:i+d] = lobs[r][par_id]['y'].flatten()
+            obs_z[i:i+d] = lobs[r][par_id]['z'].flatten()
+            obs_t[i:i+d] = np.array([t2h(t) for t in lobs[r][par_id]['t'].flatten()])
             # obs_name[i:i+d] = np.array([obs_info['records'][r]['name'] for 
             obs_err[i:i+d] = np.ones(d) * obs_info['records'][r]['err']['std']
             hroi[i:i+d] = np.ones(d) * obs_info['records'][r]['hroi']
             vroi[i:i+d] = np.ones(d) * obs_info['records'][r]['vroi']
             troi[i:i+d] = np.ones(d) * obs_info['records'][r]['troi']
             for m in range(c.nens):
-                obs_prior[m, i:i+d] = lobs_prior[m,r][loc].flatten()
+                obs_prior[m, i:i+d] = lobs_prior[m,r][par_id].flatten()
             i += d
 
         ##loop through unmasked grid points in the tile
@@ -62,12 +62,12 @@ def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, l
                 keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
 
                 for key in keys:
-                    ens_prior = np.array([state_prior[m, rec_id][loc][key] for m in range(c.nens)])
+                    ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
 
                     ##localization factor
                     state_x = c.grid.x[0, ii[~mask_chk][l]]
                     state_y = c.grid.y[jj[~mask_chk][l], 0]
-                    state_z = z_state[m, rec_id][loc][key]
+                    state_z = z_state[m, rec_id][par_id][key]
                     state_t = t2h(state_info['fields'][rec_id]['time'])
                     hdist = np.hypot(obs_x-state_x, obs_y-state_y)
                     vdist = np.abs(obs_z-state_z)
@@ -85,9 +85,9 @@ def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, l
 
                     ##save the posterior ensemble to the state
                     for m in range(c.nens):
-                        state_post[m, rec_id][loc][key] = ens_post[m]
+                        state_post[m, rec_id][par_id][key] = ens_post[m]
 
-        message(c.comm, progress_bar(loc, len(loc_list[c.pid])), pid_show)
+        message(c.comm, progress_bar(par_id, len(loc_list[c.pid])), pid_show)
 
     message(c.comm, ' done.\n', pid_show)
 
@@ -97,7 +97,7 @@ def batch_assim(c, state_info, obs_info, loc_list, state_prior, z_state, lobs, l
 ##serial assimilation goes through the list of observations one by one
 ##for each obs the near by state variables are updated one by one.
 ##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
-def serial_assim(c, state_info, obs_info, loc_list, state_prior, lobs, lobs_prior):
+def serial_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, lobs, lobs_prior):
 
     state_post = state_prior.copy()  ##make a copy for posterior states
 
