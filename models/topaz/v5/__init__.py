@@ -161,7 +161,7 @@ def write_grid(path, **kwargs):
 
 
 ##topaz stored a separate landmask in depth.a file
-def read_mask(path, grid):
+def read_mask(path, grid, **kwargs):
     depthfile = path+'/topo/depth.a'
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
     mask = f.read_field('depth').mask
