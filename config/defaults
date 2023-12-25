@@ -12,11 +12,11 @@ data_dir=$SCRATCH/data
 work_dir=$SCRATCH/$exp_name
 
 #ensemble size, number of members (model runs, realizations, etc.)
-nens=2
+nens=8
 
 ##parallel scheme
-nproc=1
-nproc_mem=1
+nproc=8
+nproc_mem=4
 
 #DA scheme
 assim_mode=batch ##batch or serial

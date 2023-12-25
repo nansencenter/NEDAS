@@ -279,8 +279,8 @@ def prepare_state(c, state_info, field_list):
 
 ##transpose_field_to_state send chunks of field owned by a pid to other pid
 ##  so that the field-complete fields get transposed into ensemble-complete state
-##  with keys (mem_id, rec_id) pointing to the slices in loc_list
-def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
+##  with keys (mem_id, rec_id) pointing to the partition in par_list
+def transpose_field_to_state(c, state_info, field_list, partitions, par_list, fields):
 
     message(c.comm, 'transpose field to state\n', 0)
     state = {}
@@ -298,7 +298,7 @@ def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
 
         ## - for each source proc id (src_pid) with field_list item (mem_id, rec_id),
         ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to destination
-        ##   proc id (dst_pid) with its corresponding slice in loc_list
+        ##   proc id (dst_pid) with its corresponding partition in par_list
         ## - every pid needs to send/recv to/from every pid, so we use cyclic
         ##   coreography here to prevent deadlock
 
@@ -315,9 +315,9 @@ def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
         if task < len(field_list[c.pid]):
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 fld_chk = {}
-                for par_id in range(len(loc_list[dst_pid])):
+                for par_id in par_list[dst_pid]:
                     ##slice for this par_id
-                    istart,iend,di,jstart,jend,dj = loc_list[dst_pid][par_id]
+                    istart,iend,di,jstart,jend,dj = partitions[par_id]
                     ##save the unmasked points in slice to fld_chk for this par_id
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     if rec['is_vector']:
@@ -349,7 +349,7 @@ def transpose_field_to_state(c, state_info, field_list, loc_list, fields):
 
 
 ##transpose_state_to_field transposes back the state to field-complete fields
-def transpose_state_to_field(c, state_info, field_list, loc_list, state):
+def transpose_state_to_field(c, state_info, field_list, partitions, par_list, state):
 
     message(c.comm, 'transpose state to field\n', 0)
     fields = {}
@@ -391,8 +391,8 @@ def transpose_state_to_field(c, state_info, field_list, loc_list, state):
                     fld_chk = c.comm.recv(source=src_pid, tag=task)
 
                 ##unpack the fld_chk to form a complete field
-                for par_id in range(len(loc_list[src_pid])):
-                    istart,iend,di,jstart,jend,dj = loc_list[src_pid][par_id]
+                for par_id in par_list[src_pid]:
+                    istart,iend,di,jstart,jend,dj = partitions[par_id]
                     mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
                     fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
 
