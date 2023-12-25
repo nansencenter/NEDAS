@@ -58,6 +58,8 @@ List of necessary functions/parameters:
 
 	'x' : a list of x coordinates for each measurement.
 
+    'err_std' : a list of error standard deviation for each measurement.
+
 
 * `random_network(**kwargs)` generates a random realization of observing network for observation type `name`, it is used in generation of synthetic observations from model nature runs (truth). The function returns `obs_seq` but only the coordinates 't', 'z', 'y', 'x' are needed. The observed values will be generated later by `state_to_obs()` instead for the synthetic observations.
 

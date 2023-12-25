@@ -15,8 +15,8 @@ work_dir=$SCRATCH/$exp_name
 nens=100
 
 ##parallel scheme
-nproc=1024
-nproc_mem=32
+nproc=2000
+nproc_mem=100
 
 #DA scheme
 assim_mode=batch ##batch or serial
@@ -126,8 +126,8 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-ocean_temp   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  none
-ocean_saln   prep_obs.insitu  topaz.v5  normal  0.6  0  0  0  none  200000  inf  inf  ocean_velocity=0.5,ocean_temp=0.8
+ocean_temp   prep_obs.insitu  topaz.v5  normal  0.5  0  0  0  none  300000  100  inf  none
+ocean_saln   prep_obs.insitu  topaz.v5  normal  3.0  0  0  0  none  300000  100  inf  ocean_velocity=0.5,ocean_temp=0.8
 EOF
 )
 

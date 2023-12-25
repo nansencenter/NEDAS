@@ -5,7 +5,7 @@ from conversion import t2h, h2t
 
 ##batch assimilation solves the matrix version EnKF analysis for a given local state
 ##the local_analysis updates for different variables are computed in parallel
-def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_state, lobs, lobs_prior):
+def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, z_state, lobs, lobs_prior):
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
@@ -13,11 +13,17 @@ def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_stat
     _ = local_analysis(np.ones(5), np.ones(10), np.ones(10), None, np.ones((5,10)), 'ETKF', np.ones(10))
 
     ##pid with most obs to work with will print out progress
-    pid_show = 0
+    # obs_count = [np.sum([len(obs_inds[r][p])
+    #                      for r in obs_info['records'].keys()
+    #                      for p in par_list[pid] ])
+    #              for pid in range(c.nproc)]
+    # pid_show = obs_count.index(max(obs_count))
 
     ##loop through tiles stored on pid
-    for par_id in range(len(loc_list[c.pid])):
-        ist,ied,di,jst,jed,dj = loc_list[c.pid][par_id]
+    for p in range(len(par_list[c.pid])):
+        par_id = par_list[c.pid][p]
+
+        ist,ied,di,jst,jed,dj = partitions[par_id]
         ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
         mask_chk = c.mask[jst:jed:dj, ist:ied:di]
 
@@ -70,9 +76,10 @@ def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_stat
                     state_z = z_state[m, rec_id][par_id][key]
                     state_t = t2h(state_info['fields'][rec_id]['time'])
                     hdist = np.hypot(obs_x-state_x, obs_y-state_y)
-                    vdist = np.abs(obs_z-state_z)
-                    tdist = np.abs(obs_t-state_t)
+                    # vdist = np.abs(obs_z-state_z)
+                    # tdist = np.abs(obs_t-state_t)
                     lfactor = local_factor(hdist, hroi, c.localize_type)
+                    #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
                     if (lfactor==0).all():
                         continue
                     inds = np.where(lfactor>0)
@@ -87,9 +94,9 @@ def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_stat
                     for m in range(c.nens):
                         state_post[m, rec_id][par_id][key] = ens_post[m]
 
-        message(c.comm, progress_bar(par_id, len(loc_list[c.pid])), pid_show)
+        message(c.comm, progress_bar(p, len(par_list[c.pid])), 0)
 
-    message(c.comm, ' done.\n', pid_show)
+    message(c.comm, ' done.\n', 0)
 
     return state_post
 
@@ -97,7 +104,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_stat
 ##serial assimilation goes through the list of observations one by one
 ##for each obs the near by state variables are updated one by one.
 ##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
-def serial_assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, lobs, lobs_prior):
+def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, lobs, lobs_prior):
 
     state_post = state_prior.copy()  ##make a copy for posterior states
 

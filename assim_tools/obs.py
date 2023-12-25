@@ -224,14 +224,14 @@ def partition_grid(c):
         ##the workload on each tile is uneven since there are masked points
         ##so we divide into 3*nproc tiles so that they can be distributed
         ##according to their load (number of unmasked points)
-        nx_tile = np.minimum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc / 3))), 20)
+        nx_tile = np.minimum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc / 3))), 50)
 
         ##a list of (istart, iend, di, jstart, jend, dj) for tiles
         ##note: we have 3*nproc entries in the list
-        loc_list_full = [(i, np.minimum(i+nx_tile, c.nx), 1,   ##istart, iend, di
-                          j, np.minimum(j+nx_tile, c.ny), 1)   ##jstart, jend, dj
-                          for j in np.arange(0, c.ny, nx_tile)
-                          for i in np.arange(0, c.nx, nx_tile) ]
+        partitions = [(i, np.minimum(i+nx_tile, c.nx), 1,   ##istart, iend, di
+                       j, np.minimum(j+nx_tile, c.ny), 1)   ##jstart, jend, dj
+                      for j in np.arange(0, c.ny, nx_tile)
+                      for i in np.arange(0, c.nx, nx_tile) ]
 
     elif c.assim_mode == 'serial':
         ##the domain is divided into tiles, each tile is formed by nproc elements
@@ -247,15 +247,15 @@ def partition_grid(c):
 
         ##a list of (ist, ied, di, jst, jed, dj) for slicing
         ##note: we have nproc entries in the list
-        loc_list_full = [(i, nx, nx_intv, j, ny, ny_intv)
-                         for j in np.arange(ny_intv)
-                         for i in np.arange(nx_intv) ]
+        partitions = [(i, nx, nx_intv, j, ny, ny_intv)
+                      for j in np.arange(ny_intv)
+                      for i in np.arange(nx_intv) ]
 
-    return loc_list_full
+    return partitions
 
 
 @bcast_by_root(c.comm_mem)
-def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
+def assign_obs_to_loc(c, partitions, obs_info, obs_list, obs_seq):
 
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
@@ -264,16 +264,16 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
         obs_rec = obs_seq[obs_rec_id]
         obs_inds_pid[obs_rec_id] = {}
 
-        if c.assim_mode == 'batch':
-            ##loop over tiles with par_id in loc_list_full given by partition_grid
-            for par_id in range(len(loc_list_full)):
-                ist,ied,di,jst,jed,dj = loc_list_full[par_id]
+        hroi = obs_info['records'][obs_rec_id]['hroi']
+        xo = np.array(obs_rec['x'])  ##obs x,y
+        yo = np.array(obs_rec['y'])
+        x = c.grid.x[0,:]   ##grid x,y
+        y = c.grid.y[:,0]
 
-                hroi = obs_info['records'][obs_rec_id]['hroi']
-                xo = np.array(obs_rec['x'])  ##obs x,y
-                yo = np.array(obs_rec['y'])
-                x = c.grid.x[0,:]            ##grid x,y
-                y = c.grid.y[:,0]
+        if c.assim_mode == 'batch':
+            ##loop over partitions with par_id
+            for par_id in range(len(partitions)):
+                ist,ied,di,jst,jed,dj = partitions[par_id]
 
                 ##condition 1: within the four corner points of the tile
                 hdist = np.hypot(np.minimum(np.abs(xo - x[ist]),
@@ -296,7 +296,7 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
 
                 ##if any of the 3 condition satisfies, the obs is within
                 ##hroi of any points in tile[par_id]
-                inds = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))
+                inds = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))[0]
                 obs_inds_pid[obs_rec_id][par_id] = inds
 
         elif c.assim_mode == 'serial':
@@ -316,27 +316,29 @@ def assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq):
 
 
 @bcast_by_root(c.comm)
-def build_loc_tasks(c, loc_list_full, obs_info, obs_inds):
+def build_loc_tasks(c, partitions, obs_info, obs_inds):
+    par_list_full = np.arange(len(partitions))
+
     if c.assim_mode == 'batch':
-        ##distribute the loc_list_full according to workload to each pid
+        ##distribute the list of par_id according to workload to each pid
         ##number of unmasked grid points in each tile
         nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
-                              for ist,ied,di,jst,jed,dj in loc_list_full] )
+                              for ist,ied,di,jst,jed,dj in partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
         nlobs_loc = np.array([np.sum([len(obs_inds[r][p])
                                       for r in obs_info['records'].keys()])
-                              for p in range(len(loc_list_full))] )
+                              for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        loc_list = distribute_tasks(c.comm, loc_list_full, workload)
+        par_list = distribute_tasks(c.comm, par_list_full, workload)
 
     if c.assim_mode == 'serial':
-        ##just assign each loc slice to each pid
-        loc_list = {p:loc_list_full[p] for p in range(c.nproc)}
+        ##just assign each partition to each pid, pid==par_id
+        par_list = {pid:pid for pid in range(c.nproc)}
 
-    return loc_list
+    return par_list
 
 
 ##prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_seq
@@ -497,13 +499,13 @@ def state_to_obs(c, state_info, field_list, **kwargs):
 
 ##transpose obs from field-complete to ensemble-complete:
 ##given obs_list[pid] -> list of (mem_id, obs_rec_id)
-##      loc_list[pid] -> list of par_id -> (ist,ied,di,jst,jed,dj)
+##      par_list[pid] -> list of par_id
 ##      obs_inds[obs_rec_id][par_id] -> inds of subset of obs_seq
 ##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
 ##to the destination proc (dst_pid)
 ##ensemble = True: process the obs_prior_seq[mem_id, obs_rec_id]=array
 ##ensemble = False: process the obs_seq[obs_rec_id]={'obs':array,'x':array,'y':...}
-def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=False):
+def transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_seq, ensemble=False):
 
     message(c.comm, 'transpose obs to local obs\n', 0)
     lobs = {}
@@ -542,7 +544,7 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=Fal
                     ##this is the obs prior seq for mem_id, obs_rec_id
                     ##for each loc, assemble the subset of seq with obs_inds
                     obs_chk = {}
-                    for par_id in range(len(loc_list[dst_pid])):
+                    for par_id in par_list[dst_pid]:
                         inds = obs_inds[obs_rec_id][par_id]
                         obs_chk[par_id] = seq[..., inds]
 
@@ -559,7 +561,7 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=Fal
                         ##assemble the obs_chk dict with same keys but subset obs_inds
                         ##do this for each par_id to get the full obs_chk
                         obs_chk = {}
-                        for par_id in range(len(loc_list[dst_pid])):
+                        for par_id in par_list[dst_pid]:
                             obs_chk[par_id] = {}
                             inds = obs_inds[obs_rec_id][par_id]
                             for key, value in seq.items():
@@ -594,7 +596,6 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq, ensemble=Fal
     message(c.comm, ' done.\n', 0)
 
     return lobs
-
 
 
 ##output an obs values to the binfile for a member (obs_prior), if member=None it is the actual obs

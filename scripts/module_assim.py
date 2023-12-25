@@ -72,11 +72,11 @@ obs_list = build_obs_tasks(c, obs_info)
 
 obs_seq = prepare_obs(c, state_info, obs_info, obs_list)
 
-loc_list_full = partition_grid(c)
+partitions = partition_grid(c)
 
-obs_inds = assign_obs_to_loc(c, loc_list_full, obs_info, obs_list, obs_seq)
+obs_inds = assign_obs_to_loc(c, partitions, obs_info, obs_list, obs_seq)
 
-loc_list = build_loc_tasks(c, loc_list_full, obs_info, obs_inds)
+par_list = build_loc_tasks(c, partitions, obs_info, obs_inds)
 
 ##compute obs prior, each pid compute a subset of obs
 obs_prior_seq = prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields)
@@ -91,20 +91,20 @@ message(c.comm, '3.Transpose from field-complete to ensemble-complete\n', 0)
 
 ##the local state variables to be updated
 message(c.comm, 'state variable fields: ', 0)
-state_prior = transpose_field_to_state(c, state_info, field_list, loc_list, fields)
+state_prior = transpose_field_to_state(c, state_info, field_list, partitions, par_list, fields)
 
 ##z_coords for state variables
 message(c.comm, 'z coords fields: ', 0)
-z_state = transpose_field_to_state(c, state_info, field_list, loc_list, z_fields)
+z_state = transpose_field_to_state(c, state_info, field_list, partitions, par_list, z_fields)
 
 ##global scalar state variables to be updated
 
 ##obs and obs_prior
 message(c.comm, 'obs sequences: ', 0)
-lobs = transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_seq)
+lobs = transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_seq)
 
 message(c.comm, 'obs prior sequences: ', 0)
-lobs_prior = transpose_obs_to_lobs(c, obs_list, obs_inds, loc_list, obs_prior_seq, ensemble=True)
+lobs_prior = transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_prior_seq, ensemble=True)
 
 c.comm.Barrier()
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-runtime), 0)
@@ -118,7 +118,7 @@ if c.assim_mode == 'batch':
 elif c.assim_mode == 'serial':
     assim = serial_assim
 
-state_post = assim(c, state_info, obs_info, obs_inds, loc_list, state_prior, z_state, lobs, lobs_prior)
+state_post = assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, z_state, lobs, lobs_prior)
 
 c.comm.Barrier()
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-runtime), 0)
@@ -129,7 +129,7 @@ runtime = time.time()
 message(c.comm, '5.Transpose state from ensemble-complete to field-complete\n', 0)
 
 message(c.comm, 'state variable fields: ', 0)
-fields = transpose_state_to_field(c, state_info, field_list, loc_list, state_post)
+fields = transpose_state_to_field(c, state_info, field_list, partitions, par_list, state_post)
 
 state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/post_state.bin'
 output_state(c, state_info, field_list, fields, state_file)
