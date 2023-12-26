@@ -63,6 +63,19 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_p
         ##loop through unmasked grid points in the tile
         for l in range(len(ii[~mask_chk])):
 
+            state_x = c.grid.x[0, ii[~mask_chk][l]]
+            state_y = c.grid.y[jj[~mask_chk][l], 0]
+            hdist = np.hypot(obs_x-state_x, obs_y-state_y)
+            lfactor = local_factor(hdist, hroi, c.localize_type)
+            if (lfactor==0).all():
+                continue
+            inds = np.where(lfactor>0)
+
+            ##cache the localization factor given h, v, t, ob component
+            ##avoid recomputing transform matrix if there is no change in
+            ##rec_id dimension (most changes in solution is due to h localiz.)
+            lfactor_bank = {}
+
             ##loop through each field record
             for rec_id, rec in state_info['fields'].items():
                 keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
@@ -71,18 +84,11 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_p
                     ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
 
                     ##localization factor
-                    state_x = c.grid.x[0, ii[~mask_chk][l]]
-                    state_y = c.grid.y[jj[~mask_chk][l], 0]
                     state_z = z_state[m, rec_id][par_id][key]
-                    state_t = t2h(state_info['fields'][rec_id]['time'])
-                    hdist = np.hypot(obs_x-state_x, obs_y-state_y)
+                    # state_t = t2h(state_info['fields'][rec_id]['time'])
                     # vdist = np.abs(obs_z-state_z)
                     # tdist = np.abs(obs_t-state_t)
-                    lfactor = local_factor(hdist, hroi, c.localize_type)
                     #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
-                    if (lfactor==0).all():
-                        continue
-                    inds = np.where(lfactor>0)
 
                     obs_prior_sub = np.zeros((c.nens, len(inds[0])))
                     for m in range(c.nens):

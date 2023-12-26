@@ -204,6 +204,7 @@ if comm.Get_size() == 1:
 else:
     assert nproc == comm.Get_size(), "nproc is not the same as defined in config"
     assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
+nproc_rec = int(nproc/nproc_mem)
 
 pid = comm.Get_rank()  ##processor id
 
@@ -211,6 +212,5 @@ pid_mem = pid % nproc_mem
 pid_rec = pid // nproc_mem
 comm_mem = comm.Split(pid_rec, pid_mem)
 comm_rec = comm.Split(pid_mem, pid_rec)
-
 
 
