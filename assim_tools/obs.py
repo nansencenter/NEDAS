@@ -124,20 +124,10 @@ def read_obs_info(binfile):
 
 
 def build_obs_tasks(c, obs_info):
-    ##member list
-    mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
-
     ##obs_rec_id list
     obs_rec_list = distribute_tasks(c.comm_rec, [i for i in obs_info['records'].keys()])
 
-    ##collect (mem_id, obs_rec_id) to make the obs_list
-    obs_list = {}
-    for p in range(c.nproc):
-        obs_list[p] = [(m, r)
-                       for m in mem_list[p%c.nproc_mem]
-                       for r in obs_rec_list[p//c.nproc_mem] ]
-
-    return obs_list
+    return obs_rec_list
 
 
 ##read ens-mean z coords from z_file at obs time
@@ -172,15 +162,14 @@ def mean_z_coords(c, state_info, time):
 ##since this is the actual obs (1 copy), only pid_mem==0 will do the work
 ##and broadcast to all pid_mem in comm_mem
 @bcast_by_root(c.comm_mem)
-def prepare_obs(c, state_info, obs_info, obs_list):
+def prepare_obs(c, state_info, obs_info, obs_rec_list):
 
     message(c.comm_rec, 'reading obs sequences from dataset\n', 0)
     obs_seq = {}
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload
     ##as a subset of obs_rec_list
-    obs_rec_list = [r for m,r in obs_list[c.pid] if m==0]
-    for obs_rec_id in obs_rec_list:
+    for obs_rec_id in obs_rec_list[c.pid_rec]:
         obs_rec = obs_info['records'][obs_rec_id]
 
         ##load the dataset module
@@ -224,7 +213,7 @@ def partition_grid(c):
         ##the workload on each tile is uneven since there are masked points
         ##so we divide into 3*nproc tiles so that they can be distributed
         ##according to their load (number of unmasked points)
-        nx_tile = np.minimum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc / 3))), 50)
+        nx_tile = np.minimum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc_mem / 3))), 20)
 
         ##a list of (istart, iend, di, jstart, jend, dj) for tiles
         ##note: we have 3*nproc entries in the list
@@ -234,19 +223,19 @@ def partition_grid(c):
                       for i in np.arange(0, c.nx, nx_tile) ]
 
     elif c.assim_mode == 'serial':
-        ##the domain is divided into tiles, each tile is formed by nproc elements
-        ##each element is stored on a different pid
+        ##the domain is divided into tiles, each is formed by nproc_mem elements
+        ##each element is stored on a different pid_mem
         ##for each pid, its loc points cover the entire domain with some spacing
 
-        ##list of possible factoring of nproc = nx_intv * ny_intv
+        ##list of possible factoring of nproc_mem = nx_intv * ny_intv
         ##pick the last factoring that is most 'square', so that the interval
         ##is relatively even in both directions for each pid
-        nx_intv, ny_intv = [(i, int(c.nproc / i))
-                            for i in range(1, int(np.ceil(np.sqrt(c.nproc))) + 1)
-                            if c.nproc % i == 0][-1]
+        nx_intv, ny_intv = [(i, int(c.nproc_mem / i))
+                            for i in range(1, int(np.ceil(np.sqrt(c.nproc_mem))) + 1)
+                            if c.nproc_mem % i == 0][-1]
 
         ##a list of (ist, ied, di, jst, jed, dj) for slicing
-        ##note: we have nproc entries in the list
+        ##note: we have nproc_mem entries in the list
         partitions = [(i, nx, nx_intv, j, ny, ny_intv)
                       for j in np.arange(ny_intv)
                       for i in np.arange(nx_intv) ]
@@ -255,12 +244,11 @@ def partition_grid(c):
 
 
 @bcast_by_root(c.comm_mem)
-def assign_obs_to_loc(c, partitions, obs_info, obs_list, obs_seq):
+def assign_obs_to_loc(c, partitions, obs_info, obs_rec_list, obs_seq):
 
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
-    obs_rec_list = [r for m,r in obs_list[c.pid] if m==0]
-    for obs_rec_id in obs_rec_list:
+    for obs_rec_id in obs_rec_list[c.pid_rec]:
         obs_rec = obs_seq[obs_rec_id]
         obs_inds_pid[obs_rec_id] = {}
 
@@ -300,10 +288,10 @@ def assign_obs_to_loc(c, partitions, obs_info, obs_list, obs_seq):
                 obs_inds_pid[obs_rec_id][par_id] = inds
 
         elif c.assim_mode == 'serial':
-            ##locality doesn't matter, we just divide obs_rec into nproc partitions
-            ##with par_id from 0 to nproc-1
+            ##locality doesn't matter, we just divide obs_rec into nproc_mem
+            ##partitions with par_id from 0 to nproc_mem-1
             inds = distribute_tasks(c.comm, np.arange(len(obs_rec['obs'])))
-            for par_id in range(c.nproc):
+            for par_id in range(c.nproc_mem):
                 obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
 
     ##gather all obs_rec_id from pid_rec to form the complete obs_inds dict
@@ -332,40 +320,39 @@ def build_loc_tasks(c, partitions, obs_info, obs_inds):
                               for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        par_list = distribute_tasks(c.comm, par_list_full, workload)
+        par_list = distribute_tasks(c.comm_mem, par_list_full, workload)
 
     if c.assim_mode == 'serial':
         ##just assign each partition to each pid, pid==par_id
-        par_list = {pid:pid for pid in range(c.nproc)}
+        par_list = {p:p for p in range(c.nproc_mem)}
 
     return par_list
 
 
 ##prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_seq
-def prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_seq, fields, z_fields):
+def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
 
     message(c.comm, 'compute obs priors\n', 0)
     obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
     ##all proc goes through their own task list simultaneously
-    obs_ntask_max = np.max([len(lst) for p,lst in obs_list.items()])
-    for task in range(obs_ntask_max):
+    nr = len(obs_rec_list[c.pid_rec])
+    nm = len(mem_list[c.pid_mem])
+    for m, mem_id in enumerate(mem_list[c.pid_mem]):
+        for r, obs_rec_id in enumerate(obs_rec_list[c.pid_rec]):
 
-        ##process an obs record if not at the end of task list
-        if task < len(obs_list[c.pid]):
             ##this is the obs record to process
-            mem_id, obs_rec_id = obs_list[c.pid][task]
             obs_rec = obs_info['records'][obs_rec_id]
             # message(c.comm, '   {:15s} t={} member={:3d} on proc{}\n'.format(obs_rec['name'], obs_rec['time'], mem_id+1, c.pid), c.pid)
 
-            seq = state_to_obs(c, state_info, field_list, member=mem_id,
+            seq = state_to_obs(c, state_info, mem_list, rec_list, member=mem_id,
                                model_fld=fields, model_z=z_fields,
                                **obs_rec, **obs_seq[obs_rec_id])
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
 
-        message(c.comm, progress_bar(task, obs_ntask_max), 0)
+        message(c.comm, progress_bar(m*nr+r, nr*nm), 0)
 
     message(c.comm, ' done.\n', 0)
 
@@ -374,9 +361,7 @@ def prepare_obs_from_state(c, state_info, field_list, obs_info, obs_list, obs_se
 
 ##the top-level obs forward operator routine
 ##provides several ways to compute obs_prior from state fields
-def state_to_obs(c, state_info, field_list, **kwargs):
-    mem_list = set([m for m,r in field_list[c.pid]])
-    rec_list = set([r for m,r in field_list[c.pid]])
+def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
 
     mem_id = kwargs['member']  ##if None, try to get variable from truth_file
     time = kwargs['time']  ##obs time step
