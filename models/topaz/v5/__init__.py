@@ -18,7 +18,7 @@
 
 import numpy as np
 import glob
-from functools import cache
+from functools import lru_cache
 from datetime import datetime
 from netCDF4 import Dataset
 
@@ -262,7 +262,7 @@ z_units = 'm'
 ##calculate vertical coordinates given the 3D model state
 ##inputs: path, grid, **kwargs: same as filename() inputs
 ##        z_type, defined for each field_info['z_coords']
-@cache
+@lru_cache(maxsize=3)
 def z_coords(path, grid, **kwargs):
     ##some defaults if not set in kwargs
     if 'units' not in kwargs:
