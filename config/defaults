@@ -1,7 +1,7 @@
 ####All settings and their default values
 
 ##experiment name
-exp_name=default
+exp_name=exp1
 
 ##load HPC-specific settings, directory names, env, etc.
 . $HOME/code/NEDAS/config/env/betzy/base.src

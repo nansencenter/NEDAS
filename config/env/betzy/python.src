@@ -3,11 +3,13 @@ ulimit -s 2000000
 # Load the right modules
 module --force purge
 ml load StdEnv
-ml load GCCcore/12.2.0
-ml load Python/3.10.8-GCCcore-12.2.0
-ml load FFTW/3.3.10-GCC-12.2.0
-ml load imkl/2022.2.1
-ml load CMake/3.24.3-GCCcore-12.2.0
-ml load impi/2021.7.1-intel-compilers-2022.2.1
+ml load GCCcore/12.3.0
+ml load Python/3.11.3-GCCcore-12.3.0
+ml load FFTW/3.3.10-GCC-12.3.0
+ml load impi/2021.9.0-intel-compilers-2023.1.0
 
 export PYTHONPATH=$PYTHONPATH:$HOME/code/NEDAS
+
+
+##enter the project env
+source $HOME/yp/bin/activate
