@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. $CONFIG_FILE
+. $config_file
 
 nnodes=$1
 ncpus=$2

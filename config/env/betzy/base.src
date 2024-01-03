@@ -1,6 +1,6 @@
 #!/bin/bash
 host=betzy
-hostppn=512
+hostppn=128
 
 SCRATCH=/cluster/work/users/yingyue
 

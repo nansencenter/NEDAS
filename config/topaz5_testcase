@@ -15,7 +15,7 @@ work_dir=$SCRATCH/$exp_name
 nens=100
 
 ##parallel scheme
-nproc=2000
+nproc=500
 nproc_mem=100
 
 #DA scheme
