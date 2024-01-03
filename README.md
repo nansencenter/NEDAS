@@ -120,11 +120,17 @@ As shown in Fig. 2, a transpose among different `pid_mem` brings the observation
 
 When the transpose is complete, on each `pid`, the local ensemble **state\_prior**[`mem_id`, `rec_id`][`par_id`] is updated to the posterior **state\_post**, using local observations **lobs**[`obs_rec_id`][`par_id`, `rec_id`] and observation priors **lobs\_prior**[`mem_id`, `obs_rec_id`][`par_id`, `rec_id`].
 
-We provide two assimilation modes:
+NEDAS provides two assimilation modes:
 
 In batch mode, the analysis domain is divided into small local partitions (indexed by `par_id`) and each `pid_mem` solves the analysis for its own list of `par_id`. The local observations are those falling inside the localization radius for each [`par_id`,`rec_id`]. The "local analysis" for each state variable is computed using the matrix-version ensemble filtering equations (such as [LETKF](https://doi.org/10.1016/j.physd.2006.11.008), [DEnKF](https://doi.org/10.1111/j.1600-0870.2007.00299.x)). The batch mode is favorable when the local observation volume is small and the matrix solution allows more flexible error covariance modeling (e.g., to include correlations in observation errors).
 
-In serial mode, we go through the observation sequence and assimilation one observation at a time. Each `pid` stores a subset of state variables and observations with `par_id`, here locality doesn't matter in storage, the `pid` owning the observation being assimilated will first compute observation-space increments, then broadcast them to all the `pid` with state\_prior and/or lobs\_prior within the observation's localization radius and they will be updated. For the next observation, the updated observation priors will be used for computing increments. The whole process iteratively updates the state variables on each `pid`.
+In serial mode, we go through the observation sequence and assimilation one observation at a time. Each `pid` stores a subset of state variables and observations with `par_id`, here locality doesn't matter in storage, the `pid` owning the observation being assimilated will first compute observation-space increments, then broadcast them to all the `pid` with state\_prior and/or lobs\_prior within the observation's localization radius and they will be updated. For the next observation, the updated observation priors will be used for computing increments. The whole process iteratively updates the state variables on each `pid`. The serial mode is more scalable especially for inhomogeneous network where load balancing is difficult, or when local observation volume is large. The scalar update equations allow more flexible use of nonlinear filtering approaches (such as particle filter, rank regression).
+
+NEDAS allows flexible modifications in the interface between model/dataset modules and the core assimilation algorithms, to achieve more sophisticated functionality:
+
+Multiple time steps can be added in the `time` dimension for the state and/or observations to achieve ensemble smoothing instead of filtering. Iterative smoothers can also be formulated by running the analysis cycle as an outer-loop iteration (although they can be very costly).
+
+Miscellaneous transform functions can be added for state and/or observations, for example, Gaussian anamorphosis to deal with non-Gaussian variables; spatial bandpass filtering to run assimilation for "scale components" in multiscale DA; neural networks to provide a nonlinear mapping between the state space and observation space, etc.
 
 
 ## Description of Key Variables and Functions <a name='descriptions'></a>
@@ -143,9 +149,11 @@ Indices and lists:
 
 * `obs_rec_list`[`pid_rec`] is a list of observation records `obs_rec_id` for processors with `pid_rec` to handle.
 
-* `partitions` is a list of `(istart, iend, di, jstart, jend, dj)` defining the partitions of the 2D analysis domain, each partition holds a slice `[istart:iend:di, jstart:jend:dj]` of the field and is indexed by `par_id`.
+* `partitions` is a list of tuples `(istart, iend, di, jstart, jend, dj)` defining the partitions of the 2D analysis domain, each partition holds a slice `[istart:iend:di, jstart:jend:dj]` of the field and is indexed by `par_id`.
 
-* `obs_inds`[`obs_rec_id`][`par_id`, `rec_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id` and field record `rec_id`.
+* `par_list`[`pid_mem`] is a list of partition id `par_id` for processor with `pid_mem` to handle.
+
+* `obs_inds`[`obs_rec_id`]['par'][`par_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id`, and `obs_inds`[`obs_rec_id`]['rec'][`rec_id`], similarly, is the indices of local observations for the field record `rec_id`.
 
 
 Data structures:
@@ -156,7 +164,7 @@ Data structures:
 
 * `state_prior`[`mem_id`, `rec_id`][`par_id`] points to the field chunk `fld_chk` (np.array) in the partition.
 
-* `obs_seq`[`obs_rec_id`] points to observation sequence `seq` that is a dictionary with keys ('obs', 't', 'z', 'y', 'x', 'err_std') each pointing to a list containing the entire record.
+* `obs_seq`[`obs_rec_id`] points to observation sequence `seq` that is a dictionary with keys ('obs', 't', 'z', 'y', 'x', 'err\_std') each pointing to a list containing the entire record.
 
 * `lobs`[`obs_rec_id`][`par_id`, `rec_id`] points to local observation sequence `obs_chk` that is a dictionary with same keys as `seq` but the lists only contain a subset of the record.
 
@@ -209,9 +217,9 @@ and planned developement for:
 
 ### Acknowledgements <a name='acknowledgements'></a>
 
-NEDAS was initiated by Yue Ying in 2022. Please cite this repository if you used NEDAS to produce results in your research publication/presentation.
+NEDAS was initiated by [Yue Ying](https://myying.github.io/) in 2022. Please cite this repository if you used NEDAS to produce results in your research publication/presentation.
 
-The developement of this software was supported by the NERSC internal funding in 2022; and the Scale-Aware Sea Ice Project (SASIP) in 2023.
+The developement of this software was supported by the NERSC internal funding in 2022; and the Scale-Aware Sea Ice Project ([SASIP](https://sasip-climate.github.io/)) in 2023.
 
 During the development, we received with contribution from: Anton Korosov, Timothy Williams (pynextsim libraries), NERSC-HYCOM-CICE group led by Annette Samuelsen (pythonlib for abfile, confmap, etc.), Jiping Xie (enkf-topaz), Tsuyoshi Wakamatsu (BIORAN), Francois Counillon, Yiguo Wang, Tarkeshwar Singh (EnOI, EnKF, and offline EnKS in NorCPM).
 
