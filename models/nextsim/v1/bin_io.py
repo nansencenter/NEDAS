@@ -1,6 +1,6 @@
 import numpy as np
 import struct
-from assim_tools.common import type_convert, type_dic, type_size
+from conversion import type_convert, type_dic, type_size
 
 ##basic read/write of data from nextsim bin/dat file
 def get_info(filename):

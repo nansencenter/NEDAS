@@ -223,6 +223,10 @@ class Grid(object):
                 self.coarsen_nearest_elem = nearest
 
 
+    def set_destination_grid(self, grid):
+        self.dst_grid = grid
+
+
     def wrap_cyclic_xy(self, x_, y_):
         ## when interpolating for point x_,y_, if the coordinates falls outside of the domain
         ## we wrap around and make then inside again, if the boundary condition is cyclic (self.cyclic_dim)

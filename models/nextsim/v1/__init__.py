@@ -2,7 +2,7 @@ import numpy as np
 import glob
 from datetime import datetime, timedelta
 
-from assim_tools.common import units_convert
+from conversion import units_convert
 from .bin_io import read_data, write_data
 
 ##Note: we only work with restart files, normal nextsim binfile have some variables names that
