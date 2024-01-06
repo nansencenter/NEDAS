@@ -2,7 +2,7 @@ import numpy as np
 import os
 
 class dummy_comm(object):
-   """dummy communicator for python without mpi"""
+    """dummy communicator for python without mpi"""
     def __init__(self):
         self.size = 1
         self.rank = 0
