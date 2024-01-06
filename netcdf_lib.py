@@ -3,13 +3,31 @@ from netCDF4 import Dataset
 
 ##netcdf file io
 def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
-    ###write gridded data to netcdf file
-    ###filename: path/name of the output file
-    ###dim: dict{'dimension name': number of grid points in dimension (int); None for unlimited}
-    ###varname: name for the output variable
-    ###dat: data for output, number of dimensions must match dim (excluding unlimited dims)
-    ###recno: dict{'dimension name': record_number, ...}, each unlimited dim should have a recno entry
-    ###attr: attribute dict{'name of attr':'value of attr'}
+    """
+    Write a variable to a netcdf file
+
+    Inputs:
+    - filename: str
+      Path to the output nc file
+
+    - dim: dict(str:int)
+      Dimension definition for the variable, 'dimension name':length of dimension (int)
+      The dimension length can be None if it is "unlimited" dimension (record dimension)
+
+    - varname: str
+      Name of the output variable
+
+    - dat: np.array
+      Data for output, number of its dimensions must match dim (excluding unlimited dims)
+
+    - recno: dict, optional
+      Dictionary {'dimension name': record_number}, each unlimited dimension defined in dim
+      should have a corresponding recno entry to note which record to write to.
+
+    - attr: dict, optional
+      Additional attribute to output to the variable
+      Dictionary {'name of attr':'value of attr'}
+    """
     f = Dataset(filename, 'a', format='NETCDF4')
     ndim = len(dim)
     s = ()  ##slice for each dimension
@@ -40,7 +58,23 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
 
 
 def nc_read_var(filename, varname):
-    ###read gridded data from netcdf file
+    """
+    Read a variable from an netcdf file
+
+    This reads the entire variable, if you only want a slice, it is more efficient to use
+    netCDF4.Dataset directly.
+
+    Inputs:
+    - filename: str
+      Path to the netcdf file for reading
+
+    - varname: str
+      Name of the variable to read
+
+    Return:
+    - dat: np.array
+      The variable read from the file
+    """
     f = Dataset(filename, 'r')
     assert(varname in f.variables)
     dat = f[varname][...].data

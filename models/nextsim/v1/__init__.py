@@ -51,8 +51,8 @@ from grid import Grid
 uniq_grid_key = ('member', 'time')
 
 
-##read native grid from mesh file, returns a grid obj
 def read_grid(path, **kwargs):
+    """read native grid from mesh file, returns a grid obj"""
     meshfile = filename(path, **kwargs).replace('field', 'mesh')
     x = read_data(meshfile, 'Nodes_x')
     y = read_data(meshfile, 'Nodes_y')
@@ -63,17 +63,23 @@ def read_grid(path, **kwargs):
 
 
 def write_grid(path, **kwargs):
-    ##Note: now we assume that number of mesh elements and their indices doesn't change!
-    ##only updating the mesh node position x,y
+    """
+    write updated mesh back to mesh file
+
+    Note: now we assume that number of mesh elements and their indices doesn't change!
+    only updating the mesh node position x,y
+    """
     meshfile = filename(path, **kwargs).replace('field', 'mesh')
 
     write_data(meshfile, 'Nodes_x', grid.x)
     write_data(meshfile, 'Nodes_y', grid.y)
 
 
-##get the grid object directly from .msh definition file
-##this function is uniq to nextsim, not required by assim_tools
 def read_grid_from_msh(mshfile):
+    """
+    get the grid object directly from .msh definition file
+    this function is uniq to nextsim, not required by assim_tools
+    """
     info = read_mshfile(mshfile)
     x = info['nodes_x']
     y = info['nodes_y']
@@ -81,8 +87,8 @@ def read_grid_from_msh(mshfile):
     return Grid(proj, x, y, regular=False, triangles=triangles)
 
 
-##read native variable defined on native grid from model restart files
 def read_var(path, grid, **kwargs):
+    """read native variable defined on native grid from model restart files"""
     ##check name in kwargs and read the variables from file
     vname = kwargs['name']
     assert vname in variables, 'variable name '+vname+' not listed in variables'
@@ -101,6 +107,7 @@ def read_var(path, grid, **kwargs):
 
 
 def write_var(path, grid, var, **kwargs):
+    """write native variable back to a model restart file"""
     fname = filename(path, **kwargs)
 
     ##check name in kwargs and read the variables from file

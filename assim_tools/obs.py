@@ -2,6 +2,7 @@ import numpy as np
 import struct
 import importlib
 from datetime import datetime, timedelta
+from memory_profiler import profile
 import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from log import message, progress_bar
@@ -10,32 +11,39 @@ from perturb import random_field_gaussian
 from grid import Grid
 from .state import read_field
 
-##Note:
-## The observation has dimensions: variable, time, z, y, x
-## Since the observation network is typically irregular, we store the obs record
-## for each variable in a 1d sequence, with coordinates (t,z,y,x), and size nobs
-##
-## To parallelize workload, we distribute each obs record over all the processors
-## - for batch assimilation mode, each pid stores the list of local obs within the
-##   hroi of its tiles, with size nlobs (number of local obs)
-## - for serial mode, each pid stores a non-overlapping subset of the obs list,
-##   here 'local' obs (in storage sense) is broadcast to all pid before computing
-##   its update to the state/obs near that obs.
-##
-## The hroi is separately defined for each obs record.
-## For very large hroi, the serial mode is more parallel efficient option, since
-## in batch mode the same obs may need to be stored in multiple pids
-##
-## To compare to the observation, obs_prior simulated by the model needs to be
-## computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
+"""
+Note: The observation has dimensions: variable, time, z, y, x
+Since the observation network is typically irregular, we store the obs record
+for each variable in a 1d sequence, with coordinates (t,z,y,x), and size nobs
+
+To parallelize workload, we distribute each obs record over all the processors
+- for batch assimilation mode, each pid stores the list of local obs within the
+  hroi of its tiles, with size nlobs (number of local obs)
+- for serial mode, each pid stores a non-overlapping subset of the obs list,
+  here 'local' obs (in storage sense) is broadcast to all pid before computing
+  its update to the state/obs near that obs.
+
+The hroi is separately defined for each obs record.
+For very large hroi, the serial mode is more parallel efficient option, since
+in batch mode the same obs may need to be stored in multiple pids
+
+To compare to the observation, obs_prior simulated by the model needs to be
+computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
+"""
 
 
-## parse c.obs_def, read the dataset files to get the obs records
-## for each obs_id in record, obtain coordinates and properties for that obs_id
-## input: c: config module with the environment variables
-## return: info dict with some dimensions and list of uniq obs records
 @bcast_by_root(c.comm)
 def parse_obs_info(c):
+    """
+    Parse info for the observation records defined in config.
+
+    Input:
+    - c: config module with the environment variables
+
+    Return:
+    - info: dict
+      A dictionary with some dimensions and list of unique obs records
+    """
     obs_info = {'size':0, 'records':{}}
     obs_rec_id = 0  ##record id for an obs sequence
     pos = 0         ##seek position for rec
@@ -125,13 +133,21 @@ def read_obs_info(binfile):
 
 def build_obs_tasks(c, obs_info):
     ##obs_rec_id list
-    obs_rec_list = distribute_tasks(c.comm_rec, [i for i in obs_info['records'].keys()])
+    obs_rec_list_full = [i for i in obs_info['records'].keys()]
+    obs_rec_size = np.array([2 if r['is_vector'] else 1 for i,r in obs_info['records'].items()])
+    obs_rec_list = distribute_tasks(c.comm_rec, obs_rec_list_full, obs_rec_size)
 
     return obs_rec_list
 
 
-##read ens-mean z coords from z_file at obs time
-def mean_z_coords(c, state_info, time):
+def mean_z_coords(c, state_info, z_file):
+    """
+    Read the ensemble-mean z coords from z_file at obs time
+
+    Inputs: c, state_info, z_file
+
+    Return: z fields [k, ...] for all unique level k defined in state_info
+    """
     ##first, get a list of indices k
     k_list = list(set([r['k'] for i,r in state_info['fields'].items() if r['time']==time]))
 
@@ -145,7 +161,6 @@ def mean_z_coords(c, state_info, time):
         rec_id = [i for i,r in state_info['fields'].items() if r['time']==time and r['k']==k_list[k]][0]
 
         ##read the z field with (mem_id=0, rec_id) from z_file
-        z_file = c.work_dir+'/analysis/'+t2s(time)+c.s_dir+'/z_coords.bin'
         z_fld = read_field(z_file, state_info, c.mask, 0, rec_id)
 
         ##assign the coordinates to z(k)
@@ -157,13 +172,19 @@ def mean_z_coords(c, state_info, time):
     return z
 
 
-##prepare the obs in parallel, read dataset files and convert to obs_seq
-##which contains obs value and coordinates time, z, y, x
-##since this is the actual obs (1 copy), only pid_mem==0 will do the work
-##and broadcast to all pid_mem in comm_mem
 @bcast_by_root(c.comm_mem)
 def prepare_obs(c, state_info, obs_info, obs_rec_list):
+    """
+    Prepare the obs in parallel, read dataset files and convert to obs_seq
+    which contains obs value, coordinates and other info
 
+    Since this is the actual obs (1 copy), only pid_mem==0 will do the work
+    and broadcast to all pid_mem in comm_mem
+
+    Inputs: c, state_info, obs_info, obs_rec_list
+
+    Return: obs_seq
+    """
     message(c.comm_rec, 'reading obs sequences from dataset\n', 0)
     obs_seq = {}
 
@@ -180,7 +201,8 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
         path = c.data_dir+'/'+obs_rec['source']
 
         ##read ens-mean z coords from z_file for this obs network
-        z = mean_z_coords(c, state_info, obs_rec['time'])
+        z_file = c.work_dir+'/analysis/'+t2s(obs_rec['time'])+c.s_dir+'/z_coords.bin'
+        z = mean_z_coords(c, state_info, z_file)
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
@@ -197,6 +219,8 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
             ##read dataset files and obtain obs sequence
             seq = src.read_obs(path, c.grid, c.mask, z, **obs_rec)
 
+        del z
+
         message(c.comm_rec, 'number of '+obs_rec['name']+' obs from '+obs_rec['source']+': {}\n'.format(len(seq['obs'])), c.pid_rec)
 
         obs_seq[obs_rec_id] = seq
@@ -204,9 +228,13 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
     return obs_seq
 
 
-##generate spatial partitioning of the domain
 @bcast_by_root(c.comm)
 def partition_grid(c):
+    """
+    Generate spatial partitioning of the domain, given config c
+
+    Return: partitions
+    """
 
     if c.assim_mode == 'batch':
         ##divide into square tiles with nx_tile grid points in each direction
@@ -244,21 +272,29 @@ def partition_grid(c):
 
 
 @bcast_by_root(c.comm_mem)
-def assign_obs_to_loc(c, partitions, obs_info, obs_rec_list, obs_seq):
+def assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq):
+    """
+    Assign the observation sequence to each partition par_id
+
+    Inputs: c, state_info, obs_info, partitions, obs_rec_list, obs_seq
+
+    Returns: obs_inds
+    """
 
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
     for obs_rec_id in obs_rec_list[c.pid_rec]:
         obs_rec = obs_seq[obs_rec_id]
-        obs_inds_pid[obs_rec_id] = {}
-
-        hroi = obs_info['records'][obs_rec_id]['hroi']
-        xo = np.array(obs_rec['x'])  ##obs x,y
-        yo = np.array(obs_rec['y'])
-        x = c.grid.x[0,:]   ##grid x,y
-        y = c.grid.y[:,0]
+        obs_inds_pid[obs_rec_id] = {'par':{}, 'rec':{}}
 
         if c.assim_mode == 'batch':
+            ##1. screen horizontally for obs inside hroi of partition par_id
+            hroi = obs_info['records'][obs_rec_id]['hroi']
+            xo = np.array(obs_rec['x'])  ##obs x,y
+            yo = np.array(obs_rec['y'])
+            x = c.grid.x[0,:]   ##grid x,y
+            y = c.grid.y[:,0]
+
             ##loop over partitions with par_id
             for par_id in range(len(partitions)):
                 ist,ied,di,jst,jed,dj = partitions[par_id]
@@ -285,26 +321,47 @@ def assign_obs_to_loc(c, partitions, obs_info, obs_rec_list, obs_seq):
                 ##if any of the 3 condition satisfies, the obs is within
                 ##hroi of any points in tile[par_id]
                 inds = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))[0]
-                obs_inds_pid[obs_rec_id][par_id] = inds
+
+                obs_inds_pid[obs_rec_id]['par'][par_id] = inds
+
+            ##2. screen in field record dimension for obs inside vroi,troi of rec_id
+            vroi = obs_info['records'][obs_rec_id]['vroi']
+            troi = obs_info['records'][obs_rec_id]['troi']
+            zo = np.array(obs_rec['z'])
+            to = np.array(obs_rec['t'])
+            # z = 
+            # t = 
+
+            ##loop over field records with rec_id
+            for rec_id in state_info['fields'].keys():
+                obs_inds_pid[obs_rec_id]['rec'][rec_id] = np.arange(len(obs_rec['obs']))
+
 
         elif c.assim_mode == 'serial':
             ##locality doesn't matter, we just divide obs_rec into nproc_mem
             ##partitions with par_id from 0 to nproc_mem-1
-            inds = distribute_tasks(c.comm, np.arange(len(obs_rec['obs'])))
-            for par_id in range(c.nproc_mem):
-                obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
+            full_inds = np.arange(len(obs_rec['obs']))
 
-    ##gather all obs_rec_id from pid_rec to form the complete obs_inds dict
+            inds = distribute_tasks(c.comm, full_inds)
+            for par_id in range(c.nproc_mem):
+                obs_inds_pid[obs_rec_id]['par'][par_id] = inds[par_id]
+
+            ##for the rec_id dimension, there is no dividing into parts, just use all the inds
+            for rec_id in state_info['fields'].keys():
+                obs_inds_pid[obs_rec_id]['rec'][rec_id] = full_inds
+
+    ##now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
+    ##gather all obs_rec_id from different pid_rec to form the complete obs_inds dict
     obs_inds = {}
     for entry in c.comm_rec.allgather(obs_inds_pid):
         for obs_rec_id, data in entry.items():
-            obs_inds[obs_rec_id] = data   ##each collected data is a dict {par_id:inds}
+            obs_inds[obs_rec_id] = data
 
     return obs_inds
 
 
-@bcast_by_root(c.comm)
-def build_loc_tasks(c, partitions, obs_info, obs_inds):
+@bcast_by_root(c.comm_mem)
+def build_par_tasks(c, partitions, obs_info, obs_inds):
     par_list_full = np.arange(len(partitions))
 
     if c.assim_mode == 'batch':
@@ -315,7 +372,7 @@ def build_loc_tasks(c, partitions, obs_info, obs_inds):
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
-        nlobs_loc = np.array([np.sum([len(obs_inds[r][p])
+        nlobs_loc = np.array([np.sum([len(obs_inds[r]['par'][p])
                                       for r in obs_info['records'].keys()])
                               for p in par_list_full] )
 
@@ -329,9 +386,14 @@ def build_loc_tasks(c, partitions, obs_info, obs_inds):
     return par_list
 
 
-##prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_seq
 def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
+    """
+    Prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_prior_seq
 
+    Inputs: c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fiels
+
+    Return: obs_prior_seq
+    """
     message(c.comm, 'compute obs priors\n', 0)
     obs_prior_seq = {}
 
@@ -344,7 +406,6 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
 
             ##this is the obs record to process
             obs_rec = obs_info['records'][obs_rec_id]
-            # message(c.comm, '   {:15s} t={} member={:3d} on proc{}\n'.format(obs_rec['name'], obs_rec['time'], mem_id+1, c.pid), c.pid)
 
             seq = state_to_obs(c, state_info, mem_list, rec_list, member=mem_id,
                                model_fld=fields, model_z=z_fields,
@@ -352,16 +413,18 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
 
-        message(c.comm, progress_bar(m*nr+r, nr*nm), 0)
+            message(c.comm, progress_bar(m*nr+r, nr*nm), 0)
 
     message(c.comm, ' done.\n', 0)
 
     return obs_prior_seq
 
 
-##the top-level obs forward operator routine
-##provides several ways to compute obs_prior from state fields
 def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
+    """
+    ##the top-level obs forward operator routine
+    ##provides several ways to compute obs_prior from state fields
+    """
 
     mem_id = kwargs['member']  ##if None, try to get variable from truth_file
     time = kwargs['time']  ##obs time step
@@ -482,23 +545,20 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     return obs_seq
 
 
+def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_inds, obs_seq, ensemble=False):
+    """
 ##transpose obs from field-complete to ensemble-complete:
-##given obs_list[pid] -> list of (mem_id, obs_rec_id)
-##      par_list[pid] -> list of par_id
-##      obs_inds[obs_rec_id][par_id] -> inds of subset of obs_seq
 ##send the subset of obs_seq (the local obs, lobs) from the source proc (src_pid)
 ##to the destination proc (dst_pid)
 ##ensemble = True: process the obs_prior_seq[mem_id, obs_rec_id]=array
 ##ensemble = False: process the obs_seq[obs_rec_id]={'obs':array,'x':array,'y':...}
-def transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_seq, ensemble=False):
+    """
 
     message(c.comm, 'transpose obs to local obs\n', 0)
     lobs = {}
 
-    ##all pid goes through their own task list simultaneously
-    obs_ntask_max = np.max([len(lst) for p,lst in obs_list.items()])
-
-    for task in range(obs_ntask_max):
+    nr = len(rec_list[c.pid_rec])
+    for r, rec_id in enumerate(rec_list[c.pid_rec]):
 
         ##prepare the obs seq for sending if not at the end of task list
         if task < len(obs_list[c.pid]):
@@ -510,7 +570,7 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_seq, ensemble=Fal
                     seq = obs_seq[obs_rec_id].copy()
 
         ##the collective send/recv follows the same idea under state.transpose_field_to_state
-        ##1) receive obs_chk from src_pid, for src_pid<pid first
+        ##1) receive lobs_seq from src_pid, for src_pid<pid first
         for src_pid in np.arange(0, c.pid):
             if task < len(obs_list[src_pid]):
                 src_mem_id, src_obs_rec_id = obs_list[src_pid][task]
@@ -527,39 +587,39 @@ def transpose_obs_to_lobs(c, obs_list, obs_inds, par_list, obs_seq, ensemble=Fal
             for dst_pid in np.mod(np.arange(0, c.nproc)+c.pid, c.nproc):
                 if ensemble:
                     ##this is the obs prior seq for mem_id, obs_rec_id
-                    ##for each loc, assemble the subset of seq with obs_inds
-                    obs_chk = {}
+                    ##for each dst_par_id, dst_rec_id, assemble the subset lobs_seq using obs_inds
+                    lobs_seq = {}
                     for par_id in par_list[dst_pid]:
                         inds = obs_inds[obs_rec_id][par_id]
-                        obs_chk[par_id] = seq[..., inds]
+                        lobs_seq[par_id] = seq[..., inds]
 
                     if dst_pid == c.pid:
-                        ##pid already stores the obs_chk, just copy
-                        lobs[mem_id, obs_rec_id] = obs_chk
+                        ##pid already stores the lobs_seq, just copy
+                        lobs[mem_id, obs_rec_id] = lobs_seq
                     else:
-                        ##send obs_chk to dst_pid's lobs
-                        c.comm.send(obs_chk, dest=dst_pid, tag=task)
+                        ##send lobs_seq to dst_pid's lobs
+                        c.comm.send(lobs_seq, dest=dst_pid, tag=task)
 
                 else:
                     if mem_id == 0:
                         ##this is the obs seq with keys 'obs','x','y','z','t'
-                        ##assemble the obs_chk dict with same keys but subset obs_inds
-                        ##do this for each par_id to get the full obs_chk
-                        obs_chk = {}
+                        ##assemble the lobs_seq dict with same keys but subset obs_inds
+                        ##do this for each par_id to get the full lobs_seq
+                        lobs_seq = {}
                         for par_id in par_list[dst_pid]:
-                            obs_chk[par_id] = {}
+                            lobs_seq[par_id] = {}
                             inds = obs_inds[obs_rec_id][par_id]
                             for key, value in seq.items():
-                                obs_chk[par_id][key] = value[..., inds]
+                                lobs_seq[par_id][key] = value[..., inds]
 
                         if dst_pid == c.pid:
-                            ##pid already stores the obs_chk, just copy
-                            lobs[obs_rec_id] = obs_chk
+                            ##pid already stores the lobs_seq, just copy
+                            lobs[obs_rec_id] = lobs_seq
                         else:
-                            ##send obs_chk to dst_pid's lobs
-                            c.comm.send(obs_chk, dest=dst_pid, tag=task)
+                            ##send lobs_seq to dst_pid's lobs
+                            c.comm.send(lobs_seq, dest=dst_pid, tag=task)
 
-        ##3) finish receiving obs_chk from src_pid, for src_pid>pid now
+        ##3) finish receiving lobs_seq from src_pid, for src_pid>pid now
         for src_pid in np.arange(c.pid+1, c.nproc):
             if task < len(obs_list[src_pid]):
                 src_mem_id, src_obs_rec_id = obs_list[src_pid][task]

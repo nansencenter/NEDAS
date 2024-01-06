@@ -153,7 +153,7 @@ Indices and lists:
 
 * `par_list`[`pid_mem`] is a list of partition id `par_id` for processor with `pid_mem` to handle.
 
-* `obs_inds`[`obs_rec_id`]['par'][`par_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id`, and `obs_inds`[`obs_rec_id`]['rec'][`rec_id`], similarly, is the indices of local observations for the field record `rec_id`.
+* `obs_inds`[`obs_rec_id`]['par'][`par_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id`, and similarly `obs_inds`[`obs_rec_id`]['rec'][`rec_id`] is the indices of local observations for the field record `rec_id`.
 
 
 Data structures:
@@ -166,11 +166,11 @@ Data structures:
 
 * `obs_seq`[`obs_rec_id`] points to observation sequence `seq` that is a dictionary with keys ('obs', 't', 'z', 'y', 'x', 'err\_std') each pointing to a list containing the entire record.
 
-* `lobs`[`obs_rec_id`][`par_id`, `rec_id`] points to local observation sequence `obs_chk` that is a dictionary with same keys as `seq` but the lists only contain a subset of the record.
+* `lobs`[`obs_rec_id`][`par_id`] points to local observation sequence `lobs_seq` that is a dictionary with same keys as `seq` but the lists only contain a subset of the record.
 
 * `obs_prior_seq`[`mem_id`, `obs_rec_id`] points to the observation prior sequence (np.array), same length with `seq['obs']`.
 
-* `lobs_prior`[`mem_id`, `obs_rec_id`][`par_id`, `rec_id`] points to the local observation prior sequence (np.array), same length with `obs_chk`.
+* `lobs_prior`[`mem_id`, `obs_rec_id`][`par_id`] points to the local observation prior sequence (np.array), same length with `lobs_seq`.
 
 
 Functions:

@@ -3,39 +3,48 @@ import sys
 import struct
 import importlib
 from datetime import datetime, timedelta
+from memory_profiler import profile
 import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from log import message, progress_bar
 from parallel import bcast_by_root, distribute_tasks
 
-##Note: The analysis is performed on a regular grid.
-## The entire state has dimensions: member, variable, time,  z,  y,  x
-##                      indexed by: mem_id,        v,    t,  k,  j,  i
-##                       with size:   nens,       nv,   nt, nz, ny, nx
-##
-## To parallelize workload, we group the dimensions into 3 indices:
-## mem_id indexes the ensemble members
-## rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
-##          for different variables, we stack these dimensions in the 'record'
-##          dimension with size nrec
-## par_id indexes the spatial partitions, which are subset of the 2D grid
-##          given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
-##          the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
-##
-## The entire state is distributed across the memory of many processors,
-## at any moment, a processor only stores a subset of state in its memory:
-## either having all the mem_id,rec_id but only a subset of par_id (we call this
-## ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
-## (we call this field-complete).
-## It is easier to perform i/o and pre/post processing on field-complete state,
-## while easier to run assimilation algorithms with ensemble-complete state.
+"""
+Note: The analysis is performed on a regular grid.
+The entire state has dimensions: member, variable, time,  z,  y,  x
+                     indexed by: mem_id,        v,    t,  k,  j,  i
+                      with size:   nens,       nv,   nt, nz, ny, nx
 
+To parallelize workload, we group the dimensions into 3 indices:
+mem_id indexes the ensemble members
+rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
+         for different variables, we stack these dimensions in the 'record'
+         dimension with size nrec
+par_id indexes the spatial partitions, which are subset of the 2D grid
+         given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
+         the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
 
-## parses info for the nrec fields in the state.
-## input: c: config module with the environment variables
-## returns: info dict with some dimensions and list of uniq field records
+The entire state is distributed across the memory of many processors,
+at any moment, a processor only stores a subset of state in its memory:
+either having all the mem_id,rec_id but only a subset of par_id (we call this
+ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
+(we call this field-complete).
+It is easier to perform i/o and pre/post processing on field-complete state,
+while easier to run assimilation algorithms with ensemble-complete state.
+"""
+
 @bcast_by_root(c.comm)
 def parse_state_info(c):
+    """
+    Parses info for the nrec fields in the state.
+
+    Input:
+    - c: config module with the environment variables
+
+    Returns:
+    - info: dict
+      A dictionary with some dimensions and list of unique field records
+    """
     info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}, 'scalars':[]}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
@@ -90,8 +99,16 @@ def parse_state_info(c):
     return info
 
 
-##write info to a .dat file accompanying the .bin file
 def write_field_info(binfile, info):
+    """
+    Write state_info to a .dat file accompanying the .bin file
+
+    Inputs:
+    - binfile: str
+      File path for the .bin file
+
+    - info: state_info
+    """
     with open(binfile.replace('.bin','.dat'), 'wt') as f:
         ##first line: some dimension sizes
         f.write('{} {} {}\n'.format(info['nx'], info['ny'], info['size']))
@@ -111,8 +128,17 @@ def write_field_info(binfile, info):
             f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, source, dtype, is_vector, units, err_type, time, dt, k, pos))
 
 
-##read info from .dat file
 def read_field_info(binfile):
+    """
+    Read .dat file accompanying the .bin file and obtain state_info
+
+    Input:
+    - binfile: str
+      File path for the .bin file
+
+    Returns:
+    - info: state_info dict
+    """
     with open(binfile.replace('.bin','.dat'), 'r') as f:
         lines = f.readlines()
 
@@ -139,8 +165,29 @@ def read_field_info(binfile):
     return info
 
 
-##write a field fld with mem_id,rec_id to binfile
 def write_field(binfile, info, mask, mem_id, rec_id, fld):
+    """
+    Write a field to a binary file
+
+    Inputs:
+    - binfile: str
+      File path for the .bin file
+
+    - info: state_info dict
+
+    - mask: bool, np.array with shape (ny, nx)
+      True if the grid point is masked (for example land grid point in ocean models).
+      The masked points will not be stored in the binfile to reduce disk usage.
+
+    - mem_id: int
+      Member index, from 0 to nens-1
+
+    - rec_id: int
+      Field record index, info['fields'][rec_id] gives the record information
+
+    - fld: float, np.array
+      The field to be written to the file
+    """
     ny = info['ny']
     nx = info['nx']
     rec = info['fields'][rec_id]
@@ -158,8 +205,30 @@ def write_field(binfile, info, mask, mem_id, rec_id, fld):
         f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
 
 
-##read a field from binfile, given mem_id, rec_id
 def read_field(binfile, info, mask, mem_id, rec_id):
+    """
+    Read a field from a binary file
+
+    Inputs:
+    - binfile: str
+      File path for the .bin file
+
+    - info: state_info dict
+
+    - mask: bool, np.array with shape (ny, nx)
+      True if the grid point is masked (for example land grid point in ocean models).
+      The masked points will not be stored in the binfile to reduce disk usage.
+
+    - mem_id: int
+      Member index from 0 to nens-1
+
+    - rec_id: int
+      Field record index, info['fields'][rec_id] gives the record information
+
+    Returns:
+    - fld: float, np.array
+      The field read from the file
+    """
     ny = info['ny']
     nx = info['nx']
     rec = info['fields'][rec_id]
@@ -180,8 +249,6 @@ def read_field(binfile, info, mask, mem_id, rec_id):
         return fld
 
 
-##functions to prepare the state variables
-
 def build_state_tasks(c, state_info):
     ##list of mem_id as tasks
     mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
@@ -194,10 +261,13 @@ def build_state_tasks(c, state_info):
     return mem_list, rec_list
 
 
-##prepare_state collects fields from model restart files, convert them to
-##    the analysis grid, preprocess (coarse-graining etc), save to fields
-##    with key (mem_id, rec_id) pointing to uniq fields
 def prepare_state(c, state_info, mem_list, rec_list):
+    """
+    Collects fields from model restart files, convert them to the analysis grid,
+    preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
+
+    Inputs: c, state_info, mem_list, rec_list
+    """
 
     message(c.comm, 'prepare state by reading fields from model restart\n', 0)
     fields = {}
@@ -214,7 +284,6 @@ def prepare_state(c, state_info, mem_list, rec_list):
         for r, rec_id in enumerate(rec_list[c.pid_rec]):
 
             rec = state_info['fields'][rec_id]
-            # message(c.comm, '   {:15s} t={} k={:5d} member={:3d} on proc{}\n'.format(rec['name'], rec['time'], rec['k'], mem_id+1, c.pid), c.pid)
 
             ##directory storing model output
             path = c.work_dir+'/forecast/'+c.time+'/'+rec['source']
@@ -227,9 +296,11 @@ def prepare_state(c, state_info, mem_list, rec_list):
             var_name = rec['name'] if 'variable' in src.uniq_grid_key else None
             time = rec['time'] if 'time' in src.uniq_grid_key else None
             k = rec['k'] if 'k' in src.uniq_grid_key else None
+
             grid_key = (member, rec['source'], var_name, time, k)
             if grid_key in grid_bank:
                 grid = grid_bank[grid_key]
+
             else:
                 grid = src.read_grid(path, **rec)
                 grid.dst_grid = c.grid
@@ -240,6 +311,8 @@ def prepare_state(c, state_info, mem_list, rec_list):
             fld = grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
             fields[mem_id, rec_id] = fld
 
+            ##misc. transform
+
             ##read z_coords and save to dict
             ##only need to generate the uniq z coords, store in bank
             member = mem_id if 'member' in src.uniq_z_key else None
@@ -249,9 +322,13 @@ def prepare_state(c, state_info, mem_list, rec_list):
             z_key = (member, rec['source'], var_name, time, k)
             if z_key in z_bank:
                 z = z_bank[z_key]
+
             else:
                 zvar = src.z_coords(path, grid, member=mem_id, time=rec['time'], k=rec['k'])
                 z = grid.convert(zvar, is_vector=False, method='linear', coarse_grain=True)
+
+                ##misc.transform
+
                 z_bank[z_key] = z
 
             if rec['is_vector']:
@@ -263,13 +340,23 @@ def prepare_state(c, state_info, mem_list, rec_list):
 
     message(c.comm, ' done.\n', 0)
 
+    ##clean up
+    del grid_bank, grid, z_bank, var, zvar
+
     return fields, z_coords
 
 
-##transpose_field_to_state send chunks of field owned by a pid to other pid
-##  so that the field-complete fields get transposed into ensemble-complete state
-##  with keys (mem_id, rec_id) pointing to the partition in par_list
 def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_list, fields):
+    """
+    transpose_field_to_state send chunks of field owned by a pid to other pid
+    so that the field-complete fields get transposed into ensemble-complete state
+    with keys (mem_id, rec_id) pointing to the partition in par_list
+
+    Inputs: c, state_info, mem_list, rec_list, partitions, par_list, fields
+    fields is the locally stored field-complete fields with subset of mem_id,rec_id
+
+    Returns: state dict with ensemble-complete field chunks.
+    """
 
     message(c.comm, 'transpose field to state\n', 0)
     state = {}
@@ -340,8 +427,15 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
     return state
 
 
-##transpose_state_to_field transposes back the state to field-complete fields
 def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state):
+    """
+    ##transpose_state_to_field transposes back the state to field-complete fields
+
+    Inputs: c, state_info, mem_list, rec_list, partitions, par_list, state
+    state is the locally stored ensemble-complete field chunks for subset of par_id
+
+    Returns: fields dict with field-complete fields for subset of mem_id,rec_id.
+    """
 
     message(c.comm, 'transpose state to field\n', 0)
     fields = {}
@@ -408,8 +502,14 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
     return fields
 
 
-##parallel output the fields to the binary state_file
 def output_state(c, state_info, mem_list, rec_list, fields, state_file):
+    """
+    Parallel output the fields to the binary state_file
+
+    Inputs: c, state_info, mem_list, rec_list, fields, state_file
+    fields is the locally stored field-complete fields on each pid
+    state_file is the path to the output binary file.
+    """
 
     message(c.comm, 'save state to '+state_file+'\n', 0)
 
@@ -437,9 +537,15 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
     message(c.comm, ' done.\n', 0)
 
 
-##compute ensemble mean of a field stored distributively on all pid_mem
-##collect means on pid_mem=0, and output to mean_file
 def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
+    """
+    Compute ensemble mean of a field stored distributively on all pid_mem
+    collect means on pid_mem=0, and output to mean_file
+
+    Inputs: c, state_info, mem_list, rec_list, fields, mean_file
+    fields is the locally stored field-complete fields on each pid
+    mean_file is the path to the output binary file.
+    """
 
     message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', 0)
     if c.pid == 0:
@@ -469,5 +575,8 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
         message(c.comm, progress_bar(r, len(rec_list[c.pid_rec])), 0)
 
     message(c.comm, ' done.\n', 0)
+
+    ##clean up
+    del sum_fld_pid, sum_fld
 
 

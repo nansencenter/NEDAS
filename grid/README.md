@@ -78,11 +78,11 @@ Typically we use the `Grid` class for conversion of a 2D field from one grid to 
 
 Once you created a `grid1` object on which a 2D field `fld1` is defined, and a `grid2` object for the destination grid. You convert `fld1` by first setting
 
-`grid1.set_dst_grid(grid2)`, then
+`grid1.set_destination_grid(grid2)`, then
 
 `fld2 = grid1.convert(fld1)`
 
-It is recommended that you initialize a `grid` object, set the destination grid by `set_dst_grid`, then apply the same `grid.convert` to many fields needing conversion. Since the interpolation and rotation matrices are computed by `set_dst_grid` only once, the following application of `grid.convert` can be very efficient.
+It is recommended that you initialize a `grid` object, set the destination grid by `set_destination_grid`, then apply the same `grid.convert` to many fields needing conversion. Since the interpolation and rotation matrices are computed by `set_destination_grid` only once, the following application of `grid.convert` can be very efficient.
 
 
 ### 2.1 Interpolation
