@@ -44,14 +44,18 @@ def read_obs(path, grid, mask, model_z, **kwargs):
     assert 'name' in kwargs, 'prep_obs.insitu.read_obs: missing obs variable name=?'
     obs_name = kwargs['name']
 
-    obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[]}
+    obs_seq = {'obs':[],
+                't':[], 'z':[], 'y':[], 'x':[],
+                'err_std':[],
+                'profile_id':[], 'level_id':[] }
 
     ONEM = 9806.           ##press (Pa) for 1 m depth
-    NUM_OBS_PER_LAYER = 1  ##for vertical superobing
+    NUM_OBS_PER_LAYER = None  ##for vertical superobing
     TEMP_MIN = -2.         ##min,max of ocean_temp
     TEMP_MAX = 40.
     SALN_MIN = 16.         ##min,max of ocean_saln
     SALN_MAX = 37.5
+    OBS_ERR_VAR = {'ocean_temp':0.5, 'ocean_saln':0.02}  ##obs error variance
 
     for file_name in filename(path, **kwargs):
 
@@ -113,7 +117,7 @@ def read_obs(path, grid, mask, model_z, **kwargs):
             for l in range(nlev):
                 if z_qc[p,l] not in (b'1', b'2'):
                     flag2[p,l] = 0
-                if obs_qc[p,l] not in (b'1', b'2'):
+                if obs_qc[p,l] not in (b'1',):
                     flag2[p,l] = 0
             if np.sum(flag2[p,:]) == 0:
                 flag1[p] = 0
@@ -152,7 +156,6 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                         flag2[p,:] = 0
 
         ##thinning in horizontal TODO
-
 
         ##thinning in vertical
         if NUM_OBS_PER_LAYER is not None and model_z is not None:
@@ -195,7 +198,9 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 obs_seq['z'].append(z[p,l])
                 obs_seq['y'].append(y[p])
                 obs_seq['x'].append(x[p])
-                obs_seq['err_std'].append(0.1)
+                obs_seq['err_std'].append(np.sqrt(OBS_ERR_VAR[obs_name]))
+                obs_seq['profile_id'].append(p)
+                obs_seq['level_id'].append(l)
 
     for key in obs_seq.keys():
         obs_seq[key] = np.array(obs_seq[key])
