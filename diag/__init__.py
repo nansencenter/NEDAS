@@ -11,13 +11,26 @@ def pattern_corr(fld, fld_tr):
 
 
 ##some spectral diagnostics
+
 def pwrspec2d(fld):
-    ##horizontal 2d power spectrum p(k2d), on a regular Cartesian grid
-    ##for very large grid, the map factors will cause slight errors in grid spacings
-    ##but okay for relatively small grids. Of course for global analysis one shall use
-    ##the spherical harmonics instead
-    ##  input fld[..., ny, nx]
-    ##  return wn[0:nup], pwr[..., 0:nup], nup is the max wavenumber given ny,nx
+    """
+    Horizontal 2D power spectrum p(k2d), on a regular Cartesian grid
+
+    For very large grid, the map factors will cause slight errors in grid spacings
+    but okay for relatively small grids. Of course for global analysis one shall use
+    the spherical harmonics instead.
+
+    Input:
+    - fld: np.array, [..., ny, nx]
+      n-dimensional input field, the last two dimensions are the horizontal directions (y,x)
+
+    Returns:
+    - wn: np.array, [nup]
+      Wavenumber in 2D, int(k2d), nup is the max wavenumber given ny,nx (whichever is larger)
+
+    - pwr: np.array, [..., nup]
+      The power spectrum, leading dimensions the same as fld but ny,nx replaced by nup.
+    """
     ny, nx = fld.shape[-2:]
     kx, ky = get_wn(fld)
     nup = int(max(kx.max(), ky.max()))
@@ -44,6 +57,7 @@ def pwrspec2d(fld):
 
 
 ###some ensemble metrics
+
 def crps(fld_ens, fld_tr):
     return
 

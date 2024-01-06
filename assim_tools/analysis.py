@@ -3,9 +3,11 @@ from numba import njit
 from log import message, progress_bar
 from conversion import t2h, h2t
 
-##batch assimilation solves the matrix version EnKF analysis for a given local state
-##the local_analysis updates for different variables are computed in parallel
 def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, z_state, lobs, lobs_prior):
+    """
+    batch assimilation solves the matrix version EnKF analysis for a given local state
+    the local_analysis updates for different variables are computed in parallel
+    """
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
@@ -107,10 +109,12 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_p
     return state_post
 
 
-##serial assimilation goes through the list of observations one by one
-##for each obs the near by state variables are updated one by one.
-##so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
 def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, lobs, lobs_prior):
+    """
+    serial assimilation goes through the list of observations one by one
+    for each obs the near by state variables are updated one by one.
+    so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
+    """
 
     state_post = state_prior.copy()  ##make a copy for posterior states
 
@@ -122,14 +126,36 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_
 
 ##core algorithms for ensemble data assimilation:
 @njit
-def local_analysis(ens_prior,          ##ensemble state [nens]
-                   obs,                ##obs [nlobs]
-                   obs_err,            ##obs err std [nlobs]
-                   obs_err_corr,       ##obs err corr matrix, if None, uncorrelated
-                   obs_prior,          ##ensemble obs values [nens, nlobs]
-                   filter_type,        ##type of filter algorithm to apply
-                   local_factor,       ##localization factor [nlobs]
-                   ):
+def local_analysis(ens_prior, obs, obs_err, obs_err_corr, obs_prior, filter_type, local_factor):
+    """
+    Local analysis for batch assimilation mode
+
+    Inputs:
+    - ens_prior: np.array[nens]
+      The prior ensemble state variables
+
+    - obs: np.array[nlobs]
+      The local observation sequence
+
+    - obs_err: np.array[nlobs]
+      The observation error standard deviations
+
+    - obs_err_corr: np.array
+      If None, the observation errors are uncorrelated (np.eye(nlobs) will be used here)
+
+    - obs_prior: np.array[nens, nlobs]
+      The observation priors
+
+    - filter_type: str
+      Type of filter to use: "ETKF", or "DEnKF"
+
+    - local_factor: np.array[nlobs]
+      Localization/impact factor for each observation
+
+    Return:
+    - ens_post: np.array[nens]
+      The posterior ensmble state variables
+    """
     ##update the local state variable ens_prior with the obs
     nens, nlobs = obs_prior.shape
     ens_post = ens_prior.copy()
@@ -201,13 +227,27 @@ def local_analysis(ens_prior,          ##ensemble state [nens]
 
 
 @njit
-def obs_increment(obs_prior,          ##obs prior [nens]
-                  obs,                ##obs, scalar
-                  obs_err,            ##obs err std, scalar
-                  filter_type,        ##kind of filter algorithm
-                  ):
-    ##compute analysis increment for 1 obs
-    ##obs_prior[nens] is the prior ensemble values corresponding to this obs
+def obs_increment(obs_prior, obs, obs_err, filter_type):
+    """
+    Compute analysis increment in observation space
+
+    Inputs:
+    - obs_prior: np.array[nens]
+      The observation prior ensemble
+
+    - obs: float
+      The real observation
+
+    - obs_err: float
+      The observation error standard deviation
+
+    - filter_type: str
+      Type of filtering to apply: "EAKF", "RHF", etc.
+
+    Return:
+    - obs_incr: np.array[nens]
+      Analysis increments in observation space
+    """
     nens = obs_prior.size
 
     ##obs error variance
@@ -243,15 +283,30 @@ def obs_increment(obs_prior,          ##obs prior [nens]
 
 
 @njit
-def update_ensemble(ens_prior,             ##prior ens [nens] being updated
-                    obs_prior,             ##obs prior ens [nens]
-                    obs_incr,              ##obs increments [nens]
-                    local_factor,          ##localization factor, scalar
-                    regress_kind='linear', ##kind of regression method
-                    ):
-    ##update the ensemble for 1 variable using the obs increments
-    ##local_factor is the localization factor to reduce spurious correlation
-    ##ens_prior[nens] is the ensemble values prior to update
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_kind='linear'):
+    """
+    Update the ensemble variable using the obs increments
+
+    Inputs:
+    - ens_prior: np.array[nens]
+      The prior ensemble variables to be updated
+
+    - obs_prior: np.array[nens]
+      Observation prior ensemble
+
+    - obs_incr: np.array[nens]
+      Observation space analysis increment
+
+    - local_factor: float
+      The localization factor to reduce spurious correlation in regression
+
+    - regress_kind: str
+      Type of regression to perform, 'linear', 'probit', etc.
+
+    Return:
+    - ens_post: np.array[nens]
+      The posterior ensemble values after update
+    """
     nens = ens_prior.size
 
     ens_post = ens_prior.copy()
@@ -279,12 +334,22 @@ def update_ensemble(ens_prior,             ##prior ens [nens] being updated
     return ens_post
 
 
-##localization factor based on distance and roi
 @njit
 def local_factor(dist, roi, localize_type='GC'):
-    ## dist: distance
-    ## roi: radius of influence, distance beyond which loc=0
-    ## returns the localization factor loc
+    """
+    Localization factor based on distance and radius of influence (roi)
+
+    Inputs:
+    - dist: np.array
+      Distance between observation and state (being updated)
+
+    - roi: float or np.array same shape as dist
+      The radius of influence, distance beyond which local_factor is tapered to 0
+
+    Return:
+    - lfactor: np.array
+      The localization factor, same shape as dist
+    """
     dist = np.atleast_1d(dist)
     lfactor = np.zeros(dist.shape)
 

@@ -1,8 +1,8 @@
 import numpy as np
 import os
 
-##dummy communicator for python without mpi
 class dummy_comm(object):
+   """dummy communicator for python without mpi"""
     def __init__(self):
         self.size = 1
         self.rank = 0
@@ -35,8 +35,8 @@ class dummy_comm(object):
         return obj
 
 
-##initialize the communicator for mpi
 def parallel_start():
+    """initialize the communicator for mpi"""
     ##possible environ variable names from mpi calls
     mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
     if any([ev in os.environ for ev in mpi_env_var]):
@@ -49,9 +49,11 @@ def parallel_start():
     return comm
 
 
-##decorator for func() to be run only by rank 0 in comm
-##and result of func() is then broadcasted to all other ranks
 def bcast_by_root(comm):
+    """
+    Decorator for func() to be run only by rank 0 in comm,
+    and result of func() is then broadcasted to all other ranks.
+    """
     def decorator(func):
         def wrapper(*args, **kwargs):
             if comm.Get_rank() == 0:
@@ -64,12 +66,25 @@ def bcast_by_root(comm):
     return decorator
 
 
-##divide a list of task indices and assign a subset to each rank in comm
 def distribute_tasks(comm, tasks, load=None):
-    ##tasks: list of indices (in a for loop) to work on
-    ##load: amount of workload for each task, if None then tasks have equal workload
-    ##returns the subset of tasks for the proc rank calling this function to work on
-    ##       in a dict from rank -> its corresponding task list
+    """
+    Divide a list of task indices and assign a subset to each rank in comm
+
+    Inputs:
+    - comm: mpi communicator
+
+    - tasks: list
+      List of indices (to be used in a for loop)
+
+    - load: np.array, optional
+      Amount of workload for each task element
+      The default is None, we will let tasks have equal workload
+
+    Return:
+    - task_list: dict
+      Dictionary {rank:list}, list is the subset of tasks for the processor rank
+      calling this function to work on
+    """
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks
 

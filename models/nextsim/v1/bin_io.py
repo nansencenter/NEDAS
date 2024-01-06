@@ -2,8 +2,8 @@ import numpy as np
 import struct
 from conversion import type_convert, type_dic, type_size
 
-##basic read/write of data from nextsim bin/dat file
 def get_info(filename):
+    """basic read/write of data from nextsim bin/dat file"""
     info = {}
     with open(filename.replace('.bin','.dat'), 'r') as f:
         lines = f.readlines()
@@ -36,6 +36,7 @@ def get_info(filename):
     return info
 
 def read_data(filename, v_name):
+    """Read data frim a binary file"""
     info = get_info(filename)
     if v_name not in info:
         raise ValueError('variable %s not found in %s' %(v_name, filename))
@@ -49,9 +50,11 @@ def read_data(filename, v_name):
     return v_data
 
 def write_data(filename, v_name, v_data):
-    ##write some var to existing nextsim restart file
-    ##only for outputing analysis after DA
-    ##to generate new file, see nextsim model documentation
+    """
+    write some var to existing nextsim restart file
+    only for outputing analysis after DA
+    to generate new file, see nextsim model documentation
+    """
     info = get_info(filename)
     if v_name not in info:
         raise ValueError('variable %s not in %s' %(v_name, filename))

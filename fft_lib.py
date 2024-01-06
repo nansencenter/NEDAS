@@ -4,6 +4,9 @@ import numpy as np
 import pyfftw
 
 def fft2(f):
+    """
+    2D FFT implemented by pyFFTW
+    """
     ##prepare fftw plan
     a = pyfftw.empty_aligned(f.shape, dtype='float32')
     b = pyfftw.empty_aligned(f.shape[:-1] + (f.shape[-1]//2+1,), dtype='complex64')
@@ -30,6 +33,9 @@ def fft2(f):
 
 
 def ifft2(fh):
+    """
+    Inverse 2D FFT implemented by pyFFTW
+    """
     ##prepare fftw plan
     b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
     a = pyfftw.empty_aligned(fh.shape, dtype='float32')
@@ -39,8 +45,22 @@ def ifft2(fh):
     return f
 
 
+##or, if fftw is not available, comment out the above and use np.fft instead:
+##from np.fft import fft2, ifft2
+
+
 def fftwn(n):
-    ##wavenumber sequence for fft results in 1 dimension
+    """
+    Wavenumber sequence for FFT output in 1 dimension
+
+    Input:
+    - n: int
+      The size of the dimension
+
+    Output:
+    - wn: np.array
+      The sequence of wavenumber (0,1,2,...-2,-1) for this dimension
+    """
     nup = int(np.ceil((n+1)/2))
     if n%2 == 0:
         wn = np.concatenate((np.arange(0, nup), np.arange(2-nup, 0)))
@@ -49,13 +69,18 @@ def fftwn(n):
     return wn
 
 
-##or, if fftw is not available, use np.fft instead
-##from np.fft import fft2, ifft2
-
-
 def get_wn(fld):
-    ##generate meshgrid wavenumber for input field
-    ## the last two dimensions are horizontal (y, x)
+    """
+    Generate meshgrid wavenumber for the input field
+
+    Input:
+    - fld: np.array
+      n-dimensional field, the last two dimensions are the horizontal directions (y, x)
+
+    Return:
+    - wnx, wny: np.array, same dimensions as fld
+      The wavenumber in x, y directions, according to the dimension (nx or ny, whichever is larger)
+    """
     ny, nx = fld.shape[-2:]
 
     wnx = np.zeros(fld.shape)

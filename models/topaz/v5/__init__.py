@@ -55,10 +55,12 @@ variables = {'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vecto
 ##some constants
 ONEM = 9806.  ##pressure (Pa) in 1 meter water
 
-##parse kwargs and find matching filename
-##for keys in kwargs that are not set, here we define the default values
-##key values in kwargs will also be checked for erroneous values here
 def filename(path, **kwargs):
+    """
+    Parse kwargs and find matching filename
+    for keys in kwargs that are not set, here we define the default values
+    key values in kwargs will also be checked for erroneous values here
+    """
     if 'time' in kwargs and kwargs['time'] is not None:
         assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
         tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
@@ -117,9 +119,11 @@ def destagger(dat, v_name):
 ##topaz grid is fixed in time/space, so no keys needed
 uniq_grid_key = ()
 
-###parse grid.info and generate grid.Grid object
-###kwargs here are dummy input since the grid is fixed
 def read_grid(path, **kwargs):
+    """
+    Parse grid.info and generate grid.Grid object
+    kwargs here are dummy input since the grid is fixed
+    """
     grid_info_file = path+'/topo/grid.info'
     cm = ConformalMapping.init_from_file(grid_info_file)
     nx = cm._ires
@@ -177,10 +181,23 @@ def read_depth(path, grid):
     return -depth
 
 
-##get the state variable with name in state_def
-##and other kwargs: time, level, and member to pinpoint where to get the variable
-##returns a 2D field defined on grid from read_grid
 def read_var(path, grid, **kwargs):
+    """
+    Read the state variable from a model restart file
+
+    Inputs:
+    - path: str
+      Path to the directory where the restart files are stored
+
+    - grid: Grid obj
+      Describes the model native grid, from read_grid()
+
+    - **kwargs: time, level, and member to pinpoint where to get the variable
+
+    Return:
+    - var: np.array
+      a 2D field defined on grid with the state variable
+    """
     ##check name in kwargs and read the variables from file
     assert 'name' in kwargs, 'please specify which variable to get, name=?'
     name = kwargs['name']
@@ -220,9 +237,10 @@ def read_var(path, grid, **kwargs):
     return var
 
 
-##output updated variable with name='varname' defined in state_def
-##to the corresponding model restart file
 def write_var(path, grid, var, **kwargs):
+    """
+    Write a variable (overwrite) to the model restart file
+    """
     ##check name in kwargs
     assert 'name' in kwargs, 'please specify which variable to write, name=?'
     name = kwargs['name']
@@ -259,11 +277,18 @@ def write_var(path, grid, var, **kwargs):
 uniq_z_key = ('member', 'time', 'k')
 z_units = 'm'
 
-##calculate vertical coordinates given the 3D model state
-##inputs: path, grid, **kwargs: same as filename() inputs
-##        z_type, defined for each field_info['z_coords']
 @lru_cache(maxsize=3)
 def z_coords(path, grid, **kwargs):
+    """
+    Calculate vertical coordinates given the 3D model state
+
+    Inputs:
+    - path, grid, **kwargs same as filename() inputs
+
+    Return:
+    - z: np.array
+      The corresponding z field
+    """
     ##some defaults if not set in kwargs
     if 'units' not in kwargs:
         kwargs['units'] = z_units
