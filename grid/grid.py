@@ -979,32 +979,38 @@ class Grid(object):
             d = (spacing[0]*L, spacing[1]*L)
         else:
             d = (spacing*L, spacing*L)
+
         dt = L / V / num_steps
-        xo, yo = np.mgrid[x.min():x.max():d[0], y.min():y.max():d[1]]
+
+        xo, yo = np.mgrid[x.min()+0.5*d[0]:x.max():d[0], y.min()+0.5*d[1]:y.max():d[1]]
         npoints = xo.flatten().shape[0]
         xtraj = np.full((npoints, num_steps+1,), np.nan)
         ytraj = np.full((npoints, num_steps+1,), np.nan)
         leng = np.zeros(npoints)
         xtraj[:, 0] = xo.flatten()
         ytraj[:, 0] = yo.flatten()
+
         for t in range(num_steps):
             ###find velocity ut,vt at traj position for step t
             ut = self.interp(u, xtraj[:,t], ytraj[:,t])
             vt = self.interp(v, xtraj[:,t], ytraj[:,t])
+
             ###velocity should be in physical units, to plot the right length on projection
             ###we use the map factors to scale distance units
-            mfx = self.interp(self.mfx, xtraj[:,t], ytraj[:,t])
-            mfy = self.interp(self.mfy, xtraj[:,t], ytraj[:,t])
-            ut = ut * mfx
-            vt = vt * mfy
+            ut = ut * self.interp(self.mfx, xtraj[:,t], ytraj[:,t])
+            vt = vt * self.interp(self.mfy, xtraj[:,t], ytraj[:,t])
+
             ###update traj position
             xtraj[:, t+1] = xtraj[:, t] + ut * dt
             ytraj[:, t+1] = ytraj[:, t] + vt * dt
+
+            ##update length
             leng = leng + np.sqrt(ut**2 + vt**2) * dt
 
         ##plot the vector lines
         hl = headlength * L
         hw = headwidth * L
+
         def arrowhead_xy(x1, x2, y1, y2):
             np.seterr(invalid='ignore')
             ll = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
