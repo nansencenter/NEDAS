@@ -38,10 +38,17 @@ def progress_bar(task_id, ntask, width=33):
     - pstr: str
       The progress bar msg to be shown by message()
     """
+    if ntask==0:
+        progress = 1.
+    else:
+        progress = (task_id+1) / ntask
+
     ##the progress bar looks like this: .....  | ??%
-    pstr = '\r{:{}}| '.format('.'*int(np.ceil((task_id+1)/ntask*width)), width)
+    pstr = '\r{:{}}| '.format('.'*int(np.ceil(progress * width)), width)
+
     ##add the percentage completed at the end
-    pstr += '{:.0f}%'.format((100/ntask*(task_id+1)))
+    pstr += '{:.0f}%'.format(100*progress)
+
     return pstr
 
 
