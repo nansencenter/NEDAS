@@ -3,37 +3,46 @@ from numba import njit
 from log import message, progress_bar
 from conversion import t2h, h2t
 
-def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, z_state, lobs, lobs_prior):
+def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """
     batch assimilation solves the matrix version EnKF analysis for a given local state
     the local_analysis updates for different variables are computed in parallel
     """
+    message(c.comm, 'assimilate in batch mode\n', 0)
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
     ##a small dummy call to local_analysis to compile it with njit
     _ = local_analysis(np.ones(5), np.ones(10), np.ones(10), None, np.ones((5,10)), 'ETKF', np.ones(10))
 
+    ##this part counts total number of tasks for each pid, only for nice output of progress
     ##pid with most obs to work with will print out progress
-    # obs_count = [np.sum([len(obs_inds[r][p])
-    #                      for r in obs_info['records'].keys()
-    #                      for p in par_list[pid] ])
-    #              for pid in range(c.nproc)]
-    # pid_show = obs_count.index(max(obs_count))
+    obs_count = np.array([np.sum([len(obs_inds[r][p])
+                                  for r in obs_info['records'].keys()
+                                  for p in lst])
+                          for lst in par_list.values()])
+    pid_show = np.argsort(obs_count)[-1]
+    ##start counting
+    ntask = 0
+    for par_id in par_list[c.pid_mem]:
+        ist,ied,di,jst,jed,dj = partitions[par_id]
+        ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
+        mask_chk = c.mask[jst:jed:dj, ist:ied:di]
+        for l in range(len(ii[~mask_chk])):
+            ntask += 1
 
-    ##loop through tiles stored on pid
-    for p in range(len(par_list[c.pid])):
-        par_id = par_list[c.pid][p]
-
+    ##now the actual work starts, loop through tiles stored on pid
+    task = 0
+    for par_id in par_list[c.pid_mem]:
         ist,ied,di,jst,jed,dj = partitions[par_id]
         ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
         mask_chk = c.mask[jst:jed:dj, ist:ied:di]
 
-        ##fetch local obs seq and obs_prior seq on tile
+        ##fetch local obs seq and obs_prior seq on par_id
         nlobs = np.sum([len(lobs[r][par_id]['obs'].flatten()) for r in obs_info['records'].keys()])
         if nlobs == 0:
+            task += len(ii[~mask_chk])
             continue
-
         obs = np.full(nlobs, np.nan)
         obs_name = np.full(nlobs, np.nan)
         obs_x = np.full(nlobs, np.nan)
@@ -64,47 +73,45 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_p
 
         ##loop through unmasked grid points in the tile
         for l in range(len(ii[~mask_chk])):
-
             state_x = c.grid.x[0, ii[~mask_chk][l]]
             state_y = c.grid.y[jj[~mask_chk][l], 0]
             hdist = np.hypot(obs_x-state_x, obs_y-state_y)
             lfactor = local_factor(hdist, hroi, c.localize_type)
             if (lfactor==0).all():
+                task += 1
                 continue
-            inds = np.where(lfactor>0)
+            inds = np.where(lfactor>0)[0][0:300]
 
-            ##cache the localization factor given h, v, t, ob component
-            ##avoid recomputing transform matrix if there is no change in
-            ##rec_id dimension (most changes in solution is due to h localiz.)
-            lfactor_bank = {}
+            ##loop through each field rec_id on pid_rec
+            for rec_id in rec_list[c.pid_rec]:
+                rec = state_info['fields'][rec_id]
 
-            ##loop through each field record
-            for rec_id, rec in state_info['fields'].items():
                 keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
-
                 for key in keys:
                     ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
 
                     ##localization factor
-                    state_z = z_state[m, rec_id][par_id][key]
+                    # state_z = z_state[m, rec_id][par_id][key]
                     # state_t = t2h(state_info['fields'][rec_id]['time'])
                     # vdist = np.abs(obs_z-state_z)
                     # tdist = np.abs(obs_t-state_t)
                     #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
 
+                    obs_sub = obs[inds]
                     obs_prior_sub = np.zeros((c.nens, len(inds[0])))
                     for m in range(c.nens):
                         obs_prior_sub[m, :] = obs_prior[m, :][inds]
 
-                    ens_post = local_analysis(ens_prior, obs[inds], obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
+                    ens_post = local_analysis(ens_prior, obs, obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
 
                     ##save the posterior ensemble to the state
                     for m in range(c.nens):
                         state_post[m, rec_id][par_id][key] = ens_post[m]
 
-        message(c.comm, progress_bar(p, len(par_list[c.pid])), 0)
+            message(c.comm, progress_bar(task, ntask), pid_show)
+            task += 1
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', pid_show)
 
     return state_post
 
@@ -115,6 +122,7 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_
     for each obs the near by state variables are updated one by one.
     so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
     """
+    message(c.comm, 'assimilate in serial mode\n', 0)
 
     state_post = state_prior.copy()  ##make a copy for posterior states
 

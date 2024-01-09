@@ -528,6 +528,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
 
     return obs_seq
 
+
 def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_inds, input_obs, ensemble=False):
     """
     Transpose obs from field-complete to ensemble-complete
@@ -543,18 +544,21 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
 
     """
     pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+    if ensemble:
+        message(c.comm, 'obs prior sequences: ', pid_show)
+    else:
+        message(c.comm, 'obs sequences: ', pid_show)
+    message(c.comm, 'transpose obs to local obs\n', pid_show)
 
     ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
     ##        input_obs -> tmp_obs
-    message(c.comm, 'transpose obs to local obs\n', pid_show)
     tmp_obs = {}  ##local obs at intermediate stage
 
-    nr = len(rec_list[c.pid_rec])
+    nr = len(obs_rec_list[c.pid_rec])
     for r, obs_rec_id in enumerate(obs_rec_list[c.pid_rec]):
 
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
-
         for m in range(nm_max):
 
             ##prepare the obs seq for sending if not at the end of mem_list
@@ -634,7 +638,7 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
                     if mem_id == 0:
                         del input_obs[obs_rec_id]
 
-        message(c.comm, progress_bar(r, nr), pid_show)
+            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), pid_show)
 
     message(c.comm, ' done.\n', pid_show)
 
