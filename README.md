@@ -118,7 +118,7 @@ As shown in Fig. 2, a transpose among different `pid_mem` brings the observation
 |:--|
 | **Figure 2**: Same as Fig. 1 but showing the memory layout for observations. There are 5 observation records distributed over `pid_rec`. An additional transpose along the record dimension (yellow arrows) is necessary to allow observation records stored in other `pid_rec` to update the field records stored in each `pid_rec`. |
 
-When the transpose is complete, on each `pid`, the local ensemble **state\_prior**[`mem_id`, `rec_id`][`par_id`] is updated to the posterior **state\_post**, using local observations **lobs**[`obs_rec_id`][`par_id`, `rec_id`] and observation priors **lobs\_prior**[`mem_id`, `obs_rec_id`][`par_id`, `rec_id`].
+When the transpose is complete, on each `pid`, the local ensemble **state\_prior**[`mem_id`, `rec_id`][`par_id`] is updated to the posterior **state\_post**, using local observations **lobs**[`obs_rec_id`][`par_id`] and observation priors **lobs\_prior**[`mem_id`, `obs_rec_id`][`par_id`].
 
 NEDAS provides two assimilation modes:
 
@@ -153,7 +153,7 @@ Indices and lists:
 
 * `par_list`[`pid_mem`] is a list of partition id `par_id` for processor with `pid_mem` to handle.
 
-* `obs_inds`[`obs_rec_id`]['par'][`par_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id`, and similarly `obs_inds`[`obs_rec_id`]['rec'][`rec_id`] is the indices of local observations for the field record `rec_id`.
+* `obs_inds`[`obs_rec_id`][`par_id`] is the indices in the entire observation record `obs_rec_id` that belong to the local observation sequence for partition `par_id`.
 
 
 Data structures:
