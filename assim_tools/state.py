@@ -92,7 +92,7 @@ def parse_state_info(c):
                       }
                 info['scalars'].append(rec)
 
-    message(c.comm, 'number of unique field records, nrec={}\n'.format(len(info['fields'])), 0)
+    message(c.comm, 'number of unique field records, nrec={}\n'.format(len(info['fields'])), c.pid_show)
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
 
@@ -269,7 +269,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
     Inputs: c, state_info, mem_list, rec_list
     """
 
-    message(c.comm, 'prepare state by reading fields from model restart\n', 0)
+    message(c.comm, 'prepare state by reading fields from model restart\n', c.pid_show)
     fields = {}
     z_coords = {}
     grid_bank = {}
@@ -336,9 +336,9 @@ def prepare_state(c, state_info, mem_list, rec_list):
             else:
                 z_coords[mem_id, rec_id] = z
 
-            message(c.comm, progress_bar(m*nr+r, nm*nr), 0)
+            message(c.comm, progress_bar(m*nr+r, nm*nr), c.pid_show)
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', c.pid_show)
 
     ##clean up
     del grid_bank, grid, z_bank, var, zvar
@@ -358,7 +358,7 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
     Returns: state dict with ensemble-complete field chunks.
     """
 
-    message(c.comm, 'transpose field to state\n', 0)
+    message(c.comm, 'transpose field to state\n', c.pid_show)
     state = {}
 
     nr = len(rec_list[c.pid_rec])
@@ -420,9 +420,9 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
             if m < len(mem_list[c.pid_mem]):
                 del fields[mem_id, rec_id]   ##free up memory
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), 0)
+            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', c.pid_show)
 
     return state
 
@@ -437,7 +437,7 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
     Returns: fields dict with field-complete fields for subset of mem_id,rec_id.
     """
 
-    message(c.comm, 'transpose state to field\n', 0)
+    message(c.comm, 'transpose state to field\n', c.pid_show)
     fields = {}
 
     ##all pid goes through their own task list simultaneously
@@ -495,9 +495,9 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
                     c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                     del state[dst_mem_id, rec_id]   ##free up memory
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), 0)
+            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', c.pid_show)
 
     return fields
 
@@ -511,7 +511,7 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
     state_file is the path to the output binary file.
     """
 
-    message(c.comm, 'save state to '+state_file+'\n', 0)
+    message(c.comm, 'save state to '+state_file+'\n', c.pid_show)
 
     if c.pid == 0:
         ##if file doesn't exist, create the file
@@ -532,9 +532,9 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
             ##write the data to binary file
             write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
 
-            message(c.comm, progress_bar(m*nr+r, nm*nr), 0)
+            message(c.comm, progress_bar(m*nr+r, nm*nr), c.pid_show)
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', c.pid_show)
 
 
 def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
@@ -547,7 +547,7 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
     mean_file is the path to the output binary file.
     """
 
-    message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', 0)
+    message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', c.pid_show)
     if c.pid == 0:
         open(mean_file, 'wb')
         write_field_info(mean_file, state_info)
@@ -572,9 +572,9 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
             mean_fld = sum_fld / c.nens
             write_field(mean_file, state_info, c.mask, 0, rec_id, mean_fld)
 
-        message(c.comm, progress_bar(r, len(rec_list[c.pid_rec])), 0)
+        message(c.comm, progress_bar(r, len(rec_list[c.pid_rec])), c.pid_show)
 
-    message(c.comm, ' done.\n', 0)
+    message(c.comm, ' done.\n', c.pid_show)
 
     ##clean up
     del sum_fld_pid, sum_fld
