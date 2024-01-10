@@ -8,7 +8,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
     batch assimilation solves the matrix version EnKF analysis for a given local state
     the local_analysis updates for different variables are computed in parallel
     """
-    message(c.comm, 'assimilate in batch mode\n', 0)
+    message(c.comm, 'assimilate in batch mode\n', c.pid_show)
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
@@ -21,7 +21,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
                                   for r in obs_info['records'].keys()
                                   for p in lst])
                           for lst in par_list.values()])
-    pid_show = np.argsort(obs_count)[-1]
+    c.pid_show = np.argsort(obs_count)[-1]
     ##start counting
     ntask = 0
     for par_id in par_list[c.pid_mem]:
@@ -73,6 +73,8 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
 
         ##loop through unmasked grid points in the tile
         for l in range(len(ii[~mask_chk])):
+            message(c.comm, progress_bar(task, ntask), c.pid_show)
+
             state_x = c.grid.x[0, ii[~mask_chk][l]]
             state_y = c.grid.y[jj[~mask_chk][l], 0]
             hdist = np.hypot(obs_x-state_x, obs_y-state_y)
@@ -80,38 +82,40 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
             if (lfactor==0).all():
                 task += 1
                 continue
-            inds = np.where(lfactor>0)[0][0:300]
+            inds = np.where(lfactor>0)[0] #[0:3000]
+            ##TODO: keep only the first 3000 obs with most impact
+            ##TODO: lfactor is maybe wrong
 
             ##loop through each field rec_id on pid_rec
-            for rec_id in rec_list[c.pid_rec]:
-                rec = state_info['fields'][rec_id]
+            # for rec_id in rec_list[c.pid_rec]:
+            #     rec = state_info['fields'][rec_id]
 
-                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
-                for key in keys:
-                    ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
+            #     keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
+            #     for key in keys:
+            #         ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
 
-                    ##localization factor
-                    # state_z = z_state[m, rec_id][par_id][key]
-                    # state_t = t2h(state_info['fields'][rec_id]['time'])
-                    # vdist = np.abs(obs_z-state_z)
-                    # tdist = np.abs(obs_t-state_t)
-                    #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
+            #         ##localization factor
+            #         # state_z = z_state[m, rec_id][par_id][key]
+            #         # state_t = t2h(state_info['fields'][rec_id]['time'])
+            #         # vdist = np.abs(obs_z-state_z)
+            #         # tdist = np.abs(obs_t-state_t)
+            #         #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
 
-                    obs_sub = obs[inds]
-                    obs_prior_sub = np.zeros((c.nens, len(inds[0])))
-                    for m in range(c.nens):
-                        obs_prior_sub[m, :] = obs_prior[m, :][inds]
+            #         obs_sub = obs[inds]
+            #         obs_prior_sub = np.zeros((c.nens, len(inds)))
+            #         for m in range(c.nens):
+            #             obs_prior_sub[m, :] = obs_prior[m, :][inds]
 
-                    ens_post = local_analysis(ens_prior, obs, obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
+            #         ens_post = local_analysis(ens_prior, obs, obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
 
-                    ##save the posterior ensemble to the state
-                    for m in range(c.nens):
-                        state_post[m, rec_id][par_id][key] = ens_post[m]
+            #         ##save the posterior ensemble to the state
+            #         for m in range(c.nens):
+            #             state_post[m, rec_id][par_id][key] = ens_post[m]
 
-            message(c.comm, progress_bar(task, ntask), pid_show)
+            ##TODO: ntask is not right
             task += 1
 
-    message(c.comm, ' done.\n', pid_show)
+    message(c.comm, ' done.\n', c.pid_show)
 
     return state_post
 
@@ -122,7 +126,7 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_
     for each obs the near by state variables are updated one by one.
     so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
     """
-    message(c.comm, 'assimilate in serial mode\n', 0)
+    message(c.comm, 'assimilate in serial mode\n', c.pid_show)
 
     state_post = state_prior.copy()  ##make a copy for posterior states
 

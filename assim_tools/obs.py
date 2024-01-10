@@ -186,7 +186,7 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
 
     Return: obs_seq
     """
-    message(c.comm_rec, 'reading obs sequences from dataset\n', 0)
+    message(c.comm_rec, 'reading obs sequences from dataset\n', c.pid_show)
     obs_seq = {}
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload
@@ -377,8 +377,8 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
 
     Return: obs_prior_seq
     """
-    pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
-    message(c.comm, 'compute obs priors\n', pid_show)
+    c.pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+    message(c.comm, 'compute obs priors\n', c.pid_show)
     obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
@@ -397,9 +397,9 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
 
-            message(c.comm, progress_bar(m*nr+r, nr*nm), pid_show)
+            message(c.comm, progress_bar(m*nr+r, nr*nm), c.pid_show)
 
-    message(c.comm, ' done.\n', pid_show)
+    message(c.comm, ' done.\n', c.pid_show)
 
     return obs_prior_seq
 
@@ -543,12 +543,12 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
     Return: output_obs[obs_rec_id][par_id] as the local observation sequence {'obs':array,'x':array,'y':...}
 
     """
-    pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+    c.pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
     if ensemble:
-        message(c.comm, 'obs prior sequences: ', pid_show)
+        message(c.comm, 'obs prior sequences: ', c.pid_show)
     else:
-        message(c.comm, 'obs sequences: ', pid_show)
-    message(c.comm, 'transpose obs to local obs\n', pid_show)
+        message(c.comm, 'obs sequences: ', c.pid_show)
+    message(c.comm, 'transpose obs to local obs\n', c.pid_show)
 
     ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
     ##        input_obs -> tmp_obs
@@ -638,9 +638,9 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
                     if mem_id == 0:
                         del input_obs[obs_rec_id]
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), pid_show)
+            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
 
-    message(c.comm, ' done.\n', pid_show)
+    message(c.comm, ' done.\n', c.pid_show)
 
     ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
     ##        tmp_obs -> output_obs

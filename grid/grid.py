@@ -218,9 +218,16 @@ class Grid(object):
         s2 = np.sqrt((self.x[t][:,0]-self.x[t][:,2])**2+(self.y[t][:,0]-self.y[t][:,2])**2)
         s3 = np.sqrt((self.x[t][:,2]-self.x[t][:,1])**2+(self.y[t][:,2]-self.y[t][:,1])**2)
         sa = (s1 + s2 + s3)/3
+
+        ##try to remove very elongated triangles, so that mesh dx is more accurate
         e = 0.3
-        inds = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
-        return np.mean(sa[inds])
+        valid = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
+        if ~valid.all():
+            ##all triangles are elongated, just take their mean size
+            return np.mean(sa)
+        else:
+            ##take the mean of triangle size, excluding the elongated ones
+            return np.mean(sa[valid])
 
 
     @cached_property
