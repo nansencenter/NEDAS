@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from memory_profiler import profile
 import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from log import message, progress_bar
+from log import message, show_progress
 from parallel import bcast_by_root, distribute_tasks
 
 """
@@ -336,7 +336,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
             else:
                 z_coords[mem_id, rec_id] = z
 
-            message(c.comm, progress_bar(m*nr+r, nm*nr), c.pid_show)
+            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -420,7 +420,7 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
             if m < len(mem_list[c.pid_mem]):
                 del fields[mem_id, rec_id]   ##free up memory
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -495,7 +495,7 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
                     c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                     del state[dst_mem_id, rec_id]   ##free up memory
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -532,7 +532,7 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
             ##write the data to binary file
             write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
 
-            message(c.comm, progress_bar(m*nr+r, nm*nr), c.pid_show)
+            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -572,7 +572,7 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
             mean_fld = sum_fld / c.nens
             write_field(mean_file, state_info, c.mask, 0, rec_id, mean_fld)
 
-        message(c.comm, progress_bar(r, len(rec_list[c.pid_rec])), c.pid_show)
+        show_progress(c.comm, r, len(rec_list[c.pid_rec]), c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 

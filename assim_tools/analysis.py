@@ -1,6 +1,6 @@
 import numpy as np
 from numba import njit
-from log import message, progress_bar
+from log import message, show_progress
 from conversion import t2h, h2t
 
 def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
@@ -12,17 +12,14 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
 
     state_post = state_prior.copy() ##save a copy for posterior states
 
-    ##a small dummy call to local_analysis to compile it with njit
-    _ = local_analysis(np.ones(5), np.ones(10), np.ones(10), None, np.ones((5,10)), 'ETKF', np.ones(10))
-
-    ##this part counts total number of tasks for each pid, only for nice output of progress
-    ##pid with most obs to work with will print out progress
+    ##pid with the most obs in its task list with show progress message
     obs_count = np.array([np.sum([len(obs_inds[r][p])
                                   for r in obs_info['records'].keys()
                                   for p in lst])
                           for lst in par_list.values()])
     c.pid_show = np.argsort(obs_count)[-1]
-    ##start counting
+
+    ##count number of tasks
     ntask = 0
     for par_id in par_list[c.pid_mem]:
         ist,ied,di,jst,jed,dj = partitions[par_id]
@@ -42,7 +39,9 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
         nlobs = np.sum([len(lobs[r][par_id]['obs'].flatten()) for r in obs_info['records'].keys()])
         if nlobs == 0:
             task += len(ii[~mask_chk])
+            show_progress(c.comm, task, ntask, c.pid_show)
             continue
+
         obs = np.full(nlobs, np.nan)
         obs_name = np.full(nlobs, np.nan)
         obs_x = np.full(nlobs, np.nan)
@@ -56,6 +55,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
         obs_prior = np.full((c.nens, nlobs), np.nan)
         i = 0
         for r, obs_rec in obs_info['records'].items():
+            ##TODO: if obs is vector???
             d = len(lobs[r][par_id]['obs'].flatten())
             obs[i:i+d] = lobs[r][par_id]['obs'].flatten()
             obs_x[i:i+d] = lobs[r][par_id]['x'].flatten()
@@ -73,7 +73,6 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
 
         ##loop through unmasked grid points in the tile
         for l in range(len(ii[~mask_chk])):
-            message(c.comm, progress_bar(task, ntask), c.pid_show)
 
             state_x = c.grid.x[0, ii[~mask_chk][l]]
             state_y = c.grid.y[jj[~mask_chk][l], 0]
@@ -81,64 +80,51 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
             lfactor = local_factor(hdist, hroi, c.localize_type)
             if (lfactor==0).all():
                 task += 1
+                show_progress(c.comm, task, ntask, c.pid_show)
                 continue
-            inds = np.where(lfactor>0)[0] #[0:3000]
+
+            # inds = np.where(lfactor>0)[0] #[0:3000]
+            # print(lfactor(inds))
             ##TODO: keep only the first 3000 obs with most impact
             ##TODO: lfactor is maybe wrong
+            # obs_prior_sub = np.zeros((c.nens, len(inds)))
+            # for m in range(c.nens):
+            #     obs_prior_sub[m, :] = obs_prior[m, :][inds]
+            weight = local_analysis(obs, obs_err, None, obs_prior, c.filter_type, lfactor)
 
             ##loop through each field rec_id on pid_rec
-            # for rec_id in rec_list[c.pid_rec]:
-            #     rec = state_info['fields'][rec_id]
+            for rec_id in rec_list[c.pid_rec]:
+                rec = state_info['fields'][rec_id]
 
-            #     keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
-            #     for key in keys:
-            #         ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
+                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
+                for key in keys:
+                    ens_prior = np.array([state_prior[m, rec_id][par_id][key] for m in range(c.nens)])
 
-            #         ##localization factor
-            #         # state_z = z_state[m, rec_id][par_id][key]
-            #         # state_t = t2h(state_info['fields'][rec_id]['time'])
-            #         # vdist = np.abs(obs_z-state_z)
-            #         # tdist = np.abs(obs_t-state_t)
-            #         #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
+                    ##localization factor
+                    # state_z = z_state[m, rec_id][par_id][key]
+                    # state_t = t2h(state_info['fields'][rec_id]['time'])
+                    # vdist = np.abs(obs_z-state_z)
+                    # tdist = np.abs(obs_t-state_t)
+                    #* local_factor(vdist, vroi, c.localize_type) * local_factor(tdist, troi, c.localize_type)
 
-            #         obs_sub = obs[inds]
-            #         obs_prior_sub = np.zeros((c.nens, len(inds)))
-            #         for m in range(c.nens):
-            #             obs_prior_sub[m, :] = obs_prior[m, :][inds]
+                    ##save the posterior ensemble to the state
+                    for m in range(c.nens):
+                        state_post[m, rec_id][par_id][key] = np.sum(ens_prior * weight[:, m])
 
-            #         ens_post = local_analysis(ens_prior, obs, obs_err[inds], None, obs_prior_sub, c.filter_type, lfactor[inds])
-
-            #         ##save the posterior ensemble to the state
-            #         for m in range(c.nens):
-            #             state_post[m, rec_id][par_id][key] = ens_post[m]
-
-            ##TODO: ntask is not right
             task += 1
+            show_progress(c.comm, task, ntask, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
     return state_post
 
 
-def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, lobs, lobs_prior):
-    """
-    serial assimilation goes through the list of observations one by one
-    for each obs the near by state variables are updated one by one.
-    so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
-    """
-    message(c.comm, 'assimilate in serial mode\n', c.pid_show)
-
-    state_post = state_prior.copy()  ##make a copy for posterior states
-
-    ##go through the entire obs list one at a time
-    # for 
-
-    return state_post
+def form_local_obs():
+    return obs, obs_prior
 
 
-##core algorithms for ensemble data assimilation:
 @njit
-def local_analysis(ens_prior, obs, obs_err, obs_err_corr, obs_prior, filter_type, local_factor):
+def local_analysis(obs, obs_err, obs_err_corr, obs_prior, filter_type, local_factor):
     """
     Local analysis for batch assimilation mode
 
@@ -165,12 +151,14 @@ def local_analysis(ens_prior, obs, obs_err, obs_err_corr, obs_prior, filter_type
       Localization/impact factor for each observation
 
     Return:
+    - weights: np.array[nens, nens]
+      The transform weights
+
     - ens_post: np.array[nens]
       The posterior ensmble state variables
     """
     ##update the local state variable ens_prior with the obs
     nens, nlobs = obs_prior.shape
-    ens_post = ens_prior.copy()
 
     ##ensemble weight matrix, weight[:, m] is for the m-th member
     ##also known as T in Bishop 2001, and X5 in Evensen textbook (and in Sakov 2012)
@@ -225,17 +213,68 @@ def local_analysis(ens_prior, obs, obs_err, obs_err_corr, obs_prior, filter_type
 
     weight += var_ratio_sqrt
 
+    return weight
+
+
+@njit
+def ensemble_transform(ens_prior, weight):
+    """transform the prior ensemble with the weight matrix"""
+    nens = ens_prior.size
+
     ##check if weights sum to 1
     for m in range(nens):
         sum_wgts = np.sum(weight[:, m])
         if np.abs(sum_wgts - 1) > 1e-5:
             print('Warning: sum of weights != 1 detected!')
 
-    ##finally, transform the prior ensemble with the weight matrix
+    ##apply the weight
+    ens_post = ens_prior.copy()
     for m in range(nens):
         ens_post[m] = np.sum(ens_prior * weight[:, m])
 
     return ens_post
+
+
+def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, lobs, lobs_prior):
+    """
+    serial assimilation goes through the list of observations one by one
+    for each obs the near by state variables are updated one by one.
+    so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
+    """
+    message(c.comm, 'assimilate in serial mode\n', c.pid_show)
+
+    ##count number of obs for each obs_rec_id, find max number
+    nobs = np.array([np.sum([len(ind) for ind in obs_inds[r].values()])
+                     for r in obs_info['records'].keys()])
+    nobs_max = np.max(nobs)
+
+    ##form the full obs sequence
+    obs_list = []
+    for obs_rec_id in obs_info['records'].keys():
+        for obs_id in range(nobs[obs_rec_id]):
+            obs_list.append((obs_rec_id, obs_id))
+    np.random.shuffle(obs_list)  ##randomize order
+
+    ##go through the entire obs list one at a time
+    for p in range(len(obs_list)):
+        obs_rec_id, obs_id = obs_list[p]
+        # keys = [(0, l), (1, l)] if obs_rec['is_vector'] else [l]
+        # ##if the pid owns this obs, compute obs_incr
+        # # if c.pid_mem
+
+        ##find index of state ij within obs roi
+
+        ##update locally stored state variables
+
+        ##find obs within obs roi
+
+        ##update locally stored obs
+
+        show_progress(c.comm, p, len(obs_list), c.pid_show)
+
+    message(c.comm, ' done.\n', c.pid_show)
+
+    return state_prior
 
 
 @njit

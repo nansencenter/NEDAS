@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from memory_profiler import profile
 import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from log import message, progress_bar
+from log import message, show_progress
 from parallel import bcast_by_root, distribute_tasks
 from perturb import random_field_gaussian
 from grid import Grid
@@ -264,7 +264,7 @@ def partition_grid(c):
 
         ##a list of (ist, ied, di, jst, jed, dj) for slicing
         ##note: we have nproc_mem entries in the list
-        partitions = [(i, nx, nx_intv, j, ny, ny_intv)
+        partitions = [(i, c.nx, nx_intv, j, c.ny, ny_intv)
                       for j in np.arange(ny_intv)
                       for i in np.arange(nx_intv) ]
 
@@ -329,7 +329,7 @@ def assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq):
             ##partitions with par_id from 0 to nproc_mem-1
             full_inds = np.arange(len(obs_rec['obs']))
 
-            inds = distribute_tasks(c.comm, full_inds)
+            inds = distribute_tasks(c.comm_mem, full_inds)
             for par_id in range(c.nproc_mem):
                 obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
 
@@ -364,7 +364,7 @@ def build_par_tasks(c, partitions, obs_info, obs_inds):
 
     if c.assim_mode == 'serial':
         ##just assign each partition to each pid, pid==par_id
-        par_list = {p:p for p in range(c.nproc_mem)}
+        par_list = {p:np.array([p]) for p in range(c.nproc_mem)}
 
     return par_list
 
@@ -397,7 +397,7 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
 
-            message(c.comm, progress_bar(m*nr+r, nr*nm), c.pid_show)
+            show_progress(c.comm, m*nr+r, nr*nm, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -544,6 +544,7 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
 
     """
     c.pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+
     if ensemble:
         message(c.comm, 'obs prior sequences: ', c.pid_show)
     else:
@@ -638,7 +639,7 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
                     if mem_id == 0:
                         del input_obs[obs_rec_id]
 
-            message(c.comm, progress_bar(r*nm_max+m, nr*nm_max), c.pid_show)
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
