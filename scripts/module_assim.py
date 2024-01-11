@@ -5,9 +5,8 @@ import time
 from log import message
 from parallel import distribute_tasks
 from assim_tools import *
-import warnings
 
-c.pid_show = 0  ##which pid is showing progress messages
+debug = False
 
 pstr = '. module_assim .'
 message(c.comm, len(pstr)*'.'+'\n'+pstr+'\n'+len(pstr)*'.'+'\n\n', c.pid_show)
@@ -49,8 +48,8 @@ fields_prior, z_fields = prepare_state(c, state_info, mem_list, rec_list)
 
 state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_state.bin'
 output_state(c, state_info, mem_list, rec_list, fields_prior, state_file)
-# mean_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_mean_state.bin'
-# output_ens_mean(c, state_info, mem_list, rec_list, fields_prior, mean_file)
+mean_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_mean_state.bin'
+output_ens_mean(c, state_info, mem_list, rec_list, fields_prior, mean_file)
 
 message(c.comm, 'collect model z coordinates, ', c.pid_show)
 z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
@@ -73,7 +72,7 @@ obs_rec_list = build_obs_tasks(c, obs_info)
 
 obs_seq = prepare_obs(c, state_info, obs_info, obs_rec_list)
 
-if c.pid_mem == 0:
+if c.pid_mem == 0 and debug:
     np.save('obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
 
 partitions = partition_grid(c)
@@ -82,8 +81,9 @@ obs_inds = assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq
 
 par_list = build_par_tasks(c, partitions, obs_info, obs_inds)
 
-if c.pid == 0:
+if c.pid == 0 and debug:
     np.save('obs_inds.npy', obs_inds)
+    np.save('partitions.npy', partitions)
     np.save('par_list.npy', par_list)
 
 obs_prior_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields_prior, z_fields)
@@ -112,8 +112,12 @@ c.comm.Barrier()
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
-np.save('lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
-np.save('lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+if debug:
+    np.save('state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
+    np.save('z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
+    np.save('lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
+    np.save('lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+exit()
 
 ##--------------------------
 ##4.Assimilate obs to update state variables

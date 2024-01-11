@@ -39,7 +39,7 @@ def progress_bar(task_id, ntask, width=33):
       The progress bar msg to be shown by message()
     """
     if ntask==0:
-        progress = 1.
+        progress = 1
     else:
         progress = (task_id+1) / ntask
 
@@ -50,5 +50,13 @@ def progress_bar(task_id, ntask, width=33):
     pstr += '{:.0f}%'.format(100*progress)
 
     return pstr
+
+
+def show_progress(comm, task_id, ntask, pid, nmsg=30):
+    ##only show at most nmsg messages
+    d = ntask/nmsg
+    if int((task_id-1)/d)<int(task_id/d) or d<1 or task_id+1==ntask:
+        message(comm, progress_bar(task_id, ntask), pid)
+        sys.stdout.flush()
 
 
