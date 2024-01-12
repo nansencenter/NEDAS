@@ -3,7 +3,6 @@ import sys
 import struct
 import importlib
 from datetime import datetime, timedelta
-from memory_profiler import profile
 import config as c
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from log import message, show_progress

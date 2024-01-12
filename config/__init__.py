@@ -25,12 +25,13 @@ nens = int(os.environ.get('nens'))
 ##DA scheme
 assim_mode = os.environ.get('assim_mode')
 assert assim_mode in ('batch', 'serial'), 'unknown assimilation mode: '+assim_mode
+filter_type = os.environ.get('filter_type')
+###check type if valid
+regress_type = os.environ.get('regress_type', 'linear')
 
 run_filter = os.environ.get('run_filter').lower()=='true'
 run_align_space = os.environ.get('run_align_space').lower()=='true'
 run_align_time = os.environ.get('run_align_time').lower()=='true'
-
-filter_type = os.environ.get('filter_type')
 
 ##multiscale
 nscale = int(os.environ.get('nscale'))
