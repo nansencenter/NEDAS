@@ -18,7 +18,7 @@ fi
 ###this works on Betzy
 if [[ $host == "betzy" ]]; then
     offset_node=$((offset_batch/$SLURM_NTASKS_PER_NODE))
-    srun -N $nnodes -n $ncpus -r $offset_node --exact $exe_command
+    srun -N $nnodes -n $ncpus -r $offset_node --exact --unbuffered $exe_command
 fi
 
 
