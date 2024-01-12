@@ -235,7 +235,7 @@ def ensemble_transform(ens_prior, weight):
     return ens_post
 
 
-def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_prior, lobs, lobs_prior):
+def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """
     serial assimilation goes through the list of observations one by one
     for each obs the near by state variables are updated one by one.
@@ -243,32 +243,97 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, state_
     """
     message(c.comm, 'assimilate in serial mode\n', c.pid_show)
 
+    ##x,y coordinates for local state variables on pid
+    ist,ied,di,jst,jed,dj = partitions[c.pid_mem]
+    ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
+    mask_chk = c.mask[jst:jed:dj, ist:ied:di]
+    x = c.grid.x[jst:jed:dj, ist:ied:di][~mask_chk]
+    y = c.grid.y[jst:jed:dj, ist:ied:di][~mask_chk]
+
     ##count number of obs for each obs_rec_id, find max number
     nobs = np.array([np.sum([len(ind) for ind in obs_inds[r].values()])
                      for r in obs_info['records'].keys()])
     nobs_max = np.max(nobs)
 
-    ##form the full obs sequence
+    ##form the full list of obs_ids to later go through
     obs_list = []
     for obs_rec_id in obs_info['records'].keys():
         for obs_id in range(nobs[obs_rec_id]):
-            obs_list.append((obs_rec_id, obs_id))
-    np.random.shuffle(obs_list)  ##randomize order
+            v_list = [0, 1] if obs_info['records'][obs_rec_id]['is_vector'] else [None]
+            for v in v_list:
+                obs_list.append((obs_rec_id, obs_id, v))
 
-    ##go through the entire obs list one at a time
+    ##randomize the order of obs (this is optional)
+    np.random.shuffle(obs_list)
+
+    ##go through the entire obs list, indexed by p, one obs (scalar) at a time
     for p in range(len(obs_list)):
-        obs_rec_id, obs_id = obs_list[p]
-        # keys = [(0, l), (1, l)] if obs_rec['is_vector'] else [l]
-        # ##if the pid owns this obs, compute obs_incr
-        # # if c.pid_mem
 
-        ##find index of state ij within obs roi
+        obs_rec_id, obs_id, v = obs_list[p]
+        obs_rec = obs_info['records'][obs_rec_id]
 
-        ##update locally stored state variables
+        ##figure out with pid owns the obs_id
+        pid_owner_obs = [p for p,lst in obs_inds[obs_rec_id].items() if obs_id in lst][0]
 
-        ##find obs within obs roi
+        ##1. if the pid owns this obs, compute obs_incr and broadcast
+        if c.pid_mem == pid_owner_obs:
+            ##local obs index in lobs seq
+            i = np.where(obs_inds[obs_rec_id][pid_owner_obs]==obs_id)[0]
 
-        ##update locally stored obs
+            ##collect obs info
+            obs = {}
+            obs['obs'] = lobs[obs_rec_id][pid_owner_obs]['obs'][v, i].item()
+            obs['x'] = lobs[obs_rec_id][pid_owner_obs]['x'][i].item()
+            obs['y'] = lobs[obs_rec_id][pid_owner_obs]['y'][i].item()
+            obs['err_std'] = lobs[obs_rec_id][pid_owner_obs]['err_std'][i].item()
+            obs_prior = np.array([lobs_prior[m, obs_rec_id][c.pid_mem][v, i].item() for m in range(c.nens)])
+
+            ##compute obs-space increment
+            obs_incr = obs_increment(obs_prior, obs['obs'], obs['err_std'], c.filter_type)
+
+        else:
+            obs = None
+            obs_prior = None
+            obs_incr = None
+        obs = c.comm_mem.bcast(obs, root=pid_owner_obs)
+        obs_prior = c.comm_mem.bcast(obs_prior, root=pid_owner_obs)
+        obs_incr = c.comm_mem.bcast(obs_incr, root=pid_owner_obs)
+
+        ##2. all pid update their own locally stored state/obs:
+        ##
+        ##distance between local state variable and the obs
+        hdist = np.hypot(x-obs['x'], y-obs['y'])
+        lfactor = local_factor(hdist, obs_rec['hroi'])
+
+        ##go through location within roi (lfactor>0)
+        for l in range(len(x)):
+            if lfactor[l] == 0:
+                continue
+
+            ##loop through each field rec_id on pid_rec
+            for rec_id in rec_list[c.pid_rec]:
+                rec = state_info['fields'][rec_id]
+
+                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
+                for key in keys:
+                    ##collect members from state_prior
+                    ens_prior = np.array([state_prior[m, rec_id][c.pid_mem][key] for m in range(c.nens)])
+
+                    ##compute the update
+                    ens_post = update_ensemble(ens_prior, obs_prior, obs_incr, lfactor[l], c.regress_type)
+
+                    ##save to the state_prior (iteratively updated by each obs, by the end becomes the posterior)
+                    for m in range(c.nens):
+                        state_prior[m, rec_id][c.pid_mem][key] = ens_post[m]
+
+        ##update locally stored obs, indexed by q
+        ##only need to update the unused obs
+        # for q in range(p+1, len(obs_list)):
+        #     l_obs_rec_id, l_obs_id, l_v = obs_list[q]
+        #     ##distance between local obs and the obs
+
+        #     if :
+        #         continue
 
         show_progress(c.comm, p, len(obs_list), c.pid_show)
 
@@ -293,7 +358,7 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
       The observation error standard deviation
 
     - filter_type: str
-      Type of filtering to apply: "EAKF", "RHF", etc.
+      Type of filtering to apply: "EAKF" (default), "RHF", etc.
 
     Return:
     - obs_incr: np.array[nens]
@@ -334,7 +399,7 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
 
 
 @njit
-def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_kind='linear'):
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     """
     Update the ensemble variable using the obs increments
 
@@ -369,7 +434,7 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_kind='
     obs_prior_mean = np.mean(obs_prior)
     obs_prior_pert = obs_prior - obs_prior_mean
 
-    if reg_kind == 'linear':
+    if regress_type == 'linear':
         ##linear regression relates the obs_prior with ens_prior
         obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
         cov = np.sum(ens_prior * obs_prior_pert) / (nens-1)
@@ -378,7 +443,7 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_kind='
         ##the updated posterior ensemble
         ens_post = ens_prior + local_factor * reg_factor * obs_incr
 
-    # elif reg_kind == 'probit':
+    # elif regress_type == 'probit':
     #     pass
 
 
