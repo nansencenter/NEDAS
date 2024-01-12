@@ -117,7 +117,6 @@ if debug:
     np.save('z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
     np.save('lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
     np.save('lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
-exit()
 
 ##--------------------------
 ##4.Assimilate obs to update state variables

@@ -50,7 +50,7 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 'profile_id':[], 'level_id':[] }
 
     ONEM = 9806.           ##press (Pa) for 1 m depth
-    NUM_OBS_PER_LAYER = None  ##for vertical superobing
+    NUM_OBS_PER_LAYER = 1  ##for vertical superobing
     TEMP_MIN = -2.         ##min,max of ocean_temp
     TEMP_MAX = 40.
     SALN_MIN = 16.         ##min,max of ocean_saln

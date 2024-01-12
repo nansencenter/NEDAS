@@ -52,11 +52,10 @@ def progress_bar(task_id, ntask, width=33):
     return pstr
 
 
-def show_progress(comm, task_id, ntask, pid, nmsg=30):
+def show_progress(comm, task_id, ntask, root=None, nmsg=30, width=33):
     ##only show at most nmsg messages
     d = ntask/nmsg
     if int((task_id-1)/d)<int(task_id/d) or d<1 or task_id+1==ntask:
-        message(comm, progress_bar(task_id, ntask), pid)
-        sys.stdout.flush()
+        message(comm, progress_bar(task_id, ntask, width), root)
 
 

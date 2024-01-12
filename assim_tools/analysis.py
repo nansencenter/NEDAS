@@ -1,7 +1,9 @@
 import numpy as np
 from numba import njit
+import config as c
 from log import message, show_progress
 from conversion import t2h, h2t
+from parallel import bcast_by_root
 
 def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """
@@ -250,23 +252,9 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
     x = c.grid.x[jst:jed:dj, ist:ied:di][~mask_chk]
     y = c.grid.y[jst:jed:dj, ist:ied:di][~mask_chk]
 
-    ##count number of obs for each obs_rec_id, find max number
-    nobs = np.array([np.sum([len(ind) for ind in obs_inds[r].values()])
-                     for r in obs_info['records'].keys()])
-    nobs_max = np.max(nobs)
+    obs_list = form_obs_list(obs_info, obs_inds)
 
-    ##form the full list of obs_ids to later go through
-    obs_list = []
-    for obs_rec_id in obs_info['records'].keys():
-        for obs_id in range(nobs[obs_rec_id]):
-            v_list = [0, 1] if obs_info['records'][obs_rec_id]['is_vector'] else [None]
-            for v in v_list:
-                obs_list.append((obs_rec_id, obs_id, v))
-
-    ##randomize the order of obs (this is optional)
-    np.random.shuffle(obs_list)
-
-    ##go through the entire obs list, indexed by p, one obs (scalar) at a time
+    ##go through the entire obs list, indexed by p, one scalar obs at a time
     for p in range(len(obs_list)):
 
         obs_rec_id, obs_id, v = obs_list[p]
@@ -291,40 +279,40 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
             ##compute obs-space increment
             obs_incr = obs_increment(obs_prior, obs['obs'], obs['err_std'], c.filter_type)
 
-        else:
-            obs = None
-            obs_prior = None
-            obs_incr = None
-        obs = c.comm_mem.bcast(obs, root=pid_owner_obs)
-        obs_prior = c.comm_mem.bcast(obs_prior, root=pid_owner_obs)
-        obs_incr = c.comm_mem.bcast(obs_incr, root=pid_owner_obs)
+        # else:
+        #     obs = None
+        #     obs_prior = None
+        #     obs_incr = None
+        # obs = c.comm_mem.bcast(obs, root=pid_owner_obs)
+        # obs_prior = c.comm_mem.bcast(obs_prior, root=pid_owner_obs)
+        # obs_incr = c.comm_mem.bcast(obs_incr, root=pid_owner_obs)
 
         ##2. all pid update their own locally stored state/obs:
         ##
         ##distance between local state variable and the obs
-        hdist = np.hypot(x-obs['x'], y-obs['y'])
-        lfactor = local_factor(hdist, obs_rec['hroi'])
+        # hdist = np.hypot(x-obs['x'], y-obs['y'])
+        # lfactor = local_factor(hdist, obs_rec['hroi'])
 
         ##go through location within roi (lfactor>0)
-        for l in range(len(x)):
-            if lfactor[l] == 0:
-                continue
+        # for l in range(len(x)):
+        #     if lfactor[l] == 0:
+        #         continue
 
-            ##loop through each field rec_id on pid_rec
-            for rec_id in rec_list[c.pid_rec]:
-                rec = state_info['fields'][rec_id]
+        #     ##loop through each field rec_id on pid_rec
+        #     for rec_id in rec_list[c.pid_rec]:
+        #         rec = state_info['fields'][rec_id]
 
-                keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
-                for key in keys:
-                    ##collect members from state_prior
-                    ens_prior = np.array([state_prior[m, rec_id][c.pid_mem][key] for m in range(c.nens)])
+        #         keys = [(0, l), (1, l)] if rec['is_vector'] else [l]
+        #         for key in keys:
+        #             ##collect members from state_prior
+        #             ens_prior = np.array([state_prior[m, rec_id][c.pid_mem][key] for m in range(c.nens)])
 
-                    ##compute the update
-                    ens_post = update_ensemble(ens_prior, obs_prior, obs_incr, lfactor[l], c.regress_type)
+        #             ##compute the update
+        #             ens_post = update_ensemble(ens_prior, obs_prior, obs_incr, lfactor[l], c.regress_type)
 
-                    ##save to the state_prior (iteratively updated by each obs, by the end becomes the posterior)
-                    for m in range(c.nens):
-                        state_prior[m, rec_id][c.pid_mem][key] = ens_post[m]
+        #             ##save to the state_prior (iteratively updated by each obs, by the end becomes the posterior)
+        #             for m in range(c.nens):
+        #                 state_prior[m, rec_id][c.pid_mem][key] = ens_post[m]
 
         ##update locally stored obs, indexed by q
         ##only need to update the unused obs
@@ -340,6 +328,26 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
     message(c.comm, ' done.\n', c.pid_show)
 
     return state_prior
+
+
+@bcast_by_root(c.comm)
+def form_obs_list(obs_info, obs_inds):
+    ##count number of obs for each obs_rec_id
+    nobs = np.array([np.sum([len(ind) for ind in obs_inds[r].values()])
+                     for r in obs_info['records'].keys()])
+
+    ##form the full list of obs_ids
+    obs_list = []
+    for obs_rec_id in obs_info['records'].keys():
+        for obs_id in range(nobs[obs_rec_id]):
+            v_list = [0, 1] if obs_info['records'][obs_rec_id]['is_vector'] else [None]
+            for v in v_list:
+                obs_list.append((obs_rec_id, obs_id, v))
+
+    ##randomize the order of obs (this is optional)
+    np.random.shuffle(obs_list)
+
+    return obs_list
 
 
 @njit
