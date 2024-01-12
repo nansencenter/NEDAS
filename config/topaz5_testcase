@@ -19,12 +19,13 @@ nproc=500
 nproc_mem=100
 
 #DA scheme
-assim_mode=batch ##batch or serial
+assim_mode=serial ##batch or serial
+filter_type=EAKF
+regress_type=linear
+
 run_filter=true  ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
-
-filter_type=ETKF
 
 ##number of scale components
 ##if > 1, use multiscale approach:
@@ -126,8 +127,8 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-ocean_temp   prep_obs.insitu  topaz.v5  normal  0.5  0  0  0  none  300000  100  inf  none
-ocean_saln   prep_obs.insitu  topaz.v5  normal  3.0  0  0  0  none  300000  100  inf  ocean_velocity=0.5,ocean_temp=0.8
+ocean_temp   prep_obs.insitu  topaz.v5  normal  0.5   0  0  0  none  300000  100  inf  none
+ocean_saln   prep_obs.insitu  topaz.v5  normal  0.02  0  0  0  none  300000  100  inf  ocean_velocity=0.5,ocean_temp=0.8
 EOF
 )
 
