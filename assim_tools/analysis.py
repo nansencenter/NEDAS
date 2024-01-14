@@ -479,24 +479,21 @@ def local_factor(dist, roi, localize_type='GC'):
 
     if localize_type == 'GC': ##Gaspari-Cohn function (default)
         r = dist / (roi / 2)
+
+        ind1 = np.where(r<1)
         loc1 = (((-0.25*r + 0.5)*r + 0.625)*r - 5.0/3.0) * r**2 + 1
-        ind1 = np.where(r<0.5)
         lfactor[ind1] = loc1[ind1]
-        r[np.where(r==0)] = 1e-10
+
+        ind2 = np.where(np.logical_and(r>=1, r<2))
+        r[np.where(r==0)] = 1e-10  ##avoid divide by 0
         loc2 = ((((r/12.0 - 0.5)*r + 0.625)*r + 5.0/3.0)*r - 5.0)*r + 4 - 2.0/(3.0*r)
-        ind2 = np.where(np.logical_and(r>=0.5, r<1))
         lfactor[ind2] = loc2[ind2]
 
     elif localize_type == 'step':  #step function from 1 to 0 at roi
-        r = dist / roi
-        ind1 = np.where(r<=1)
-        lfactor[ind1] = 1.0
-        ind2 = np.where(r>1)
-        lfactor[ind2] = 0.0
+        lfactor[np.where(dist<=roi)] = 1.0
 
     elif localize_type == 'exp':  ##exponential decay
-        r = dist / roi
-        lfactor = np.exp(-r)
+        lfactor = np.exp(-dist/roi)
 
     else:
         print('Error: unknown localization function type: '+localize_type)
