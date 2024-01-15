@@ -105,8 +105,6 @@ def pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior):
 ###functions for the batch assimilation mode:
 def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """batch assimilation solves the matrix version EnKF analysis for each local state, the local states in each partition are processed in parallel"""
-    message(c.comm, 'assimilate in batch mode\n', c.pid_show)
-
     ##pid with the most obs in its task list with show progress message
     obs_count = np.array([np.sum([len(obs_inds[r][p])
                                   for r in obs_info['records'].keys()
@@ -123,6 +121,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
             ntask += 1
 
     ##now the actual work starts, loop through partitions stored on pid_mem
+    message(c.comm, 'assimilate in batch mode:\n', c.pid_show)
     task = 0
     for par_id in par_list[c.pid_mem]:
 
@@ -145,6 +144,8 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
 
         ###TODO: obs_err_corr factored into obs_err
         obs_err = obs_data['err_std']
+
+        impact_on_state = 1
 
         ##loop through the unmasked grid points in the partition
         for l in range(nloc):
@@ -205,7 +206,11 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
             continue  ##the state is outside of troi of all obs, skip
 
         ##total lfactor
-        lfactor = h_lfactor * v_lfactor * t_lfactor * impact_on_state[n, :]
+        ###TODO: 1. v_lfactor seems to cause "failure to converge" error in svd?
+        ###      2. try sorting rec_list w.r.t. level k, so that on each pid mostly
+        ###         the update is done for the same level, hence reducing number of
+        ###         computation?
+        lfactor = h_lfactor #* v_lfactor * t_lfactor #* impact_on_state[n, :]
 
         ###TODO: topaz only keep the first 3000 obs with highest lfactor
         ###      create a legacy option here for backwards compatibility
@@ -332,7 +337,6 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
     for each obs the near by state variables are updated one by one.
     so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
     """
-    message(c.comm, 'assimilate in serial mode\n', c.pid_show)
 
     par_id = c.pid_mem
 
@@ -342,6 +346,8 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
     obs_data = pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior)
 
     obs_list = global_obs_list(obs_info, obs_inds)
+
+    message(c.comm, 'assimilate in serial mode:\n', c.pid_show)
 
     ##go through the entire obs list, indexed by p, one scalar obs at a time
     for p in range(len(obs_list)):
