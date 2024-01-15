@@ -386,6 +386,7 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
     nm = len(mem_list[c.pid_mem])
     for m, mem_id in enumerate(mem_list[c.pid_mem]):
         for r, obs_rec_id in enumerate(obs_rec_list[c.pid_rec]):
+            show_progress(c.comm, m*nr+r, nr*nm, c.pid_show)
 
             ##this is the obs record to process
             obs_rec = obs_info['records'][obs_rec_id]
@@ -395,8 +396,6 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
                                **obs_rec, **obs_seq[obs_rec_id])
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
-
-            show_progress(c.comm, m*nr+r, nr*nm, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -561,6 +560,8 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
         for m in range(nm_max):
 
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
+
             ##prepare the obs seq for sending if not at the end of mem_list
             if m < len(mem_list[c.pid_mem]):
                 mem_id = mem_list[c.pid_mem][m]
@@ -637,8 +638,6 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
                 else:
                     if mem_id == 0:
                         del input_obs[obs_rec_id]
-
-            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 

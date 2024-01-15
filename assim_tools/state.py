@@ -281,6 +281,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
 
     for m, mem_id in enumerate(mem_list[c.pid_mem]):
         for r, rec_id in enumerate(rec_list[c.pid_rec]):
+            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
 
             rec = state_info['fields'][rec_id]
 
@@ -335,8 +336,6 @@ def prepare_state(c, state_info, mem_list, rec_list):
             else:
                 z_coords[mem_id, rec_id] = z
 
-            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
-
     message(c.comm, ' done.\n', c.pid_show)
 
     ##clean up
@@ -367,6 +366,7 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
 
         for m in range(nm_max):
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
             ##prepare the fld for sending if not at the end of mem_list
             if m < len(mem_list[c.pid_mem]):
@@ -419,8 +419,6 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
             if m < len(mem_list[c.pid_mem]):
                 del fields[mem_id, rec_id]   ##free up memory
 
-            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
-
     message(c.comm, ' done.\n', c.pid_show)
 
     return state
@@ -447,6 +445,7 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
 
         for m in range(nm_max):
+            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
 
             ##prepare an empty fld for receiving if not at the end of mem_list
             if m < len(mem_list[c.pid_mem]):
@@ -494,8 +493,6 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
                     c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                     del state[dst_mem_id, rec_id]   ##free up memory
 
-            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
-
     message(c.comm, ' done.\n', c.pid_show)
 
     return fields
@@ -524,14 +521,13 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
 
     for m, mem_id in enumerate(mem_list[c.pid_mem]):
         for r, rec_id in enumerate(rec_list[c.pid_rec]):
+            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
 
             ##get the field record for output
             fld = fields[mem_id, rec_id]
 
             ##write the data to binary file
             write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
-
-            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -553,6 +549,7 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
     c.comm.Barrier()
 
     for r, rec_id in enumerate(rec_list[c.pid_rec]):
+        show_progress(c.comm, r, len(rec_list[c.pid_rec]), c.pid_show)
 
         ##initialize a zero field with right dimensions for rec_id
         if state_info['fields'][rec_id]['is_vector']:
@@ -570,8 +567,6 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
         if c.pid_mem == 0:
             mean_fld = sum_fld / c.nens
             write_field(mean_file, state_info, c.mask, 0, rec_id, mean_fld)
-
-        show_progress(c.comm, r, len(rec_list[c.pid_rec]), c.pid_show)
 
     message(c.comm, ' done.\n', c.pid_show)
 
