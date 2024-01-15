@@ -37,7 +37,7 @@ def pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_pri
             rec = state_info['fields'][rec_id]
             data['rec_id'][n] = rec_id
             data['t'][n] = t2h(rec['time'])
-            data['z'][m, n, :] = z_state[m, rec_id][par_id][v, :]
+            data['z'][m, n, :] = z_state[m, rec_id][par_id][v, :].astype(np.float32)
             data['state_prior'][m, n, :] = state_prior[m, rec_id][par_id][v, :]
 
     return data
@@ -88,7 +88,7 @@ def pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior):
             data['obs_rec_id'][i:i+d] = r
             data['x'][i:i+d] = lobs[r][par_id]['x']
             data['y'][i:i+d] = lobs[r][par_id]['y']
-            data['z'][i:i+d] = lobs[r][par_id]['z']
+            data['z'][i:i+d] = lobs[r][par_id]['z'].astype(np.float32)
             data['t'][i:i+d] = np.array([t2h(t) for t in lobs[r][par_id]['t']])
             data['err_std'][i:i+d] = lobs[r][par_id]['err_std']
             data['hroi'][i:i+d] = np.ones(d) * obs_info['records'][r]['hroi']
@@ -181,12 +181,10 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
     nens, nfld = state_prior.shape
 
     ##horizontal localization
-    h_dist = np.hypot(obs_x - state_x, obs_y - state_y).astype(np.float32)
+    h_dist = np.hypot(obs_x - state_x, obs_y - state_y)
     h_lfactor = local_factor(h_dist, hroi, localize_type)
-
-    ##if the state is outside of hroi of all local obs, skip
     if (h_lfactor==0).all():
-        return
+        return  ##if the state is outside of hroi of all local obs, skip
 
     lfactor_old = np.zeros(obs_x.size)
     weights_old = np.eye(nens)
@@ -195,21 +193,22 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
     for n in range(nfld):
 
         ##vertical localization
-        v_dist = np.abs(obs_z - np.mean(state_z[:, n])).astype(np.float32)
+        v_dist = np.abs(obs_z - np.mean(state_z[:, n]))
         v_lfactor = local_factor(v_dist, vroi, localize_type)
+        if (v_lfactor==0).all():
+            continue  ##the state is outside of vroi of all obs, skip
 
         ##temporal localization
-        t_dist = np.abs(obs_t - state_t[n]).astype(np.float32)
+        t_dist = np.abs(obs_t - state_t[n])
         t_lfactor = local_factor(t_dist, troi, localize_type)
+        if (t_lfactor==0).all():
+            continue  ##the state is outside of troi of all obs, skip
 
         ##total lfactor
         lfactor = h_lfactor * v_lfactor * t_lfactor * impact_on_state[n, :]
 
         ###TODO: topaz only keep the first 3000 obs with highest lfactor
-
-        ##if the state is outside of roi of all obs, skip
-        if (lfactor==0).all():
-            continue
+        ###      create a legacy option here for backwards compatibility
 
         if n>0 and (lfactor==lfactor_old).all():
             weights = weights_old
@@ -379,38 +378,16 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
         obs_incr = obs_increment(obs['prior'], obs['obs'], obs['err_std'], c.filter_type)
 
         ##2. all pid update their own locally stored state:
-        ##distance between local state variable and the obs
-        h_dist = np.hypot(state_data['x'] - obs['x'],
-                          state_data['y'] - obs['y']).astype(np.float32)
-        h_lfactor = local_factor(h_dist, obs['hroi'], c.localize_type)
-
-        v_dist = np.abs(np.mean(state_data['z'], axis=0) - obs['z']).astype(np.float32)
-        v_lfactor = local_factor(v_dist, obs['vroi'], c.localize_type)
-
-        t_dist = np.abs(state_data['t'] - obs['t']).astype(np.float32)
-        t_lfactor = local_factor(t_dist, obs['troi'], c.localize_type)
-
-        lfactor = np.tile(h_lfactor, (nfld,1))
-        lfactor *= v_lfactor
-        lfactor *= np.tile(t_lfactor, (nloc,1)).T
-
-        update_local_state(state_data['state_prior'], obs['prior'], obs_incr, lfactor, c.regress_type)
+        update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
+                           state_data['x'], state_data['y'], state_data['z'], state_data['t'],
+                           obs['x'], obs['y'], obs['z'], obs['t'],
+                           obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
 
         ##3. all pid update their own locally stored obs:
-        ##distance between local obs and the obs
-        h_dist = np.hypot(obs_data['x'] - obs['x'],
-                          obs_data['y'] - obs['y']).astype(np.float32)
-        h_lfactor = local_factor(h_dist, obs['hroi'], c.localize_type)
-
-        v_dist = np.abs(obs_data['z'] - obs['z']).astype(np.float32)
-        v_lfactor = local_factor(v_dist, obs['vroi'], c.localize_type)
-
-        t_dist = np.abs(obs_data['t'] - obs['t']).astype(np.float32)
-        t_lfactor = local_factor(t_dist, obs['troi'], c.localize_type)
-
-        lfactor = h_lfactor * v_lfactor * t_lfactor
-
-        update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr, lfactor, c.regress_type)
+        update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
+                         obs_data['x'], obs_data['y'], obs_data['z'], obs_data['t'],
+                         obs['x'], obs['y'], obs['z'], obs['t'],
+                         obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -497,24 +474,62 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
 
 
 @njit
-def update_local_state(ens_state, obs_prior, obs_incr, lfactor, regress_type):
-    nens, nrec, nloc = ens_state.shape
+def update_local_state(state_data, obs_prior, obs_incr,
+                       state_data_x, state_data_y, state_data_z, state_data_t,
+                       obs_x, obs_y, obs_z, obs_t,
+                       hroi, vroi, troi, localize_type, regress_type):
+
+    nens, nfld, nloc = state_data.shape
+
     for l in range(nloc):
-        for n in range(nrec):
-            if lfactor[n, l] == 0:
+        ##horizontal localization factor
+        h_dist = np.array(np.hypot(state_data_x[l] - obs_x, state_data_y[l] - obs_y))
+        h_lfactor = local_factor(h_dist, hroi, localize_type)
+        if h_lfactor == 0:
+            continue
+
+        for n in range(nfld):
+            ##temporal localization factor
+            t_dist = np.array(np.abs(state_data_t[n] - obs_t))
+            t_lfactor = local_factor(t_dist, troi, localize_type)
+            if t_lfactor == 0:
                 continue
-            ens_state[:, n, l] = update_ensemble(ens_state[:, n, l], obs_prior, obs_incr, lfactor[n, l], regress_type)
+
+            ##vertical localization factor
+            v_dist = np.array(np.abs(np.mean(state_data_z[:, n, l]) - obs_z))
+            v_lfactor = local_factor(v_dist, vroi, localize_type)
+            if v_lfactor == 0:
+                continue
+
+            lfactor = h_lfactor * v_lfactor * t_lfactor
+            state_data[:, n, l] = update_ensemble(state_data[:, n, l], obs_prior, obs_incr, lfactor, regress_type)
 
 
 @njit
-def update_local_obs(ens_obs, used, obs_prior, obs_incr, lfactor, regress_type):
-    nens, nlobs = ens_obs.shape
+def update_local_obs(obs_data, used, obs_prior, obs_incr,
+                     obs_data_x, obs_data_y, obs_data_z, obs_data_t,
+                     obs_x, obs_y, obs_z, obs_t,
+                     hroi, vroi, troi, localize_type, regress_type):
+    nens, nlobs = obs_data.shape
+
+    ##distance between local obs_data and the obs being assimilated
+    h_dist = np.hypot(obs_data_x - obs_x, obs_data_y - obs_y)
+    h_lfactor = local_factor(h_dist, hroi, localize_type)
+
+    # v_dist = np.abs(obs_data_z - obs_z)
+    # v_lfactor = local_factor(v_dist, vroi, localize_type)
+
+    # t_dist = np.abs(obs_data_t - obs_t)
+    # t_lfactor = local_factor(t_dist, troi, localize_type)
+
+    lfactor = h_lfactor #* v_lfactor * t_lfactor
+
     for i in range(nlobs):
         if used[i]:
             continue  ##only need to update the unused obs
         if lfactor[i] == 0:
             continue
-        ens_obs[:, i] = update_ensemble(ens_obs[:, i], obs_prior, obs_incr, lfactor[i], regress_type)
+        obs_data[:, i] = update_ensemble(obs_data[:, i], obs_prior, obs_incr, lfactor[i], regress_type)
 
 
 @njit
@@ -584,7 +599,7 @@ def local_factor(dist, roi, localize_type='GC'):
     - lfactor: np.array
       The localization factor, same shape as dist
     """
-    dist = np.atleast_1d(dist)
+
     shape = dist.shape
     dist = dist.flatten()
     lfactor = np.zeros(dist.shape)
