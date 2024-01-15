@@ -91,45 +91,6 @@ def parse_obs_info(c):
     return obs_info
 
 
-##write obs_info to a .dat file accompanying the obs_seq bin file
-def write_obs_info(binfile, info):
-    with open(binfile.replace('.bin','.dat'), 'wt') as f:
-        f.write('{} {}\n'.format(info['nobs'], info['nens']))
-        for rec in info['obs_seq'].values():
-            f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['source'], rec['model'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
-
-
-##read obs_info from the dat file
-def read_obs_info(binfile):
-    with open(binfile.replace('.bin','.dat'), 'r') as f:
-        lines = f.readlines()
-
-        ss = lines[0].split()
-        info = {'nobs':int(ss[0]), 'nens':int(ss[1]), 'obs_seq':{}}
-
-        ##following lines of obs records
-        obs_id = 0
-        for lin in lines[1:]:
-            ss = lin.split()
-            rec = {'name': ss[0],
-                   'source': ss[1],
-                   'model': ss[2],
-                   'dtype': ss[3],
-                   'is_vector': bool(int(ss[4])),
-                   'units': ss[5],
-                   'z_units':ss[6],
-                   'err_type': ss[7],
-                   'err': np.float32(ss[8]),
-                   'x': np.float32(ss[9]),
-                   'y': np.float32(ss[10]),
-                   'z': np.float32(ss[11]),
-                   'time': h2t(np.float32(ss[12])),
-                   'pos': int(ss[13]), }
-            info['obs_seq'][obs_id] = rec
-            obs_id += 1
-        return info
-
-
 def build_obs_tasks(c, obs_info):
     ##obs_rec_id list
     obs_rec_list_full = [i for i in obs_info['records'].keys()]
@@ -204,15 +165,9 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
         z = read_mean_z_coords(c, state_info, obs_rec['time'])
 
         if c.use_synthetic_obs:
-            ##generate synthetic obs network
-            seq = src.random_network(c.grid, c.mask, z)
-
-            ##get obs values from the truth file
-            truth_file = c.data_dir+'/truth/'+t2s(obs_rec['time'])+'/'+rec['model']
-            # obs_operator()
-
-            ##perturb with obs err
-            # obs_rec['obs'] += random_field(obs_rec['err'])
+            ##just generate synthetic obs network here, the actual obs values
+            ##will later be computed by a separate call to prepare_obs_from_state
+            seq = src.random_network(path, c.grid, c.mask, z)
 
         else:
             ##read dataset files and obtain obs sequence
@@ -649,6 +604,45 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
             output_obs[key] = data
 
     return output_obs
+
+
+##write obs_info to a .dat file accompanying the obs_seq bin file
+def write_obs_info(binfile, info):
+    with open(binfile.replace('.bin','.dat'), 'wt') as f:
+        f.write('{} {}\n'.format(info['nobs'], info['nens']))
+        for rec in info['obs_seq'].values():
+            f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['source'], rec['model'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
+
+
+##read obs_info from the dat file
+def read_obs_info(binfile):
+    with open(binfile.replace('.bin','.dat'), 'r') as f:
+        lines = f.readlines()
+
+        ss = lines[0].split()
+        info = {'nobs':int(ss[0]), 'nens':int(ss[1]), 'obs_seq':{}}
+
+        ##following lines of obs records
+        obs_id = 0
+        for lin in lines[1:]:
+            ss = lin.split()
+            rec = {'name': ss[0],
+                   'source': ss[1],
+                   'model': ss[2],
+                   'dtype': ss[3],
+                   'is_vector': bool(int(ss[4])),
+                   'units': ss[5],
+                   'z_units':ss[6],
+                   'err_type': ss[7],
+                   'err': np.float32(ss[8]),
+                   'x': np.float32(ss[9]),
+                   'y': np.float32(ss[10]),
+                   'z': np.float32(ss[11]),
+                   'time': h2t(np.float32(ss[12])),
+                   'pos': int(ss[13]), }
+            info['obs_seq'][obs_id] = rec
+            obs_id += 1
+        return info
 
 
 ##output an obs values to the binfile for a member (obs_prior), if member=None it is the actual obs

@@ -58,7 +58,6 @@ output_ens_mean(c, state_info, mem_list, rec_list, z_fields, z_file)
 ##mean_z_coords will read mem_id=0 anyway
 # output_state(c, state_info, mem_list, rec_list, z_fields, z_file)
 
-c.comm.Barrier()
 message(c.comm, 'Step 1 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
@@ -88,7 +87,6 @@ if c.pid == 0 and debug:
 
 obs_prior_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields_prior, z_fields)
 
-c.comm.Barrier()
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
@@ -108,7 +106,6 @@ lobs = transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_
 
 lobs_prior = transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_inds, obs_prior_seq, ensemble=True)
 
-c.comm.Barrier()
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
@@ -128,7 +125,6 @@ elif c.assim_mode == 'serial':
 
 state_post = assimilate(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior)
 
-c.comm.Barrier()
 message(c.comm, 'Step 4 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
@@ -144,7 +140,6 @@ output_state(c, state_info, mem_list, rec_list, fields_post, state_file)
 mean_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/post_mean_state.bin'
 output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
 
-c.comm.Barrier()
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
@@ -158,7 +153,6 @@ message(c.comm, '6.Post-processing\n', c.pid_show)
 # obs_post_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_list, obs_seq, fields_post, z_fields)
 # output_obs(c, obs_info, obs_post_seq)
 
-c.comm.Barrier()
 message(c.comm, 'Step 6 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 
 message(c.comm, 'Completed successfully. All took {} seconds\n'.format(time.time()-runtime0), c.pid_show)
