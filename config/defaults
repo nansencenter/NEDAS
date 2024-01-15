@@ -19,12 +19,13 @@ nproc=8
 nproc_mem=4
 
 #DA scheme
-assim_mode=batch ##batch or serial
+assim_mode=serial ##batch or serial
+filter_type=EAKF
+regress_type=linear
+
 run_filter=true  ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
-
-filter_type=ETKF
 
 ##number of scale components
 ##if > 1, use multiscale approach:
