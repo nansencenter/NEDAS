@@ -289,8 +289,8 @@ def prepare_state(c, state_info, mem_list, rec_list):
     - z_coords: dict[(mem_id, rec_id), zfld]
       where zfld is same shape as fld, it's he z coordinates corresponding to each field
     """
-
     message(c.comm, 'prepare state by reading fields from model restart\n', c.pid_show)
+
     fields = {}
     z_coords = {}
     grid_bank = {}
@@ -313,7 +313,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
 
-            ##only need to generate the uniq grid objs, stored them in memory bank
+            ##only need to generate the uniq grid objs, store them in memory bank
             member = mem_id if 'member' in src.uniq_grid_key else None
             var_name = rec['name'] if 'variable' in src.uniq_grid_key else None
             time = rec['time'] if 'time' in src.uniq_grid_key else None
@@ -325,7 +325,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
 
             else:
                 grid = src.read_grid(path, **rec)
-                grid.dst_grid = c.grid
+                grid.set_destination_grid(c.grid)
                 grid_bank[grid_key] = grid
 
             ##read field and save to dict
@@ -446,9 +446,6 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
                 if m < len(mem_list[src_pid]):
                     src_mem_id = mem_list[src_pid][m]
                     state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-
-            if m < len(mem_list[c.pid_mem]):
-                del fields[mem_id, rec_id]   ##free up memory
 
     message(c.comm, ' done.\n', c.pid_show)
 

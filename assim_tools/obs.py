@@ -477,7 +477,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     nobs = len(obs_x)
 
     obs_grid = Grid(c.grid.proj, obs_x, obs_y, regular=False)
-    c.grid.dst_grid = obs_grid
+    c.grid.set_destination_grid(obs_grid)
 
     if is_vector:
         seq = np.full((2, nobs), np.nan)
@@ -519,7 +519,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
 
                 if k == 0:  ##initialize grid obj for conversion
                     grid = model_src.read_grid(path, **kwargs)
-                    grid.dst_grid = c.grid
+                    grid.set_destination_grid(c.grid)
 
                 z_ = grid.convert(model_src.z_coords(path, grid, **kwargs))
                 z = np.array([z_, z_]) if is_vector else z_
@@ -718,14 +718,6 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
                     else:
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-
-            if m < len(mem_list[c.pid_mem]):
-                ##free up memory
-                if ensemble:
-                    del input_obs[mem_id, obs_rec_id]
-                else:
-                    if mem_id == 0:
-                        del input_obs[obs_rec_id]
 
     message(c.comm, ' done.\n', c.pid_show)
 
