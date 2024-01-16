@@ -196,6 +196,9 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
             ##compute obs values
             seq['obs'] = state_to_obs(c, state_info, None, None, member=None, **obs_rec, **seq)
 
+            ##perturb with obs err
+            seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec['err']['std']
+
         else:
             ##read dataset files and obtain obs sequence
             seq = src.read_obs(path, c.grid, c.mask, z, **obs_rec)
