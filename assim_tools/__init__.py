@@ -4,5 +4,5 @@ from .obs import parse_obs_info, build_obs_tasks, prepare_obs, partition_grid, a
 
 from .analysis import batch_assim, serial_assim, local_analysis, obs_increment, update_ensemble, local_factor
 
-from .update import add_increment, alignment
+from .update import update_restart
 

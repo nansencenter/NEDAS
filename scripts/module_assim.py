@@ -13,12 +13,6 @@ message(c.comm, len(pstr)*'.'+'\n'+pstr+'\n'+len(pstr)*'.'+'\n\n', c.pid_show)
 
 runtime0 = time.time()  ##start the timer
 
-##for each scale component, analysis is stored in a separate s_dir
-if c.nscale > 1:
-    c.s_dir = f'/scale_{c.scale+1}'
-else:
-    c.s_dir = ''
-
 ##parallel scheme setup
 assert c.nproc % c.nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
 c.pid_mem = c.pid % c.nproc_mem
@@ -147,7 +141,7 @@ runtime = time.time()
 ##6.Post-processing
 message(c.comm, '6.Post-processing\n', c.pid_show)
 
-## just copy output state to model restart files
+update_restart(c, state_info, mem_list, rec_list, fields_prior_save, fields_post)
 
 ##optional: output posterior obs for diag
 # obs_post_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_list, obs_seq, fields_post, z_fields)
