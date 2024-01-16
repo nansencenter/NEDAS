@@ -21,7 +21,7 @@ variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 
 def filename(path, **kwargs):
     """parse kwargs and find matching filename"""
     if 'member' in kwargs and kwargs['member'] is not None:
-        mstr = '_mem{:03d}'.format(kwargs['member'])
+        mstr = '_mem{:03d}'.format(kwargs['member']+1)
     else:
         mstr = ''
 
