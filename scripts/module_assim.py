@@ -141,7 +141,7 @@ runtime = time.time()
 ##6.Post-processing
 message(c.comm, '6.Post-processing\n', c.pid_show)
 
-update_restart(c, state_info, mem_list, rec_list, fields_prior_save, fields_post)
+update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
 
 ##optional: output posterior obs for diag
 # obs_post_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_list, obs_seq, fields_post, z_fields)

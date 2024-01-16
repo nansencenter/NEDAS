@@ -10,7 +10,7 @@ variables = {'velocity': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'uni
 
 def random_network(path, grid, mask, z, **kwargs):
     if kwargs['name'] == 'velocity':
-        nobs = 500  ##number of obs
+        nobs = 150  ##number of obs
         # obs_range = 180000  ##observed range from vortex center, m
 
         obs_seq = {'obs': np.full(nobs, np.nan),

@@ -4,7 +4,7 @@ import importlib
 import sys
 from datetime import datetime, timedelta
 from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from parallel import distribute_tasks
+from log import message, show_progress
 
 def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post):
     """
@@ -61,7 +61,7 @@ def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
 
             ##output the posterior variable back to restart files
             var_post = c.grid.convert(fld_post, is_vector=rec['is_vector'], method='linear')
-            src.write_var(path, grid, member=mem_id, **rec)
+            src.write_var(path, grid, var_post, member=mem_id, **rec)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -72,6 +72,7 @@ def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
 ##alignment technique
 def alignment():
     pass
+
 
 def warp():
     pass

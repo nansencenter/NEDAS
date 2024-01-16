@@ -52,10 +52,10 @@ inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
 time_start=200101010000    ##format ccyymmddHHMM
-time_end=200101011200
+time_end=200101030000
 time_assim_start=200101010300
-time_assim_end=200101011100
-cycle_period=1  ##in hours
+time_assim_end=200101022100
+cycle_period=3  ##in hours
 ##Assimilation (filter update, displacement, etc.) starts at time_assim_start
 ##`time` points to the current cycle time
 ##`next_time`/`prev_time` points to the next/previous cycle time
