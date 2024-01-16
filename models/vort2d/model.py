@@ -2,14 +2,34 @@ import numpy as np
 from perturb import random_field_powerlaw
 from fft_lib import fft2, ifft2, get_wn
 
-##initial condition for model: a rankine vortex embedded in a random wind flow
-def initialize(grid,
-               Vmax,        ##maximum wind speed, m/s
-               Rmw,         ##radius of maximum wind, m
-               Vbg,         ##background flow wind speed, m/s
-               Vslope,
-               loc_sprd=0,  ##the spread in center location, m
-               ):
+def initialize(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
+    """
+    Initialize the 2d vortex model
+    initial condition: a rankine vortex embedded in a random wind flow
+
+    Inputs:
+    - grid: Grid obj
+      The model domain, doubly periodic, described by a Grid obj
+
+    - Vmax: float
+      Maximum wind speed (vortex intensity), m/s
+
+    - Rmw: float
+      Radius of maximum wind (vortex size), m
+
+    - Vbg: float
+      Background flow average wind speed, m/s
+
+    - Vslope: int
+      Background flow kinetic energy spectrum power law (typically -2)
+
+    - loc_sprd: float, optional
+      The ensemble spread in vortex center position, m
+
+    Returns:
+    - vec_fld: np.array[2, :, :]
+      The vector velocity field, u- and v-component in first dimension.
+    """
 
     ##the vortex is randomly placed in the domain
     center_x = 0.5*(grid.xmin+grid.xmax) + np.random.normal(0, loc_sprd)
@@ -23,12 +43,27 @@ def initialize(grid,
     return vortex + bkg_flow
 
 
-##generate a rankine vortex velocity field
-def rankine_vortex(grid,    ##model grid obj
-                   Vmax,    ##maximum wind speed
-                   Rmw,     ##radius of max wind
-                   center_x, center_y,  ##vortex center coords x,y
-                  ):
+def rankine_vortex(grid, Vmax, Rmw, center_x, center_y):
+    """
+    Generate a Rankine vortex velocity field
+
+    Inputs:
+    - grid: Grid obj
+      The model domain, doubly periodic, described by a Grid obj
+
+    - Vmax: float
+      Maximum wind speed (vortex intensity), m/s
+
+    - Rmw: float
+      Radius of maximum wind (vortex size), m
+
+    - center_x, center_y: float
+      Vortex center coordinates x,y
+
+    Returns:
+    - vec_fld: np.array[2, :, :]
+      The vector velocity field
+    """
 
     ##radius from vortex center
     r = np.hypot(grid.x - center_x, grid.y - center_y)
@@ -48,11 +83,24 @@ def rankine_vortex(grid,    ##model grid obj
     return np.array([u, v])
 
 
-##random background flow wind field is given by
-def random_flow(grid,
-                amp,         ##wind speed amplitude
-                power_law,   ##wind field power spectrum slope: 0=white noise; -1=red noise
-                ):
+def random_flow(grid, amp, power_law):
+    """
+    Generate a random velocity field as the background flow
+
+    Inputs:
+    - grid: Grid obj
+      The model domain, doubly periodic, described by a Grid obj
+
+    - amp: float
+      wind speed amplitude, m/s
+
+    - power_law: int
+      wind kinetic energy spectrum power law (typically -2)
+
+    Returns:
+    - vec_fld: np.array[2, :, :]
+      The vector velocity field
+    """
     ny, nx = grid.x.shape
     fld = np.zeros((2, ny, nx))
     dx = grid.dx
@@ -73,6 +121,32 @@ def random_flow(grid,
 
 
 def advance_time(fld, dx, t_intv, dt, gen, diss):
+    """
+    Advance forward in time to integrate the model (forecasting)
+
+    Inputs:
+    - fld: np.array(2,ny,nx)
+      The prognostic velocity field
+
+    - dx: float
+      Model grid spacing, meter
+
+    - t_intv: float
+      Integration time period, hour
+
+    - dt: float
+      Model time step, second
+
+    - gen: float
+      Vorticity generation rate
+
+    - diss: float
+      Dissipation rate
+
+    Returns:
+    - fld: np.array(2,ny,nx)
+      The forecast velocity field
+    """
     ##input wind components, convert to spectral space
     uh = fft2(fld[0, :, :])
     vh = fft2(fld[1, :, :])
@@ -109,8 +183,8 @@ def advance_time(fld, dx, t_intv, dt, gen, diss):
     return np.array([u, v])
 
 
-##scaled wavenumber k for pseudospectral method
 def get_scaled_wn(x, dx):
+    """scaled wavenumber k for pseudospectral method"""
     n = x.shape[0]
     wni, wnj = get_wn(x)
     ki = (2.*np.pi) * wni / (n*dx)
@@ -119,6 +193,7 @@ def get_scaled_wn(x, dx):
 
 
 def forcing(u, v, zeta, dx, gen, diss):
+    """forcing terms on RHS of prognostic equations"""
     ki, kj = get_scaled_wn(zeta, dx)
     ug = ifft2(u)
     vg = ifft2(v)

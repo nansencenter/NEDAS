@@ -1,7 +1,7 @@
 ####All settings and their default values
 
 ##experiment name
-exp_name=vort2d
+exp_name=vort2d_testcase
 
 ##load HPC-specific settings, directory names, env, etc.
 . $HOME/code/NEDAS/config/env/localhost/base.src
@@ -15,14 +15,15 @@ work_dir=$SCRATCH/$exp_name
 nens=20
 
 ##parallel scheme
-nproc=8
+nproc=4
 nproc_mem=4
 
 #DA scheme
 assim_mode=batch ##batch or serial
-run_filter=true  ##if true, run filter/smoother update algorithms
 filter_type=ETKF
+regress_type=linear
 
+run_filter=true  ##if true, run filter/smoother update algorithms
 run_align_time=false
 run_align_space=false
 
@@ -51,9 +52,9 @@ inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
 time_start=200101010000    ##format ccyymmddHHMM
-time_end=200101070000
-time_assim_start=200101030000
-time_assim_end=200101060000
+time_end=200101011200
+time_assim_start=200101010300
+time_assim_end=200101011100
 cycle_period=1  ##in hours
 ##Assimilation (filter update, displacement, etc.) starts at time_assim_start
 ##`time` points to the current cycle time
@@ -102,7 +103,7 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
 obs_def=$(cat << EOF
-velocity    vort2d   vort2d  normal  0.1  0  0  0  none  200000  inf  inf  none
+velocity    vort2d   vort2d  normal  3.3  0  0  0  none  200000  10  10  none
 EOF
 )
 use_synthetic_obs=true
