@@ -18,15 +18,17 @@ from .param import *
 variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':np.array([0]), 'units':'m/s'}, }
 
 
-##parse kwargs and find matching filename
 def filename(path, **kwargs):
-    assert 'member' in kwargs, 'missing member in kwargs'
-    mstr = 'mem{:03d}'.format(kwargs['member'])
+    """parse kwargs and find matching filename"""
+    if 'member' in kwargs and kwargs['member'] is not None:
+        mstr = '_mem{:03d}'.format(kwargs['member'])
+    else:
+        mstr = ''
 
     assert 'time' in kwargs, 'missing time in kwargs'
     tstr = kwargs['time'].strftime('%Y%m%d_%H')
 
-    return path+'/'+tstr+'_'+mstr+'.nc'
+    return path+'/'+tstr+mstr+'.nc'
 
 
 from pyproj import Proj
@@ -70,12 +72,17 @@ def read_var(path, grid, **kwargs):
     assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
+    if 'is_vector' in kwargs:
+        is_vector = kwargs['is_vector']
+    else:
+        is_vector = variables[name]['is_vector']
+
     if is_vector:
-        var1 = nc_read_var(fname, variables[name]['name'][0])
-        var2 = nc_read-var(fname, variables[name]['name'][1])
+        var1 = nc_read_var(fname, variables[name]['name'][0])[0, ...]
+        var2 = nc_read_var(fname, variables[name]['name'][1])[0, ...]
         var = np.array([var1, var2])
     else:
-        var = nc_read_var(fname, variables[name]['name'])
+        var = nc_read_var(fname, variables[name]['name'])[0, ...]
 
     return var
 
@@ -92,9 +99,9 @@ def write_var(path, grid, var, **kwargs):
     assert 'is_vector' in kwargs, 'missing is_vector in kwargs'
     if kwargs['is_vector']:
         for i in range(2):
-            nc_write_var(fname, {'t':None, 'y':ny, 'x':nx}, variables[name]['name'][i], var[i,...], recno={'t':0})
+            nc_write_var(fname, {'t':None, 'y':grid.ny, 'x':grid.nx}, variables[name]['name'][i], var[i,...], recno={'t':0})
     else:
-        nc_write_var(fname, {'t':None, 'y':ny, 'x':nx}, var, variables[name]['name'], var, recno={'t':0})
+        nc_write_var(fname, {'t':None, 'y':grid.ny, 'x':grid.nx}, var, variables[name]['name'], var, recno={'t':0})
 
 
 ##for z coordinates, nothing to do here other than return all zeros

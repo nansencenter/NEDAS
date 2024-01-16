@@ -202,7 +202,7 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
 
         del z
 
-        message(c.comm_rec, 'number of '+obs_rec['name']+' obs from '+obs_rec['source']+': {}\n'.format(len(seq['obs'])), c.pid_rec)
+        message(c.comm_rec, 'number of '+obs_rec['name']+' obs from '+obs_rec['source']+': {}\n'.format(seq['obs'].shape[-1]), c.pid_rec)
 
         obs_seq[obs_rec_id] = seq
 

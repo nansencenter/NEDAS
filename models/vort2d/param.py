@@ -24,4 +24,8 @@ Rmw = 45000  ## radius of maximum wind (vortex size), m
 
 ##background flow
 Vbg = 5      ##background flow wind speed (std), m/s
+Vslope = -3  ##background flow kinetic energy spectrum power law
+
+##some parameters for experiment setup
+loc_sprd = 30000  ##initial spread in vortex position, m
 
