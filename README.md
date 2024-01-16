@@ -40,11 +40,11 @@ To let Python find NEDAS modules, you need to add the directory to the Python se
 
 `export PYTHONPATH=$PYTHONPATH:$CODE/NEDAS`
 
-The runtime parameters for NEDAS are handled by the `config` module, it reads system environment variables through `os.environ`. A full list of config parameters is provided by `config/defaults`. For your experiment, make a copy of the config file and change parameters accordingly. In NEDAS, `$CONFIG_FILE` points to the config file you will use. We recommend you keep a separate config file for each experiment.
+The runtime parameters for NEDAS are handled by the `config` module, it reads system environment variables through `os.environ`. A full list of config parameters is provided by `config/defaults`. For your experiment, make a copy of the config file and change parameters accordingly. In NEDAS, `$config_file` points to the config file you will use. We recommend you keep a separate config file for each experiment.
 
-Before sourcing the `$CONFIG_FILE`, you need to mark the variables for export to the environment of subsequent commands (in bash it is done by `set -a`), so that the Python subprocesses will have access to those config parameters:
+Before sourcing the `$config_file`, you need to mark the variables for export to the environment of subsequent commands (in bash it is done by `set -a`), so that the Python subprocesses will have access to those config parameters:
 
-`set -a; source $CONFIG_FILE; set +a`
+`set -a; source $config_file; set +a`
 
 Then, you can go to the `scripts` directory to run the top-level control scripts:
 
@@ -89,14 +89,14 @@ Results can then be found in the `$work_dir/$exp_name` directory.
 
 * **scripts/** contains top-level bash control scripts such as `run_cycle.sh`, `run_forecast.sh` for a cycling DA experiment. Some model-specific scripts are located in their own `models/<model>/` directories, including initialisation scripts, run scripts, and post-processing scripts.
 
-* **tutorials/** contains some Jupyter notebooks to illustrate how key functions work. Remember to enter your Python environment and `set -a; source $CONFIG_FILE`, before you start the notebook server. Note that all notebooks run in single processor mode.
+* **tutorials/** contains some Jupyter notebooks to illustrate how key functions work. Remember to enter your Python environment and `set -a; source $config_file`, before you start the notebook server. Note that all notebooks run in single processor mode.
 
 
 ## The DA Problem and Basic Design <a name='basic_design'></a>
 
 DA seeks to optimally combine information from model forecasts and observations to obtain the best estimate of state/parameters of a dynamical system, which is called the analysis. The challenges in solving the analysis for modern geophysical models are: 1) the large-dimensional model state and observations, and 2) the nonlinearity in model dynamics and in state-observation relation. 
 
-To address the first challenge, we employ distributed memory parallel computation strategy, since the entire ensemble state maybe too large to fit in the RAM of a single computer. And for the second challenge, we seek to test and compare new nonlinear DA methods (in the literature, or still in people's head) to try to tackle the problem.
+To address the first challenge, we employ distributed-memory parallel computation strategy, since the entire ensemble state maybe too large to fit in the RAM of a single computer. And for the second challenge, we seek to test and compare new nonlinear DA methods (in the literature, or still in people's head) to try to tackle the problem.
 
 A compromise is made in favor of code flexibility than its runtime efficiency. We aim for more modular design so that components in the DA algorithm can be easily changed/upgraded/compared. A pause-restart strategy is used: the model writes the state to restart files, then DA reads those files and computes the analysis and outputs to the updated files, and the model continues running. This is "offline" assimilation. In operational systems, sometimes we need "online" algorithms where everything is hold in the memory to avoid slow file I/O.  NEDAS provides parallel file I/O, not suitable for time-critical applications, but efficient enough for most research and development purposes.
 
@@ -110,7 +110,7 @@ In NEDAS, for each member the model state is further divided into "fields" with 
 
 For observations, it is easier to process the entire observing network at once, instead of going through the measurements one by one. Therefore, each observing network (record) is assigned a unique `obs_rec_id` to be handled by one processor.
 
-Each `pid_rec` only need to process its own list of `obs_rec_id`, `pid_mem` = 0 is responsible for reading and processing the actual observations using `read_obs` functions from dataset modules, while all `pid_mem` separately process their own members for the observation priors.
+Each `pid_rec` only need to process its own list of `obs_rec_id`. Processors with `pid_mem` = 0 is responsible for reading and processing the actual observations using `read_obs` functions from dataset modules, while all `pid_mem` separately process their own members for the observation priors.
 
 As shown in Fig. 2, a transpose among different `pid_mem` brings the observations **obs** from field-complete to ensemble-complete, an additional transpose among different `pid_rec` gathers all `obs_rec_id` for each `rec_id` to form the final local observation **lobs**.
 

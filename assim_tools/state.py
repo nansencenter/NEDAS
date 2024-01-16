@@ -249,6 +249,19 @@ def read_field(binfile, info, mask, mem_id, rec_id):
 
 
 def build_state_tasks(c, state_info):
+    """
+    Distribute mem_id and rec_id across processors
+
+    Inputs:
+    - c: config module
+
+    - state_info from parse_state_info()
+
+    Returns:
+    - mem_list: dict[pid_mem, list[mem_id]]
+
+    - rec_list: dict[pid_rec, list[rec_id]]
+    """
     ##list of mem_id as tasks
     mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
 
@@ -265,7 +278,16 @@ def prepare_state(c, state_info, mem_list, rec_list):
     Collects fields from model restart files, convert them to the analysis grid,
     preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
 
-    Inputs: c, state_info, mem_list, rec_list
+    Inputs:
+    - c: config module
+    - state_info: from parse_state_info()
+    - mem_list, rec_list: from build_state_tasks()
+
+    Returns:
+    - fields: dict[(mem_id, rec_id), fld]
+      where fld is np.array defined on c.grid, it's one of the state variable field
+    - z_coords: dict[(mem_id, rec_id), zfld]
+      where zfld is same shape as fld, it's he z coordinates corresponding to each field
     """
 
     message(c.comm, 'prepare state by reading fields from model restart\n', c.pid_show)
@@ -350,10 +372,19 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
     so that the field-complete fields get transposed into ensemble-complete state
     with keys (mem_id, rec_id) pointing to the partition in par_list
 
-    Inputs: c, state_info, mem_list, rec_list, partitions, par_list, fields
-    fields is the locally stored field-complete fields with subset of mem_id,rec_id
+    Inputs:
+    - c: config module
+    - state_info: from parse_state_info()
+    - mem_list, rec_list: from build_state_tasks()
+    - partitions: from partition_grid()
+    - par_list: from build_par_tasks()
 
-    Returns: state dict with ensemble-complete field chunks.
+    - fields: dict[(mem_id, rec_id), fld]
+      The locally stored field-complete fields with subset of mem_id,rec_id
+
+    Returns:
+    - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
+      The locally stored ensemble-complete field chunks on partitions.
     """
 
     message(c.comm, 'transpose field to state\n', c.pid_show)
@@ -426,12 +457,21 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
 
 def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state):
     """
-    ##transpose_state_to_field transposes back the state to field-complete fields
+    transpose_state_to_field transposes back the state to field-complete fields
 
-    Inputs: c, state_info, mem_list, rec_list, partitions, par_list, state
-    state is the locally stored ensemble-complete field chunks for subset of par_id
+    Inputs:
+    - c: config module
+    - state_info: from parse_state_info()
+    - mem_list, rec_list: from build_state_tasks()
+    - partitions: from partition_grid()
+    - par_list: from build_par_tasks()
 
-    Returns: fields dict with field-complete fields for subset of mem_id,rec_id.
+    - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
+      the locally stored ensemble-complete field chunks for subset of par_id
+
+    Returns:
+    - fields: dict[(mem_id, rec_id), fld]
+      the locally stored field-complete fields for subset of mem_id,rec_id.
     """
 
     message(c.comm, 'transpose state to field\n', c.pid_show)
@@ -502,9 +542,16 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
     """
     Parallel output the fields to the binary state_file
 
-    Inputs: c, state_info, mem_list, rec_list, fields, state_file
-    fields is the locally stored field-complete fields on each pid
-    state_file is the path to the output binary file.
+    Inputs:
+    - c: config module
+    - state_info: from parse_state_info()
+    - mem_list, rec_list: from build_state_tasks()
+
+    - fields: dict[(mem_id, rec_id), fld]
+      the locally stored field-complete fields for output
+
+    - state_file: str
+      path to the output binary file
     """
 
     message(c.comm, 'save state to '+state_file+'\n', c.pid_show)
@@ -537,9 +584,16 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
     Compute ensemble mean of a field stored distributively on all pid_mem
     collect means on pid_mem=0, and output to mean_file
 
-    Inputs: c, state_info, mem_list, rec_list, fields, mean_file
-    fields is the locally stored field-complete fields on each pid
-    mean_file is the path to the output binary file.
+    Inputs:
+    - c: config module
+    - state_info: from parse_state_info()
+    - mem_list, rec_list: from build_state_tasks()
+
+    - fields, dict[(mem_id, rec_id), fld]
+      the locally stored field-complete fields for output
+
+    - mean_file: str
+      path to the output binary file for the ensemble mean
     """
 
     message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', c.pid_show)
