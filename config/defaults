@@ -123,7 +123,7 @@ EOF
 ##      horizontal localization distance, in meters
 ##      vertical localization distance, in meters
 ##      time localization distance, in hours
-##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
+##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
 ocean_temp   prep_obs.insitu  topaz.v5  normal  0.1  0  0  0  none  200000  inf  inf  none
 ocean_saln   prep_obs.insitu  topaz.v5  normal  0.6  0  0  0  none  200000  inf  inf  ocean_velocity=0,ocean_temp=0.5

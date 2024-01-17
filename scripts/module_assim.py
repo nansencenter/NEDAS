@@ -11,6 +11,9 @@ debug = False
 pstr = '. module_assim .'
 message(c.comm, len(pstr)*'.'+'\n'+pstr+'\n'+len(pstr)*'.'+'\n\n', c.pid_show)
 
+assim_dir = c.work_dir+'/cycle/'+c.time+'/analysis/'+c.s_dir
+message(c.comm, 'Run assimilation in '+assim_dir, c.pid_show)
+
 runtime0 = time.time()  ##start the timer
 
 ##parallel scheme setup
@@ -40,13 +43,13 @@ mem_list, rec_list = build_state_tasks(c, state_info)
 
 fields_prior, z_fields = prepare_state(c, state_info, mem_list, rec_list)
 
-state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_state.bin'
+state_file = assim_dir+'/prior_state.bin'
 output_state(c, state_info, mem_list, rec_list, fields_prior, state_file)
-mean_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/prior_mean_state.bin'
+mean_file = assim_dir+'/prior_mean_state.bin'
 output_ens_mean(c, state_info, mem_list, rec_list, fields_prior, mean_file)
 
 message(c.comm, 'collect model z coordinates, ', c.pid_show)
-z_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/z_coords.bin'
+z_file = assim_dir+'/z_coords.bin'
 output_ens_mean(c, state_info, mem_list, rec_list, z_fields, z_file)
 ##topaz5 use the first member as mean z coords, so output the full z ens
 ##mean_z_coords will read mem_id=0 anyway
@@ -129,9 +132,9 @@ message(c.comm, '5.Transpose state from ensemble-complete to field-complete\n', 
 message(c.comm, 'state variable fields: ', c.pid_show)
 fields_post = transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state_post)
 
-state_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/post_state.bin'
+state_file = assim_dir+'/post_state.bin'
 output_state(c, state_info, mem_list, rec_list, fields_post, state_file)
-mean_file = c.work_dir+'/analysis/'+c.time+c.s_dir+'/post_mean_state.bin'
+mean_file = assim_dir+'/post_mean_state.bin'
 output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
 
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)

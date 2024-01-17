@@ -124,7 +124,7 @@ def read_mean_z_coords(c, state_info, time):
       z coordinate fields for all unique level k defined in state_info
     """
     ##first, get a list of indices k
-    z_file = c.work_dir+'/analysis/'+t2s(time)+c.s_dir+'/z_coords.bin'
+    z_file = c.work_dir+'/cycle/'+t2s(time)+'/analysis/'+c.s_dir+'/z_coords.bin'
     k_list = list(set([r['k'] for i,r in state_info['fields'].items() if r['time']==time]))
 
     ##get z coords for each level
@@ -510,7 +510,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                     fld = kwargs['model_fld'][mem_id, rec_id]
 
                 else:  ##option 1.2: read field from state binfile
-                    path = c.work_dir+'/analysis/'+t2s(time)+c.s_dir
+                    path = c.work_dir+'/cycle/'+t2s(time)+'/analysis/'+c.s_dir
                     z = read_field(path+'/z_coords.bin', state_info, c.mask, 0, rec_id)
                     fld = read_field(path+'/prior_state.bin', state_info, c.mask, mem_id, rec_id)
 
@@ -518,7 +518,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                 if synthetic:
                     path = c.work_dir+'/truth/'+t2s(time)+'/'+kwargs['model']
                 else:
-                    path = c.work_dir+'/forecast/'+t2s(time)+'/'+kwargs['model']
+                    path = c.work_dir+'/cycle/'+t2s(time)+'/'+kwargs['model']
 
                 if k == 0:  ##initialize grid obj for conversion
                     grid = model_src.read_grid(path, **kwargs)
@@ -589,7 +589,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
         if synthetic:
             path = c.work_dir+'/truth/'+t2s(time)+'/'+obs_rec['model']
         else:
-            path = c.work_dir+'/forecast/'+t2s(time)+'/'+obs_rec['model']
+            path = c.work_dir+'/cycle/'+t2s(time)+'/'+obs_rec['model']
 
         operator = obs_src.obs_operator[kwargs['model']]
         assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['source']+'.obs_operator for '+kwargs['model']

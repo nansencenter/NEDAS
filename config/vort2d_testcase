@@ -101,7 +101,7 @@ EOF
 ##      horizontal localization distance, in meters
 ##      vertical localization distance, in meters
 ##      time localization distance, in hours
-##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables have default impact of 1.
+##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
 velocity    vort2d   vort2d  normal  3.3  0  0  0  none  200000  10  10  none
 EOF

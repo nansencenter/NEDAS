@@ -34,7 +34,7 @@ def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
             rec = state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = c.work_dir+'/forecast/'+c.time+'/'+rec['source']
+            path = c.work_dir+'/cycle/'+c.time+'/'+rec['source']
 
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
