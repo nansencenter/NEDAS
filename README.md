@@ -217,7 +217,7 @@ and planned developement for:
 
 ### Acknowledgements <a name='acknowledgements'></a>
 
-NEDAS was initiated by [Yue Ying](https://myying.github.io/) in 2022. Please cite this repository if you used NEDAS to produce results in your research publication/presentation.
+NEDAS was initiated by [Yue Ying](https://myying.github.io/) in 2022. Please cite this repository [![DOI](https://zenodo.org/badge/485034698.svg)](https://zenodo.org/doi/10.5281/zenodo.10525330) if you used NEDAS to produce results in your research publication/presentation.
 
 The developement of this software was supported by the NERSC internal funding in 2022; and the Scale-Aware Sea Ice Project ([SASIP](https://sasip-climate.github.io/)) in 2023.
 
