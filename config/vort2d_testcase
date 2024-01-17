@@ -23,7 +23,7 @@ assim_mode=batch ##batch or serial
 filter_type=ETKF
 regress_type=linear
 
-run_filter=true  ##if true, run filter/smoother update algorithms
+run_assim=true  ##if true, run filter/smoother update algorithms
 run_align_time=false
 run_align_space=false
 
@@ -111,4 +111,5 @@ use_synthetic_obs=true
 ##ensemble perturbation settings
 perturb_variables="velocity"
 
+debug=false
 

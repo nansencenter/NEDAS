@@ -6,8 +6,6 @@ from log import message
 from parallel import distribute_tasks
 from assim_tools import *
 
-debug = False
-
 pstr = '. module_assim .'
 message(c.comm, len(pstr)*'.'+'\n'+pstr+'\n'+len(pstr)*'.'+'\n\n', c.pid_show)
 
@@ -68,7 +66,7 @@ obs_rec_list = build_obs_tasks(c, obs_info)
 
 obs_seq = prepare_obs(c, state_info, obs_info, obs_rec_list)
 
-if c.pid_mem == 0 and debug:
+if c.pid_mem == 0 and c.debug:
     np.save('obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
 
 partitions = partition_grid(c)
@@ -77,7 +75,7 @@ obs_inds = assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq
 
 par_list = build_par_tasks(c, partitions, obs_info, obs_inds)
 
-if c.pid == 0 and debug:
+if c.pid == 0 and c.debug:
     np.save('obs_inds.npy', obs_inds)
     np.save('partitions.npy', partitions)
     np.save('par_list.npy', par_list)
@@ -106,7 +104,7 @@ lobs_prior = transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list
 message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
 
-if debug:
+if c.debug:
     np.save('state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
     np.save('z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
     np.save('lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)

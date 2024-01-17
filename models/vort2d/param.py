@@ -15,7 +15,7 @@ dt = 60
 restart_dt = 1
 
 ##model phys param
-gen = 5e-5    ##vorticity generation rate
+gen = 2e-5    ##vorticity generation rate
 diss = 3e3    ##dissipation rate
 
 ### vortex parameters
