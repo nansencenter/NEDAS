@@ -9,6 +9,7 @@ function advance_time {
 }
 export -f advance_time
 
+
 function diff_time {
   date1=$1
   date2=$2
@@ -44,6 +45,18 @@ function diff_time {
 }
 export -f diff_time
 
+
+function format_time_string {
+  ccyy=`echo $1 |cut -c1-4`
+  mm=`echo $1 |cut -c5-6`
+  dd=`echo $1 |cut -c7-8`
+  hh=`echo $1 |cut -c9-10`
+  ii=`echo $1 |cut -c11-12`
+  echo ${ccyy}-${mm}-${dd}_${hh}:${ii}:00
+}
+export -f format_time_string
+
+
 function wait_for_module {
   for module in $*; do
     until [ -f $module/stat ]; do sleep 10; done
@@ -56,6 +69,7 @@ function wait_for_module {
   done
 }
 export -f wait_for_module
+
 
 function watch_log {
   logfile=$1
@@ -83,6 +97,7 @@ function watch_log {
 }
 export -f watch_log
 
+
 function watch_file {
   filename=$1
   timeout=$2
@@ -99,6 +114,7 @@ function watch_file {
   done
 }
 export -f watch_file
+
 
 function padzero {
   str=$1

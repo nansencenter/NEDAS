@@ -38,7 +38,7 @@ nscale = int(os.environ.get('nscale'))
 scale = int(os.environ.get('scale', '0'))  ##if not defined, use the first index
 ##for each scale component, analysis is stored in a separate s_dir
 if nscale > 1:
-    s_dir = f'/scale_{scale+1}'
+    s_dir = f'scale_{scale+1}'
 else:
     s_dir = ''
 
