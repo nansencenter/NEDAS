@@ -92,7 +92,7 @@ function watch_log {
     t=0
     until [ -s $logfile ]; do sleep 10 ; done
     until [[ `tail -n5 $logfile |grep $keyword` ]]; do
-        sleep 1m
+        sleep 60
         l1=`cat $logfile |wc -l`
         if [ $l1 -eq $l ]; then
             t=$((t+1))
@@ -116,7 +116,7 @@ function watch_file {
     rundir=$3
     t=0
     until [ -f $filename ]; do
-        sleep 1m
+        sleep 60
         t=$((t+1))
         if [ $t -gt $timeout ]; then
             echo Timeout waiting for $filename. Abort.
@@ -134,3 +134,13 @@ function padzero {
     expr $1 + $((10**$len)) |cut -c2-
 }
 export -f padzero
+
+
+# Function to clean up and terminate all child processes
+function cleanup {
+    echo "cleaning up and terminating..."
+    pkill -P $$
+    exit
+}
+export -f cleanup
+

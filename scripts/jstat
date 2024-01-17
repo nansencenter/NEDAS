@@ -1,0 +1,51 @@
+#!/bin/bash
+. $NEDAS/scripts/util.sh
+work_dir=$1
+
+rundir=$work_dir/cycle
+if [ ! -d $rundir ]; then echo "$rundir doesn't exist"; exit; fi
+
+t_list=`ls $rundir |grep -E '^[0-9]{12}$'`
+for t in $t_list; do
+  echo "==== `format_time_string $t` ===="
+
+for module in icbc perturb analysis vort2d ; do
+  if [ -f $rundir/$t/$module/stat ]; then
+     stat=`cat $rundir/$t/$module/stat`
+     printf "%12s" "$module"
+     case $stat in
+         waiting) echo -e "\033[7;33mwaiting\033[0m" ;;
+         running) echo -e "\033[7;32mrunning\033[0m" ;;
+         complete) echo -e "\033[7mcomplete\033[0m" ;;
+         error) echo -e "\033[7;31merror\033[0m" ;;
+     esac
+     if [[ $stat == "running" ]]; then
+       case $module in
+         icbc)
+           tail -n2 $rundir/$t/$module/icbc.log
+           ;;
+         perturb)
+           tail -n2 $rundir/$t/$module/perturb.log
+           ;;
+         analysis)
+           tail -n2 $rundir/$t/$module/assim.log
+           ;;
+         vort2d | topaz.v? | nextsim.v? | wrf)
+           for mem in `/bin/ls $rundir/$t/$module |grep -E '^[0-9]{3}$'`; do
+             if [[ -f $rundir/$t/$module/$mem/run.log ]]; then
+               logtail=`tail -n1 $rundir/$t/$module/$mem/run.log`
+             fi
+             if [[ -z $logtail ]]; then mstat="\033[0;31mwaiting\033[0m"; fi
+             if [[ $logtail ]]; then mstat="\033[0;32mrunning\033[0m: $logtail"; fi
+             if [[ `echo $logtail |grep successfully` ]]; then mstat=complete; fi
+             echo -e "$mem ($mstat)"
+           done
+           ;;
+       esac
+     fi
+  fi
+  done
+  echo ""
+done
+
+date

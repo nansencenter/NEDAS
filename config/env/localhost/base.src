@@ -1,6 +1,9 @@
 #!/bin/bash
 
 host=localhost
-hostppn=4
+
+nnodes=1
+ntasks=4
+tasks_per_node=4
 
 SCRATCH=/Users/yueng/scratch

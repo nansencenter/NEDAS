@@ -29,7 +29,7 @@ filter_type = os.environ.get('filter_type')
 ###check type if valid
 regress_type = os.environ.get('regress_type', 'linear')
 
-run_filter = os.environ.get('run_filter').lower()=='true'
+run_assim = os.environ.get('run_assim').lower()=='true'
 run_align_space = os.environ.get('run_align_space').lower()=='true'
 run_align_time = os.environ.get('run_align_time').lower()=='true'
 
@@ -220,4 +220,6 @@ comm_mem = comm.Split(pid_rec, pid_mem)
 comm_rec = comm.Split(pid_mem, pid_rec)
 
 pid_show = 0  ##which pid is showing progress messages, default to root=0
+
+debug = os.environ.get('debug').lower()=='true'
 
