@@ -71,7 +71,7 @@ Results can then be found in the `$work_dir/$exp_name` directory.
 
 * **parallel.py** handles communication among MPI processes using `mpi4py`, and **log.py** provides functions to show runtime messages and progresses.
 
-* **conversion.py** contains some unitily functions for unit and format conversion.
+* **conversion.py** contains some utility functions for unit and format conversion.
 
 * **assim\_tools/** contains the functions handling model state variables in `state.py`, functions handling observations in `obs.py`, core DA algorithms in `analysis.py`, and post-processing functions in `update.py`.
 
@@ -87,7 +87,7 @@ Results can then be found in the `$work_dir/$exp_name` directory.
 
 * **config/** contains bash environment source files and configuration files, in Python program `import config as c` will load the configuration in `c` which will then be passed into functions.
 
-* **scripts/** contains top-level bash control scripts such as `run_cycle.sh`, `run_forecast.sh` for a cycling DA experiment. Some model-specific scripts are located in their own `models/<model>/` directories, including initialisation scripts, run scripts, and post-processing scripts.
+* **scripts/** contains top-level bash control scripts such as `run_cycle.sh` for a cycling DA experiment. Some model-specific scripts are located in their own `models/<model>/` directories, including initialisation scripts, `run_forecast.sh`, and post-processing scripts.
 
 * **tutorials/** contains some Jupyter notebooks to illustrate how key functions work. Remember to enter your Python environment and `set -a; source $config_file`, before you start the notebook server. Note that all notebooks run in single processor mode.
 
@@ -221,6 +221,6 @@ NEDAS was initiated by [Yue Ying](https://myying.github.io/) in 2022. Please cit
 
 The developement of this software was supported by the NERSC internal funding in 2022; and the Scale-Aware Sea Ice Project ([SASIP](https://sasip-climate.github.io/)) in 2023.
 
-During the development, we received with contribution from: Anton Korosov, Timothy Williams (pynextsim libraries), NERSC-HYCOM-CICE group led by Annette Samuelsen (pythonlib for abfile, confmap, etc.), Jiping Xie (enkf-topaz), Tsuyoshi Wakamatsu (BIORAN), Francois Counillon, Yiguo Wang, Tarkeshwar Singh (EnOI, EnKF, and offline EnKS in NorCPM).
+With contribution from: Anton Korosov, Timothy Williams (pynextsim libraries), NERSC-HYCOM-CICE group led by Annette Samuelsen (pythonlib for abfile, confmap, etc.), Jiping Xie (enkf-topaz), Tsuyoshi Wakamatsu (BIORAN), Francois Counillon, Yiguo Wang, Tarkeshwar Singh (EnOI, EnKF, and offline EnKS in NorCPM).
 
 We provide the software "as is", the user is responsible for their own modification and ultimate interpretation of their research findings using the software. We welcome community feedback and contribution to support new models/observations, please use the "pull request" if you want to be part of the development effort.
