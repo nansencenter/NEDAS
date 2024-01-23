@@ -89,6 +89,10 @@ class Grid(object):
         self.pole_index = pole_index
         self.neighbors = neighbors
 
+        if self.neighbors is not None and self.cyclic_dim is not None:
+            print('neighbors already implemented, discarding cyclic_dim')
+            self.cyclic_dim = None
+
         ##internally we use -180:180 convention for longitude
         if self.proj_name == 'longlat':
             self.x = np.mod(self.x + 180., 360.) - 180.
@@ -405,6 +409,13 @@ class Grid(object):
                         if yi_[0]+self.Ly not in yi_:
                             yi_ = np.hstack((yi_, yi_[0] + self.Ly))
                             j_ = np.hstack((j_, j_[0]))
+
+            ##if neighbors indices are provided, the search range is extended by 1 grid point
+            if self.neighbors is not None:
+                xi_ = np.hstack((xi_, xi_[-1] + self.dx))
+                i_ = np.hstack((i_, i_[-1] + 1))
+                yi_ = np.hstack((yi_, yi_[-1] + self.dy))
+                j_ = np.hstack((j_, j_[-1] + 1))
 
             ##now find the index near the given x_,y_ coordinates
             i = np.array(np.searchsorted(xi_, x_, side='right'))
