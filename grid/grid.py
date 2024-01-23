@@ -29,7 +29,7 @@ class Grid(object):
     """
 
     def __init__(self, proj, x, y, regular=True, cyclic_dim=None, pole_dim=None,
-                 pole_index=None, triangles=None, dst_grid=None):
+                 pole_index=None, triangles=None, neighbors=None, dst_grid=None):
         """
         Initialize a Grid object.
 
@@ -54,6 +54,10 @@ class Grid(object):
 
         - triangles: np.array, optional
           Triangle indices for an unstructured mesh.
+
+        - neighbors: np.array[2, 4, field.shape], optional
+          Neighbor indices to handle special grid geometry
+          first dim: j and i component; second dim: east, north, west, south
 
         - dst_grid: Grid, optional
           Grid object to convert a field towards.
@@ -83,6 +87,7 @@ class Grid(object):
         self.cyclic_dim = cyclic_dim
         self.pole_dim = pole_dim
         self.pole_index = pole_index
+        self.neighbors = neighbors
 
         ##internally we use -180:180 convention for longitude
         if self.proj_name == 'longlat':
@@ -374,8 +379,6 @@ class Grid(object):
         if self.regular:
             xi = self.x[0, :]
             yi = self.y[:, 0]
-            idx = np.arange(self.nx)
-            idy = np.arange(self.ny)
 
             ##lon: pyproj.Proj works only for lon=-180:180
             if self.proj_name == 'longlat':
@@ -386,10 +389,10 @@ class Grid(object):
             x_, y_ = self.wrap_cyclic_xy(x_, y_)
 
             ##sort the index to monoticially increasing
-            idx_ = np.argsort(xi)
-            xi_ = xi[idx_]
-            idy_ = np.argsort(yi)
-            yi_ = yi[idy_]
+            i_ = np.argsort(xi)
+            xi_ = xi[i_]
+            j_ = np.argsort(yi)
+            yi_ = yi[j_]
 
             ##pad cyclic dimensions with additional row for the wrap-around point
             if self.cyclic_dim is not None:
@@ -397,11 +400,11 @@ class Grid(object):
                     if d=='x':
                         if xi_[0]+self.Lx not in xi_:
                             xi_ = np.hstack((xi_, xi_[0] + self.Lx))
-                            idx_ = np.hstack((idx_, idx_[0]))
+                            i_ = np.hstack((i_, i_[0]))
                     elif d=='y':
                         if yi_[0]+self.Ly not in yi_:
                             yi_ = np.hstack((yi_, yi_[0] + self.Ly))
-                            idy_ = np.hstack((idy_, idy_[0]))
+                            j_ = np.hstack((j_, j_[0]))
 
             ##now find the index near the given x_,y_ coordinates
             i = np.array(np.searchsorted(xi_, x_, side='right'))
@@ -412,25 +415,45 @@ class Grid(object):
             ##vertices (A, B, C, D) for the rectangular grid box
             ##internal coordinate (in_x, in_y) pinpoint the x_,y_ location inside the grid box
             ##with values range [0, 1)
-            ##(0,1) D----+------C (1,1)
-            ##      |    |      |
-            ##      +in_x*------+
-            ##      |    in_y   |
-            ##(0,0) A----+------B (1,0)
+            ##(j3,i3) D----+------C (j2,i2)
+            ##        |    |      |
+            ##        +in_x*------+
+            ##        |    in_y   |
+            ##(j0,i0) A----+------B (j1,i1)
             indices = None #for regular grid, the element indices are not used
+
+            if self.neighbors is not None:
+                j0, i0 = j[inside]-1, i[inside]-1
+                j1, i1 = self.neighbors[0,0,j0,i0], self.neighbors[1,0,j0,i0]
+                j2, i2 = self.neighbors[0,1,j1,i1], self.neighbors[1,1,j1,i1]
+                j3, i3 = self.neighbors[0,1,j0,i0], self.neighbors[1,1,j0,i0]
+            else:
+                j0, i0 = j[inside]-1, i[inside]-1
+                j1, i1 = j[inside]-1, i[inside]
+                j2, i2 = j[inside],   i[inside]
+                j3, i3 = j[inside],   i[inside]-1
+
             vertices = np.zeros(x_[inside].shape+(4,), dtype=int)
-            vertices[:, 0] = idy_[j[inside]-1] * self.nx + idx_[i[inside]-1]
-            vertices[:, 1] = idy_[j[inside]-1] * self.nx + idx_[i[inside]]
-            vertices[:, 2] = idy_[j[inside]] * self.nx + idx_[i[inside]]
-            vertices[:, 3] = idy_[j[inside]] * self.nx + idx_[i[inside]-1]
+            vertices[:, 0] = j_[j0] * self.nx + i_[i0]
+            vertices[:, 1] = j_[j1] * self.nx + i_[i1]
+            vertices[:, 2] = j_[j2] * self.nx + i_[i2]
+            vertices[:, 3] = j_[j3] * self.nx + i_[i3]
+
             in_coords = np.zeros(x_[inside].shape+(2,), dtype=np.float64)
-            in_coords[:, 0] = (x_[inside] - xi_[i[inside]-1]) / (xi_[i[inside]] - xi_[i[inside]-1])
-            in_coords[:, 1] = (y_[inside] - yi_[j[inside]-1]) / (yi_[j[inside]] - yi_[j[inside]-1])
+            in_coords[:, 0] = (x_[inside] - xi_[i0]) / (xi_[i0+1] - xi_[i0])
+            in_coords[:, 1] = (y_[inside] - yi_[j0]) / (yi_[j0+1] - yi_[j0])
 
             ##index of grid nearest to (x_,y_)
-            idx_r = np.where(in_coords[:,0]<0.5, idx_[i[inside]-1], idx_[i[inside]])
-            idy_r = np.where(in_coords[:,1]<0.5, idy_[j[inside]-1], idy_[j[inside]])
-            nearest =  idy_r * self.nx + idx_r
+            j_near, i_near = np.zeros(j0.shape, dtype='int'), np.zeros(j0.shape, dtype='int')
+            ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]<0.5))
+            j_near[ind], i_near[ind] = j0[ind], i0[ind]
+            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]<0.5))
+            j_near[ind], i_near[ind] = j1[ind], i1[ind]
+            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]>=0.5))
+            j_near[ind], i_near[ind] = j2[ind], i2[ind]
+            ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]>=0.5))
+            j_near[ind], i_near[ind] = j3[ind], i3[ind]
+            nearest = j_[j_near] * self.nx + i_[i_near]
 
         else:
             ##for irregular mesh, use tri_finder to find index
