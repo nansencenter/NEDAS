@@ -72,13 +72,19 @@ class Grid(object):
         else:
             self.proj_name = ''
 
-        ##proj ellps for Geod, used in distance calculation
+        ##proj info, ellps is used in Geod for distance calculation
         self.proj_ellps = 'WGS84'
+        self.proj_lon0 = 0
+        self.proj_lat0 = 0
         if hasattr(proj, 'definition'):
             for e in proj.definition.split():
                 es = e.split('=')
                 if es[0]=='ellps':
                     self.proj_ellps = es[1]
+                if es[0]=='lat_0':
+                    self.proj_lat0 = np.float32(es[1])
+                if es[0]=='lon_0':
+                    self.proj_lon0 = np.float32(es[1])
 
         ##coordinates and properties of the 2D grid
         self.x = x
@@ -412,6 +418,10 @@ class Grid(object):
 
             ##if neighbors indices are provided, the search range is extended by 1 grid point
             if self.neighbors is not None:
+                # xi_ = np.hstack((xi_[0]-self.dx, xi_, xi_[-1]+self.dx))
+                # i_ = np.hstack((i_[0]-1, i_, i_[-1]+1))
+                # yi_ = np.hstack((yi_[0]-self.dy, yi_, yi_[-1]+self.dy))
+                # j_ = np.hstack((j_[0]-1, j_, j_[-1]+1))
                 xi_ = np.hstack((xi_, xi_[-1] + self.dx))
                 i_ = np.hstack((i_, i_[-1] + 1))
                 yi_ = np.hstack((yi_, yi_[-1] + self.dy))
@@ -820,10 +830,13 @@ class Grid(object):
             if len(shape.points) > 0:
                 xy = []
                 inside = []
-                for lon, lat in shape.points:
-                    x, y = self.proj(lon, lat)
-                    xy.append((x, y))
-                    inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
+                lon, lat = [np.array(x) for x in zip(*shape.points)]
+                x, y = self.proj(lon, lat)
+                inside = np.logical_and(np.logical_and(x >= self.xmin, x <= self.xmax),
+                                        np.logical_and(y >= self.ymin, y <= self.ymax))
+                x[~inside] = np.nan
+                y[~inside] = np.nan
+                xy = [(x[i], y[i]) for i in range(x.size)]
                 ##if any point in the polygon lies inside the grid, need to plot it.
                 if any(inside):
                     data['xy'].append(xy)
@@ -886,25 +899,36 @@ class Grid(object):
         """
         self.dlon = dlon
         self.dlat = dlat
+
         llgrid_xy = []
-        for lon in np.arange(-180, 180, dlon):
+        for lon_r in np.arange(-180, 180, dlon):
             xy = []
             inside = []
-            for lat in np.arange(-89.9, 90, 0.1):
-                x, y = self.proj(lon, lat)
-                xy.append((x, y))
-                inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
+            lat = np.arange(-89.9, 90, 0.1)
+            lon = np.ones(lat.size) * lon_r
+            x, y = self.proj(lon, lat)
+            inside = np.logical_and(np.logical_and(x >= self.xmin, x <= self.xmax),
+                                    np.logical_and(y >= self.ymin, y <= self.ymax))
+            x[~inside] = np.nan
+            y[~inside] = np.nan
+            xy = [(x[i], y[i]) for i in range(x.size)]
             if any(inside):
                 llgrid_xy.append(xy)
-        for lat in np.arange(-90, 90+dlat, dlat):
+
+        for lat_r in np.arange(-90, 90+dlat, dlat):
             xy = []
             inside = []
-            for lon in np.arange(-180, 180, 0.1):
-                x, y = self.proj(lon, lat)
-                xy.append((x, y))
-                inside.append((self.xmin <= x <= self.xmax) and (self.ymin <= y <= self.ymax))
+            lon = np.arange(-180., 180., 0.1)
+            lat = np.ones(lon.size) * lat_r
+            x, y = self.proj(lon, lat)
+            inside = np.logical_and(np.logical_and(x >= self.xmin, x <= self.xmax),
+                                    np.logical_and(y >= self.ymin, y <= self.ymax))
+            x[~inside] = np.nan
+            y[~inside] = np.nan
+            xy = [(x[i], y[i]) for i in range(x.size)]
             if any(inside):
                 llgrid_xy.append(xy)
+
         return llgrid_xy
 
 
