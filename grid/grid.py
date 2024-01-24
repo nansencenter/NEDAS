@@ -399,12 +399,14 @@ class Grid(object):
             x_, y_ = self.wrap_cyclic_xy(x_, y_)
 
             ##sort the index to monoticially increasing
+            ##x_,y_ are the sorted coordinates of grid points
+            ##i_,j_ are their original grid index
             i_ = np.argsort(xi)
             xi_ = xi[i_]
             j_ = np.argsort(yi)
             yi_ = yi[j_]
 
-            ##pad cyclic dimensions with additional row for the wrap-around point
+            ##pad cyclic dimensions with additional grid point for the wrap-around
             if self.cyclic_dim is not None:
                 for d in self.cyclic_dim:
                     if d=='x':
@@ -416,65 +418,94 @@ class Grid(object):
                             yi_ = np.hstack((yi_, yi_[0] + self.Ly))
                             j_ = np.hstack((j_, j_[0]))
 
-            ##if neighbors indices are provided, the search range is extended by 1 grid point
+            ##if neighbors indices are provided, the search range is extended by 1 grid on both sides
             if self.neighbors is not None:
-                # xi_ = np.hstack((xi_[0]-self.dx, xi_, xi_[-1]+self.dx))
-                # i_ = np.hstack((i_[0]-1, i_, i_[-1]+1))
-                # yi_ = np.hstack((yi_[0]-self.dy, yi_, yi_[-1]+self.dy))
-                # j_ = np.hstack((j_[0]-1, j_, j_[-1]+1))
-                xi_ = np.hstack((xi_, xi_[-1] + self.dx))
-                i_ = np.hstack((i_, i_[-1] + 1))
-                yi_ = np.hstack((yi_, yi_[-1] + self.dy))
-                j_ = np.hstack((j_, j_[-1] + 1))
+                xi_ = np.hstack((xi_[0]-self.dx, xi_, xi_[-1]+self.dx))
+                i_ = np.hstack((i_[0]-1, i_, i_[-1]+1))
+                yi_ = np.hstack((yi_[0]-self.dy, yi_, yi_[-1]+self.dy))
+                j_ = np.hstack((j_[0]-1, j_, j_[-1]+1))
 
-            ##now find the index near the given x_,y_ coordinates
-            i = np.array(np.searchsorted(xi_, x_, side='right'))
-            j = np.array(np.searchsorted(yi_, y_, side='right'))
-            inside = ~np.logical_or(np.logical_or(i==len(xi_), i==0),
-                                    np.logical_or(j==len(yi_), j==0))
+            ##now find the position near the given x_,y_ coordinates
+            ##pi,pj are the index in the padded array, right side of the given x_,y_
+            ##only the positions inside the grid will be kept
+            pi = np.array(np.searchsorted(xi_, x_, side='right'))
+            pj = np.array(np.searchsorted(yi_, y_, side='right'))
+            inside = ~np.logical_or(np.logical_or(pi==len(xi_), pi==0),
+                                    np.logical_or(pj==len(yi_), pj==0))
+            pi, pj = pi[inside], pj[inside]
 
-            ##vertices (A, B, C, D) for the rectangular grid box
-            ##internal coordinate (in_x, in_y) pinpoint the x_,y_ location inside the grid box
-            ##with values range [0, 1)
-            ##(j3,i3) D----+------C (j2,i2)
-            ##        |    |      |
-            ##        +in_x*------+
-            ##        |    in_y   |
-            ##(j0,i0) A----+------B (j1,i1)
+            ##vertices (p1, p2, p3, p4) for the rectangular grid box
+            ##p3 is the point found by the search index (pj,pi),
+            ##internal coordinates (in_x, in_y) pinpoint the x_,y_ location inside
+            ##the rectangle with values range [0, 1)
+            ##(pj,pi-1)   p4----+------p3 (pj,pi)
+            ##             |    |      |
+            ##             +in_x*------+
+            ##             |    in_y   |
+            ##(pj-1,pi-1) p1----+------p2 (pj-1,pi)
             indices = None #for regular grid, the element indices are not used
 
             if self.neighbors is not None:
-                j0, i0 = j[inside]-1, i[inside]-1
-                j1, i1 = self.neighbors[0,0,j0,i0], self.neighbors[1,0,j0,i0]
-                j2, i2 = self.neighbors[0,1,j1,i1], self.neighbors[1,1,j1,i1]
-                j3, i3 = self.neighbors[0,1,j0,i0], self.neighbors[1,1,j0,i0]
+                ##find the right indices for each vertex grid point
+                j1,i1 = j_[pj-1], i_[pi-1]
+                j2,i2 = np.zeros(pj.shape, dtype=int), np.zeros(pj.shape, dtype=int)
+                j3,i3 = np.zeros(pj.shape, dtype=int), np.zeros(pj.shape, dtype=int)
+                j4,i4 = np.zeros(pj.shape, dtype=int), np.zeros(pj.shape, dtype=int)
+
+                ind = np.where(np.logical_and(j1>=0, i1>=0)) ##p1 is the anchor in neighbors
+                j2[ind], i2[ind] = self.neighbors[0,0,j1[ind],i1[ind]], self.neighbors[1,0,j1[ind],i1[ind]]
+                j3[ind], i3[ind] = self.neighbors[0,1,j2[ind],i2[ind]], self.neighbors[1,1,j2[ind],i2[ind]]
+                j4[ind], i4[ind] = self.neighbors[0,1,j1[ind],i1[ind]], self.neighbors[1,1,j1[ind],i1[ind]]
+
+                ind = np.where(np.logical_and(j1>=0, i1<0)) ##p2 is the anchor in neighbors
+                j2[ind], i2[ind] = j_[pj-1][ind], i_[pi][ind]
+                j1[ind], i1[ind] = self.neighbors[0,2,j2[ind],i2[ind]], self.neighbors[1,2,j2[ind],i2[ind]]
+                j3[ind], i3[ind] = self.neighbors[0,1,j2[ind],i2[ind]], self.neighbors[1,1,j2[ind],i2[ind]]
+                j4[ind], i4[ind] = self.neighbors[0,2,j3[ind],i3[ind]], self.neighbors[1,2,j3[ind],i3[ind]]
+
+                ind = np.where(np.logical_and(j1<0, i1<0)) ##p3 is the anchor in neighbors
+                j3[ind], i3[ind] = j_[pj][ind], i_[pi][ind]
+                j2[ind], i2[ind] = self.neighbors[0,3,j3[ind],i3[ind]], self.neighbors[1,3,j3[ind],i3[ind]]
+                j4[ind], i4[ind] = self.neighbors[0,2,j3[ind],i3[ind]], self.neighbors[1,2,j3[ind],i3[ind]]
+                j1[ind], i1[ind] = self.neighbors[0,2,j2[ind],i2[ind]], self.neighbors[1,2,j2[ind],i2[ind]]
+
+                ind = np.where(np.logical_and(j1<0, i1>=0)) ##p4 is the anchor in neighbors
+                j4[ind], i4[ind] = j_[pj][ind], i_[pi-1][ind]
+                j1[ind], i1[ind] = self.neighbors[0,3,j4[ind],i4[ind]], self.neighbors[1,3,j4[ind],i4[ind]]
+                j3[ind], i3[ind] = self.neighbors[0,0,j4[ind],i4[ind]], self.neighbors[1,0,j4[ind],i4[ind]]
+                j2[ind], i2[ind] = self.neighbors[0,0,j1[ind],i1[ind]], self.neighbors[1,0,j1[ind],i1[ind]]
+
             else:
-                j0, i0 = j[inside]-1, i[inside]-1
-                j1, i1 = j[inside]-1, i[inside]
-                j2, i2 = j[inside],   i[inside]
-                j3, i3 = j[inside],   i[inside]-1
+                ##use normal rectangle grid indices
+                j1, i1 = j_[pj-1], i_[pi-1]
+                j2, i2 = j_[pj-1], i_[pi]
+                j3, i3 = j_[pj],   i_[pi]
+                j4, i4 = j_[pj],   i_[pi-1]
 
-            vertices = np.zeros(x_[inside].shape+(4,), dtype=int)
-            vertices[:, 0] = j_[j0] * self.nx + i_[i0]
-            vertices[:, 1] = j_[j1] * self.nx + i_[i1]
-            vertices[:, 2] = j_[j2] * self.nx + i_[i2]
-            vertices[:, 3] = j_[j3] * self.nx + i_[i3]
+            ##assign the points to vertices
+            vertices = np.zeros(pi.shape+(4,), dtype=int)
+            vertices[:, 0] = j1 * self.nx + i1
+            vertices[:, 1] = j2 * self.nx + i2
+            vertices[:, 2] = j3 * self.nx + i3
+            vertices[:, 3] = j4 * self.nx + i4
 
-            in_coords = np.zeros(x_[inside].shape+(2,), dtype=np.float64)
-            in_coords[:, 0] = (x_[inside] - xi_[i0]) / (xi_[i0+1] - xi_[i0])
-            in_coords[:, 1] = (y_[inside] - yi_[j0]) / (yi_[j0+1] - yi_[j0])
+            ##internal coordinates inside rectangles
+            in_coords = np.zeros(pi.shape+(2,), dtype=np.float64)
+            in_coords[:, 0] = (x_[inside] - xi_[pi-1]) / (xi_[pi] - xi_[pi-1])
+            in_coords[:, 1] = (y_[inside] - yi_[pj-1]) / (yi_[pj] - yi_[pj-1])
 
-            ##index of grid nearest to (x_,y_)
-            j_near, i_near = np.zeros(j0.shape, dtype='int'), np.zeros(j0.shape, dtype='int')
+            ##index of grid point nearest to (x_,y_)
+            j_near = np.zeros(pj.shape, dtype=int)
+            i_near = np.zeros(pj.shape, dtype=int)
             ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]<0.5))
-            j_near[ind], i_near[ind] = j0[ind], i0[ind]
-            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]<0.5))
             j_near[ind], i_near[ind] = j1[ind], i1[ind]
-            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]>=0.5))
+            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]<0.5))
             j_near[ind], i_near[ind] = j2[ind], i2[ind]
-            ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]>=0.5))
+            ind = np.where(np.logical_and(in_coords[:,0]>=0.5, in_coords[:,1]>=0.5))
             j_near[ind], i_near[ind] = j3[ind], i3[ind]
-            nearest = j_[j_near] * self.nx + i_[i_near]
+            ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]>=0.5))
+            j_near[ind], i_near[ind] = j4[ind], i4[ind]
+            nearest = j_near * self.nx + i_near
 
         else:
             ##for irregular mesh, use tri_finder to find index
@@ -485,12 +516,12 @@ class Grid(object):
 
             ##internal coords are the barycentric coords (in1, in2, in3) in a triangle
             ##note: larger in1 means closer to the vertice 1!
-            ##     (0,0,1) C\
+            ##     (0,0,1) p3\
             ##            / | \
             ##           / in3. \
             ##          /  :* .   \
             ##         /in1  | in2  \
-            ##(1,0,0) A--------------B (0,1,0)
+            ##(1,0,0) p1-------------p2 (0,1,0)
             vertices = self.tri.triangles[triangle_map[inside], :]
 
             ##transform matrix for barycentric coords computation
@@ -834,13 +865,22 @@ class Grid(object):
                 x, y = self.proj(lon, lat)
                 inside = np.logical_and(np.logical_and(x >= self.xmin, x <= self.xmax),
                                         np.logical_and(y >= self.ymin, y <= self.ymax))
-                x[~inside] = np.nan
-                y[~inside] = np.nan
+
+                ##when showing global maps, the lines leave the domain and re-enter
+                ##from the other side, the cross-over lines are visible on the plot
+                ##temporary solution: make a pause when lines wrap around cut meridian
+                ##lines work fine now but filled patches do not
+                if self.proj_name in ['longlat', 'tripolar', 'bipolar']:
+                    x[~inside] = np.nan
+                    y[~inside] = np.nan
+
                 xy = [(x[i], y[i]) for i in range(x.size)]
+
                 ##if any point in the polygon lies inside the grid, need to plot it.
                 if any(inside):
                     data['xy'].append(xy)
                     data['parts'].append(shape.parts)
+
         return data
 
 

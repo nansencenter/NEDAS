@@ -86,62 +86,63 @@ def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat, ipiv=0, jpiv=0):
     """ convert from lon,lat to grid space x,y """
     ipiv, jpiv = pivotp(glon, glat, neighbors, lon, lat, ipiv, jpiv)
 
-    j0,i0 = jpiv,ipiv              ##pt0
-    j1,i1 = neighbors[:,0,j0,i0]   ##pt1, east of pt0
-    j2,i2 = neighbors[:,1,j1,i1]   ##pt2
-    j3,i3 = neighbors[:,1,j0,i0]   ##pt3, north of pt0
-    j4,i4 = neighbors[:,2,j3,i3]   ##pt4
-    j5,i5 = neighbors[:,2,j0,i0]   ##pt5, west of pt0
-    j6,i6 = neighbors[:,3,j5,i5]   ##pt6
-    j7,i7 = neighbors[:,3,j0,i0]   ##pt7, south of pt0
-    j8,i8 = neighbors[:,3,j1,i1]   ##pt8
+    pt = jpiv, ipiv
+    pt_e = neighbors[0, 0, *pt], neighbors[1, 0, *pt]
+    pt_n = neighbors[0, 1, *pt], neighbors[1, 1, *pt]
+    pt_w = neighbors[0, 2, *pt], neighbors[1, 2, *pt]
+    pt_s = neighbors[0, 3, *pt], neighbors[1, 3, *pt]
+    pt_ne = neighbors[0, 1, *pt_e], neighbors[1, 1, *pt_e]
+    pt_nw = neighbors[0, 1, *pt_w], neighbors[1, 1, *pt_w]
+    pt_se = neighbors[0, 3, *pt_e], neighbors[1, 3, *pt_e]
+    pt_sw = neighbors[0, 3, *pt_w], neighbors[1, 3, *pt_w]
 
     ##find which triangle (lon,lat) falls in
-    ##   pt4 ---- pt3 ----- pt2
+    ##  pt_nw --- pt_n ----- pt_ne
     ##     | .  3  .   2   .  \
     ##     | 4  .   .  .   1   \
-    ##   pt5 ...... pt0 ....... pt1
+    ##   pt_w...... pt......... pt_e
     ##     | 5   .   .   .   8   \
     ##     |  .   6   .  7    .   \
-    ##   pt6 -------- pt7 -------- pt8
-    ##
-    j = [[j1,j2],[j2,j3],[j3,j4],[j4,j5],[j5,j6],[j6,j7],[j7,j8],[j8,j1]]
-    i = [[i1,i2],[i2,i3],[i3,i4],[i4,i5],[i5,i6],[i6,i7],[i7,i8],[i8,i1]]
-    yoff = [[0,1],[1,1],[1,1],[1,0],[0,-1],[-1,-1],[-1,-1],[-1,0]]
-    xoff = [[1,1],[1,0],[0,-1],[-1,-1],[-1,-1],[-1,0],[0,1],[1,1]]
+    ##  pt_sw ----- pt_s -------- pt_se
 
-    for t in range(8):
-        glon1, glat1 = glon[j0,i0], glat[j0,i0]
-        glon2, glat2 = glon[j[t][0],i[t][0]], glat[j[t][0],i[t][0]]
-        glon3, glat3 = glon[j[t][1],i[t][1]], glat[j[t][1],i[t][1]]
+    pt_lst   = [[pt_e, pt_ne], [pt_ne, pt_n], [pt_n, pt_nw], [pt_nw, pt_w], [pt_w, pt_sw], [pt_sw, pt_s], [pt_s, pt_se], [pt_se, pt_e]]
+    xoff_lst = [[   1,     1], [    1,    0], [   0,    -1], [   -1,   -1], [  -1,    -1], [   -1,    0], [   0,     1], [    1,    1]]
+    yoff_lst = [[   0,     1], [    1,    1], [   1,     1], [    1,    0], [   0,    -1], [   -1,   -1], [  -1,    -1], [   -1,    0]]
 
-        d1 = spherdist(lon, lat, glon1, glat1)
-        d2 = spherdist(lon, lat, glon2, glat2)
-        d3 = spherdist(lon, lat, glon3, glat3)
-        s1 = spherdist(glon2, glat2, glon3, glat3)
-        s2 = spherdist(glon3, glat3, glon1, glat1)
-        s3 = spherdist(glon1, glat1, glon2, glat2)
+    for p in range(len(pt_lst)):
+        pt1 = pt
+        pt2 = pt_lst[p][0]
+        pt3 = pt_lst[p][1]
+        xoff2 = xoff_lst[p][0]
+        xoff3 = xoff_lst[p][1]
+        yoff2 = yoff_lst[p][0]
+        yoff3 = yoff_lst[p][1]
+
+        d1 = spherdist(lon, lat, glon[pt], glat[pt])
+        d2 = spherdist(lon, lat, glon[pt2], glat[pt2])
+        d3 = spherdist(lon, lat, glon[pt3], glat[pt3])
+        s1 = spherdist(glon[pt2], glat[pt2], glon[pt3], glat[pt3])
+        s2 = spherdist(glon[pt3], glat[pt3], glon[pt], glat[pt])
+        s3 = spherdist(glon[pt], glat[pt], glon[pt2], glat[pt2])
         A1 = tri_area(s1, d2, d3)
         A2 = tri_area(s2, d1, d3)
         A3 = tri_area(s3, d1, d2)
         Atot = tri_area(s1, s2, s3)
-
         if Atot == 0:  ##the triangle is not well defined
-            continue
-
-        sum_b = (A1 + A2 + A3) / Atot
-        if np.abs(sum_b - 1) > 1e-3:  ##lon,lat is outside of this triangle
             continue
 
         ##find barycentric coordinates
         b1 = A1 / Atot
         b2 = A2 / Atot
         b3 = A3 / Atot
+        sum_b = b1 + b2 + b3
+        if np.abs(sum_b - 1) > 1e-3:   ##point falls outside this triangle
+            continue
 
         ##the output is weighted average of x,y of triangle vertices
-        x1, y1 = gx[j0,i0], gy[j0,i0]
-        x2, y2 = x1+xoff[t][0], y1+yoff[t][0]
-        x3, y3 = x1+xoff[t][1], y1+yoff[t][1]
+        x1, y1 = pt[1], pt[0]
+        x2, y2 = x1+xoff2, y1+yoff2
+        x3, y3 = x1+xoff3, y1+yoff3
         x = x1*b1 + x2*b2 + x3*b3
         y = y1*b1 + y2*b2 + y3*b3
 
