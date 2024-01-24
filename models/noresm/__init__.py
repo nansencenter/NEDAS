@@ -227,6 +227,10 @@ def read_grid(path, **kwargs):
             return xo.item(), yo.item()
         return xo.reshape(shape), yo.reshape(shape)
 
+    ##set some attributes for proj info
+    proj.name = grid_type
+    proj.definition = 'proj='+grid_type+' lon_0=70 lat_0=0'
+
     return Grid(proj, x, y, neighbors=neighbors)
 
 
