@@ -59,9 +59,8 @@ def tri_area(a, b, c):
 
 
 @njit
-def pivotp(glon, glat, neighbors, lon, lat):
+def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
     """in model glon,glat, find the pivot point for lon,lat"""
-    ipiv, jpiv = 0, 0  ##start from 0,0
 
     min_d = spherdist(glon[jpiv, ipiv], glat[jpiv, ipiv], lon, lat)
     while min_d > 0:
@@ -83,9 +82,9 @@ def pivotp(glon, glat, neighbors, lon, lat):
 
 
 @njit
-def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat):
+def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat, ipiv=0, jpiv=0):
     """ convert from lon,lat to grid space x,y """
-    ipiv, jpiv = pivotp(glon, glat, neighbors, lon, lat)
+    ipiv, jpiv = pivotp(glon, glat, neighbors, lon, lat, ipiv, jpiv)
 
     j0,i0 = jpiv,ipiv              ##pt0
     j1,i1 = neighbors[:,0,j0,i0]   ##pt1, east of pt0
@@ -146,9 +145,9 @@ def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat):
         x = x1*b1 + x2*b2 + x3*b3
         y = y1*b1 + y2*b2 + y3*b3
 
-        return x, y
+        return x, y, ipiv, jpiv
 
-    return np.nan, np.nan
+    return np.nan, np.nan, ipiv, jpiv
 
 
 @njit

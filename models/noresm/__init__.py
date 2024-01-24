@@ -217,9 +217,10 @@ def read_grid(path, **kwargs):
         shape = np.atleast_1d(xi).shape
         xi, yi = np.atleast_1d(xi).flatten(), np.atleast_1d(yi).flatten()
         xo, yo = np.full(xi.size, np.nan), np.full(xi.size, np.nan)
+        ipiv, jpiv = 0, 0
         for i in range(xi.size):
             if not inverse:
-                xo[i], yo[i] = lonlat2xy(lon, lat, x, y, neighbors, xi[i], yi[i])
+                xo[i], yo[i], ipiv, jpiv = lonlat2xy(lon, lat, x, y, neighbors, xi[i], yi[i], ipiv, jpiv)
             else:
                 xo[i], yo[i] = xy2lonlat(lon, lat, x, y, neighbors, xi[i], yi[i])
         if xo.size == 1:
