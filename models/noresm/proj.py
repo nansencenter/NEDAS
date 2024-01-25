@@ -145,6 +145,7 @@ def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat, ipiv=0, jpiv=0):
         x3, y3 = x1+xoff3, y1+yoff3
         x = x1*b1 + x2*b2 + x3*b3
         y = y1*b1 + y2*b2 + y3*b3
+        # print(ipiv, jpiv, ':', pt2, pt3, ':', b1, b2, b3, ':', x, y)
 
         return x, y, ipiv, jpiv
 

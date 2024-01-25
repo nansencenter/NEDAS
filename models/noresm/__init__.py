@@ -21,7 +21,7 @@ stagger = {'u':'u', 'v':'v', 'temp':'p', 'saln':'p'}
 ##See documentation: https://noresm-docs.readthedocs.io
 
 ##define model grid parameters here
-grid_type = 'tripolar'
+grid_type = 'tripolar'  ##type of grid should match the grid.nc file
 
 ##scaling of the model grid, 1 correspond to the given grid_file
 ##(locally stored grids: 192x180 tripolar grid, 192x160 bipolar grid)
@@ -54,30 +54,6 @@ def filename(path, **kwargs):
     ##typically there will be only one matching file given the kwargs,
     ##if there is a list of matching files, we return the first one
     return flist[0]
-
-
-##project to laea temporarily to deal with tripolar geometry
-# help_proj = Proj("+proj=laea +lat_0=90 +lon_0=0 +x_0=0 +y_0=0")
-
-##output to lonlat grid with resolution
-# lon, lat = np.meshgrid(np.arange(-180, 180+resolution, resolution),
-#                        np.arange(-90, 90+resolution, resolution))
-
-# def proj(x, y, inverse=False):
-#     x = np.atleast_1d(x).astype(float)
-#     y = np.atleast_1d(y).astype(float)
-
-#     if inverse:
-#         return xy2lon(x, y), xy2lat(x, y)
-
-#     else:
-#         x = np.mod(x + 110, 360) - 110
-#         return lonlat2x(x, y), lonlat2y(x, y)
-
-
-# def read_grid(path, **kwargs):
-    # x, y = np.meshgrid(np.arange(nx), np.arange(ny))
-    # return Grid(proj, x, y, cyclic_dim='x')
 
 
 def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
@@ -120,6 +96,7 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
             filename = __path__[0]+'/grid_tripolar.nc'
         else:
             raise ValueError('cannot find grid file for grid_type '+grid_type)
+    # print('reading grid file: '+filename)
 
     with Dataset(filename) as f:
         if stagger in ['p', 'u', 'v', 'q']:
@@ -138,6 +115,8 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
 
     else:
         ##refine/coarsen the lon,lat grid to the desired scaling
+        ##note: this part is only for testing, usually a grid_file is provided directly
+        ##      the manual refining/coarsening here is not so accurate
 
         ##helper proj to avoid interpolating coordinates (lon,lat) that are not continuous
         ##the north pole stereographic projection is good, since south pole
@@ -145,7 +124,23 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
         hproj = Proj("+proj=stere +lon_0=0 +lat_0=90")
 
         if grid_type=='bipolar':
-            pass
+            ##pad orig grid to prepare for interpolation
+            ny, nx = lon.shape
+            lon_, lat_ = np.zeros((ny, nx+1)), np.zeros((ny, nx+1))
+            lat_[:, :-1] = lat
+            lat_[:, -1] = lat[:, 0]  ##cyclic east-west boundary
+            lon_[:, :-1] = lon
+            lon_[:, -1] = lon[:, 0]  ##cyclic east-west boundary
+
+            hx, hy = hproj(lon_, lat_)
+            xi, yi = np.meshgrid(np.arange(nx+1), np.arange(ny))
+            xy2hx = LinearNDInterpolator(list(zip(xi.flatten(), yi.flatten())), hx.flatten())
+            xy2hy = LinearNDInterpolator(list(zip(xi.flatten(), yi.flatten())), hy.flatten())
+
+            x_ = np.arange(0, nx, scale_x)
+            y_ = np.arange(0, ny-1+scale_y, scale_y)
+            xo, yo = np.meshgrid(x_, y_)
+            grid_lon, grid_lat = hproj(xy2hx(xo, yo), xy2hy(xo, yo), inverse=True)
 
         elif grid_type=='tripolar':
             ##pad orig grid to prepare for interpolation
@@ -183,7 +178,18 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
     ##neighbor indices
     grid_neighbors = np.zeros((2, 4, ny, nx), dtype='int')
     if grid_type=='bipolar':
-        pass
+        ##y component
+        grid_neighbors[0, 0, ...] = y                       ##east
+        grid_neighbors[0, 1, :-1, :] = y[1:, :]             ##north
+        grid_neighbors[0, 1, -1, :] = y[-1, :]
+        grid_neighbors[0, 2, ...] = y                       ##west
+        grid_neighbors[0, 3, 0, :] = y[0, :]                ##south
+        grid_neighbors[0, 3, 1:, :] = y[:-1, :]
+        ##x component
+        grid_neighbors[1, 0, ...] = np.roll(x, -1, axis=1)  ##east
+        grid_neighbors[1, 1, :, :] = x                      ##north
+        grid_neighbors[1, 2, ...] = np.roll(x, 1, axis=1)   ##west
+        grid_neighbors[1, 3, ...] = x                       ##south
 
     elif grid_type=='tripolar':
         ##y component
@@ -207,6 +213,13 @@ def read_grid(path, **kwargs):
     """
     Generate a Grid object for the NorESM model grid
     """
+    if 'grid_type' in kwargs:
+        grid_type = kwargs['grid_type']
+    if 'scale_x' in kwargs:
+        scale_x = kwargs['scale_x']
+    if 'scale_y' in kwargs:
+        scale_y = kwargs['scale_y']
+
     if not 'stagger' in kwargs:
         kwargs['stagger'] = 'p'
 
