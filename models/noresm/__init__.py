@@ -16,19 +16,6 @@ variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':
 ##staggering types for native model variables: 'p','u','v','q'
 stagger = {'u':'u', 'v':'v', 'temp':'p', 'saln':'p'}
 
-##NorESM uses bipolar and tripolar ocean model grids
-##See https://expearth.uib.no/?page_id=28 for some explanation
-##See documentation: https://noresm-docs.readthedocs.io
-
-##define model grid parameters here
-grid_type = 'tripolar'  ##type of grid should match the grid.nc file
-
-##scaling of the model grid, 1 correspond to the given grid_file
-##(locally stored grids: 192x180 tripolar grid, 192x160 bipolar grid)
-##0.5 means the resolution doubles, 2 means the resolution reduces by half
-scale_x = 0.5
-scale_y = 0.5
-
 
 def filename(path, **kwargs):
     """
@@ -210,15 +197,30 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
 
 
 def read_grid(path, **kwargs):
-    """
-    Generate a Grid object for the NorESM model grid
-    """
+    """ Generate a Grid object for the NorESM model grid """
+
+    ##NorESM uses bipolar and tripolar ocean model grids
+    ##See https://expearth.uib.no/?page_id=28 for some explanation
+    ##See documentation: https://noresm-docs.readthedocs.io
+
+    scale_x = 0.5
+    scale_y = 0.5
     if 'grid_type' in kwargs:
         grid_type = kwargs['grid_type']
+    else:
+        grid_type = 'tripolar'  ##type of grid should match the grid.nc file
+
+    ##scaling of the model grid, 1 correspond to the given grid_file
+    ##(locally stored grids: 192x180 tripolar grid, 192x160 bipolar grid)
+    ##0.5 means the resolution doubles, 2 means the resolution reduces by half
     if 'scale_x' in kwargs:
         scale_x = kwargs['scale_x']
+    else:
+        scale_x = 0.5  ##default
     if 'scale_y' in kwargs:
         scale_y = kwargs['scale_y']
+    else:
+        scale_y = 0.5
 
     if not 'stagger' in kwargs:
         kwargs['stagger'] = 'p'
