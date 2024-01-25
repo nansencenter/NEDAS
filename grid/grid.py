@@ -365,22 +365,22 @@ class Grid(object):
           Whether x_,y_ points are inside the grid.
           Note that the following returned properties only have the inside points
 
-        - indices: int, np.array with inside.size
+        - indices: int, np.array with inside_size
           Indices of the grid elements that x_,y_ falls in.
           For regular grid, it is None since vertices can pinpoint the grid box already.
           For irregular mesh, it is the index for tri.triangles from tri_finder.
 
-        - vertices: int, np.array with shape (inside.size, n),
+        - vertices: int, np.array with shape (inside_size, n),
           n = 4 for regular grid boxes, or 3 for mesh elements
           The grid indices in self.x,y (flattened) for the nodes of each
           grid element that x_,y_ falls in.
 
-        - in_coords: float, np.array with shape (inside.size, n),
+        - in_coords: float, np.array with shape (inside_size, n),
           n = 2 for regular grid boxes, or 3 for mesh elements
           The internal coordinates for x_,y_ within the grid box/element,
           used in computing interp_weights, see illustration below.
 
-        - nearest: int, np.array with inside.size
+        - nearest: int, np.array with inside_size
           The indices for the nodes in self.x,y that are closest to x_,y_
         """
         x_ = np.array(x_).flatten()
