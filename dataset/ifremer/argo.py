@@ -40,7 +40,7 @@ def filename(path, **kwargs):
 ##         model_z: depth (-meters) defined on grid [nz, ny, nx], if None not available
 ## return: obs_seq dict with lists of obs,x,y,z,time
 def read_obs(path, grid, mask, model_z, **kwargs):
-    assert 'name' in kwargs, 'prep_obs.insitu.read_obs: missing obs variable name=?'
+    assert 'name' in kwargs, 'ifremer.argo.read_obs: missing obs variable name=?'
     obs_name = kwargs['name']
 
     obs_seq = {'obs':[],
@@ -200,6 +200,8 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 obs_seq['err_std'].append(np.sqrt(OBS_ERR_VAR[obs_name]))
                 obs_seq['profile_id'].append(p)
                 obs_seq['level_id'].append(l)
+
+        f.close()
 
     for key in obs_seq.keys():
         obs_seq[key] = np.array(obs_seq[key])
