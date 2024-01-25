@@ -79,5 +79,13 @@ def get_traj_pairs(path, grid, **kwargs):
 def random_network(path, grid, mask, **kwargs):
     pass
 
-# from .state_to_obs import state_to_obs
 
+##some observation operators obs_operator[model][obs_var_name]
+obs_operator = {}
+
+def get_nextsim_seaice_drift(path, grid, mask, z, , **kwargs):
+
+
+    return obs_seq
+
+obs_operator['nextsim.v1'] = {'seaice_drift':get_nextsim_seaice_drift, }
