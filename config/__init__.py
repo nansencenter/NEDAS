@@ -94,7 +94,7 @@ if grid_type == 'new':
     grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
 
     ##mask for nan area in domain, where no i/o or analysis tasks needed
-    maskfile = os.environ.get('maskfile')
+    maskfile = os.environ.get('maskfile', '')
     if os.path.exists(maskfile):
         mask_dat = np.load(maskfile, allow_pickle=True)
         mask_grid = Grid(proj, mask_dat['x'], mask_dat['y'], dst_grid=grid)
