@@ -16,6 +16,8 @@ Optional parameters:
 
 * `pole_index`: `None` (default), tuple of the pole index(s) in `pole_dim`
 
+* `neighbors`: `None` (default), for regular grid with special geometry (e.g. tripolar ocean grid), `neighbors` stores the j,i index of 4 neighors (east, north, west, and south) on each grid point. Since specifying neighbors already take care of cyclic boundary conditions, `cyclic_dim` will be discarded if `neighbors` is set.
+
 * `triangles`: `None` (default), if the triangle indices `ind[grid.x.size, 3]` for the unstructured mesh are given here, the grid will skip computing triangulation.
 
 * `dst_grid`: `None` (default), the destination grid object is set here.
