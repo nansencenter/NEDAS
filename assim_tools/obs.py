@@ -191,7 +191,9 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            seq = src.random_network(path, c.grid, c.mask, z, **obs_rec)
+            truth_path = c.work_dir+'/truth/'+t2s(obs_rec['time'])+'/'+obs_rec['model']
+
+            seq = src.random_network(path, c.grid, c.mask, z, truth_path, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, state_info, None, None, member=None, **obs_rec, **seq)
