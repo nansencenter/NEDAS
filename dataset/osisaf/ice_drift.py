@@ -3,12 +3,14 @@ import glob
 from datetime import datetime, timedelta
 import pyproj
 from netCDF4 import Dataset
+from grid import Grid
 
 variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km/day'}, }
 
 ##osisaf grid definition
 proj = pyproj.Proj("+proj=stere +a=6378273 +b=6356889.44891 +lat_0=90 +lat_ts=70 +lon_0=-45")
 x, y = np.meshgrid(np.arange(-3750000, 3626000, 62500), np.arange(5750000, -5251000, -62500))
+obs_grid = Grid(proj, x, y)
 
 
 def filename(path, **kwargs):
@@ -40,6 +42,8 @@ def read_obs(path, grid, mask, model_z, **kwargs):
     assert 'name' in kwargs, 'osisaf.ice_conc.read_obs: missing obs variable name'
     assert kwargs['name'] == 'seaice_drift', 'osisaf.ice_conc.read_obs can only provide seaice_conc'
 
+    obs_grid.set_destination_grid(grid)  ##for vector rotation
+
     obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
     for file_name in filename(path, **kwargs):
@@ -55,10 +59,15 @@ def read_obs(path, grid, mask, model_z, **kwargs):
             t0, t1 = f['time_bnds'][n,:].data
             obs_dt0 = f['dt0'][n,...].data.flatten()
             obs_dt1 = f['dt1'][n,...].data.flatten()
-            obs_dx = f['dX'][n,...].data.flatten()
-            obs_dy = f['dY'][n,...].data.flatten()
             obs_err = f['uncert_dX_and_dY'][n,...].data.flatten()
             qc_flag = f['status_flag'][n,...].data.flatten()
+
+            ###get drift vector, rotate vector from proj to grid.proj
+            obs_dx = f['dX'][n,...]
+            obs_dy = f['dY'][n,...]
+            obs_drift = obs_grid.rotate_vectors(np.array([obs_dx, obs_dy]))
+            obs_dx = obs_drift[0,...].flatten()
+            obs_dy = obs_drift[1,...].flatten()
 
             for p in range(obs_dx.size):
                 if qc_flag[p] != 30:
@@ -91,6 +100,9 @@ def read_obs(path, grid, mask, model_z, **kwargs):
 
     for key in obs_seq.keys():
         obs_seq[key] = np.array(obs_seq[key])
+
+    ##make obs dimension [2,nobs] for vectors
+    obs_seq['obs'] = obs_seq['obs'].T
 
     return obs_seq
 
