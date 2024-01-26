@@ -72,10 +72,7 @@ def read_var(path, grid, **kwargs):
     assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
-    if 'is_vector' in kwargs:
-        is_vector = kwargs['is_vector']
-    else:
-        is_vector = variables[name]['is_vector']
+    is_vector = variables[name]['is_vector']
 
     if is_vector:
         var1 = nc_read_var(fname, variables[name]['name'][0])[0, ...]

@@ -76,7 +76,7 @@ def nc_read_var(filename, varname):
       The variable read from the file
     """
     f = Dataset(filename, 'r')
-    assert(varname in f.variables)
+    assert varname in f.variables, 'variable '+varname+' is not defined in '+filename
     dat = f[varname][...].data
     f.close()
     return dat
