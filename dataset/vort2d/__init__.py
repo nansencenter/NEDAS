@@ -12,7 +12,8 @@ variables = {'velocity': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'uni
 def random_network(path, grid, mask, z, truth_path, **kwargs):
 
     ##get truth vortex position, some network is vortex-following
-    i, j = get_vortex_position(truth_path, grid, **kwargs)
+    velocity = get_velocity(truth_path, grid, **kwargs)
+    i, j = vortex_position(velocity[0,...], velocity[1,...])
     true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
     if 'network_type' in kwargs:
@@ -75,21 +76,9 @@ def random_network(path, grid, mask, z, truth_path, **kwargs):
     return obs_seq
 
 
-##some observation operators obs_operator[model][obs_var_name]
-obs_operator = {}
+###utility functions for obs diagnostics
 
-def get_velocity(path, grid, **kwargs):
-    model = importlib.import_module('models.vort2d')
-
-    ##get the velocity field from model
-    kwargs['name'] = 'velocity'
-    true_velocity = model.read_var(path, grid, **kwargs)
-
-    return true_velocity[0, ...], true_velocity[1, ...]
-
-
-def get_vortex_position(path, grid, mask, z, **kwargs):
-    u, v = get_velocity(path, grid, **kwargs)
+def vortex_position(u, v):
     ny, nx = u.shape
 
     ##compute vorticity
@@ -109,17 +98,12 @@ def get_vortex_position(path, grid, mask, z, **kwargs):
     return center_i, center_j
 
 
-def get_vortex_intensity(path, grid, mask, z **kwargs):
-    u, v = get_velocity(path, grid, **kwargs)
-    Vmax = np.max(np.hypot(u, v))
-
-    return Vmax
+def vortex_intensity(u, v):
+    return np.max(np.hypot(u, v))
 
 
-def get_vortex_size(path, grid, mask, z, **kwargs):
-    u, v = get_velocity(path, grid, **kwargs)
+def vortex_size(u, v, center_i, center_j):
     wind = np.hypot(u, v)
-    center_i, center_j = get_vortex_position(path, grid, mask, z, **kwargs)
     ny, nx = wind.shape
 
     nr = 30
@@ -143,7 +127,40 @@ def get_vortex_size(path, grid, mask, z, **kwargs):
         else:
             Rsize = i1 + (wind_rad[i1] - wind_min) / (wind_rad[i1] - wind_rad[i1+1])
 
-    return Rsize * grid.dx
+    return Rsize
+
+
+##package the functions into obs_operator, to be used in assim_tools.obs.state_to_obs
+obs_operator = {}
+
+def get_velocity(path, grid, **kwargs):
+    model = importlib.import_module('models.vort2d')
+    ##get the velocity field from model
+    kwargs['name'] = 'velocity'
+    return model.read_var(path, grid, **kwargs)
+
+
+def get_vortex_position(path, grid, mask, z, **kwargs):
+    velocity = get_velocity(path, grid, **kwargs)
+    center_i, center_j = vortex_position(velocity[0,...], velocity[1,...])
+    obs_seq = np.zeros((2, 1), dtype='float')
+    obs_seq[0,0] = grid.x[center_j, center_i]
+    obs_seq[1,0] = grid.y[center_j, center_i]
+    return obs_seq
+
+
+def get_vortex_intensity(path, grid, mask, z, **kwargs):
+    velocity = get_velocity(path, grid, **kwargs)
+    Vmax = vortex_intensity(velocity[0,...], velocity[1,...])
+    return np.array([Vmax])
+
+
+def get_vortex_size(path, grid, mask, z, **kwargs):
+    velocity = get_velocity(path, grid, **kwargs)
+    center_i, center_j = vortex_position(velocity[0,...], velocity[1,...])
+    Rsize = vortex_size(velocity[0,...], velocity[1,...], center_i, center_j)
+    Rsize = Rsize * grid.dx
+    return np.array([Rsize])
 
 
 obs_operator['vort2d'] = {'vortex_position': get_vortex_position,

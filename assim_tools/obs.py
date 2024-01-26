@@ -481,9 +481,6 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     obs_z = np.array(kwargs['z'])
     nobs = len(obs_x)
 
-    obs_grid = Grid(c.grid.proj, obs_x, obs_y, regular=False)
-    c.grid.set_destination_grid(obs_grid)
-
     if is_vector:
         seq = np.full((2, nobs), np.nan)
     else:
@@ -533,12 +530,14 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
-                z = c.grid.convert(z[0, ...], coarse_grain=False)
+                z = c.grid.interp(z[0, ...], obs_x, obs_y)
                 zc = np.array([z, z])
+                v1 = c.grid.interp(fld[0, ...], obs_x, obs_y)
+                v2 = c.grid.interp(fld[1, ...], obs_x, obs_y)
+                vc = np.array([v1, v2])
             else:
-                zc = c.grid.convert(z, coarse_grain=False)
-
-            vc = c.grid.convert(fld, is_vector=is_vector, coarse_grain=False)
+                zc = c.grid.interp(z, obs_x, obs_y)
+                vc = c.grid.interp(fld, obs_x, obs_y)
 
             ##vertical interp to obs_z, take ocean depth as example:
             ##    -------------------------------------------
@@ -589,9 +588,9 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     ## if dataset module provides an obs_operator, use it to compute obs
     elif kwargs['model'] in obs_src.obs_operator:
         if synthetic:
-            path = c.work_dir+'/truth/'+t2s(time)+'/'+obs_rec['model']
+            path = c.work_dir+'/truth/'+t2s(time)+'/'+kwargs['model']
         else:
-            path = c.work_dir+'/cycle/'+t2s(time)+'/'+obs_rec['model']
+            path = c.work_dir+'/cycle/'+t2s(time)+'/'+kwargs['model']
 
         operator = obs_src.obs_operator[kwargs['model']]
         assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['source']+'.obs_operator for '+kwargs['model']
