@@ -7,7 +7,7 @@ cd $rundir
 if [[ `cat stat` == "complete" ]]; then exit; fi
 
 ##check dependency
-model_list=`echo "$state_def" |awk '{print $2}' |uniq`
+model_list=`echo "$state_def" |awk '{print $2}' |uniq |sed 's/\./\//g'`
 for model in $model_list; do wait_for_module ../../$prev_time/$model; done
 
 echo running > stat
