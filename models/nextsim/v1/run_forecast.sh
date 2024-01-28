@@ -1,10 +1,12 @@
 #!/bin/bash
 #SBATCH --account=nn2993k
-#SBATCH --job-name=run_cycle
+#SBATCH --job-name=nextsim_fcst
 #SBATCH --time=0-00:30:00
 #SBATCH --nodes=4
-#SBATCH --ntasks-per-node=125
-#SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/run_cycle.%j
+#SBATCH --ntasks-per-node=128
+#SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/nextsim_fcst.%j
+###run deterministic forecast
+casename=$1
 
 source ~/.bashrc
 ##other initial environment src code
@@ -21,9 +23,6 @@ trap cleanup SIGINT SIGTERM
 if [[ ! -d $work_dir ]]; then mkdir -p $work_dir; fi
 cd $work_dir
 
-##list of model components
-model_list=`echo "$state_def" |awk '{print $2}' |uniq |sed 's/\./\//g'`
-
 #start cycling
 date
 export time=$time_start
@@ -34,7 +33,7 @@ while [[ $next_time -le $time_assim_end ]]; do
     export next_time=`advance_time $time $cycle_period`
 
     echo "--------------------------------------------------"
-    echo "current cycle: $time => $next_time"
+    echo "current time step: $time => $next_time"
 
     ##make the necessary directories
     mkdir -p cycle/$time
@@ -48,23 +47,11 @@ while [[ $next_time -le $time_assim_end ]]; do
         fi
     done
 
-    ###prepare icbc and perturb members
-    for model in $model_list; do
-        $script_dir/../models/$model/module_icbc.sh &
-        $script_dir/../models/$model/module_perturb.sh &
-    done
-
-    ###data assimilation step
-    if [ $time -ge $time_assim_start ] && [ $time -le $time_assim_end ]; then
-        if $run_assim; then
-            $script_dir/module_assim.sh &
-        fi
-    fi
+    ###prepare icbc
+    $script_dir/../models/nextsim/v1/module_icbc.sh &
 
     ###model forecast step
-    for model in $model_list; do
-        $script_dir/../models/$model/module_ens_forecast.sh &
-    done
+    $script_dir/../models/nextsim/v1/module_forecast.sh &
     wait
 
     ##check errors
@@ -83,3 +70,9 @@ while [[ $next_time -le $time_assim_end ]]; do
 done
 
 echo cycling complete
+
+if [[ ! -z $casename ]]; then
+    echo moving the output to $workdir/$casename
+    mv cycle $casename
+fi
+

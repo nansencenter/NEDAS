@@ -11,7 +11,7 @@ variables = {'seaice_conc': {'name':'M_conc', 'dtype':'float', 'is_vector':False
              'seaice_thick': {'name':'M_thick', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'m' },
              'seaice_damage': {'name':'M_damage', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'%' },
              'snow_thick': {'name':'M_snow_thick', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'m' },
-             'seaice_drift': {'name':'M_VT', 'dtype':'float', 'is_vector':True, 'restart_dt':3, 'levels':[0], 'units':'m/s' },
+             'seaice_velocity': {'name':'M_VT', 'dtype':'float', 'is_vector':True, 'restart_dt':3, 'levels':[0], 'units':'m/s' },
              }
 
 
@@ -30,7 +30,7 @@ def filename(path, **kwargs):
 
     if 'member' in kwargs:
         if kwargs['member'] is None:
-            mstr = '001'
+            mstr = ''
         else:
             assert kwargs['member'] >= 0, 'member index shall be >= 0'
             mstr = '{:03d}'.format(kwargs['member']+1)
@@ -97,11 +97,15 @@ def read_var(path, grid, **kwargs):
     var = read_data(fname, variables[vname]['name'])
 
     ##nextsim restart file concatenates u,v component, so reshape if is_vector
-    if kwargs['is_vector']:
+    if variables[vname]['is_vector']:
         var = var.reshape((2, -1))
 
     ##convert units if native unit is not the same as required by kwargs
-    var = units_convert(kwargs['units'], variables[vname]['units'], var)
+    if 'units' in kwargs:
+        units = kwargs['units']
+    else:
+        units = variables[vname]['units']
+    var = units_convert(units, variables[vname]['units'], var)
 
     return var
 

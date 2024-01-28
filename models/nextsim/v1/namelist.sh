@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. $CONFIG_FILE
+. $config_file
 
 cat << EOF
 [mesh]
@@ -9,15 +9,15 @@ filename=small_arctic_10km.msh
 [setup]
 ice-type=topaz
 ocean-type=topaz
-atmosphere-type=$ATMOS_TYPE
+atmosphere-type=generic_ps
 bathymetry-type=etopo
 use_assimilation=false
 dynamics-type=bbm
 
 [simul]
 timestep=900
-time_init=${DATE:0:4}-${DATE:4:2}-${DATE:6:2} ${DATE:8:2}:00:00
-duration=21
+time_init=${time:0:4}-${time:4:2}-${time:6:2} ${time:8:2}:00:00
+duration=`echo "$cycle_period / 24" |bc -l`
 
 [thermo]
 use_assim_flux=false
@@ -43,7 +43,7 @@ compaction_param=-25
 
 [restart]
 start_from_restart=true
-basename=${DATE:0:8}T${DATE:8:2}0000Z
+basename=${time:0:8}T${time:8:2}0000Z
 input_path=restart
 type=extend
 write_initial_restart=true
@@ -52,7 +52,7 @@ output_interval=1
 check_restart=true
 
 [output]
-output_per_day=`expr 1440 / $CYCLE_PERIOD`
+output_per_day=8
 datetime_in_filename=true
 exporter_path=.
 export_before_regrid=true
