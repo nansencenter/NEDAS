@@ -129,15 +129,17 @@ class Grid(object):
             self.x_elem = np.mean(self.x[self.tri.triangles], axis=1)
             self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
 
-            ###size of each edge:
-            # t = self.tri.triangles
-            # s1 = np.sqrt((x[t[:,0]] - x[t[:,1]])**2 + (y[t[:,0]] - y[t[:,1]])**2)
-            # s2 = np.sqrt((x[t[:,0]] - x[t[:,2]])**2 + (y[t[:,0]] - y[t[:,2]])**2)
-            # s3 = np.sqrt((x[t[:,2]] - x[t[:,1]])**2 + (y[t[:,2]] - y[t[:,1]])**2)
-            # s = 0.5*(s1+s2+s3)
-            # self.area = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))
-            ###circumference-to-area ratio (1: equilateral triangle, ~0: very elongated)
-            # self.ratio =  area / s**2 * 3**(3/2)
+            ##some triangle properties
+            t = self.tri.triangles
+            s1 = np.hypot(x[t[:,0]] - x[t[:,1]], y[t[:,0]] - y[t[:,1]])
+            s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
+            s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
+            s = 0.5*(s1+s2+s3)
+            self.tri_p = 2.0 * s  ##circumference
+            self.tri_a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+            ##circumference-to-area ratio
+            ##(1: equilateral triangle, ~0: very elongated)
+            self.ratio =  area / s**2 * 3**(3/2)
 
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
