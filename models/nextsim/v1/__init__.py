@@ -28,12 +28,8 @@ def filename(path, **kwargs):
     else:
         dt = 0
 
-    if 'member' in kwargs:
-        if kwargs['member'] is None:
-            mstr = ''
-        else:
-            assert kwargs['member'] >= 0, 'member index shall be >= 0'
-            mstr = '{:03d}'.format(kwargs['member']+1)
+    if 'member' in kwargs and kwargs['member'] is not None:
+        mstr = '{:03d}'.format(kwargs['member']+1)
     else:
         mstr = ''
 

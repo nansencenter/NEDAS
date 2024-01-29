@@ -97,7 +97,7 @@ maskfile=$SCRATCH/mask.npz
 state_def=$(cat << EOF
 seaice_velocity  nextsim.v1  field  normal
 seaice_conc      nextsim.v1  field  normal
-seaice_thick     nextsim.v2  field  normal
+seaice_thick     nextsim.v1  field  normal
 EOF
 )
 
@@ -121,8 +121,10 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-seaice_conc  osisaf.ice_conc  nextsim.v1  normal  0.1  0  0  0  none  200000  10  6  none
-seaice_drift osisaf.ice_drift nextsim.v1  normal   10  0  0  0  none  200000  10  6  none
+seaice_conc    osisaf.ice_conc   nextsim.v1  normal   0.1  0  0  0  none  200000  10  24  none
+seaice_drift   osisaf.ice_drift  nextsim.v1  normal    10  0  0  0  none  200000  10  24  none
+seaice_drift   rgps              nextsim.v1  normal    10  0  0  0  none   60000  10  24  none
+seaice_shear   rgps              nextsim.v1  normal  0.01  0  0  0  none   60000  10  24  none
 EOF
 )
 
