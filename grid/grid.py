@@ -135,11 +135,11 @@ class Grid(object):
             s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
             s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
             s = 0.5*(s1+s2+s3)
-            self.tri_p = 2.0 * s  ##circumference
-            self.tri_a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+            self.tri.p = 2.0 * s  ##circumference
+            self.tri.a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
             ##circumference-to-area ratio
             ##(1: equilateral triangle, ~0: very elongated)
-            self.ratio =  area / s**2 * 3**(3/2)
+            self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
 
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
