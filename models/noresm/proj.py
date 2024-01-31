@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import LinearNDInterpolator
 from numba import njit
 
 @njit
@@ -82,9 +83,8 @@ def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
 
 
 @njit
-def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat, ipiv=0, jpiv=0):
-    """ convert from lon,lat to grid space x,y """
-    ipiv, jpiv = pivotp(glon, glat, neighbors, lon, lat, ipiv, jpiv)
+def find_grid_index(glon, glat, gx, gy, neighbors, lon, lat, ipiv, jpiv):
+    """ convert a point lon,lat to grid space x,y """
 
     pt = jpiv, ipiv
     pt_e = neighbors[0, 0, *pt], neighbors[1, 0, *pt]
@@ -147,45 +147,93 @@ def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat, ipiv=0, jpiv=0):
         y = y1*b1 + y2*b2 + y3*b3
         # print(ipiv, jpiv, ':', pt2, pt3, ':', b1, b2, b3, ':', x, y)
 
-        return x, y, ipiv, jpiv
+        return x, y
 
-    return np.nan, np.nan, ipiv, jpiv
+    return np.nan, np.nan
 
 
-@njit
+def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat):
+    """ convert from lon,lat to grid space index x,y """
+    x, y = np.full(lon.size, np.nan), np.full(lon.size, np.nan)
+    ipiv, jpiv = 0, 0
+    for i in range(lon.size):
+        ipiv, jpiv = pivotp(glon, glat, neighbors, lon[i], lat[i], ipiv, jpiv)
+        x[i], y[i] = find_grid_index(glon, glat, gx, gy, neighbors, lon[i], lat[i], ipiv, jpiv)
+    return x, y
+
+
 def xy2lonlat(glon, glat, gx, gy, neighbors, x, y):
-    """ convert from grid space x,y to lon,lat """
+    """ convert from grid space index x,y to lon,lat """
+    ny, nx = glon.shape
+    glon_, glat_ = np.zeros((ny+2, nx+2)), np.zeros((ny+2, nx+2))
+    glat_[1:-1, 1:-1] = glat
+    glat_[1:-1, 0] = glat[:, -1]  ##cyclic west boundary
+    glat_[1:-1, -1] = glat[:, 0]  ##cyclic east boundary
+    glat_[-1, :] = glat_[-2, ::-1]  ##north boundary
+    glat_[0, :] = -80.2851  ##south boundary, add another latitude band
+                            ##better: extrapolated from lat[1:5,:]
+    glon_[1:-1, 1:-1] = glon
+    glon_[1:-1, 0] = glon[:, -1]  ##cyclic west boundary
+    glon_[1:-1, -1] = glon[:, 0]  ##cyclic east boundary
+    glon_[-1, :] = glon_[-2, ::-1]  ##north boundary
+    glon_[0, :] = glon_[1, :]   ##south boundary, add another latitude band
+
+    gx_, gy_ = np.meshgrid(np.arange(-1, nx+1), np.arange(-1, ny+1))
+    sx, sy = lonlat2sxy(glon_, glat_)
+    xy2sx = LinearNDInterpolator(list(zip(gx_.flatten(), gy_.flatten())), sx.flatten())
+    xy2sy = LinearNDInterpolator(list(zip(gx_.flatten(), gy_.flatten())), sy.flatten())
+
+    lon, lat = sxy2lonlat(xy2sx(x, y), xy2sy(x, y))
+    return lon, lat
+
     ##get 1d coordinates in x,y directions
-    ny, nx = gx.shape
-    x_, y_ = np.arange(nx+1), np.arange(ny+1)
+    # ny, nx = gx.shape
 
-    ##search in gx,gy for x,y
-    i = np.searchsorted(x_, x, side='right')
-    j = np.searchsorted(y_, y, side='right')
-    inside = ~np.logical_or(np.logical_or(i==len(x_), i==0),
-                            np.logical_or(j==len(y_), j==0))
+    ##check if x,y is inside the grid
+    ##allowed range is -1 to nx (extended 1 grid point to both sides)
+    # if x>=-1 and x<=nx and y>=0 and y<=ny:
 
-    if inside:
-        ##get the four vertices
-        j0,i0 = j-1,i-1               ##current pivot point
-        j1,i1 = neighbors[:,0,j0,i0]  ##point to the east
-        j2,i2 = neighbors[:,1,j1,i1]  ##point to the north-east
-        j3,i3 = neighbors[:,1,j0,i0]  ##point to the north
+    #     i, j = int(np.floor(x)), int(np.floor(y))
 
-        ##internal coordinates for interpolation weights
-        u, v = x - x_[i0], y - y_[j0]
-        w = np.array([(1-u)*(1-v), u*(1-v), (1-u)*v, u*v])
+    #     ##get the four vertices
+    #     if i<0 and j<0:
+    #         j2,i2 = j+1,i+1
+    #         j1,i1 = neighbors[:,3,j2,i2]  ##point to the south
+    #         j3,i3 = neighbors[:,2,j2,i2]  ##point to the west
+    #         j0,i0 = neighbors[:,2,j1,i1]  ##point to the south-west
 
-        ##lon,lat at vertices, convert to stere proj, interp, convert back
-        lon_pt = np.array([glon[j0,i0], glon[j1,i1], glon[j2,i2], glon[j3,i3]])
-        lat_pt = np.array([glat[j0,i0], glat[j1,i1], glat[j2,i2], glat[j3,i3]])
-        sx_pt, sy_pt = lonlat2sxy(lon_pt, lat_pt)
-        sx, sy = np.sum(w*sx_pt), np.sum(w*sy_pt)
-        lon, lat = sxy2lonlat(sx, sy)
+    #     elif i<0 and j>=0:
+    #         j1,i1 = j,i+1
+    #         j0,i0 = neighbors[:,2,j1,i1]  ##point to the west
+    #         j2,i2 = neighbors[:,1,j1,i1]  ##point to the north
+    #         j3,i3 = neighbors[:,1,j0,i0]  ##point to the north-west
 
-        return lon, lat
+    #     elif i>=0 and j<0:
+    #         j3,i3 = j+1,i
+    #         j0,i0 = neighbors[:,3,j3,i3]  ##point to the south
+    #         j2,i2 = neighbors[:,0,j3,i3]  ##point to the east
+    #         j1,i1 = neighbors[:,0,j0,i0]  ##point to the south-east
 
-    else:
-        return np.nan, np.nan
+    #     else:
+    #         j0,i0 = j,i
+    #         j1,i1 = neighbors[:,0,j0,i0]  ##point to the east
+    #         j3,i3 = neighbors[:,1,j0,i0]  ##point to the north
+    #         j2,i2 = neighbors[:,1,j1,i1]  ##point to the north-east
+
+    #     ##internal coordinates for interpolation weights
+    #     u, v = x - i, y - j
+    #     w = np.array([(1-u)*(1-v), u*(1-v), (1-u)*v, u*v])
+
+    #     ##lon,lat at vertices, convert to stere proj, interp, convert back
+    #     lon_pt = np.array([glon[j0,i0], glon[j1,i1], glon[j2,i2], glon[j3,i3]])
+    #     lat_pt = np.array([glat[j0,i0], glat[j1,i1], glat[j2,i2], glat[j3,i3]])
+    #     sx_pt, sy_pt = lonlat2sxy(lon_pt, lat_pt)
+    #     sx, sy = np.sum(w*sx_pt), np.sum(w*sy_pt)
+    #     lon, lat = sxy2lonlat(sx, sy)
+
+    #     return lon, lat
+
+    # else:
+    #     return np.nan, np.nan
 
 

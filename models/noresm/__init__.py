@@ -203,8 +203,6 @@ def read_grid(path, **kwargs):
     ##See https://expearth.uib.no/?page_id=28 for some explanation
     ##See documentation: https://noresm-docs.readthedocs.io
 
-    scale_x = 0.5
-    scale_y = 0.5
     if 'grid_type' in kwargs:
         grid_type = kwargs['grid_type']
     else:
@@ -220,7 +218,7 @@ def read_grid(path, **kwargs):
     if 'scale_y' in kwargs:
         scale_y = kwargs['scale_y']
     else:
-        scale_y = 0.5
+        scale_y = 0.5  ##default
 
     if not 'stagger' in kwargs:
         kwargs['stagger'] = 'p'
@@ -232,12 +230,10 @@ def read_grid(path, **kwargs):
         shape = np.atleast_1d(xi).shape
         xi, yi = np.atleast_1d(xi).flatten(), np.atleast_1d(yi).flatten()
         xo, yo = np.full(xi.size, np.nan), np.full(xi.size, np.nan)
-        ipiv, jpiv = 0, 0
-        for i in range(xi.size):
-            if not inverse:
-                xo[i], yo[i], ipiv, jpiv = lonlat2xy(lon, lat, x, y, neighbors, xi[i], yi[i], ipiv, jpiv)
-            else:
-                xo[i], yo[i] = xy2lonlat(lon, lat, x, y, neighbors, xi[i], yi[i])
+        if not inverse:
+            xo, yo = lonlat2xy(lon, lat, x, y, neighbors, xi, yi)
+        else:
+            xo, yo = xy2lonlat(lon, lat, x, y, neighbors, xi, yi)
         if xo.size == 1:
             return xo.item(), yo.item()
         return xo.reshape(shape), yo.reshape(shape)
