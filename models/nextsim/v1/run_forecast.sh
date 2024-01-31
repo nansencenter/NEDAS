@@ -1,10 +1,12 @@
 #!/bin/bash
 #SBATCH --account=nn2993k
 #SBATCH --job-name=nextsim_fcst
-#SBATCH --time=0-00:30:00
-#SBATCH --nodes=4
+#SBATCH --time=0-01:00:00
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
+#SBATCH --qos=devel
 #SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/nextsim_fcst.%j
+
 ###run deterministic forecast
 casename=$1
 
@@ -34,6 +36,8 @@ while [[ $next_time -le $time_assim_end ]]; do
 
     echo "--------------------------------------------------"
     echo "current time step: $time => $next_time"
+
+    export forecast_period=$cycle_period
 
     ##make the necessary directories
     mkdir -p cycle/$time

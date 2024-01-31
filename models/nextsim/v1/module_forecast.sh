@@ -8,7 +8,7 @@ cd $rundir
 if [[ `cat stat` == "complete" ]]; then exit; fi
 
 ##check dependency
-if [[ $time == $time_start ]]; then wait_for_module ../icbc; fi
+wait_for_module ../icbc
 
 echo running > stat
 
@@ -26,12 +26,14 @@ mkdir data
 cd data
 ln -fs $data_dir/BATHYMETRY/* .
 ln -fs $data_dir/TOPAZ4/TP4DAILY_* .
-mkdir -p GENERIC_PS_ATM
-cp -L $data_dir/generic_ps_atm/generic_ps_atm_${time:0:8}.nc GENERIC_PS_ATM/.
+ln -fs $work_dir/cycle/$time/icbc/GENERIC_PS_ATM .
 cd ..
+
 mkdir -p restart
 cd restart
-cp -L $data_dir/nextsim_ens/restart/{field,mesh}_${time:0:8}T${time:8:4}00Z.{bin,dat} .
+if [[ $time == $time_start ]]; then
+    ln -fs $work_dir/cycle/$time/icbc/{field,mesh}_${time:0:8}T${time:8:4}00Z.{bin,dat} .
+fi
 cd ..
 export NEXTSIM_DATA_DIR=`pwd`/data
 
@@ -41,16 +43,14 @@ $script_dir/../models/nextsim/v1/namelist.sh > nextsim.cfg
 ##run the model
 $script_dir/job_submit.sh $nnodes $ntasks 0 $code_dir/nextsim/model/bin/nextsim.exec --config-files=nextsim.cfg >& run.log
 
-cd ..
-
-nextdir=$work_dir/cycle/$next_time/nextsim.v1
+nextdir=$work_dir/cycle/$next_time/nextsim.v1/restart
 if [[ ! -d $nextdir ]]; then mkdir -p $nextdir; fi
 
-##collect output files, make a copy of forecast files to next cycle
-watch_log $m_id/run.log successfully 5 $rundir
+##collect output files, make a copy of forecast file (prior) to
+##next cycle directory to be updated to analysis file (posterior)
+watch_log run.log "Simulation done" 1 $rundir
 
-#mv $m_id/${next_time:0:8}_${next_time:8:2}_mem$m_id.nc .
-#cp -L ${next_time:0:8}_${next_time:8:2}_mem$m_id.nc $nextdir/.
+mv restart/{field,mesh}_${next_time:0:8}T${next_time:8:4}00Z.{bin,dat} $nextdir/.
 
 echo complete > stat
 

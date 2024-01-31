@@ -33,7 +33,7 @@ def filename(path, **kwargs):
     else:
         mstr = ''
 
-    search = path+'/'+mstr+'/field_'+tstr+'.bin'
+    search = path+'/'+mstr+'/restart/field_'+tstr+'.bin'
     flist = glob.glob(search)
     assert len(flist)>0, 'no matching files found: '+search
     return flist[0]
@@ -132,5 +132,14 @@ uniq_z_key = ()
 def z_coords(path, grid, **kwargs):
     ##for nextsim, just discard inputs and simply return zero as z_coords
     return np.zeros(grid.x.shape)
+
+
+def read_param(path, **kwargs):
+    param = 0
+    return param
+
+
+def write_param(path, param, **kwargs):
+    pass
 
 

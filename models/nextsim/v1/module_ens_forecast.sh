@@ -41,13 +41,13 @@ for m in `seq 1 $nens`; do
     cd data
     ln -fs $data_dir/BATHYMETRY/* .
     ln -fs $data_dir/TOPAZ4/TP4DAILY_* .
-    ln -fs /cluster/work/users/yingyue/data/GENERIC_PS_ATM/$casename/$mem GENERIC_PS_ATM
+    ln -fs $work_dir/cycle/$time/icbc/GENERIC_PS_ATM .
     cd ..
     export NEXTSIM_DATA_DIR=`pwd`/data
 
     mkdir -p restart
     cd restart
-    ln -fs $SCRATCH/nextsim_ens_runs/init_run/restart/{field,mesh}_${DATE:0:8}T${DATE:8:4}00Z.{bin,dat} .
+    ln -fs $work_dir/cycle/$time/icbc/{field,mesh}_${time:0:8}T${time:8:4}00Z.{bin,dat} .
     cd ..
 
     ##make the namelist
@@ -65,7 +65,7 @@ for m in `seq 1 $nens`; do
 done
 wait
 
-nextdir=$work_dir/cycle/$next_time/vort2d
+nextdir=$work_dir/cycle/$next_time/nextsim.v1
 if [[ ! -d $nextdir ]]; then mkdir -p $nextdir; fi
 
 ##collect output files, make a copy of forecast files to next cycle
