@@ -18,6 +18,9 @@ variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 
 rgps_proj = pyproj.Proj('+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=70')
 rgps_dt = timedelta(days=3)  ##RGPS records the position every 3 days
 
+##tolerance when searching for the time along trajectory
+dt_tol=timedelta(days=3)
+
 ##some parameters
 DRIFT_MAX = 80  ##km/day
 DRIFT_ERR_STD = 5
@@ -150,9 +153,6 @@ def get_rgps_traj_pairs(file_name, time):
     d0_out = time
     d1_out = time + rgps_dt
 
-    ##tolerance when searching for the time along trajectory
-    dt_tol=timedelta(days=3)
-
     pairs = []
     for stream in loadmat(file_name)['out'][0]:
 
@@ -281,6 +281,7 @@ def get_nextsim_files(path, **kwargs):
         t_list.append(t)
 
     file_list = list(np.array(file_list)[np.argsort(t_list)])
+    assert len(file_list)>0, 'no matching files found'
 
     return file_list
 

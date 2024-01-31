@@ -54,33 +54,24 @@ inflate_factor = np.array(os.environ.get('inflate_factor').split()).astype(np.fl
 
 
 ##time control for experiment
-time_start=os.environ.get('time_start')
-time_end=os.environ.get('time_end')
-time_assim_start=os.environ.get('time_assim_start')
-time_assim_end=os.environ.get('time_assim_end')
+time_start = os.environ.get('time_start')
+time_end = os.environ.get('time_end')
+time_assim_start = os.environ.get('time_assim_start')
+time_assim_end = os.environ.get('time_assim_end')
 
-cycle_period=np.float32(os.environ.get('cycle_period'))
+cycle_period = np.float32(os.environ.get('cycle_period'))
 
-time=os.environ.get('time', time_start)  ##time is the current analysis cycle
-prev_time=os.environ.get('prev_time', time_start)
-next_time=os.environ.get('next_time', time_start)
+time = os.environ.get('time', time_start)  ##time is the current analysis cycle
+prev_time = os.environ.get('prev_time', time_start)
+next_time = os.environ.get('next_time', time_start)
 
-##time scheme for analysis window
-obs_window_min = np.float32(os.environ.get('obs_window_min'))
-obs_window_max = np.float32(os.environ.get('obs_window_max'))
-obs_nt = int(os.environ.get('obs_nt'))
-obs_dt = 12   #(obs_window_max - obs_window_min) / obs_nt
-obs_ts = np.array([0]) #np.arange(obs_window_min, obs_window_max, obs_dt)
+##time steps for the analysis window
+obs_time_steps = np.array(os.environ.get('obs_time_steps', '0').split()).astype(np.float32)
+state_time_steps = np.array(os.environ.get('state_time_steps', '0').split()).astype(np.float32)
 
-##time scale for averaging
-t_scale = np.array(os.environ.get('t_scale').split()).astype(np.float32)[scale]
-
-##analysis time slots, typically only [0] at model restart time
-if run_align_time:
-    state_ts = obs_ts
-else:
-    state_ts = np.array([0])
-
+##time multiscale smoothing
+obs_time_scale = np.array(os.environ.get('obs_time_scale', '0').split()).astype(np.float32)[scale]
+state_time_scale = np.array(os.environ.get('state_time_scale', '0').split()).astype(np.float32)[scale]
 
 ##define analysis grid
 grid_type = os.environ.get('grid_type')

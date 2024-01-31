@@ -31,6 +31,11 @@ for module in icbc perturb analysis vort2d nextsim.v1; do
            tail -n2 $rundir/$t/$module/assim.log
            ;;
          vort2d | topaz.v? | nextsim.v? | wrf)
+           ##single run
+           if [[ -f $rundir/$t/$module/run.log ]]; then
+             tail -n5 $rundir/$t/$module/run.log
+           fi
+           ##ensemble runs
            for mem in `/bin/ls $rundir/$t/$module |grep -E '^[0-9]{3}$'`; do
              if [[ -f $rundir/$t/$module/$mem/run.log ]]; then
                logtail=`tail -n1 $rundir/$t/$module/$mem/run.log`

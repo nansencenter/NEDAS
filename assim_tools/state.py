@@ -59,8 +59,8 @@ def parse_state_info(c):
             assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['source']+'.variables'
 
             #now go through time and zlevels to form a uniq field record
-            for time in s2t(c.time) + c.state_ts*timedelta(hours=1):  ##time slices
-                for k in src.variables[vname]['levels']:  ##vertical levels
+            for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
+                for k in src.variables[vname]['levels']:
                     rec = { 'name': vname,
                             'source': vrec['source'],
                             'dtype': src.variables[vname]['dtype'],
@@ -68,7 +68,7 @@ def parse_state_info(c):
                             'units': src.variables[vname]['units'],
                             'err_type': vrec['err_type'],
                             'time': time,
-                            'dt': c.t_scale,
+                            'dt': c.state_time_scale,
                             'k': k,
                             'pos': pos, }
                     info['fields'][rec_id] = rec
@@ -83,7 +83,7 @@ def parse_state_info(c):
             ##this is a scalar (model parameter, etc.) to be updated
             ##since there is no difficulty storing the scalars on 1 proc
             ##we don't bother with parallelization (no rec_id needed)
-            for time in s2t(c.time) + c.state_ts*timedelta(hours=1):  ##time slices
+            for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
                 rec = {'name': vname,
                        'source': vrec['source'],
                        'err_type': vrec['err_type'],

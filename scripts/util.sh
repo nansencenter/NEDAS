@@ -88,17 +88,17 @@ function watch_log {
     keyword=$2
     timeout=$3
     rundir=$4
-    l=0
+    l=`cat $logfile |wc -l`
     t=0
     until [ -s $logfile ]; do sleep 10 ; done
-    until [[ `tail -n5 $logfile |grep $keyword` ]]; do
+    until [[ `tail -n5 $logfile |grep "$keyword"` ]]; do
         sleep 60
         l1=`cat $logfile |wc -l`
         if [ $l1 -eq $l ]; then
             t=$((t+1))
         else
-        l=$l1
-        t=0
+            l=$l1
+            t=0
         fi
         if [ $t -gt $timeout ]; then
             echo "`pwd`/$logfile stagnant for $timeout minutes! Abort."

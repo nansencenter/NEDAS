@@ -17,7 +17,7 @@ dynamics-type=bbm
 [simul]
 timestep=900
 time_init=${time:0:4}-${time:4:2}-${time:6:2} ${time:8:2}:00:00
-duration=`echo "$cycle_period / 24" |bc -l`
+duration=`echo "$forecast_period / 24" |bc -l`
 
 [thermo]
 use_assim_flux=false
@@ -33,7 +33,7 @@ albedoW=0.07
 [dynamics]
 time_relaxation_damage=15
 compression_factor=10e3
-C_lab=1.35e6
+C_lab=${cohesion:-1.35}e6
 substeps=120
 use_temperature_dependent_healing=true
 ERA5_quad_drag_coef_air=0.0017
@@ -48,7 +48,7 @@ input_path=restart
 type=extend
 write_initial_restart=true
 write_interval_restart=true
-output_interval=1
+output_interval=`echo "$cycle_period / 24" |bc -l`
 check_restart=true
 
 [output]
@@ -59,7 +59,7 @@ export_before_regrid=true
 export_after_regrid=true
 
 [moorings]
-use_moorings=true
+use_moorings=false
 grid_type=regular
 spacing=3
 output_timestep=1

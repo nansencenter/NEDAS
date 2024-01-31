@@ -56,7 +56,7 @@ def parse_obs_info(c):
         assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['source']+'.variables'
 
         ##loop through time steps in obs window
-        for time in s2t(c.time) + c.obs_ts*timedelta(hours=1):
+        for time in s2t(c.time) + c.obs_time_steps*timedelta(hours=1):
             obs_rec = {'name': vname,
                        'source': vrec['source'],
                        'model': vrec['model'],
@@ -65,8 +65,7 @@ def parse_obs_info(c):
                        'units': src.variables[vname]['units'],
                        'z_units': src.variables[vname]['z_units'],
                        'time': time,
-                       'obs_window_min': c.obs_window_min,
-                       'obs_window_max': c.obs_window_max,
+                       'dt': 0,
                        'pos': pos,
                        'err':{'type': vrec['err_type'],
                               'std': vrec['err_std'],
