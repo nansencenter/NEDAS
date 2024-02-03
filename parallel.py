@@ -6,6 +6,7 @@ class dummy_comm(object):
     def __init__(self):
         self.size = 1
         self.rank = 0
+        self.buf = {}
 
     def Get_size(self):
         return self.size
@@ -21,6 +22,12 @@ class dummy_comm(object):
 
     def bcast(self, obj, root=0):
         return obj
+
+    def send(self, obj, dest, tag):
+        self.buf[tag] = obj
+
+    def recv(self, source, tag):
+        return self.buf[tag]
 
     def allgather(self, obj):
         return [obj]
