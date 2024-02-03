@@ -11,6 +11,7 @@ class TestParallel(unittest.TestCase):
         self.assertIsInstance(comm.Get_rank(), int)
         self.assertTrue(comm.Get_rank() < comm.Get_size())
 
+
     def test_bcast(self):
         comm = parallel.parallel_start()
 
@@ -36,6 +37,7 @@ class TestParallel(unittest.TestCase):
         self.assertEqual(data3[0], 1)
         self.assertTrue(data3[1])
 
+
     def test_send_recv(self):
         comm = parallel.parallel_start()
         pid = comm.Get_rank()
@@ -46,6 +48,7 @@ class TestParallel(unittest.TestCase):
         if pid == nproc-1:
             recv_data = comm.recv(source=0, tag=0)
             self.assertTrue((recv_data == np.array([1, 2, 3])).all())
+
 
     def test_allgather(self):
         comm = parallel.parallel_start()
