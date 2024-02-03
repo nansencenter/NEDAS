@@ -1,0 +1,16 @@
+eig_pak.f90 
+ifort -r8 -i4 -c eigrg1.f 
+fft_fftw3_1pe.f90
+io_tools.f90
+mpif.h
+numerics_lib.f90
+op_rules.f90
+qg_arrays.f90
+qg_diagnostics.f90
+qg_driver.f90
+qg_init_tools.f90
+qg_params.f90
+qg_run_tools.f90
+strat_tools.f90
+syscalls_linux.f90
+transform_tools.f90

@@ -1,0 +1,234 @@
+
+                   Output files from SQG model
+                   ***************************
+
+Almost all of these are only produced if relevant parameters are set.
+For example, none of the modal or ape series or spectra are produced if 
+model is run with one layer (nz=1).
+
+Spectra of ANY sort are only produced if 'do_spectra = T' -- this is
+the default and it is assumed to be true below.
+
+Further conditions are listed below.
+
+nkx = 2*kmax+1
+nky = kmax+1
+nx = 2*(kmax+1)
+ny = 2*(kmax+1)
+
+FILE		   DESCRIPTION				SIZE
+----		   -----------				----
+
+********* For ANY run ***************************
+
+diag1_time.bin	   Model times at which timeseries
+		       were written			(1,d1frame)
+diag2_time.bin	   Model times at which spectra and
+		       any other 2d fields 
+		       were written			(1,d1frame)
+eddy_time.bin      Eddy times at which diagnostics 
+		       were written (uses rms 
+		       vorticity for timescale)		(1,d1frame)
+ke.bin		   KE timeseries			(1,d1frame)
+kes.bin		   KE spectrum (by layer if nz>1)	(kmax,nz,d2frame)
+ens.bin		   Enstrophy timeseries			(1,d1frame)
+parameters.bin	   A bunch of params packed together 
+		       for SQGM matlab routines - 
+		       this is read in by GETPARAMS.	NA
+psi.bin		   The main data file - stores frames 
+		       of spectral psi			(nkx,nky,nz,frame)
+restart.nml	   All the namelist parameters spit 
+		       out for restarting		NA
+run.log		   A run log (all printed messages)	NA
+write_time.bin	   Model times at which frames of psi 
+		       and tracer were written		(1,frame)
+
+*********** If relevant parameters are /= 0 **********
+
+apes.bin	   APE spectrum (by layer if nz>1)	
+		       (only if F/=0: finite def rad)	(kmax,nz,d2frame)
+bd_rate.bin	   Bottom drag dissipation rate 
+		       timeseries (bot_drag>0)		(1,d1frame)
+bds.bin            BD spectrum by layer			(kmax,nz,d2frame)
+
+qd_rate.bin	   Quadratic drag dissipation rate 
+		       timeseries (quad_drag>0)		(1,d1frame)
+qds.bin            QD spectrum by layer			(kmax,nz,d2frame)
+
+td_rate.bin	   Top drag dissipation rate 
+		       timeseries (top_drag>0)		(1,d1frame)
+
+thd_rate.bin	   Thermal drag dissipation rate 
+		       timeseries (therm_drag>0 and
+		       surface_bc = 'free_surface')	(1,d1frame)
+
+filter_rate.bin	   Filter dissipation rate 
+		       timeseries 
+		       (filter_type/='none')		(1,d1frame)
+filters.bin        Filter spectrum by layer		(kmax,nz,d2frame)
+
+gen_rmf_rate.bin   Generation rate timeseries due
+		       to random markovian forcing
+		       (if use_forcing = T)		(1,d1frame)
+gens_rmf.bin       Generation spectrum from RMF		(kmax,nz,d2frame)
+
+xfers.bin          Energy transfer spectra -
+		       (do_xfer_spectra = T)		(kmax,d2frame)
+		       
+*********** If 'use_tracer = T' *********************
+
+tracer.bin	   Data file for saved frames of 
+		       spectral tracer field		(nkx,nky,nz,frame)
+tvar.bin	   Tracer variance timeseries		(1,d1frame)
+tvars.bin	   Tracer variance spectrum		(kmax,nz,d2frame)
+tpsi.bin	   Tracer "energy" timeseries		(1,d1frame)
+tpsis.bin	   Tracer "energy" spectrum		(kmax,nz,d2frame)
+
+tflux.bin	   Tracer flux timeseries 
+		       (use_mean_grad_t = T)		(1,d1frame)
+tfluxs.bin	   Tracer flux spectrum			(kmax,nz,d2frame)
+
+filter_rate_t.bin  Filter dissipation rate 
+		       timeseries 
+		       (filter_type_t/='none')		(1,d1frame)
+
+gen_rmf_t.bin	   Generation rate timeseries due
+		       to random markovian forcing
+		       (if use_forcing_t = T)		(1,d1frame)
+
+********* If nz > 1 ******************************
+
+dz.bin		   Layer thicknesses			(1,nz)	
+kz.bin		   Baroclinic deformation wavenumbers	(1,nz)
+rho.bin		   Density profile			(1,nz)
+tripint.bin	   Triple interaction coefficient	(nz,nz,nz)
+vmode.bin	   The vertical stratification modes    (nz,nz)
+ape.bin		   APE timeseries			(1,d1frame) 
+apems.bin	   APE modal spectrum			(kmax,nz,d2frame)
+apes.bin           APE z spectrum  (for each interface)	(kmax,nz-1,d2frame)
+kems.bin	   KE modal spectrum			(kmax,nz,d2frame)
+vq.bin		   <v'q'> vs. z				(nz,d2frame)
+
+
+bdms.bin           BD modal spectrum (bot_drag>0)	(kmax,nz,d2frame)
+filterms.bin	   Filter modal spectrum		(kmax,nz,d2frame)
+qdms.bin           QD modal spectrum (quad_drag>0)	(kmax,nz,d2frame)
+tdms.bin           Top drag modal spectrum (top_drag>0)	(kmax,nz,d2frame)
+thdms.bin          Therm drag modal spectrum 
+		       (therm_drag>0)			(kmax,nz,d2frame)
+
+
+xferms.bin         Energy transfer spectra by mode -
+		       (do_xfer_spectra = T)
+		       Holds *every* intermode 
+		       transfer term (see below)	(kmax,nz^3,d2frame)
+
+******** If uscale /= 0 AND nz >1 ******************
+
+ubar.bin	   Mean zonal velocity profile		(1,nz)
+gen_bci_rate.bin       Generation rate timeseries	(1,d1frame)
+genms.bin	   Generation spectrum by mode - only
+		       (do_genm_spectra = T)
+		       Holds *every* intermode 
+		       generatiion term (see below)	(kmax,nz^3,d2frame)
+gens.bin	   Generation spectrum by layer		(kmax,nz,d2frame)
+
+********* If use_topo = T ************************
+
+hb.bin		   Spectral bottom topography		(nkx,nky)
+
+********* If do_aniso_spectra = T (i.e. if you expect anisotropy) *******
+
+kesx.bin           KE spectra vs. kx and z	        (kmax,nz,d2frame)   
+kesy.bin           KE spectra vs. ky and z		(kmax,nz,d2frame)   
+kemsx.bin          KE spectra vs. kx and mode		(kmax,nz,d2frame)   
+kemsy.bin          KE spectra vs. ky and mode		(kmax,nz,d2frame)   
+
+********* If do_x_avgs = T ***********************
+
+uv_avg_x.bin       <u'v'> vs. y and z		        (ny,nz,d2frame)
+vq_avg_x.bin	   <v'q'> vs. y and z		        (ny,nz,d2frame)
+
+
+************************************************************************
+
+NOTE:  genms.bin and xferms.bin are special.  In the modal formulation
+of QG, the generation due to a mean shear and the internal transfers
+are double sums over the triple interaction coefficient for each mode.
+These files contain the UN-summed (i.e. not summed over modes) spectra:
+
+If K is the isotropic wavenumber, then
+
+
+xferms(k,j,m,K) = iso_spectra( 
+			   tripint(m,j,k)*conj(psim(:,:,m)) 
+			   *jacob(psim(:,:,j),-(kz(k)**2+ksqd_)*psim(:,:,k)) 
+		  )
+
+genms(k,j,m,K) =  iso_spectra( 
+			   tripint(j,k,m)*Um(j)* 
+                           conjg(psim(:,:,m))*i*kx_* 
+                           (kz(j)**2-kz(k)**2-ksqd_)*psim(:,:,k)
+                  )
+
+SO:
+
+xferms(m,K) = Sum_{j,k} ( xferms(k,j,m,K) ) 
+	    = the isotropic spectrum of transfers into/outof mode m
+
+genms(m,K) = Sum_{j,k} ( genms(k,j,m,K) ) 
+	    = the isotropic spectrum of generation due to baroclinic
+	       instability into/outof mode m
+
+Hence 
+
+Sum_{m,K} ( xferms(m,K) ) == 0
+
+and 
+
+Sum_{m,K} ( genms(m,K) ) == G <-- the total eddy generation (the congruent 
+				  value in time of the gen_bci_rate.bin 
+				  timeseries).
+
+
+But the initial spectra are thus 4 dimensional + time, so how are they 
+stored?  They are packed into the first dimension via routines
+ind2sub_ in numerics_lib.f90.  An equivalent set of functions are 
+in the SQG Matlab package:  sub2ind_ and ind2sub_ (the underscore
+is necessary because there are pre-existing Matlab functions by the
+same name).  
+
+Thus, as an example, to read in all the transfers for a given 
+multi-layer run at frame d2frame (hence at model time diag2_time(d2frame))
+
+>> xferms = read_field('xferms',kmax,nz^3,1,d2frame);
+>> size(xferms)
+
+ans =
+
+    63     9
+
+(assuming kmax = 63 and nz = 3 => 3 layers by 128^2)
+
+Then to access a given part of the spectrum, we use sub2ind_.  To
+plot the transfer spectrum corresponding to triads in baroclinic
+modes 3 and 2 transfering to 1 (where 3 = BC2, 2 = BC1 and 1 = BT,
+and of cours nz>=3)
+
+>> semilogx( xferms(:,sub2ind_([3 2 1],nz)) )  % Not positive definite
+
+If you want to sum over all the intermediate modes to get the total
+transfers into and out of mode m, use SUM_MODES:
+
+>> xferms_tot = sum_modes(xferms,nz);
+>> size(xferms)
+
+ans =
+
+    63      3
+
+
+Get it?  Hope so.
+
+
+
