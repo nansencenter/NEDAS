@@ -1,0 +1,234 @@
+
+                 Input parameters for QG model
+                 *****************************
+
+All of these are possible inputs to the namelist run_params,
+usually defined in a file called input.nml in your data
+directory. 
+
+**Below list is outdated, but mostly right... Best way to see all
+possible params is to look in file qg_params.f90**
+
+Default values are * d.  If no default is listed, the parameter must
+be entered explicitly when CONDITIONS are true.
+
+
+PARAMETER        LEGAL VALS     CONDITIONS        DESCRIPTION
+---------	 ----------     ----------        -----------
+
+**** Resolution parameters: ****
+
+kmax            2^n-1           always            Max horizontal wave #
+                                                    phys res=2*(kmax+1)
+nz              >= 1            always            Number of layers
+
+dt              > 0             adapt_dt=F        Timestep (non-dim)
+
+**** Flags: (logical) ****
+
+restarting      T/F*            --                Is this a restart?
+adapt_dt        T*/F            --                Use adaptive timestep
+use_mean_grad_t T/F*            --                Use mean tracer gradient
+use_forcing     T/F*            --                Use random markovian
+                                                    forcing (RMF)
+norm_forcing    T/F*            --                Normalize generation rate 
+		       		                    for RMF
+use_tracer      T/F*            --                Calculate tracers
+use_forcing_t   T/F*            --                Use RMF for tracers
+norm_forcing_t  T/F*            --                Normalize generation rate
+                                                    for tracer RMF
+use_topo        T/F*            --                Include topography
+do_spectra      T*/F            --                Calc/save spectra
+do_xfer_spectra T/F*            --                Calculate transfer
+do_genm_spectra T/F*            --                Calculate modal generation
+do_aniso_spectraT/F*            --                Calculate anisotropic spectra
+do_x_avg        T/F*            --                Calculate zonal averages
+initialize_energy T*/F          --                Init psi field st e = e_o
+						    (set to F if you read in
+						    an init field)
+
+**** Switches: (character) *****
+
+psi_init_type 'spectral'	always		Init streamfunction type
+	      'spectral_m'
+              'spectral_z'                        
+              'read'
+surface_bc    'rigid_lid'*      --		Surface boundary condition
+	      'free_surface'
+	      'periodic'
+strat_type    'linear'          nz>1		Stratification type
+	      'twolayer'
+	      'exp'
+              'stc'
+              'twolayer'
+              'read'
+ubar_type     'linear'          nz>1&uscale>0	Mean zonal velocity type
+	      'exp'
+              'stc'   
+              'modal'
+              'read'
+topo_type     'spectral'        use_topo=T	Topography type
+              'gaussbump'
+              'xslope'
+              'yslope'
+              'read'
+filter_type   'hyperviscous'	always		Enstrophy filter type
+	      'exp_cutoff'
+	      'none'            
+filter_type_t 'hyperviscous'	use_tracer=T	Variance filter type
+	      'exp_cutoff'
+	      'none'            
+tracer_init_type 'spatially_centered'   --	Init tracer type
+		 'spatially_constant'* 	  
+                 'read'
+ 
+**** Basic scales ****
+
+beta           >= 0		always		Coriolis grad param
+                                                  = beta_0 L^2/U_0(2pi)
+F              >= 0		always		Ratio of ext rossby
+                                                  rad to domain scale
+                                                  = f_0^2L^2/((2pi)^2g'H)
+uscale         any		nz>1		Scale factor for Ubar
+
+**** Mean stratification/velocity parameters (ref switch: strat_type)
+
+deltc	       >=0           'stc'|'exp'|'twolayer' Density scale depth
+delz_in_file   file name     'read'		Layer thicknesses
+rho_in_file    file name     'read'		Density profile
+
+**** Mean zonal velocity (Ubar) type (ref switch: ubar_type)
+
+delu	       >=0           'stc'|'exp'        Ubar scale depth
+umode	       0:nlevs-1     'modal'		Mode which Ubar projects onto
+ubar_in_file   file name     'read'		Ubar profile
+
+**** Streamfunction initialization parameters (ref switch: psi_init_type)
+
+e_o	       >0 (1 *)	     all	        Init energy
+k_o	       >0            'spectral_?'	Init peak k_isotrop
+delk	       >0            'spectral_?'	Init spectral spread
+m_o	       0:nlevs-1     'spectral_m'|
+			     'elliptical_vortex'Init BC mode of E
+z_o	       1:nlevs       'spectral_z'	Init level of energy
+psi_init_file  file name     'read'		Spectral input psi
+del_vort       >0	     'elliptical_vortex'Width of vortex
+aspect_vort    >0	     'elliptical_vortex'Aspect ratio of vortex
+
+**** Filter parameters (ref switch: filter_type)
+
+filter_exp     >=1	     filter_type/='none' Filter exponent 
+					'hyperviscous' => del^(2*filter_exp)q
+					'exp_cutoff' => 
+					 -(e^(alpha(k-k_cut)^filter_exp)-1)q
+k_cut	       >=0           'exp_cutoff'	Cutoff wavenumber - no 
+						 filtering below this value
+
+**** Dissipation parameters
+
+bot_drag       >=0           --			Bottom drag
+quad_drag      >=0           --			Quadratic bottom drag
+top_drag       >=0           --			Top drag
+therm_drag     >=0           --			Thermal drag
+
+**** Randome markovian forcing parameters (use_forcing=T)
+
+forc_coef      >=0	     req'd              RMF amplitude (or total 
+						generation rate if 
+						norm_forcing = T)
+forc_corr      0:1 (.5 *)			RMF correlation
+kf_min         0:kmax^2      req'd		Min k  for RMF
+kf_max         0:kmax^2      req'd		Max k for RMF
+
+**** Topography parameters (only for use_topo=T;  ref switch: topo_type)
+
+toposcale      any (1 *)    			Scale factor for hb
+del_topo       >0           'spectral'|'gaussbump'    Width of bump in k or x
+k_o_topo       1:kmax       'spectral'          Peak isotropic wavenumber of 
+						 topographic spectrum
+hb_in_file     filename     'read'              Spectral bottom topography 
+
+**** Tracer parameters (only for do_tracers=T;  ref switch: tracer_init_type)
+
+tvar_o        >=0 (0 *)	    --			Initial total variance
+kf_min_t      0:kmax^2      use_forcing_t=T	Min k for trc RMF
+kf_max_t      0:kmax^2      use_forcing_t=T	Max k for trc RMF
+z_stir        0:nz (1 *)    --                  Psi level used to stir tracer
+						  (0 => BT mode used to stir)
+forc_coef_t   >=0           use_forcing_t=T	Tracer RMF coef
+tracer_init_file  file name  'read'		Init spectral phi
+filter_exp_t  >=1	    filter_type_t/='none' Filter exponent 
+					'hyperviscous' => del^(2*filter_exp)t
+					'exp_cutoff' => 
+					 -(e^(alpha(k-k_cut)^filter_exp)-1)t
+k_cut_t       >=0           'exp_cutoff'	Cutoff wavenumber - no 
+						 filtering below this value
+
+! Interval steps for i/o and diagnostic calculations
+
+write_step     >0           always		Frame snapshot step
+diag1_step     >0           100			1D diagnostics step
+diag2_step     >0           100			2D diagnostics step
+
+! Counters/control parameters
+
+total_counts   >0           always		Total timesteps to do
+start_frame    >0           restarting=T|psi_init_type='read'  	
+						Frame from which to start
+
+
+
+************************************************************************
+**** DIP Switches and tuning factors - factory settings.
+
+recunit         >0  (8 *)   --		       For direct access IO used by
+						   io_tools.f90.  See header
+						   in that file for more
+						   info - many systems
+						   other than the Cray T90
+						   require this to be 2.
+idum            any (-7 *)  --		       Random generator seed
+
+**** Numerical stability tuning parameters
+
+robert         >=0,<<1 (0.01 *)      --          Robert filter value
+dt_tune        O(1)    (0.3 *)       --          Tuning for adaptive TS
+dt_step        int>0   (10  *)       --          dt re-calculation interval
+filt_tune      O(1)    (1   *)       --          Filter max tuning value
+filt_tune_t    O(1)    (1   *)       --          Filter_t max tuning value
+
+rmf_norm_min   >0,<1   (1.e-5 *)     --		 RMF min generation for norm
+						     i.e. if norm_forcing=T,
+						     generation will NOT
+						     be normalized if 
+						     the ACTUAL generation
+						     is < rmf_norm_min
+rho_slope      >0,<<1  (.00005 *)    --		 Lin slope * exp prof
+						     i.e. for strat_type 
+						     ='exp'|'stc', profile
+						     is multiplied by a 
+						     weak linear slope at 
+						     depth.  If your run
+						     stops at the beginning
+						     with an error message
+						     'some drho<0 in tripint'
+						     or something like that,
+						     increase this value.
+						     (its occuring because
+						     a spline interpolated
+						     rho profile has become
+						     non-monotonic)
+hf             int>2   (10 *)        --		 High resolution interpolation
+						     factor - i.e. for a given
+						     nz, stratification is
+						     interpolated to hf*nz
+						     layers for calculation
+						     of all modes, and layer
+						     thicknesses are then 
+						     taken from zero crossings
+						     of (nz-1) th mode. 
+						     The higher this value,
+						     the more accruate the
+						     selection of dz...
+
+

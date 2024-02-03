@@ -1,0 +1,151 @@
+
+                 Quick Start Guide to SQG Model
+                 ******************************
+
+1. 'tar xvf qgmodel.tar' will create a directory structure as follows
+
+                             qgmodel/
+                              |
+                    ---------------------------------
+                    src/   doc/   exp/  bin/   qgmat/
+                     |             |
+                ------      --------------------------
+                vX.XX/      ex1/   ex2/  ex3/   ex_su/
+
+        Source code (Fortran 90/77) resides in src/.
+        Some sample initial input (namelist) files are in
+        each of the subdirectories of exp/
+        Some brief documentation resides in doc/.
+	MATLAB diagnostic tools are in qgmat/ (see sqgm_guide.txt).
+
+	**Current version is set up for use on an Intel machine, with
+	the ifort compiler, and FFTW3.x.  If you want to use the code
+	with other FFTs or compilers, you will have to change the
+	files fft_xxx.f90 and syscalls_xxx.f90.  See header for
+	io_tools.f90, too -- there may be a need to change a parameter
+	setting in the makefile to get direct access binary I/O to
+	work right.  Email me for tips.**
+
+2.  Install FFTW3.x for use with ifort and icc:
+        
+	Get the recent stable version of fftw from http://www.fftw.org 
+	(under Downloads), then put the .tar.gz file in a temp
+	directory and go there.  In the configure line below, replace
+	the path $HOME/util/fftw to some location in your directory
+	where you keep utilities (if you were root, this would be
+	/usr/local).  I suggest making a directory called fftw 
+	somewhere. The install step will make directories /lib & /include
+	etc... in whatever directory is chosen by --prefix...
+
+	You'll also need to locate ifort and icc. Type 'which ifort' etc.. and
+	replace	the appropriate options below with results.
+
+	configure will take 5 minutes, make about 10-15 minutes.
+
+	tar xvfz fftw-3.1.2.tar.gz
+	cd fftw-3.1.2
+	./configure --prefix=$HOME/util/fftw CC="/opt/bin/icc" F77="/opt/bin/ifort"
+	make
+	make install
+
+3.  Build the QG model
+
+        You'll need to figure out the right library paths 
+	to include in your .cshrc (or equiv) file for icc and ifort.  
+	e.g. on the machine I'm using, it's:
+
+	setenv LD_LIBRARY_PATH /opt/intel/cce/current/lib:/opt/intel/fce/current/lib
+
+	Then you can build the model, using mkmf to create a makefile
+	(mkmf is in the /bin directory -- see
+	http://www.gfdl.gov/~vb/mkmf.html for details of its use):
+ 
+	cd ~/qgmodel/src/v2.93
+	~/qgmodel/bin/mkmf -x -v -p qg2.93 -t mkmf.template.intel path_names  > mkmf.log
+	cp qg2.93 ../..
+	cd ../..
+
+4.  The result of a successful compilation is the placement of
+        the executable qgX.XX in your base (qgmodel/) directory.
+        The exectuable takes two command line arguments,
+        separated by a space.
+
+        arg1: The pathname (relative to location of executable,
+        or absolute) of the directory where the input file is to
+        be found, and where all of the model output will be
+        written as well.  Call this 'datadir'.
+        DEFAULT is directory of executable, datadir =  '/.'
+
+        arg2: The name of the input file.  If none is specified,
+        program first looks for a restart file 'restart.nml', and
+        then looks for 'input.nml'.  Program only looks in
+        datadir.
+
+        2 args:   % qgX.XX exp/ex1 whatever.nml
+                - looks for exp/ex1/whatever.nml
+
+        1 arg:    % qgX.XX exp/ex1
+                - looks for exp/ex1/restart.nml, but if that's not
+		there, it looks for exp/ex1/input.nml
+
+	0 arg:	  % qgX.XX
+		- looks for ./restart.nml, but if that's not there
+		it looks for ./input.nml
+
+5.  The input file is a namelist which can include a large number
+        of input parameters, only a few of which are mandatory.
+        A list of these, along with a brief description of their
+        meaning, is listed in doc/parameters.txt.
+
+6.  All model output (apart from two namelists and a run log) is
+        written in unformatted direct access binary format, and
+        has the file extension '.bin'  A brief description of each
+        file produced resides in doc/output_files.txt.
+        These ouput files are most easily read with the MATLAB 5
+        function READ_FIELD, included in the diagnostics package,
+        'sqg_matlab.tar'.  If these functions are loaded, you can
+        use GETPARAMS in the directory where the output resides
+        to read in most of the essential parameters (resolution,
+        stratification profiles, etc...).
+
+        NOTE: There is one special task here - you need to know
+        the default record length for direct access on your
+        architecture.  Usually it is 8 (as in 8 bits or 1 byte -
+        that is the correct value for SGI, Cray and
+        Linux/Portland Group f90), but on some DECs it is 2.
+        Whatever the value, set 'recunit' in your namelist input to the
+        proper value (or hard wire it by setting its value in
+        qg_params.f90 before compiling).  See also the header in
+        io_tools.f90.
+
+7.  Try running the examples in the example directories just to
+        see what happens.  Diagnostic messages will be printed to
+        the screen if run in interactive mode.  Mostly, though,
+        its useful to see a namelist input file that works.
+
+	For any run in which adaptive timestepping is used (the
+	default: adapt_dt = T), you should take care to make
+	sure that you use the largest allowable timestep by
+	setting dt_tune in the namelist.  The adaptation is not very
+	sophisticated, so the dt_tune you need may vary widely.  Some
+	simulations I've used 2., others require .1.  
+	If you are getting floating point errors
+	(most likely in first 1000 timesteps, but can happen at
+	any time), dt_tune is probably too large.
+
+	If you get an error message generated from the program with 
+	some code probably called "iochk", you can find the deep
+	meaning of the code either in the documentation for the 
+	compiler (its an IO error) or, on the Cray T90 (and I 
+	think on SGIs as well) by using the command 'explain lib-#'
+	where # is the code.
+
+8.  See the included PS document for details regarding the 
+	methods of enstrophy dissipation (enstrophdiss.ps)
+
+9.  You may email me for limited help with problems you may
+        have.  And there are many features of the model
+        which are not documented, so if you're thinking,
+        gee, wouldn't it be nice if I could ..., you might be able to
+        without much hassle. 
+

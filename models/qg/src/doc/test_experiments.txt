@@ -1,0 +1,65 @@
+
+Example input.nml files are included in each of the subdirectories.  I
+only guarantee that the parameters in each are consistent so that the
+model should start properly.  All are 128x128 horizontally (in grid space,
+hence kmax = 63 = N/2 - 1, where N = 128)
+
+ex1:  1 layer with random markovian forcing at intermediate wavenumbers
+	and with tracers forced by a mean gradient.  There is some drag
+	and an exponential cutoff filter on both the vorticity and
+	the tracer, but with different parameters for each one.
+	F = 0 so this is straight 2D turbulence, not QG.
+
+ex2:  2 layer with forcing by mean zonal velocity shear (which creates
+	baroclinic instability, causing potential energy of the mean state
+	to be converted to eddy kinetic energy).  Layers are equal 
+	thickness, and there is some bottom drag and beta.  
+	F = 400 so the deformation wavenumber is 2*sqrt(F) = 40
+	(since stratification type is linear)
+
+ex3:  8 layer with surface intensified stratification, surface intensified
+	mean zonal shear and random isotropic topography.
+
+
+Play with the parameters in these - you will find in some cases 
+that numerical stability is sensitive to certain settings.
+
+
+ex_su:
+
+An example for the Surface QG model is in EX_SU, which sets the model
+to the case of a uniform zonal flow over a gaussian mountain in the
+center of the domain.  The initial state contains a tiny perturbation
+vortex over the mountain (null initial perturbation energy will not,
+of course, evolve). This corresponds very closely to the run which
+produced Figure 4. of Held, Pierrehumbert, Garner and Swanson, 1995:
+"Surface quasi-geostrophic dynamics", JFM, vol. 282, 1--20, only this
+one is at half their resolution.  (hence note the fewer number of
+secondary vorticies which form on the filament. Nevertheless, I
+suspect that there are more with the present exponential cutoff
+filter than if the same resolution run was executed with del^8(T)
+hyperviscosity, as used in the paper).
+
+One can make a nice movie of the evolving temperature field for this 
+run with the following commands in Matlab (beware that this requires
+a chunk of memory though...):
+
+cd to directory where output data is stored, and then:
+
+>> getparams;                          % read in run parameters
+>> k_ = sqrt(get_ksqd(kmax));          % make array of K = sqrt(kx^2 + ky^2)
+>> for i = 2:101                       % skip the initial frame
+psik = read_field('psi',nkx,nky,nz,i); 
+tempk = -k_.*psik;                     % get spectral temperature field
+temp(:,:,i) = spec2grid(tempk);        % get grid space field
+end
+>> plotfield(temp,100,'p','jet')       % plot last frame of field and..
+>> cvec = caxis;                       %   ..get color axis from this one
+>> x=linspace(-pi,pi,256);             % get axes for plot
+>> figure                      % open fig window and set it to size you want
+>> moviet = make_movie(temp,'p','jet',x,x,cvec);  % use jet colormap
+>> movie(moviet,5,6)           % play movie 5 times at 6 frames/sec
+
+(use help graph3d for list of colormap options if you don't like jet...)
+
+

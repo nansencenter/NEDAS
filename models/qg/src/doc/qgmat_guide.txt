@@ -1,0 +1,87 @@
+
+              Quick Start Guide for QG Matlab routines
+              ****************************************
+
+1.  You first need to add the full path
+        of this directory to your MATLABPATH environment variable
+        and reload the path or restart MATLAB.  For example, if
+	your name is bob and you unpacked this package in your
+	home directory, you would add the following line to your
+	.cshrc or .login file (for tcsh or csh at least):
+	setenv MATLABPATH /home/bob/qgmodel/qgmat
+
+2.  Type help.  You should see an entry for the new directory.  If
+        you then type >> help qgmat (possibly with prepending
+        directory) you will get a listing of all the included
+        functions.
+
+3.  The basic input commands are GETPARAMS and READ_FIELD.  These
+        require some knowledge of the binary type of the
+        architecture you are working on.  See internal 
+	documentation for functions.
+
+4.  Example session, assuming you have output from a SQG run in
+        directory exp/ex2:
+
+********************************************************************
+
+>> cd exp/ex2
+>> ls
+
+ape.bin            filter_rate.bin    kes_y.bin          tripint.bin
+apems.bin          filterms.bin       kz.bin             ubar.bin
+apes.bin           gen_bci_rate.bin   parameters.bin     vmode.bin
+bd_rate.bin        gens.bin           psi.bin            vq.bin
+bdms.bin           input.nml          psiq.bin           write_time.bin
+diag_time.bin      ke.bin             qdms.bin           xferms.bin
+dz.bin             kems.bin           restart.nml
+eddy_time.bin      kes.bin            rho.bin
+ens.bin            kes_x.bin          run.log
+
+>> getparams
+
+ans =
+
+    63
+
+>> who
+
+Your variables are:
+
+F           d2frame     kmax        nx          uscale      
+ans         datadir     kz          ny          vmode       
+beta        dz          m           nz          z           
+bot_drag    frame       nkx         rho         zi          
+d1frame     k           nky         ubar        
+
+>> ke = read_field('ke');  
+>> plot(ke)                 % plot of kinetic energy timeseries
+>> kems = read_field('kems',kmax,nz,1,1:d2frame); % d2frame is the last 
+						    spectra frame written
+>> size(kems)   % kems contains spectra along first dimension, mode
+                  along second, time frame along third.
+ans =
+
+    63     2   101         % d1frame must be 101.
+
+>> loglog(k,sum(kems(:,1,52:101),3)/50)  % log-log plot of barotropic 
+	 				   kinetic energy
+                                           spectrum averaged over last 50 
+                                           frames
+>> psik = read_field('psi',nkx,nky,nz,frame);  % frame 'frame' of psi.bin is 
+						 read into psik (its spectral)
+					         kmax = 63, nz = 8, so this is
+						 a 127 x 64 x 8, complex*16
+						 array
+>> psi = spec2grid(psik);  % convert it to grid-space - 
+			     psi is now a 128 x 128 x 8, real*8 array
+>> plotfield(psi)  % Plots top layer by default in interp shaded pcolor w/
+        	     colorbar
+
+
+There are many other possibilities.  Most quantities I can think
+of to diagnose are already diagnosed by the model, and many
+of them can be done offline with the psi frames that have been saved,
+and utilizing the functions in this package.  
+
+***********************************************************************
