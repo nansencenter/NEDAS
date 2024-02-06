@@ -59,7 +59,6 @@ def read_obs(path, grid, mask, model_z, **kwargs):
             t0, t1 = f['time_bnds'][n,:].data
             obs_dt0 = f['dt0'][n,...].data.flatten()
             obs_dt1 = f['dt1'][n,...].data.flatten()
-            obs_err = f['uncert_dX_and_dY'][n,...].data.flatten()
             qc_flag = f['status_flag'][n,...].data.flatten()
 
             ###get drift vector, rotate vector from proj to grid.proj
@@ -68,6 +67,11 @@ def read_obs(path, grid, mask, model_z, **kwargs):
             obs_drift = obs_grid.rotate_vectors(np.array([obs_dx, obs_dy]))
             obs_dx = obs_drift[0,...].flatten()
             obs_dy = obs_drift[1,...].flatten()
+
+            if 'uncert_dX_and_dY' in f.variables:
+                obs_err = f['uncert_dX_and_dY'][n,...].data.flatten()
+            else:
+                obs_err = 10 * np.ones(obs_dx.shape)  ##default drift err 10 km
 
             for p in range(obs_dx.size):
                 if qc_flag[p] != 30:
