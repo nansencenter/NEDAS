@@ -60,6 +60,8 @@ def parse_obs_info(c):
             obs_rec = {'name': vname,
                        'source': vrec['source'],
                        'model': vrec['model'],
+                       'obs_window_min': vrec['obs_window_min'],
+                       'obs_window_max': vrec['obs_window_max'],
                        'dtype': src.variables[vname]['dtype'],
                        'is_vector': src.variables[vname]['is_vector'],
                        'units': src.variables[vname]['units'],

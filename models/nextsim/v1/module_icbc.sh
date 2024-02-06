@@ -15,6 +15,8 @@ echo "  Generating initial and boundary conditions..."
 src_file=$script_dir/../config/env/$host/nextsim.v1.src
 if [[ -f $src_file ]]; then source $src_file; fi
 
+touch icbc.log
+
 ##initial condition comes from previous restart files
 if [[ $time == $time_start ]]; then
     cp $data_dir/nextsim_ens/restart/{field,mesh}_${time:0:8}T${time:8:4}00Z.{bin,dat} .
@@ -22,7 +24,8 @@ fi
 
 ##boundary condition is from era5 and convert to generic_ps_atm files
 mkdir GENERIC_PS_ATM
-for d in `seq 0 3`; do
+fcst_days=$((forecast_period/24))  ##got forecast_period from top-level scripts
+for d in `seq 0 $fcst_days`; do
     fcst_time=`advance_time $time $((d*24))`
     cp $data_dir/generic_ps_atm/generic_ps_atm_${fcst_time:0:8}.nc GENERIC_PS_ATM/.
 done

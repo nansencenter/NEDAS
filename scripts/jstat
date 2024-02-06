@@ -25,10 +25,12 @@ for module in icbc perturb analysis vort2d nextsim.v1; do
            tail -n2 $rundir/$t/$module/icbc.log
            ;;
          perturb)
-           tail -n2 $rundir/$t/$module/perturb.log
+           for mem in `/bin/ls $rundir/$t/$module |grep -E '^[0-9]{3}$'`; do
+             tail -n2 $rundir/$t/$module/$mem/perturb.log
+           done
            ;;
          analysis)
-           tail -n2 $rundir/$t/$module/assim.log
+           tail -n5 $rundir/$t/$module/assim.log
            ;;
          vort2d | topaz.v? | nextsim.v? | wrf)
            ##single run
@@ -37,12 +39,14 @@ for module in icbc perturb analysis vort2d nextsim.v1; do
            fi
            ##ensemble runs
            for mem in `/bin/ls $rundir/$t/$module |grep -E '^[0-9]{3}$'`; do
-             if [[ -f $rundir/$t/$module/$mem/run.log ]]; then
-               logtail=`tail -n1 $rundir/$t/$module/$mem/run.log`
+             logtail=''
+             logfile=$rundir/$t/$module/$mem/run.log
+             if [[ -f $logfile ]]; then
+               logtail=`tail -n3 $logfile`
              fi
              if [[ -z $logtail ]]; then mstat="\033[0;31mwaiting\033[0m"; fi
-             if [[ $logtail ]]; then mstat="\033[0;32mrunning\033[0m: $logtail"; fi
-             if [[ `echo $logtail |grep successfully` ]]; then mstat=complete; fi
+             if [[ $logtail ]]; then mstat="\033[0;32mrunning\033[0m: \n$logtail"; fi
+             if [[ `echo $logtail |grep done` ]]; then mstat=complete; fi
              echo -e "$mem ($mstat)"
            done
            ;;

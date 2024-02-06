@@ -2,8 +2,9 @@
 #SBATCH --account=nn2993k
 #SBATCH --job-name=run_cycle
 #SBATCH --time=0-00:30:00
-#SBATCH --nodes=4
-#SBATCH --ntasks-per-node=125
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=128
+#SBATCH --qos=devel
 #SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/run_cycle.%j
 
 source ~/.bashrc
@@ -24,6 +25,13 @@ cd $work_dir
 ##list of model components
 model_list=`echo "$state_def" |awk '{print $2}' |uniq |sed 's/\./\//g'`
 
+##obs window for all included obs
+export obs_window_min=`echo "$obs_def" |awk '{print $4}' |sort -n |head -n1`
+export obs_window_max=`echo "$obs_def" |awk '{print $5}' |sort -n |tail -n1`
+
+export obs_time_step_min=`echo $obs_time_steps |awk '{print $1}'`
+export obs_time_step_max=`echo $obs_time_steps |awk '{print $NF}'`
+
 #start cycling
 date
 export time=$time_start
@@ -35,6 +43,14 @@ while [[ $next_time -le $time_assim_end ]]; do
 
     echo "--------------------------------------------------"
     echo "current cycle: $time => $next_time"
+
+    if $run_assim && [ $next_time -ge $time_assim_start ] && [ $next_time -le $time_assim_end ]; then
+        ##need to run the model until end of obs window
+        ##to provide obs priors for assimilation
+        export forecast_period=$((cycle_period+$obs_time_step_max+$obs_window_max))
+    else
+        export forecast_period=$cycle_period
+    fi
 
     ##make the necessary directories
     mkdir -p cycle/$time
@@ -55,10 +71,8 @@ while [[ $next_time -le $time_assim_end ]]; do
     done
 
     ###data assimilation step
-    if [ $time -ge $time_assim_start ] && [ $time -le $time_assim_end ]; then
-        if $run_assim; then
-            $script_dir/module_assim.sh &
-        fi
+    if $run_assim && [ $time -ge $time_assim_start ] && [ $time -le $time_assim_end ]; then
+        $script_dir/module_assim.sh &
     fi
 
     ###model forecast step

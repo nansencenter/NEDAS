@@ -67,7 +67,7 @@ obs_rec_list = build_obs_tasks(c, obs_info)
 obs_seq = prepare_obs(c, state_info, obs_info, obs_rec_list)
 
 if c.pid_mem == 0 and c.debug:
-    np.save('obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
+    np.save(assim_dir+'/obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
 
 partitions = partition_grid(c)
 
@@ -76,9 +76,9 @@ obs_inds = assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq
 par_list = build_par_tasks(c, partitions, obs_info, obs_inds)
 
 if c.pid == 0 and c.debug:
-    np.save('obs_inds.npy', obs_inds)
-    np.save('partitions.npy', partitions)
-    np.save('par_list.npy', par_list)
+    np.save(assim_dir+'/obs_inds.npy', obs_inds)
+    np.save(assim_dir+'/partitions.npy', partitions)
+    np.save(assim_dir+'/par_list.npy', par_list)
 
 obs_prior_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields_prior, z_fields)
 
@@ -105,10 +105,10 @@ message(c.comm, 'Step 3 took {} seconds\n\n'.format(time.time()-runtime), c.pid_
 runtime = time.time()
 
 if c.debug:
-    np.save('state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
-    np.save('z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
-    np.save('lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
-    np.save('lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+    np.save(assim_dir+'/state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
+    np.save(assim_dir+'/z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
+    np.save(assim_dir+'/lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
+    np.save(assim_dir+'/lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
 
 ##--------------------------
 ##4.Assimilate obs to update state variables
