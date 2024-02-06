@@ -63,12 +63,14 @@ cycle_period=3  ##in hours
 ##define analysis window relative to `time`, in hours
 ##Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
 ## for each cycle, so watch out for overfitting
-obs_window_min=-1
-obs_window_max=0
-obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
-t_scale="1"  ##characteristic time scale, hours, averaging window for the state valid at t
+#obs_window_min=-1
+#obs_window_max=0
+#obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
+#t_scale="1"  ##characteristic time scale, hours, averaging window for the state valid at t
 
-state_ts="0"
+##time steps for obs and state for each analysis cycle
+obs_time_steps="0"
+state_time_steps="0"
 
 ##define a reference coordinate system where analysis takes place
 ##you can use model modules to provide the grid (analysis grid is same as model grid)
@@ -103,7 +105,7 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-velocity    vort2d   vort2d  normal  3.3  0  0  0  none  200000  10  10  none
+velocity    vort2d   vort2d  -3  0  normal  3.3  0  0  0  none  200000  10  10  none
 EOF
 )
 use_synthetic_obs=true

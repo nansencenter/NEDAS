@@ -15,7 +15,7 @@ work_dir=$SCRATCH/$exp_name
 nens=32
 
 ##parallel scheme
-nproc=512
+nproc=128
 nproc_mem=32
 
 #DA scheme
@@ -23,7 +23,7 @@ assim_mode=serial ##batch or serial
 filter_type=EAKF
 regress_type=linear
 
-run_assim=false  ##if true, run filter/smoother update algorithms
+run_assim=true ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
 
@@ -52,7 +52,7 @@ inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
 time_start=200701020000    ##format ccyymmddHHMM
-time_end=200701140000
+time_end=200702250000
 time_assim_start=200701030000
 time_assim_end=200701130000
 cycle_period=24  ##in hours
@@ -61,6 +61,13 @@ cycle_period=24  ##in hours
 ##`next_time`/`prev_time` points to the next/previous cycle time
 
 ##define analysis window relative to `time`, in hours
+##Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
+## for each cycle, so watch out for overfitting
+##obs_window_min=0
+##obs_window_max=72
+##t_scale="1"  ##characteristic time scale, hours, averaging window for the state valid at t
+
+##time steps for obs and state for each analysis cycle
 obs_time_steps="0"
 state_time_steps="0"
 
@@ -105,6 +112,8 @@ EOF
 ##      obs variable name
 ##      source, dataset module that provides this obs variable
 ##      model, models module that provides this obs prior
+##      obs_window_min, hours
+##      obs_window_max, hours
 ##      error type, normal/lognormal/beta
 ##      error standard deviation
 ##      error horizontal correlation length, in meters
@@ -116,9 +125,8 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-seaice_conc    osisaf.ice_conc   nextsim.v1  normal   0.1  0  0  0  none  200000  10  24  none
-seaice_drift   osisaf.ice_drift  nextsim.v1  normal    10  0  0  0  none  200000  10  24  none
-seaice_shear   rgps              nextsim.v1  normal  0.01  0  0  0  none   60000  10  24  none
+seaice_conc    osisaf.ice_conc   nextsim.v1 -12 12  normal   0.1  0  0  0  none  200000  10  24  none
+seaice_shear   rgps              nextsim.v1 -24 48  normal  0.01  0  0  0  none   60000  10  24  none
 EOF
 )
 
@@ -131,5 +139,5 @@ perturb_variables="seaice_drift ocean_surf_height"
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 cohesion=1.35
 
-debug=false
+debug=true
 

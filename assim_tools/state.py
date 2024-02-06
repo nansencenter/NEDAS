@@ -308,7 +308,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
             rec = state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = c.work_dir+'/cycle/'+c.time+'/'+rec['source']
+            path = c.work_dir+'/cycle/'+t2s(rec['time'])+'/'+rec['source']
 
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
@@ -324,7 +324,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
                 grid = grid_bank[grid_key]
 
             else:
-                grid = src.read_grid(path, **rec)
+                grid = src.read_grid(path, member=mem_id, **rec)
                 grid.set_destination_grid(c.grid)
                 grid_bank[grid_key] = grid
 
@@ -361,7 +361,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
     message(c.comm, ' done.\n', c.pid_show)
 
     ##clean up
-    del grid_bank, grid, z_bank, var, zvar
+    # del grid_bank, z_bank, var, zvar
 
     return fields, z_coords
 
@@ -622,6 +622,6 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
     message(c.comm, ' done.\n', c.pid_show)
 
     ##clean up
-    del sum_fld_pid, sum_fld
+    # del sum_fld_pid, sum_fld
 
 

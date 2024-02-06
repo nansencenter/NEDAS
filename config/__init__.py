@@ -123,19 +123,21 @@ for r in range(len(lines)):
     ss = lines[r].split()
 
     ##check line format is correct
-    assert len(ss)==13, 'obs_def format error, should be "varname, source, model, err_type, err_std, err_hcorr, err_vcorr, err_tcorr, cross_corr[list of variable=corr_coef,...], hroi, vroi, troi, impact_on_state[list of state_variable=impact_factor,...]"'
+    assert len(ss)==15, 'obs_def format error, should be "varname, source, model, obs_window_min, obs_window_max, err_type, err_std, err_hcorr, err_vcorr, err_tcorr, cross_corr[list of variable=corr_coef,...], hroi, vroi, troi, impact_on_state[list of state_variable=impact_factor,...]"'
 
     obs_def.append({'name': ss[0],
                     'source': ss[1],
                     'model': ss[2],
-                    'err_type': ss[3],
-                    'err_std': np.float32(ss[4]),
-                    'err_hcorr': np.float32(ss[5]),
-                    'err_vcorr': np.float32(ss[6]),
-                    'err_tcorr': np.float32(ss[7]),
-                    'hroi': np.float32(ss[9]),
-                    'vroi': np.float32(ss[10]),
-                    'troi': np.float32(ss[11]),
+                    'obs_window_min': int(ss[3]),
+                    'obs_window_max': int(ss[4]),
+                    'err_type': ss[5],
+                    'err_std': np.float32(ss[6]),
+                    'err_hcorr': np.float32(ss[7]),
+                    'err_vcorr': np.float32(ss[8]),
+                    'err_tcorr': np.float32(ss[9]),
+                    'hroi': np.float32(ss[11]),
+                    'vroi': np.float32(ss[12]),
+                    'troi': np.float32(ss[13]),
                     })
 
 ##update obs_impact_on_state
@@ -145,7 +147,7 @@ for r in range(len(lines)):
     ##default is 1 for all state variables
     obs_def[r]['impact_on_state'] = np.ones(len(state_def))
 
-    for en in ss[12].split(','):
+    for en in ss[14].split(','):
         if '=' in en:
             v, fac = en.split('=')
             ##check if v is one of the defined state variables
@@ -166,7 +168,7 @@ for r in range(len(lines)):
     name = ss[0]
     source = ss[1]
 
-    for en in ss[8].split(','):
+    for en in ss[10].split(','):
         if '=' in en:
             v, coef = en.split('=')
             ##check if v is one of the defined obs variables

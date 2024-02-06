@@ -34,7 +34,7 @@ def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
             rec = state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = c.work_dir+'/cycle/'+c.time+'/'+rec['source']
+            path = c.work_dir+'/cycle/'+t2s(rec['time'])+'/'+rec['source']
 
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
@@ -50,7 +50,7 @@ def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
                 grid = grid_bank[grid_key]
 
             else:
-                grid = src.read_grid(path, **rec)
+                grid = src.read_grid(path, member=mem_id, **rec)
 
             ##grid is the model native grid; c.grid is the analysis grid
             c.grid.set_destination_grid(grid)
