@@ -12,7 +12,7 @@ x, y = np.meshgrid(np.arange(-3845000, 3755000, 10000), np.arange(5845000, -5355
 
 def filename(path, **kwargs):
     if 'time' not in kwargs:
-        search = path+'/ice_conc_nh_polstere-100_multi_????????????.nc'
+        search = path+'/????_nh_polstere/ice_conc_nh_polstere-100_multi_????????????.nc'
         file_list = glob.glob(search)
 
     else:
@@ -25,7 +25,7 @@ def filename(path, **kwargs):
         for d in d_range:
             t = kwargs['time'] + d * timedelta(hours=1)
             tstr = t.strftime('%Y%m%d%H%M')
-            search = path+'/ice_conc_nh_polstere-100_multi_'+tstr+'.nc'
+            search = path+'/'+t.strftime('%Y')+'_nh_polstere/ice_conc_nh_polstere-100_multi_'+tstr+'.nc'
             for result in glob.glob(search):
                 if result not in file_list:
                     file_list.append(result)
@@ -54,7 +54,10 @@ def read_obs(path, grid, mask, model_z, **kwargs):
             t = f['time'][n].data * timedelta(seconds=1) + datetime(1978, 1, 1)
             qc_flag = f['status_flag'][n,...].data.flatten()
             obs = f['ice_conc'][n,...].data.flatten()
-            obs_err = f['total_uncertainty'][n,...].data.flatten()
+            if 'total_uncertainty' in f.variables:
+                obs_err = f['total_uncertainty'][n,...].data.flatten()
+            else:
+                obs_err = 0.3 * np.ones(obs.shape)  ##default conc err 0.3
 
             for p in range(obs.size):
                 if qc_flag[p] < 0 or qc_flag[p] > 10:
