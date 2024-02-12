@@ -93,8 +93,9 @@ def write_var(path, grid, var, **kwargs):
     assert name in variables, 'variable name '+name+' not listed in variables'
     fname = filename(path, **kwargs)
 
-    assert 'is_vector' in kwargs, 'missing is_vector in kwargs'
-    if kwargs['is_vector']:
+    is_vector = variables[name]['is_vector']
+
+    if is_vector:
         for i in range(2):
             nc_write_var(fname, {'t':None, 'y':grid.ny, 'x':grid.nx}, variables[name]['name'][i], var[i,...], recno={'t':0})
     else:

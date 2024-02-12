@@ -16,7 +16,7 @@
 FC = ifort
 LD = ifort
 FFLAGS =  -O3 -r8 -i4 -assume byterecl -free -ipo -nowarn
-LIBS = -L/glade/u/apps/ch/opt/fftw/3.3.7/intel/17.0.1/lib -lfftw3 -L/user/lib64 -lm
+LIBS = -L/cluster/software/FFTW/3.3.8-intel-2019b/lib -lfftw3 -L/user/lib64 -lm
 LDFLAGS = $(LIBS)
 TMPFILES = *.mod
 

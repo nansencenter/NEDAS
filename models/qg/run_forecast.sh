@@ -6,7 +6,7 @@ source ~/.bashrc
 ##other initial environment src code
 
 ##load configuration files, functions, parameters
-export config_file=$HOME/code/NEDAS/config/vort2d_testcase
+export config_file=$HOME/code/NEDAS/config/qg_testcase
 set -a; source $config_file; set +a
 
 cd $script_dir
@@ -29,6 +29,8 @@ while [[ $next_time -le $time_assim_end ]]; do
     echo "--------------------------------------------------"
     echo "current time step: $time => $next_time"
 
+    export forecast_period=$cycle_period
+
     ##make the necessary directories
     mkdir -p cycle/$time
 
@@ -42,10 +44,10 @@ while [[ $next_time -le $time_assim_end ]]; do
     done
 
     ###prepare icbc and perturb members
-    $script_dir/../models/vort2d/module_icbc.sh &
+    $script_dir/../models/qg/module_icbc.sh &
 
     ###model forecast step
-    $script_dir/../models/vort2d/module_forecast.sh &
+    $script_dir/../models/qg/module_forecast.sh &
     wait
 
     ##check errors

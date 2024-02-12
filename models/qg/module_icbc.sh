@@ -14,17 +14,22 @@ echo running > stat
 echo "  Generating initial and boundary conditions..."
 
 ##load env if necessary
-src_file=$script_dir/../config/env/$host/vort2d.src
+src_file=$script_dir/../config/env/$host/qg.src
 if [[ -f $src_file ]]; then source $src_file; fi
 
-$script_dir/job_submit.sh 1 1 0 python $script_dir/../models/vort2d/generate_ic.py $time >& icbc.log
+##make input.nml
+export input_type=spectral_m
+export random_seed=$RANDOM
+$script_dir/../models/qg/namelist.sh > input.nml
+
+$script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& icbc.log
 
 ##check output
-icfile=${time:0:8}_${time:8:2}.nc
-watch_file $icfile 5 $rundir
+icfile=output.bin
+watch_file $icfile 1 $rundir
 
-if [[ ! -d ../vort2d ]]; then mkdir -p ../vort2d; fi
-mv $icfile ../vort2d/.
+if [[ ! -d ../qg ]]; then mkdir -p ../qg; fi
+cp $icfile ../qg/input.bin
 
 echo complete > stat
 

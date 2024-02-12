@@ -14,21 +14,44 @@ echo running > stat
 echo "  Generating perturbed ensemble members..."
 
 ##load env if necessary
-src_file=$script_dir/../config/env/$host/vort2d.src
+src_file=$script_dir/../config/env/$host/qg.src
 if [[ -f $src_file ]]; then source $src_file; fi
 
-$script_dir/job_submit.sh 1 1 0 python $script_dir/../models/vort2d/perturb_ic.py $time $nens >& perturb.log
+tid=0
+nt=$ntasks
+for m in `seq 1 $nens`; do
+    m_id=`padzero $m 3`
+    if [[ ! -d $m_id ]]; then mkdir -p $m_id; fi
+    touch $m_id/perturb.log
 
-if [[ ! -d ../vort2d ]]; then mkdir -p ../vort2d; fi
+    ##run the model for member m
+    cd $m_id
+
+    ##make input.nml
+    export input_type=spectral_m
+    export random_seed=$RANDOM
+    $script_dir/../models/qg/namelist.sh > input.nml
+
+    $script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& perturb.log &
+
+    cd ..
+
+    ##wait if ntasks processors are all in use
+    tid=$((tid+1))
+    if [[ $tid == $nt ]]; then tid=0; wait; fi
+
+done
+wait
+
 
 ##check output
 for m in `seq 1 $nens`; do
     m_id=`padzero $m 3`
 
-    icfile=${time:0:8}_${time:8:2}_mem$m_id.nc
-    watch_file $icfile 1 $rundir
+    if [[ ! -d ../qg/$m_id ]]; then mkdir -p ../qg/$m_id; fi
 
-    mv $icfile ../vort2d/.
+    watch_file $m_id/output.bin 1 $rundir
+    cp $m_id/output.bin ../qg/$m_id/output_${time:0:8}_${time:8:2}.bin
 done
 
 echo complete > stat
