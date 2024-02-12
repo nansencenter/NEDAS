@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=nn2993k
 #SBATCH --job-name=run_cycle
-#SBATCH --time=0-00:30:00
+#SBATCH --time=0-01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
 #SBATCH --qos=devel
@@ -11,7 +11,7 @@ source ~/.bashrc
 ##other initial environment src code
 
 ##load configuration files, functions, parameters
-export config_file=$HOME/code/NEDAS/config/nextsim_testcase
+export config_file=$HOME/code/NEDAS/config/qg_testcase
 set -a; source $config_file; set +a
 
 cd $script_dir

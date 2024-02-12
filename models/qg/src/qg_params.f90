@@ -371,7 +371,7 @@ contains
     Check_parameters=.true.
 
     call Message('')
-    call Message('SQG model version 2.92')
+    call Message('QG model version 2.92')
     call Message('')
     call Message('Checking parameters for consistency')
     call Message('')
