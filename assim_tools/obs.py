@@ -505,7 +505,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                 rec_id = [i for i,r in state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
 
                 ##option 1.1: if the current pid stores this field, just read it
-                if rec_id in rec_list and mem_id in mem_list and 'model_fld' in kwargs and 'model_z' in kwargs:
+                if rec_id in rec_list[c.pid_rec] and mem_id in mem_list[c.pid_mem] and 'model_fld' in kwargs and 'model_z' in kwargs:
                     z = kwargs['model_z'][mem_id, rec_id]
                     fld = kwargs['model_fld'][mem_id, rec_id]
 
@@ -524,10 +524,10 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                     grid = model_src.read_grid(path, **kwargs)
                     grid.set_destination_grid(c.grid)
 
-                z_ = grid.convert(model_src.z_coords(path, grid, **kwargs))
+                z_ = grid.convert(model_src.z_coords(path, grid, k=k, **kwargs))
                 z = np.array([z_, z_]) if is_vector else z_
 
-                fld = grid.convert(model_src.read_var(path, grid, **kwargs), is_vector=is_vector)
+                fld = grid.convert(model_src.read_var(path, grid, k=k, **kwargs), is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
