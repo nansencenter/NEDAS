@@ -10,7 +10,7 @@ pstr = '. module_assim .'
 message(c.comm, len(pstr)*'.'+'\n'+pstr+'\n'+len(pstr)*'.'+'\n\n', c.pid_show)
 
 assim_dir = c.work_dir+'/cycle/'+c.time+'/analysis/'+c.s_dir
-message(c.comm, 'Run assimilation in '+assim_dir, c.pid_show)
+message(c.comm, 'Run assimilation in '+assim_dir+'\n\n', c.pid_show)
 
 runtime0 = time.time()  ##start the timer
 

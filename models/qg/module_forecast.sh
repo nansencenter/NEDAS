@@ -20,7 +20,7 @@ if [[ -f $src_file ]]; then source $src_file; fi
 ##make input.nml
 export input_type=read
 $script_dir/../models/qg/namelist.sh > input.nml
-
+rm -f restart.nml
 ln -fs output_${time:0:8}_${time:8:2}.bin input.bin
 
 $script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& run.log
