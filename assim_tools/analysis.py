@@ -206,24 +206,32 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
             continue  ##the state is outside of troi of all obs, skip
 
         ##total lfactor
-        ###TODO: 1. v_lfactor seems to cause "failure to converge" error in svd?
-        ###      2. try sorting rec_list w.r.t. level k, so that on each pid mostly
-        ###         the update is done for the same level, hence reducing number of
-        ###         computation?
-        lfactor = h_lfactor #* v_lfactor * t_lfactor #* impact_on_state[n, :]
+        lfactor = h_lfactor * v_lfactor * t_lfactor #* impact_on_state[n, :]
+        if (lfactor==0).all():
+            continue
 
-        ###TODO: topaz only keep the first 3000 obs with highest lfactor
-        ###      create a legacy option here for backwards compatibility
+        ##only need to assimilate obs with lfactor>0
+        ind = np.where(lfactor>0)[0]
 
-        if n>0 and (lfactor==lfactor_old).all():
+        ##sort the obs from high to low lfactor
+        sort_ind = np.argsort(lfactor[ind])[::-1]
+        ind = ind[sort_ind]
+
+        ##limit number of local obs if needed
+        ###e.g. topaz only keep the first 3000 obs with highest lfactor
+        nlobs_max = None  ##3000
+        ind = ind[:nlobs_max]
+
+        ##use cached weight if no localization is applied, to avoid repeated computation
+        if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
             weights = weights_old
         else:
-            weights = ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, lfactor)
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], filter_type, lfactor[ind])
 
         ##perform local analysis and update the ensemble state
         state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
 
-        lfactor_old = lfactor
+        lfactor_old = lfactor[ind]
         weights_old = weights
 
 
@@ -522,13 +530,13 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     h_dist = np.hypot(obs_data_x - obs_x, obs_data_y - obs_y)
     h_lfactor = local_factor(h_dist, hroi, localize_type)
 
-    # v_dist = np.abs(obs_data_z - obs_z)
-    # v_lfactor = local_factor(v_dist, vroi, localize_type)
+    v_dist = np.abs(obs_data_z - obs_z)
+    v_lfactor = local_factor(v_dist, vroi, localize_type)
 
-    # t_dist = np.abs(obs_data_t - obs_t)
-    # t_lfactor = local_factor(t_dist, troi, localize_type)
+    t_dist = np.abs(obs_data_t - obs_t)
+    t_lfactor = local_factor(t_dist, troi, localize_type)
 
-    lfactor = h_lfactor #* v_lfactor * t_lfactor
+    lfactor = h_lfactor * v_lfactor * t_lfactor
 
     for i in range(nlobs):
         if used[i]:
