@@ -328,7 +328,7 @@ def assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq):
         elif c.assim_mode == 'serial':
             ##locality doesn't matter, we just divide obs_rec into nproc_mem
             ##partitions with par_id from 0 to nproc_mem-1
-            full_inds = np.arange(len(obs_rec['obs']))
+            full_inds = np.arange(obs_rec['obs'].shape[-1])
 
             inds = distribute_tasks(c.comm_mem, full_inds)
             for par_id in range(c.nproc_mem):
