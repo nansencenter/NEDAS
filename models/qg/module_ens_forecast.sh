@@ -34,7 +34,7 @@ for m in `seq 1 $nens`; do
     ##make input.nml
     export input_type=read
     $script_dir/../models/qg/namelist.sh > input.nml
-
+    rm -f restart.nml
     ln -fs output_${time:0:8}_${time:8:2}.bin input.bin
 
     $script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& run.log &
@@ -58,7 +58,9 @@ for m in `seq 1 $nens`; do
     watch_log $m_id/run.log "Calculation done" 1 $rundir
 
     watch_file $m_id/output.bin 1 $rundir
-    cp $m_id/output.bin $next_dir/output_${next_time:0:8}_${next_time:8:2}.bin
+    mv $m_id/output.bin $m_id/output_${next_time:0:8}_${next_time:8:2}.bin
+
+    cp $m_id/output_${next_time:0:8}_${next_time:8:2}.bin $next_dir/.
 
 done
 
