@@ -143,7 +143,6 @@ output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
 
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
-exit()
 
 ##--------------------------
 ##6.Post-processing
