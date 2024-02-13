@@ -41,6 +41,9 @@ mem_list, rec_list = build_state_tasks(c, state_info)
 
 fields_prior, z_fields = prepare_state(c, state_info, mem_list, rec_list)
 
+if c.debug:
+    np.save(assim_dir+'/fields_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), fields_prior)
+
 state_file = assim_dir+'/prior_state.bin'
 output_state(c, state_info, mem_list, rec_list, fields_prior, state_file)
 mean_file = assim_dir+'/prior_mean_state.bin'
@@ -81,6 +84,9 @@ if c.pid == 0 and c.debug:
     np.save(assim_dir+'/par_list.npy', par_list)
 
 obs_prior_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields_prior, z_fields)
+
+if c.debug:
+    np.save(assim_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
 
 message(c.comm, 'Step 2 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
@@ -137,6 +143,7 @@ output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
 
 message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 runtime = time.time()
+exit()
 
 ##--------------------------
 ##6.Post-processing
