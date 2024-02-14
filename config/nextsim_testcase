@@ -16,14 +16,14 @@ nens=32
 
 ##parallel scheme
 nproc=128
-nproc_mem=32
+nproc_mem=128
 
 #DA scheme
-assim_mode=serial ##batch or serial
-filter_type=EAKF
+assim_mode=batch  ##batch or serial
+filter_type=ETKF
 regress_type=linear
 
-run_assim=true ##if true, run filter/smoother update algorithms
+run_assim=true  ##if true, run filter/smoother update algorithms
 run_align_space=false  ##if true, run alignment after filter update in space/time
 run_align_time=false
 
@@ -99,6 +99,7 @@ state_def=$(cat << EOF
 seaice_velocity  nextsim.v1  field  normal
 seaice_conc      nextsim.v1  field  normal
 seaice_thick     nextsim.v1  field  normal
+seaice_damage    nextsim.v1  field  normal
 cohesion         nextsim.v1  scalar normal
 EOF
 )
@@ -125,8 +126,8 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-seaice_conc    osisaf.ice_conc   nextsim.v1 -12 12  normal   0.1  0  0  0  none  200000  10  24  none
-seaice_shear   rgps              nextsim.v1 -24 48  normal  0.01  0  0  0  none   60000  10  24  none
+seaice_conc    osisaf.ice_conc   nextsim.v1 -12 12  normal   0.1  0  0  0  none  20000  10  120  none
+seaice_shear   rgps              nextsim.v1 -24 48  normal  0.01  0  0  0  none   6000  10  120  none
 EOF
 )
 

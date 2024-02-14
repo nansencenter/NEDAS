@@ -53,6 +53,8 @@ def read_obs(path, grid, mask, model_z, **kwargs):
 
         lat = f['lat'][...].data.flatten()
         lon = f['lon'][...].data.flatten()
+        x_, y_ = grid.proj(lon, lat)
+        mask_ = grid.interp(mask.astype(int), x_, y_)
 
         ntime = f.dimensions['time'].size
         for n in range(ntime):
@@ -78,8 +80,11 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                     continue
                 if obs_err[p] <= 0:
                     continue
-                x, y = grid.proj(lon[p], lat[p])
-                if x<grid.xmin or x>grid.xmax or y<grid.ymin or y>grid.ymax:
+
+                if x_[p] < grid.xmin or x_[p] > grid.xmax or y_[p] < grid.ymin or y_[p] > grid.ymax:
+                    continue
+
+                if mask_[p] > 0:
                     continue
 
                 dt0 = obs_dt0[p] if ~np.isnan(obs_dt0[p]) else 0.
@@ -97,8 +102,8 @@ def read_obs(path, grid, mask, model_z, **kwargs):
                 obs_seq['err_std'].append(obs_err_std)
                 obs_seq['t'].append(obs_t)
                 obs_seq['z'].append(0)
-                obs_seq['y'].append(y)
-                obs_seq['x'].append(x)
+                obs_seq['y'].append(y_[p])
+                obs_seq['x'].append(x_[p])
 
         f.close()
 
