@@ -581,19 +581,24 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     if regress_type == 'linear':
         ##linear regression relates the obs_prior with ens_prior
         obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
+
+        ##if there is no prior spread, don't update at all
+        if obs_prior_var == 0:
+            return ens_prior
+
         cov = np.sum(ens_prior * obs_prior_pert) / (nens-1)
         reg_factor = cov / obs_prior_var
 
         ##the updated posterior ensemble
         ens_post = ens_prior + local_factor * reg_factor * obs_incr
 
+        return ens_post
+
     # elif regress_type == 'probit':
     #     pass
 
     # else:
     #     print('Error: unknown regression type: '+regress_type)
-
-    return ens_post
 
 
 ###localization:
