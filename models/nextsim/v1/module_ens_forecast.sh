@@ -21,8 +21,9 @@ echo "  Running ensemble forecast for nextsim.v1 model..."
 src_file=$script_dir/../config/env/$host/nextsim.v1.src
 if [[ -f $src_file ]]; then source $src_file; fi
 
-tid=0
-nt=$nnodes
+task_offset=0
+ntasks_per_mem=64
+nnodes_per_mem=1
 for m in `seq 1 $nens`; do
     m_id=`padzero $m 3`
     if [[ ! -d $m_id ]]; then mkdir -p $m_id; fi
@@ -55,13 +56,13 @@ for m in `seq 1 $nens`; do
     $script_dir/../models/nextsim/v1/namelist.sh > nextsim.cfg
 
     ##run the model
-    $script_dir/job_submit.sh 1 $tasks_per_node $tid $code_dir/nextsim/model/bin/nextsim.exec --config-files=nextsim.cfg >& run.log &
+    $script_dir/job_submit.sh $nnodes_per_mem $ntasks_per_mem $task_offset $code_dir/nextsim/model/bin/nextsim.exec --config-files=nextsim.cfg >& run.log &
 
     cd ..  ##from $m_id
 
     ##wait if ntasks processors are all in use
-    tid=$((tid+1))
-    if [[ $tid == $nt ]]; then tid=0; wait; fi
+    task_offset=$((task_offset+$ntasks_per_mem))
+    if [[ $task_offset -ge $ntasks ]]; then task_offset=0; wait; fi
 
 done
 wait

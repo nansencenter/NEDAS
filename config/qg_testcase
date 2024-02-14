@@ -4,7 +4,7 @@
 exp_name=qg_testcase
 
 ##load HPC-specific settings, directory names, env, etc.
-. $HOME/code/NEDAS/config/env/localhost/base.src
+. $HOME/code/NEDAS/config/env/betzy/base.src
 
 script_dir=$HOME/code/NEDAS/scripts
 code_dir=$HOME/code
@@ -15,12 +15,12 @@ work_dir=$SCRATCH/$exp_name
 nens=100
 
 ##parallel scheme
-nproc=4
-nproc_mem=4
+nproc=128
+nproc_mem=32
 
 #DA scheme
-assim_mode=batch  ##batch or serial
-filter_type=ETKF
+assim_mode=serial  ##batch or serial
+filter_type=EAKF
 regress_type=linear
 
 run_assim=true  ##if true, run filter/smoother update algorithms
@@ -51,7 +51,7 @@ inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adapti
 inflate_factor="1"  ##inflation factor for each scale
 
 ##time period and cycling
-time_start=200101041800    ##format ccyymmddHHMM
+time_start=200101010000    ##format ccyymmddHHMM
 time_end=200101250000
 time_assim_start=200101050000
 time_assim_end=200101220000
@@ -105,7 +105,7 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-velocity  qg  qg  -6  0  normal  0.5  0  0  0  none  50  10  24  none
+velocity  qg  qg  -6  0  normal  0.5  0  0  0  none  20  10  24  none
 EOF
 )
 use_synthetic_obs=true
@@ -134,5 +134,5 @@ bot_drag=0.3
 
 state_type=velocity  ##velocity, streamfunc, or vorticity
 
-debug=true
+debug=false
 
