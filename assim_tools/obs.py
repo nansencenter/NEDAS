@@ -399,7 +399,11 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
     - obs_prior_seq: dict[(mem_id, obs_rec_id), seq]
       where seq is np.array with values corresponding to obs_seq['obs']
     """
-    c.pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+
+    pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
+    pid_rec_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0]
+    c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
+
     message(c.comm, 'compute obs priors\n', c.pid_show)
     obs_prior_seq = {}
 
@@ -634,7 +638,10 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
       output_obs: dict[obs_rec_id, dict[par_id, dict[key, np.array]]]
       is the local observation sequence, key = 'obs','x','y','z','t'...
     """
-    c.pid_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0] * c.nproc_mem
+
+    pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
+    pid_rec_show = [p for p,lst in obs_rec_list.items() if len(lst)>0][0]
+    c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
 
     if ensemble:
         message(c.comm, 'obs prior sequences: ', c.pid_show)
@@ -697,15 +704,15 @@ def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_ind
 
                     else:
                         if mem_id == 0:
-                            ##this is the obs seq with keys 'obs','x','y','z','t'
+                            ##this is the obs seq with keys 'obs','err_std','x','y','z','t'
                             ##assemble the lobs_seq dict with same keys but subset obs_inds
                             ##do this for each par_id to get the full lobs_seq
                             lobs_seq = {}
                             for par_id in par_list[dst_pid]:
                                 lobs_seq[par_id] = {}
                                 inds = obs_inds[obs_rec_id][par_id]
-                                for key, value in seq.items():
-                                    lobs_seq[par_id][key] = value[..., inds]
+                                for key in ('obs', 'err_std', 'x', 'y', 'z', 't'):
+                                    lobs_seq[par_id][key] = seq[key][..., inds]
 
                             if dst_pid == c.pid_mem:
                                 ##pid already stores the lobs_seq, just copy

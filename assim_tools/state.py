@@ -289,6 +289,11 @@ def prepare_state(c, state_info, mem_list, rec_list):
     - z_coords: dict[(mem_id, rec_id), zfld]
       where zfld is same shape as fld, it's he z coordinates corresponding to each field
     """
+
+    pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
+    pid_rec_show = [p for p,lst in rec_list.items() if len(lst)>0][0]
+    c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
+
     message(c.comm, 'prepare state by reading fields from model restart\n', c.pid_show)
 
     fields = {}
