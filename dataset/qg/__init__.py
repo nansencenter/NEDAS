@@ -10,7 +10,7 @@ variables = {'velocity': {'dtype':'float', 'is_vector':True, 'z_units':'*', 'uni
 
 def random_network(path, grid, mask, z, truth_path, **kwargs):
 
-    nobs = 1000  ##number of obs
+    nobs = 9000  ##number of obs
     y = np.random.uniform(grid.ymin, grid.ymax, nobs)
     x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 

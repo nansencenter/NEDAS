@@ -23,6 +23,7 @@ src_file=$script_dir/../config/env/$host/qg.src
 if [[ -f $src_file ]]; then source $src_file; fi
 
 tid=0
+nt=$ntasks
 for m in `seq 1 $nens`; do
     m_id=`padzero $m 3`
     if [[ ! -d $m_id ]]; then mkdir -p $m_id; fi
@@ -37,7 +38,7 @@ for m in `seq 1 $nens`; do
     rm -f restart.nml
     ln -fs output_${time:0:8}_${time:8:2}.bin input.bin
 
-    $script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& run.log &
+    $script_dir/job_submit.sh 1 1 $tid $script_dir/../models/qg/src/qg.exe . >& run.log &
 
     cd ..
 

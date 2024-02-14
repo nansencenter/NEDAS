@@ -21,7 +21,7 @@ if [[ -f $src_file ]]; then source $src_file; fi
 $script_dir/job_submit.sh $nnodes $ntasks 0 python $script_dir/run_assim.py >& assim.log
 
 ##check output
-watch_log assim.log successfully 10 $rundir
+watch_log assim.log successfully 2 $rundir
 
 echo complete > stat
 

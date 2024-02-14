@@ -32,7 +32,7 @@ for m in `seq 1 $nens`; do
     export random_seed=$RANDOM
     $script_dir/../models/qg/namelist.sh > input.nml
 
-    $script_dir/job_submit.sh 1 1 0 $script_dir/../models/qg/src/qg.exe . >& perturb.log &
+    $script_dir/job_submit.sh 1 1 $tid $script_dir/../models/qg/src/qg.exe . >& perturb.log &
 
     cd ..
 

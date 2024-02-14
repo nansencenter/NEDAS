@@ -4,7 +4,7 @@
 
 nnodes=$1
 ncpus=$2
-offset_batch=$3
+offset=$3
 shift 3
 exe_command=$@
 
@@ -17,7 +17,7 @@ fi
 
 ###this works on Betzy
 if [[ $host == "betzy" ]]; then
-    offset_node=$((offset_batch/$SLURM_NTASKS_PER_NODE))
+    offset_node=$((offset/$SLURM_NTASKS_PER_NODE))
     srun -N $nnodes -n $ncpus -r $offset_node --exact --unbuffered $exe_command
 fi
 
