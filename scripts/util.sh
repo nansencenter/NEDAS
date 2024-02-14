@@ -88,12 +88,12 @@ function watch_log {
     keyword=$2
     timeout=$3
     rundir=$4
-    l=`cat $logfile |wc -l`
+    l=`cat $logfile |wc -m`
     t=0
     until [ -s $logfile ]; do sleep 10 ; done
     until [[ `tail -n5 $logfile |grep "$keyword"` ]]; do
         sleep 60
-        l1=`cat $logfile |wc -l`
+        l1=`cat $logfile |wc -m`
         if [ $l1 -eq $l ]; then
             t=$((t+1))
         else
