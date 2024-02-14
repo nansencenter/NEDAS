@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pyproj
 from matplotlib.tri import Triangulation
 from scipy.spatial import KDTree
+from conversion import t2s
 
 ##variable dictionary for RGPS naming convention
 variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km/day'},
@@ -16,10 +17,9 @@ variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 
 
 ##RGPS trajectory data (x,y) is in NorthPolarStereo projection:
 rgps_proj = pyproj.Proj('+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=70')
-rgps_dt = timedelta(days=3)  ##RGPS records the position every 3 days
 
 ##tolerance when searching for the time along trajectory
-dt_tol=timedelta(days=3)
+dt_tol=timedelta(days=2)
 
 ##some parameters
 DRIFT_MAX = 80  ##km/day
@@ -52,15 +52,7 @@ def filename(path, **kwargs):
 
 def read_obs(path, grid, mask, model_z, **kwargs):
     """read obs from rgps dataset"""
-    ##default kwargs if not set
-    if 'time' in kwargs:
-        time = kwargs['time']
-    else:
-        time = datetime(2007, 1, 1)
-    if 'name' in kwargs:
-        obs_name = kwargs['name']
-    else:
-        obs_name = 'seaice_drift'
+    obs_name = kwargs['name']
     assert obs_name in variables, 'rgps.read_obs: obs variable '+obs_name+' not defined in rgps.variables'
 
     ##note: x,y are obs location on grid.proj (in meters)
@@ -72,7 +64,7 @@ def read_obs(path, grid, mask, model_z, **kwargs):
 
     rec = 0
     for file_name in filename(path, **kwargs):
-        pairs = get_rgps_traj_pairs(file_name, time)
+        pairs = get_rgps_traj_pairs(file_name, kwargs['time'], kwargs['obs_window_min'], kwargs['obs_window_max'])
 
         for x0, y0, t0, x1, y1, t1 in pairs:
             tri = get_triangulation(x0, y0)
@@ -145,13 +137,13 @@ def read_obs(path, grid, mask, model_z, **kwargs):
 
 
 ##utility funcs for rgps dataset
-def get_rgps_traj_pairs(file_name, time):
+def get_rgps_traj_pairs(file_name, time, obs_window_min, obs_window_max):
     """ Get rgps trajectory pairs x,y,t defined on rgps_proj, in km,day units"""
 
     ##several records, each contain pairs of points:
     ##x0,y0,t0 at time and x1,y1,t1 at time+dt
-    d0_out = time
-    d1_out = time + rgps_dt
+    d0_out = time + timedelta(hours=1) * obs_window_min
+    d1_out = time + timedelta(hours=1) * obs_window_max
 
     pairs = []
     for stream in loadmat(file_name)['out'][0]:
@@ -257,8 +249,9 @@ def random_network(path, grid, mask, z, truth_path, **kwargs):
 nextsim = importlib.import_module('models.nextsim.v1')
 
 def get_nextsim_files(path, **kwargs):
-    t0 = kwargs['time']
-    t1 = t0 + rgps_dt
+    ##start and end time of the trajectories
+    t0 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
+    t1 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
 
     if 'member' in kwargs and kwargs['member'] is not None:
         mstr = '{:03d}'.format(kwargs['member']+1)
@@ -271,7 +264,7 @@ def get_nextsim_files(path, **kwargs):
     for result in glob.glob(search):
         if 'final' in result:
             continue
-        tstr = result.split('.')[0].split('_')[-1]
+        tstr = result.split('.')[-2].split('_')[-1]
         if 'post_regrid' in result:
             tstr = tstr.replace('0Z', '1Z')
         t = datetime.strptime(tstr, '%Y%m%dT%H%M%SZ')
@@ -303,8 +296,8 @@ def get_nextsim_traj_pairs(path, **kwargs):
         dy.append(np.zeros(x0[r].shape))
 
     ##time for the start/end position
-    t0 = kwargs['time']
-    t1 = t0 + rgps_dt
+    t0 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
+    t1 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
 
     file_list = get_nextsim_files(path, **kwargs)
 
@@ -344,6 +337,7 @@ def get_nextsim_traj_pairs(path, **kwargs):
 
 def get_nextsim_seaice_property(obs_name):
     def func(path, grid, mask, z, **kwargs):
+        obs_name = kwargs['name']
         assert obs_name in variables, 'rgps.get_nextsim_seaice_property: unknown obs variable '+obs_name
 
         pairs = get_nextsim_traj_pairs(path, **kwargs)
