@@ -1,19 +1,33 @@
 import numpy as np
 from scipy.optimize import fsolve
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 from fft_lib import fft2, ifft2, get_wn
 
 ##draw a 2D random field given its power spectrum
 ##two types of power spectra available: gaussian, or fixed power law (slope)
 def random_field_gaussian(nx, ny, amp, hcorr):
-    ##Gaussian spectrum with parameter sigma determined by
-    ##the decorrelation distance hcorr (number of grid points)
+    """
+    Random field with a Gaussian spectrum
+
+    Inputs
+    - nx, ny: int
+      Grid size in x and y (number of grid points)
+    - amp: float
+      Amplitude (standard deviation) of the random field
+    - hcorr: float
+      Horizontal decorrelation length (number of grid points)
+
+    Output:
+    - fld: np.array, [ny,nx]
+      The random 2D field
+    """
 
     fld = np.zeros((ny, nx))
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
 
     def gaussian(k, sig):
-        return np.exp(-2.0 * k / sig**2)
+        return np.exp(- k**2 / sig**2)
 
     def func2d(sig):
         sum1 = np.sum(gaussian(k2d, sig)**2 * np.cos(2*np.pi * kx/nx * hcorr))
@@ -22,7 +36,7 @@ def random_field_gaussian(nx, ny, amp, hcorr):
 
     ##solve for sig given hcorr so that func2d=0
     sig_out = np.abs(fsolve(func2d, 1)[0])
-    print(sig_out, func2d(sig_out))
+    # print(sig_out, func2d(sig_out))
 
     ##draw random phase from a white noise field
     ph = fft2(np.random.normal(0, 1, fld.shape))
@@ -54,16 +68,48 @@ def random_field_powerlaw(nx, ny, amp, pwrlaw):
 
 
 ###some more complicated random perturbation with physical constraints
-def random_displace():
-    ##TODO
-    pass
+
+##prototype: generate a random wavenumber-1 displacement for the whole domain
+def random_displacement(grid, mask, amp, hcorr):
+
+    ##set the boundaries to be masked if they are not cyclic
+    ##i.e. we don't want displacement across non-cyclic boundary
+    if grid.cyclic_dim is not None:
+        cyclic_dim = grid.cyclic_dim
+    else:
+        cyclic_dim = ''
+    if 'x' not in cyclic_dim:
+        mask[:, 0] = True
+        mask[:, -1] = True
+    if 'y' not in cyclic_dim:
+        mask[0, :] = True
+        mask[-1, :] = True
+
+    ##distance to masked area
+    dist = distance_transform_edt(1-mask.astype(float))
+    dist /= np.max(dist)
+    dist = gaussian_filter(dist, sigma=10)
+    dist[mask] = 0
+
+    ##the displacement vector field from a random streamfunction
+    psi = random_field_gaussian(grid.nx, grid.ny, 1, hcorr)
+
+    du, dv = -grady(psi, 1), gradx(psi, 1)
+    norm = np.hypot(du, dv).max()
+    du *= amp / norm
+    dv *= amp / norm
+
+    du *= dist  ##taper near mask
+    dv *= dist
+
+    return du, dv
 
 
 ###generate a random perturbation for wind u,v and pressure
 def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D domain; dt: time interval (hours)
                              prev_pres, prev_u, prev_v, ##pres, u, v, perturbation from previous t
-                             ampl_pres, ampl_wind,      ##pres amplitude (Pa); wind amplitude (m/s) for each scale
-                             scales_sig, scales_wgt,
+                             ampl_pres, ampl_wind,      ##pres amplitude (Pa); wind amplitude (m/s)
+                             hscale,                    ##horizontal decorrelation length scale (meters)
                              tscale,                    ##time decorrelation scale (hours)
                              pres_wind_relate=True,     ##if true: calc wind from pres according to pres-wind relation
                              wlat=15.,                  ##latitude bound for pure geostroph wind
@@ -78,15 +124,7 @@ def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D do
     rt = tscale / dt  ##time correlation length
     wt = np.exp(-1)**(1/rt)  ##weight on prev pert
 
-    ##power spectrum given by sigma and weight for each scale
-    ns = len(scales_wgt)
-    pwr_spec = lambda k: np.sum([scales_wgt[s] * np.exp(-k**2/scales_sig[s]**2) for s in range(ns)], axis=0)
-    ###TODO: normalize for each gauss
-
-    ##TODO: find sigma from hradius (zeroin func2D in pseudo2d.f)
-
-    pres = random_field(grid, pwr_spec)
-    # pres = ampl_pres * (pres - np.mean(pres))/np.std(pres)
+    pres = random_field_gaussian(grid.nx, grid.ny, ampl_pres, hscale/grid.dx)
 
     if pres_wind_relate:  ##calc u,v from pres according to pres-wind relation
 
@@ -108,11 +146,12 @@ def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D do
 
     else:  ##perturb u, v independently from pres
         ##wind power spectrum given by hscale and ampl_wind
-        u = random_field(grid, pwr_spec)
-        v = random_field(grid, pwr_spec)
+        u = random_field_gaussian(grid.nx, grid.ny, ampl_wind, hscale/grid.dx)
+        v = random_field_gaussian(grid.nx, grid.ny, ampl_wind, hscale/grid.dx)
 
-    u = ampl_wind * (u - np.mean(u))/np.std(u)
-    v = ampl_wind * (v - np.mean(v))/np.std(v)
+    ampl_wind_norm = np.hypot(np.std(u), np.std(v))
+    u *= ampl_wind / ampl_wind_norm
+    v *= ampl_wind / ampl_wind_norm
 
     ##apply temporal correlation
     if prev_pres is not None and prev_u is not None and prev_v is not None:
