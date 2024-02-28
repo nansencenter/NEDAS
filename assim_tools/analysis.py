@@ -29,15 +29,15 @@ def pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_pri
     nloc = len(data['x'])
     data['rec_id'] = np.full(nfld, 0)
     data['t'] = np.full(nfld, np.nan)
-    data['z'] = np.full((c.nens, nfld, nloc), np.nan)
     data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
+    data['z'] = np.zeros((nfld, nloc))
     for m in range(c.nens):
         for n in range(nfld):
             rec_id, v = data['fields'][n]
             rec = state_info['fields'][rec_id]
             data['rec_id'][n] = rec_id
             data['t'][n] = t2h(rec['time'])
-            data['z'][m, n, :] = z_state[m, rec_id][par_id][v, :].astype(np.float32)
+            data['z'][n, :] += z_state[m, rec_id][par_id][v, :].astype(np.float32) / c.nens  ##ens mean z
             data['state_prior'][m, n, :] = state_prior[m, rec_id][par_id][v, :]
 
     return data
@@ -155,7 +155,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
 
             local_analysis(state_data['state_prior'][:, :, l],
                            state_data['x'][l], state_data['y'][l],
-                           state_data['z'][:, :, l], state_data['t'],
+                           state_data['z'][:, l], state_data['t'][:],
                            obs_data['obs'], obs_err,
                            obs_data['x'], obs_data['y'],
                            obs_data['z'], obs_data['t'],
@@ -194,7 +194,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
     for n in range(nfld):
 
         ##vertical localization
-        v_dist = np.abs(obs_z - np.mean(state_z[:, n]))
+        v_dist = np.abs(obs_z - state_z[n])
         v_lfactor = local_factor(v_dist, vroi, localize_type)
         if (v_lfactor==0).all():
             continue  ##the state is outside of vroi of all obs, skip
@@ -210,8 +210,16 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
         if (lfactor==0).all():
             continue
 
+        ##if prior spread is zero, don't update
+        if np.std(state_prior[:, n]) == 0:
+            continue
+
         ##only need to assimilate obs with lfactor>0
         ind = np.where(lfactor>0)[0]
+
+        ##TODO:get rid of obs if obs_prior is nan
+        # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
+        # ind = ind[valid]
 
         ##sort the obs from high to low lfactor
         sort_ind = np.argsort(lfactor[ind])[::-1]
@@ -495,28 +503,26 @@ def update_local_state(state_data, obs_prior, obs_incr,
 
     nens, nfld, nloc = state_data.shape
 
-    for l in range(nloc):
-        ##horizontal localization factor
-        h_dist = np.array(np.hypot(state_data_x[l] - obs_x, state_data_y[l] - obs_y))
-        h_lfactor = local_factor(h_dist, hroi, localize_type)
-        if h_lfactor == 0:
-            continue
+    ##horizontal localization factor
+    h_dist = np.hypot(state_data_x - obs_x, state_data_y - obs_y)
+    h_lfactor = local_factor(h_dist, hroi, localize_type)
 
+    ##temporal localization factor
+    t_dist = np.abs(state_data_t - obs_t)
+    t_lfactor = local_factor(t_dist, troi, localize_type)
+
+    nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
+
+    ##vertical localization factor
+    v_dist = np.abs(state_data_z - obs_z)
+    v_lfactor = local_factor(v_dist, vroi, localize_type)
+
+    lfactor = np.zeros((nfld, nloc))
+    for l in nloc_sub:
         for n in range(nfld):
-            ##temporal localization factor
-            t_dist = np.array(np.abs(state_data_t[n] - obs_t))
-            t_lfactor = local_factor(t_dist, troi, localize_type)
-            if t_lfactor == 0:
-                continue
+            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
 
-            ##vertical localization factor
-            v_dist = np.array(np.abs(np.mean(state_data_z[:, n, l]) - obs_z))
-            v_lfactor = local_factor(v_dist, vroi, localize_type)
-            if v_lfactor == 0:
-                continue
-
-            lfactor = h_lfactor * v_lfactor * t_lfactor
-            state_data[:, n, l] = update_ensemble(state_data[:, n, l], obs_prior, obs_incr, lfactor, regress_type)
+    state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub], regress_type)
 
 
 @njit
@@ -524,6 +530,7 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      obs_data_x, obs_data_y, obs_data_z, obs_data_t,
                      obs_x, obs_y, obs_z, obs_t,
                      hroi, vroi, troi, localize_type, regress_type):
+
     nens, nlobs = obs_data.shape
 
     ##distance between local obs_data and the obs being assimilated
@@ -538,12 +545,10 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
 
     lfactor = h_lfactor * v_lfactor * t_lfactor
 
-    for i in range(nlobs):
-        if used[i]:
-            continue  ##only need to update the unused obs
-        if lfactor[i] == 0:
-            continue
-        obs_data[:, i] = update_ensemble(obs_data[:, i], obs_prior, obs_incr, lfactor[i], regress_type)
+    ##update the unused obs within roi
+    ind = np.where(np.logical_and(~used, lfactor>0))[0]
+
+    obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind], regress_type)
 
 
 @njit
@@ -552,8 +557,8 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     Update the ensemble variable using the obs increments
 
     Inputs:
-    - ens_prior: np.array[nens]
-      The prior ensemble variables to be updated to posterior
+    - ens_prior: np.array[nens, ...]
+      The prior ensemble variables to be updated to posterior, dimension 0 is ensemble members
 
     - obs_prior: np.array[nens]
       Observation prior ensemble
@@ -567,38 +572,42 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     - regress_kind: str
       Type of regression to perform, 'linear', 'probit', etc.
 
+    Output:
+    - ens_post: np.array[nens, ...]
+      Updated ensemble
     """
-    nens = ens_prior.size
+    nens = ens_prior.shape[0]
     ens_post = ens_prior.copy()
 
-    ##don't allow update of ensemble with any missing values
-
-    ##obs_prior separate into mean+perturbation
-    ###put some of these in input, to avoid repeated calculation
+    ##obs-space statistics
     obs_prior_mean = np.mean(obs_prior)
-    obs_prior_pert = obs_prior - obs_prior_mean
+    obs_prior_var = np.sum((obs_prior - obs_prior_mean)**2) / (nens-1)
 
     if regress_type == 'linear':
         ##linear regression relates the obs_prior with ens_prior
-        obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
 
         ##if there is no prior spread, don't update at all
         if obs_prior_var == 0:
-            return ens_prior
+            return ens_post
 
-        cov = np.sum(ens_prior * obs_prior_pert) / (nens-1)
+        cov = np.zeros(ens_prior.shape[1:])
+        for m in range(nens):
+            cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / (nens-1)
+
         reg_factor = cov / obs_prior_var
 
         ##the updated posterior ensemble
-        ens_post = ens_prior + local_factor * reg_factor * obs_incr
+        for m in range(nens):
+            ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
 
         return ens_post
 
     # elif regress_type == 'probit':
     #     pass
 
-    # else:
-    #     print('Error: unknown regression type: '+regress_type)
+    else:
+        print('Error: unknown regression type: '+regress_type)
+        raise ValueError
 
 
 ###localization:
