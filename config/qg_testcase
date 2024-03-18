@@ -15,15 +15,15 @@ work_dir=$SCRATCH/$exp_name
 nens=100
 
 ##parallel scheme
-nproc=128
-nproc_mem=32
+nproc=512
+nproc_mem=512
 
 #DA scheme
-assim_mode=serial  ##batch or serial
+assim_mode=serial
 filter_type=EAKF
 regress_type=linear
 
-run_assim=true  ##if true, run filter/smoother update algorithms
+run_assim=false ##if true, run filter/smoother update algorithms
 run_align_time=false
 run_align_space=false
 
@@ -42,13 +42,13 @@ localize_type=GC  ##GC,step,exp
 ## each observation variable has an individual set of roi, defined in obs_def
 ## for multiscale approach, the ROI is multiplied to a scaling factor which is
 ## defined here for each scale
-hroi_factor="1"
-vroi_factor="1"
-troi_factor="1"
+hroi_factor="1 1 1"
+vroi_factor="1 1 1"
+troi_factor="1 1 1"
 
 ##inflation setting
 inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
-inflate_factor="1"  ##inflation factor for each scale
+inflate_factor="1 1 1"  ##inflation factor for each scale
 
 ##time period and cycling
 time_start=200101010000    ##format ccyymmddHHMM
@@ -74,7 +74,13 @@ state_time_steps="0"
 
 ##define a reference coordinate system where analysis takes place
 ##you can use model modules to provide the grid (analysis grid is same as model grid)
-grid_type=qg  ##model module
+grid_type=new  ##model module
+proj="+proj=stere"
+xmin=0
+xmax=256
+ymin=0
+ymax=256
+dx="0.8"
 
 ##define the `state` in a multi-line string
 ##  one state variable per line, each line contains:
@@ -105,7 +111,7 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-velocity  qg  qg  -6  0  normal  0.5  0  0  0  none  20  10  24  none
+velocity  qg  qg  -6  0  normal  0.5  0  0  0  none  100  1e10  24  none
 EOF
 )
 use_synthetic_obs=true
@@ -116,6 +122,7 @@ perturb_variables="velocity"
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 kmax=127
 nz=8
+dz=0.2
 dt=0.0005
 F=100
 beta=20
