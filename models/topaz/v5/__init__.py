@@ -168,9 +168,9 @@ def write_grid(path, **kwargs):
 def read_mask(path, grid, **kwargs):
     depthfile = path+'/topo/depth.a'
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
-    mask = f.read_field('depth').mask
+    depth = f.read_field('depth')
     f.close()
-    return mask
+    return (depth==0)
 
 
 def read_depth(path, grid):
