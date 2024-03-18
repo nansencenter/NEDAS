@@ -15,7 +15,7 @@ work_dir=$SCRATCH/$exp_name
 nens=32
 
 ##parallel scheme
-nproc=128
+nproc=512
 nproc_mem=128
 
 #DA scheme
@@ -126,8 +126,8 @@ EOF
 ##      time localization distance, in hours
 ##      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
 obs_def=$(cat << EOF
-seaice_conc    osisaf.ice_conc   nextsim.v1 -12 12  normal   0.1  0  0  0  none  20000  10  120  none
-seaice_shear   rgps              nextsim.v1 -24 48  normal  0.01  0  0  0  none   6000  10  120  none
+seaice_conc    osisaf.ice_conc   nextsim.v1 -12 12  normal   0.1  0  0  0  none  200000  10  120  none
+seaice_shear   rgps              nextsim.v1 -24 48  normal  0.01  0  0  0  none   200000  10  120  none
 EOF
 )
 
@@ -140,5 +140,5 @@ perturb_variables="seaice_drift ocean_surf_height"
 ##physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 cohesion=1.35
 
-debug=true
+debug=false
 

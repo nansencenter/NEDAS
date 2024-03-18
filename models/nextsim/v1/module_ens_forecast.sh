@@ -28,12 +28,11 @@ for m in `seq 1 $nens`; do
     m_id=`padzero $m 3`
     if [[ ! -d $m_id ]]; then mkdir -p $m_id; fi
     touch $m_id/run.log
+    ##if finished skip this member
+    if [ ! -z "`grep "Simulation done" $m_id/run.log`" ]; then continue; fi
 
     ##run the model for member m
     cd $m_id
-
-    ##if finished skip this member
-    if [ ! -z "`grep "Simulation done" run.log`" ]; then break; fi
 
     ##link files for model run
     rm -rf data
@@ -79,7 +78,7 @@ for m in `seq 1 $nens`; do
     watch_log run.log "Simulation done" 1 $rundir
 
     ##make a copy of the forecast to next_time (prior) to the next rundir (to be updated to posterior)
-    cp restart/{field,mesh}_${next_time:0:8}T${next_time:8:4}00Z.{bin,dat} $nextdir/.
+    cp restart/{field,mesh}_${next_time:0:8}T${next_time:8:4}00Z.{bin,dat} $nextdir/. &
 
     ##link the intermediate output files to next dir for use by state_to_obs
     if $run_assim && [ $next_time -ge $time_assim_start ] && [ $next_time -le $time_assim_end ]; then
@@ -93,13 +92,14 @@ for m in `seq 1 $nens`; do
             ftime=${tstr:0:8}${tstr:9:4}
             if [ $ftime -ge $ftime_min ] && [ $ftime -le $ftime_max ]; then
                 #ln -fs $work_dir/cycle/$time/nextsim.v1/$m_id/$fname $nextdir/../.
-                cp $fname $nextdir/../.
+                cp $fname $nextdir/../. &
             fi
         done
     fi
 
     cd ..  ##from $m_id
 done
+wait
 
 echo complete > stat
 

@@ -262,7 +262,7 @@ def get_nextsim_files(path, **kwargs):
     t_list = []
     search = path+'/'+mstr+'/mesh*.bin'
     for result in glob.glob(search):
-        if 'final' in result:
+        if '00Z' not in result:  ##discard files without time string
             continue
         tstr = result.split('.')[-2].split('_')[-1]
         if 'post_regrid' in result:

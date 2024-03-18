@@ -5,7 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
 #SBATCH --qos=devel
-#SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/run_cycle.%j
+#SBATCH --partition=normal
+#SBATCH --output=/cluster/home/yingyue/code/NEDAS/log/cycle.%j
 
 source ~/.bashrc
 ##other initial environment src code
