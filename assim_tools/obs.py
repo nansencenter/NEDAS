@@ -496,10 +496,24 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     ##model source module
     model_src = importlib.import_module('models.'+kwargs['model'])
 
-    ##option 1:
+    ##option 1  TODO: update README
+    ## if dataset module provides an obs_operator, use it to compute obs
+    if hasattr(obs_src, 'obs_operator') and kwargs['model'] in obs_src.obs_operator and kwargs['name'] in obs_src.obs_operator[kwargs['model']]:
+        if synthetic:
+            path = c.work_dir+'/truth/'+t2s(time)+'/'+kwargs['model']
+        else:
+            path = c.work_dir+'/cycle/'+t2s(time)+'/'+kwargs['model']
+
+        operator = obs_src.obs_operator[kwargs['model']]
+        # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['source']+'.obs_operator for '+kwargs['model']
+
+        ##get the obs seq from operator
+        seq = operator[kwargs['name']](path, c.grid, c.mask, **kwargs)
+
+    ##option 2:
     ## if obs variable is one of the state variable, or can be computed by the model,
     ## then we just need to collect the 3D variable and interpolate in x,y,z
-    if obs_name in model_src.variables:
+    elif obs_name in model_src.variables:
 
         levels = model_src.variables[obs_name]['levels']
         for k in range(len(levels)):
@@ -528,10 +542,10 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                     grid = model_src.read_grid(path, **kwargs)
                     grid.set_destination_grid(c.grid)
 
-                z_ = grid.convert(model_src.z_coords(path, grid, k=k, **kwargs))
+                z_ = grid.convert(model_src.z_coords(path, grid, k=levels[k], **kwargs))
                 z = np.array([z_, z_]) if is_vector else z_
 
-                fld = grid.convert(model_src.read_var(path, grid, k=k, **kwargs), is_vector=is_vector)
+                fld = grid.convert(model_src.read_var(path, grid, k=levels[k], **kwargs), is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
@@ -588,20 +602,6 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
                 zp = zc.copy()
                 vp = vc.copy()
                 dzp = dzc.copy()
-
-    ##option 2
-    ## if dataset module provides an obs_operator, use it to compute obs
-    elif kwargs['model'] in obs_src.obs_operator:
-        if synthetic:
-            path = c.work_dir+'/truth/'+t2s(time)+'/'+kwargs['model']
-        else:
-            path = c.work_dir+'/cycle/'+t2s(time)+'/'+kwargs['model']
-
-        operator = obs_src.obs_operator[kwargs['model']]
-        assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['source']+'.obs_operator for '+kwargs['model']
-
-        ##get the obs seq from operator
-        seq = operator[kwargs['name']](path, c.grid, c.mask, **kwargs)
 
     else:
         raise ValueError('unable to obtain obs prior for '+obs_name)
