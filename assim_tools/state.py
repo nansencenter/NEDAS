@@ -618,6 +618,7 @@ def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
             sum_fld_pid += fields[mem_id, rec_id]
 
         ##sum over all field sums on different pids together to get the total sum
+        ##TODO:reduce is expensive if only part of pid holds state in memory
         sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
 
         if c.pid_mem == 0:

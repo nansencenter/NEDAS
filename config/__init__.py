@@ -34,7 +34,7 @@ run_align_space = os.environ.get('run_align_space').lower()=='true'
 run_align_time = os.environ.get('run_align_time').lower()=='true'
 
 ##multiscale
-nscale = int(os.environ.get('nscale'))
+nscale = int(os.environ.get('nscale', '1'))
 scale = int(os.environ.get('scale', '0'))  ##if not defined, use the first index
 ##for each scale component, analysis is stored in a separate s_dir
 if nscale > 1:
@@ -70,10 +70,12 @@ obs_time_steps = np.array(os.environ.get('obs_time_steps', '0').split()).astype(
 state_time_steps = np.array(os.environ.get('state_time_steps', '0').split()).astype(np.float32)
 
 ##time multiscale smoothing
-obs_time_scale = np.array(os.environ.get('obs_time_scale', '0').split()).astype(np.float32)[scale]
-state_time_scale = np.array(os.environ.get('state_time_scale', '0').split()).astype(np.float32)[scale]
+obs_time_scale = float(os.environ.get('obs_time_scale', '0'))
+state_time_scale = float(os.environ.get('state_time_scale', '0'))
+
 
 ##define analysis grid
+##TODO: not a good solution to load big file here in config, since it is imported by all other modules
 grid_type = os.environ.get('grid_type')
 if grid_type == 'new':
     proj = Proj(os.environ.get('proj'))
@@ -201,7 +203,7 @@ if comm.Get_size() == 1:
     nproc = 1
     nproc_mem = 1
 else:
-    assert nproc == comm.Get_size(), "nproc is not the same as defined in config"
+    assert nproc == comm.Get_size(), f"nproc {comm.Get_size()} is not the same as defined in config {nproc}"
     assert nproc % nproc_mem == 0, "nproc should be evenly divided by nproc_mem"
 nproc_rec = int(nproc/nproc_mem)
 
