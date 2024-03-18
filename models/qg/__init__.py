@@ -8,11 +8,13 @@ from .util import *
 restart_dt = int(os.environ['cycle_period'])
 kmax = int(os.environ['kmax'])
 nz = int(os.environ['nz'])
+dz = float(os.environ['dz'])
+levels = np.arange(0, nz, dz)
 
-variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':np.arange(nz), 'units':'*'},
-             'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':np.arange(nz), 'units':'*'},
-             'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':np.arange(nz), 'units':'*'},
-             'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':np.arange(nz), 'units':'*'},
+variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
+             'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
+             'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
+             'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
            }
 
 
@@ -59,25 +61,48 @@ def read_var(path, grid, **kwargs):
         k = 0  ##read the first layer by default
     assert k>=0 and k<nz, f'level index {k} is not within range 0-{nz}'
 
-    psik = read_data_bin(fname, kmax, nz, k)
+    k1 = int(k)
+    if k1 < nz-1:
+        k2 = k1+1
+    else:
+        k2 = k1
+
+    psik1 = read_data_bin(fname, kmax, nz, k1)
+    psik2 = read_data_bin(fname, kmax, nz, k2)
 
     if name == 'streamfunc':
-        return spec2grid(psik).T
+        var1 = spec2grid(psik1).T
+        var2 = spec2grid(psik2).T
 
     elif name == 'velocity':
-        uk = psi2u(psik)
-        vk = psi2v(psik)
-        u = spec2grid(uk).T
-        v = spec2grid(vk).T
-        return np.array([u, v])
+        uk1 = psi2u(psik1)
+        vk1 = psi2v(psik1)
+        u1 = spec2grid(uk1).T
+        v1 = spec2grid(vk1).T
+        var1 = np.array([u1, v1])
+        uk2 = psi2u(psik2)
+        vk2 = psi2v(psik2)
+        u2 = spec2grid(uk2).T
+        v2 = spec2grid(vk2).T
+        var2 = np.array([u2, v2])
 
     elif name == 'vorticity':
-        zetak = psi2zeta(psik)
-        return spec2grid(zetak).T
+        zetak1 = psi2zeta(psik1)
+        var1 = spec2grid(zetak1).T
+        zetak2 = psi2zeta(psik2)
+        var2 = spec2grid(zetak2).T
 
     elif name == 'temperature':
-        tempk = psi2temp(psik)
-        return spec2grid(tempk).T
+        tempk1 = psi2temp(psik1)
+        var1 = spec2grid(tempk1).T
+        tempk2 = psi2temp(psik2)
+        var2 = spec2grid(tempk2).T
+
+    ##vertical interp between var1 and var2
+    if k1 < nz-1:
+        return (var1*(k2-k) + var2*(k-k1)) / (k2-k1)
+    else:
+        return var1
 
 
 def write_var(path, grid, var, **kwargs):
@@ -93,23 +118,24 @@ def write_var(path, grid, var, **kwargs):
         k = 0  ##read the first layer by default
     assert k>=0 and k<nz, f'level index {k} is not within range 0-{nz}'
 
-    if name == 'streamfunc':
-        psik = grid2spec(var.T)
+    if k==int(k):
+        if name == 'streamfunc':
+            psik = grid2spec(var.T)
 
-    elif name == 'velocity':
-        uk = grid2spec(var[0,...].T)
-        vk = grid2spec(var[1,...].T)
-        psik = zeta2psi(uv2zeta(uk, vk))
+        elif name == 'velocity':
+            uk = grid2spec(var[0,...].T)
+            vk = grid2spec(var[1,...].T)
+            psik = zeta2psi(uv2zeta(uk, vk))
 
-    elif name == 'vorticity':
-        zetak = grid2spec(var.T)
-        psik = zeta2psi(zetak)
+        elif name == 'vorticity':
+            zetak = grid2spec(var.T)
+            psik = zeta2psi(zetak)
 
-    elif name == 'temperature':
-        tempk = grid2spec(var.T)
-        psik = temp2psi(tempk)
+        elif name == 'temperature':
+            tempk = grid2spec(var.T)
+            psik = temp2psi(tempk)
 
-    write_data_bin(fname, kmax, nz, k, psik)
+        write_data_bin(fname, kmax, nz, int(k), psik)
 
 
 uniq_z_key = ('k')
