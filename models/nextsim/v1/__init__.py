@@ -12,6 +12,8 @@ variables = {'seaice_conc': {'name':'M_conc', 'dtype':'float', 'is_vector':False
              'seaice_damage': {'name':'M_damage', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'%' },
              'snow_thick': {'name':'M_snow_thick', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'m' },
              'seaice_velocity': {'name':'M_VT', 'dtype':'float', 'is_vector':True, 'restart_dt':3, 'levels':[0], 'units':'m/s' },
+             'seaice_drift': {'name':'', 'dtype':'float', 'is_vector':True, 'restart_dt':3, 'levels':[0], 'units':'km/day' },
+             'seaice_shear': {'name':'', 'dtype':'float', 'is_vector':False, 'restart_dt':3, 'levels':[0], 'units':'1/day' },
              }
 
 
@@ -83,12 +85,29 @@ def read_grid_from_msh(mshfile):
     return Grid(proj, x, y, regular=False, triangles=triangles)
 
 
+##diagnostic variables getters
+def get_seaice_drift(path, grid, **kwargs):
+    return var
+
+
+def get_seaice_shear(path, grid, **kwargs):
+    return var
+
+
+get_diag_var = {'seaice_drift':get_seaice_drift,
+                'seaice_shear':get_seaice_shear, }
+
+
 def read_var(path, grid, **kwargs):
     """read native variable defined on native grid from model restart files"""
     ##check name in kwargs and read the variables from file
     vname = kwargs['name']
     assert vname in variables, 'variable name '+vname+' not listed in variables'
     fname = filename(path, **kwargs)
+
+    ##get diagnostic variables from their own getters
+    if vname in ['seaice_drift', 'seaice_shear']:
+        return get_diag_var(vname)(path, grid, **kwargs)
 
     var = read_data(fname, variables[vname]['name'])
 
@@ -115,6 +134,10 @@ def write_var(path, grid, var, **kwargs):
     vname = kwargs['name']
     assert vname in variables, "variable name "+vname+" not listed in variables"
 
+    ##ignore diagnostic variables
+    if vname in ['seaice_drift', 'seaice_shear']:
+        return
+
     ##nextsim restart file concatenates u,v component, so flatten if is_vector
     if kwargs['is_vector']:
         var = var.flatten()
@@ -122,8 +145,34 @@ def write_var(path, grid, var, **kwargs):
     ##convert units back if necessary
     var = units_convert(kwargs['units'], variables[vname]['units'], var, inverse=True)
 
+    ##check if original var is on mesh nodes or elements
+    # var_orig = read_data(fname, variables[vname]['name']).flatten()
+    # if var_orig.size != var.size:
+    #     ##the grid.convert interpolate to nodes by default, if size mismatch, this means
+    #     ##we need element values, take the average of the node values here
+    #     var = np.nanmean(var[grid.tri.triangles], axis=1)
+
     ##output the var to restart file
     write_data(fname, variables[vname]['name'], var)
+
+
+def postproc(var, **kwargs):
+    vname = kwargs['name']
+    if vname == 'seaice_conc':
+        ##set values outside physical range back
+        var[np.where(var<0)] = 0.0
+        var[np.where(var>1)] = 1.0
+
+    if vname == 'seaice_thick':
+        ##set values outside physical range back
+        var[np.where(var<0)] = 0.0
+
+    if vname == 'seaice_damage':
+        ##set values outside physical range back
+        var[np.where(var<0)] = 0.0
+        var[np.where(var>1)] = 1.0
+
+    return var
 
 
 ##since all nextsim variables are at surface, there is no need for z_coords calculation

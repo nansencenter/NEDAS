@@ -60,9 +60,9 @@ def write_data(filename, v_name, v_data):
         raise ValueError('variable %s not in %s' %(v_name, filename))
     ##update info with new v_data
     assert v_data.dtype == type_convert[info[v_name]['type']], "input data type mismatch with datfile record"
-    assert len(v_data) == info[v_name]['len'], "input data size mismatch with datfile record"
-    info[v_name]['min_val'] = np.min(v_data)
-    info[v_name]['max_val'] = np.max(v_data)
+    assert v_data.size == info[v_name]['len'], f"input data size {v_data.size} mismatch with datfile record {info[v_name]['len']}"
+    info[v_name]['min_val'] = np.nanmin(v_data)
+    info[v_name]['max_val'] = np.nanmax(v_data)
 
     ##write the dat file with updated info
     with open(filename.replace('.bin','.dat'), 'wt') as f:
