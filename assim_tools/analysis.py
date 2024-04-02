@@ -297,7 +297,15 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
     ##      when nlobs<nens, there will be singular values of 0, but the full matrix
     ##      can still be inverted with singular values of 1.
     var_ratio_inv = np.eye(nens) + S.T @ S
-    L, sv, Rh = np.linalg.svd(var_ratio_inv)
+
+    ##TODO: var_ratio_inv = np.eye(nlobs) + S @ S.T  if nlobs<nens
+
+    try:
+        L, sv, Rh = np.linalg.svd(var_ratio_inv)
+    except:
+        ##if svd failed just return equal weights (no update)
+        print('failed to invert var_ratio_inv=', var_ratio_inv)
+        return np.eye(nens)
 
     ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
     ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
