@@ -80,7 +80,7 @@ xmin=0
 xmax=256
 ymin=0
 ymax=256
-dx="0.8"
+dx="1"
 
 ##define the `state` in a multi-line string
 ##  one state variable per line, each line contains:

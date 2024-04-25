@@ -131,30 +131,30 @@ runtime = time.time()
 
 ##--------------------------
 ##5.Transposing state back to field-complete
-message(c.comm, '5.Transpose state from ensemble-complete to field-complete\n', c.pid_show)
+# message(c.comm, '5.Transpose state from ensemble-complete to field-complete\n', c.pid_show)
 
-message(c.comm, 'state variable fields: ', c.pid_show)
-fields_post = transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state_post)
+# message(c.comm, 'state variable fields: ', c.pid_show)
+# fields_post = transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state_post)
 
-state_file = assim_dir+'/post_state.bin'
-output_state(c, state_info, mem_list, rec_list, fields_post, state_file)
-mean_file = assim_dir+'/post_mean_state.bin'
-output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
+# state_file = assim_dir+'/post_state.bin'
+# output_state(c, state_info, mem_list, rec_list, fields_post, state_file)
+# mean_file = assim_dir+'/post_mean_state.bin'
+# output_ens_mean(c, state_info, mem_list, rec_list, fields_post, mean_file)
 
-message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
-runtime = time.time()
+# message(c.comm, 'Step 5 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
+# runtime = time.time()
 
-##--------------------------
-##6.Post-processing
-message(c.comm, '6.Post-processing\n', c.pid_show)
+# ##--------------------------
+# ##6.Post-processing
+# message(c.comm, '6.Post-processing\n', c.pid_show)
 
-update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
+# update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post)
 
-##optional: output posterior obs for diag
-# obs_post_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_list, obs_seq, fields_post, z_fields)
-# output_obs(c, obs_info, obs_post_seq)
+# ##optional: output posterior obs for diag
+# # obs_post_seq = prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_list, obs_seq, fields_post, z_fields)
+# # output_obs(c, obs_info, obs_post_seq)
 
-message(c.comm, 'Step 6 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
+# message(c.comm, 'Step 6 took {} seconds\n\n'.format(time.time()-runtime), c.pid_show)
 
 message(c.comm, 'Completed successfully. All took {} seconds\n'.format(time.time()-runtime0), c.pid_show)
 
