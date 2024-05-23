@@ -1,29 +1,76 @@
-####All settings and their default values
+host: 'betcy'
+nproc: 128
+nproc_mem: 128
 
-##experiment name
-exp_name: exp1
-
-##load HPC-specific settings, directory names, env, etc.
-#. $HOME/code/NEDAS/config/env/betzy/base.src
-
-script_dir: $HOME/code/NEDAS/scripts
-code_dir: $HOME/code
-data_dir: $SCRATCH/data
-work_dir: $SCRATCH/$exp_name
-
-#ensemble size, number of members (model runs, realizations, etc.)
+exp_name: 'exp1'
 nens: 8
+run_assim: True
 
-##parallel scheme
-nproc: 8
-nproc_mem: 4
+debug: False
 
-#DA scheme
-assim_mode: serial ##batch or serial
-filter_type: EAKF
-regress_type: linear
+time_start: '202301010000'
+time_end: '202301310000'
+time_assim_start: '202301030000'
+time_assim_end: '202301250000'
+cycle_period: 168
 
-#run_assim=true  ##if true, run filter/smoother update algorithms
+###define analysis window relative to `time`, in hours
+###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
+### for each cycle, so watch out for overfitting
+##obs_window_min=-24
+##obs_window_max=0
+##obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
+##t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
+
+###time steps for obs and state for each analysis cycle
+#obs_time_steps="0"
+#state_time_steps="0"
+
+#grid:
+#  type: 'custom'
+#  proj: '+proj=stere'
+#  xmin: 0
+#  xmax: 100
+#  ymin: 0
+#  ymax: 100
+#  dx: 1
+###mask: area in the reference grid that is land or other area that doesn't require analysis,
+###      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
+###      the local analysis routine will also skip masked region to evenly distribute work load.
+### the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
+### and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
+##maskfile=$SCRATCH/mask.npz
+
+state_def:
+  - name: 'velocity'
+    model_src: 'qg'
+    var_type: 'field'
+    err_type: 'normal'
+
+obs_def:
+  - name: 'velocity'
+    dataset_src: 'qg'
+    model_src: 'qg'
+    obs_window_min: -6
+    obs_window_max: 0
+    err_type: 'normal'
+    err_std: 0.5
+
+use_synthetic_obs: False
+
+###ensemble perturbation settings
+#perturb_variables="seaice_drift ocean_surf_height"
+##perturb_param_dir=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
+
+###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
+
+model_def:
+  - name: 'qg'
+
+
+assim_mode: 'serial'
+filter_type: 'EAKF'
+regress_type: 'linear'
 #run_align_space=false  ##if true, run alignment after filter update in space/time
 #run_align_time=false
 
@@ -49,112 +96,4 @@ regress_type: linear
 ###inflation setting
 #inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
 #inflate_factor="1"  ##inflation factor for each scale
-
-###time period and cycling
-#time_start=202310230000    ##format ccyymmddHHMM
-#time_end=202302240000
-#time_assim_start=202310230000
-#time_assim_end=202310230000
-#cycle_period=168  ##in hours
-###Assimilation (filter update, displacement, etc.) starts at time_assim_start
-###`time` points to the current cycle time
-###`next_time`/`prev_time` points to the next/previous cycle time
-
-###define analysis window relative to `time`, in hours
-###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
-### for each cycle, so watch out for overfitting
-##obs_window_min=-24
-##obs_window_max=0
-##obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
-##t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
-
-###time steps for obs and state for each analysis cycle
-#obs_time_steps="0"
-#state_time_steps="0"
-
-###define a reference coordinate system where analysis takes place
-###you can use model modules to provide the grid (when only assimilating for a single model)
-#grid_type=topaz.v5   ##model module name
-
-###or, you can define a grid yourself with parameters:
-##grid_type=new
-###map projection is defined as a proj.4 string, see https://proj.org/usage/projections.html
-##proj="+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60"
-
-###horizontal grid dimensions
-##xmin=-2500000  ##start,end x coordinates (meter)
-##xmax=2500000
-##ymin=-2000000  ##start,end y coordinates (meter)
-##ymax=2500000
-##dx="100000"  ##grid spacing (meter) for each scale (nscale entries)
-
-###mask: area in the reference grid that is land or other area that doesn't require analysis,
-###      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
-###      the local analysis routine will also skip masked region to evenly distribute work load.
-### the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
-### and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
-##maskfile=$SCRATCH/mask.npz
-
-###define the `state` in a multi-line string
-###  one state variable per line, each line contains:
-###     variable name
-###     source module, one of the models/ module that provides the state variable
-###     error type, normal/lognormal
-#state_def=$(cat << EOF
-#ocean_velocity      topaz.v5    field  normal
-#ocean_temp          topaz.v5    field  normal
-#ocean_saln          topaz.v5    field  normal
-#EOF
-#)
-
-###parameter estimation
-###just add model parameters as scalar state variables above, e.g.:
-##drag_coef           topaz.v5   scalar  normal
-
-###define the `obs` in a multi-line string
-###  one observation per line, each line contains:
-###      obs variable name
-###      source, dataset module that provides this obs variable
-###      model, models module that provides this obs prior
-###      error type, normal/lognormal/beta
-###      error standard deviation
-###      error horizontal correlation length, in meters
-###      error vertical correlation length, in meters
-###      error time correlation length, in hours
-###      error correlation among variables, list of "<variable name>=<corr coef>" separated by ',', if not specified, default is uncorrelated
-###      horizontal localization distance, in meters
-###      vertical localization distance, in meters
-###      time localization distance, in hours
-###      obs impact factor, list of "<state variable name>=<its impact factor>" separated by ','; if not specified, default is impact=1 for all unlisted state variables.
-#obs_def=$(cat << EOF
-obs_def:
-  - name: ocean_temp
-    dataset: osisaf
-    model: topaz.v5
-    obs_window_min: -168
-    obs_window_max: 0
-    err_type: normal
-    err_std: 0.1
-  - name: ocean_saln
-    dataset: osisaf
-    model: topaz.v5
-    obs_window_min: -168
-    obs_window_max: 0
-    err_type: normal
-    err_std: 0.6
-
-#ocean_temp  osisaf  topaz.v5 -168  0  normal  0.1  0  0  0  none  200000  inf  inf  none
-#ocean_saln  osisaf  topaz.v5 -168  0  normal  0.6  0  0  0  none  200000  inf  inf  ocean_velocity=0,ocean_temp=0.5
-#EOF
-#)
-
-#use_synthetic_obs=false
-
-###ensemble perturbation settings
-#perturb_variables="seaice_drift ocean_surf_height"
-##perturb_param_dir=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
-
-###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
-
-debug: false
 
