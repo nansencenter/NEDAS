@@ -1,0 +1,8 @@
+home_dir: '/cluster/home/yingyue'
+scratch_dir: '/cluster/work/users/yingyue'
+
+scripts_dir: '/cluster/home/yingyue/code/NEDAS/scripts'
+code_dir: '/cluster/home/yingyue/code'
+data_dir: '/cluster/work/users/yingyue/data'
+
+ppn: 128
