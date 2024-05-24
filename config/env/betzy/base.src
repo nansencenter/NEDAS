@@ -1,9 +1,0 @@
-#!/bin/bash
-host=betzy
-
-nnodes=$SLURM_NNODES
-ntasks=$SLURM_NTASKS
-tasks_per_node=128
-
-SCRATCH=/cluster/work/users/yingyue
-
