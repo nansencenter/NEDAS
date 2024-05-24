@@ -1,4 +1,4 @@
-host: 'betcy'
+host: 'betzy'
 nproc: 128
 nproc_mem: 128
 
@@ -27,6 +27,8 @@ cycle_period: 168
 #state_time_steps="0"
 
 #grid:
+nx: 256
+ny: 256
 #  type: 'custom'
 #  proj: '+proj=stere'
 #  xmin: 0
@@ -42,19 +44,19 @@ cycle_period: 168
 ##maskfile=$SCRATCH/mask.npz
 
 state_def:
-  - name: 'velocity'
-    model_src: 'qg'
-    var_type: 'field'
-    err_type: 'normal'
+- name: 'velocity'
+  model_src: 'qg'
+  var_type: 'field'
+  err_type: 'normal'
 
 obs_def:
-  - name: 'velocity'
-    dataset_src: 'qg'
-    model_src: 'qg'
-    obs_window_min: -6
-    obs_window_max: 0
-    err_type: 'normal'
-    err_std: 0.5
+- name: 'velocity'
+  dataset_src: 'qg'
+  model_src: 'qg'
+  obs_window_min: -6
+  obs_window_max: 0
+  err_type: 'normal'
+  err_std: 0.5
 
 use_synthetic_obs: False
 
@@ -65,7 +67,7 @@ use_synthetic_obs: False
 ###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 
 model_def:
-  - name: 'qg'
+- name: 'qg'
 
 
 assim_mode: 'serial'
