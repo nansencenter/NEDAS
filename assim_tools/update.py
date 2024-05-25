@@ -3,8 +3,9 @@ import struct
 import importlib
 import sys
 from datetime import datetime, timedelta
-from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from log import message, show_progress
+
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from utils.log import message, show_progress
 
 def update_restart(c, state_info, mem_list, rec_list, fields_prior, fields_post):
     """

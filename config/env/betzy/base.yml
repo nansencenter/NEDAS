@@ -1,8 +1,8 @@
-home_dir: '/cluster/home/yingyue'
-scratch_dir: '/cluster/work/users/yingyue'
+home_dir: '/cluster/home/yingyue'                ##path to home directory
+scratch_dir: '/cluster/work/users/yingyue'       ##path to scratch disk space
 
-scripts_dir: '/cluster/home/yingyue/code/NEDAS/scripts'
-code_dir: '/cluster/home/yingyue/code'
-data_dir: '/cluster/work/users/yingyue/data'
+scripts_dir: '/cluster/home/yingyue/code/NEDAS/scripts'  ##path to the NEDAS/scripts
+code_dir: '/cluster/home/yingyue/code'           ##where model codes are stored
+data_dir: '/cluster/work/users/yingyue/data'     ##where dataset are stored
 
-ppn: 128
+ppn: 128   ##number of processors per node

@@ -1,12 +1,14 @@
 import numpy as np
 from numba import njit
+
 import config as c
-from log import message, show_progress
-from conversion import t2h, h2t
-from parallel import bcast_by_root
+
+from utils.log import message, show_progress
+from utils.conversion import t2h, h2t
+from utils.parallel import bcast_by_root
 
 ###pack/unpack local state and obs data for jitted functions:
-def pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, z_state):
+def pack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, z_state):
     """pack state dict into arrays to be more easily handled by jitted funcs"""
     data = {}
 
@@ -43,7 +45,7 @@ def pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_pri
     return data
 
 
-def unpack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, data):
+def unpack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, data):
     """unpack data and write back to the original state_prior dict"""
 
     nfld = len(data['fields'])
@@ -55,7 +57,7 @@ def unpack_local_state_data(c, state_info, rec_list, partitions, par_id, state_p
             state_prior[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]
 
 
-def pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior):
+def pack_local_obs_data(obs_info, par_id, lobs, lobs_prior):
     """pack lobs and lobs_prior into arrays for the jitted functions"""
 
     ##number of local obs on partition
@@ -103,7 +105,7 @@ def pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior):
 
 
 ###functions for the batch assimilation mode:
-def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
+def batch_assim(state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """batch assimilation solves the matrix version EnKF analysis for each local state, the local states in each partition are processed in parallel"""
     ##pid with the most obs in its task list with show progress message
     obs_count = np.array([np.sum([len(obs_inds[r][p])
@@ -125,7 +127,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
     task = 0
     for par_id in par_list[c.pid_mem]:
 
-        state_data = pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, z_state)
+        state_data = pack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, z_state)
 
         nens, nfld, nloc = state_data['state_prior'].shape
 
@@ -133,7 +135,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
         if nloc == 0:
             continue
 
-        obs_data = pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior)
+        obs_data = pack_local_obs_data(obs_info, par_id, lobs, lobs_prior)
         nlobs = obs_data['x'].size
 
         ##if there is no obs to assimilate, update progress message and skip
@@ -164,7 +166,7 @@ def batch_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_lis
                            obs_data['troi'], impact_on_state,
                            c.localize_type, c.filter_type)
 
-        unpack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, state_data)
+        unpack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, state_data)
 
     message(c.comm, ' done.\n', c.pid_show)
 
@@ -355,7 +357,7 @@ def apply_ensemble_transform(ens_prior, weights):
 
 
 ###functions for the serial assimilation mode:
-def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
+def serial_assim(state_info, obs_info, obs_inds, partitions, par_list, rec_list, state_prior, z_state, lobs, lobs_prior):
     """
     serial assimilation goes through the list of observations one by one
     for each obs the near by state variables are updated one by one.
@@ -364,10 +366,10 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
 
     par_id = c.pid_mem
 
-    state_data = pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, z_state)
+    state_data = pack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, z_state)
     nens, nfld, nloc = state_data['state_prior'].shape
 
-    obs_data = pack_local_obs_data(c, obs_info, par_id, lobs, lobs_prior)
+    obs_data = pack_local_obs_data(obs_info, par_id, lobs, lobs_prior)
 
     obs_list = global_obs_list(obs_info, obs_inds)
 
@@ -421,7 +423,7 @@ def serial_assim(c, state_info, obs_info, obs_inds, partitions, par_list, rec_li
 
     message(c.comm, ' done.\n', c.pid_show)
 
-    unpack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, state_data)
+    unpack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, state_data)
 
     return state_prior
 

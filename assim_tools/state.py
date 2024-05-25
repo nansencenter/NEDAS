@@ -3,10 +3,12 @@ import sys
 import struct
 import importlib
 from datetime import datetime, timedelta
+
 import config as c
-from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from log import message, show_progress
-from parallel import bcast_by_root, distribute_tasks
+
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from utils.log import message, show_progress
+from utils.parallel import bcast_by_root, distribute_tasks
 
 """
 Note: The analysis is performed on a regular grid.
@@ -33,7 +35,7 @@ while easier to run assimilation algorithms with ensemble-complete state.
 """
 
 @bcast_by_root(c.comm)
-def parse_state_info(c):
+def parse_state_info():
     """
     Parses info for the nrec fields in the state.
 
@@ -52,17 +54,17 @@ def parse_state_info(c):
     for vrec in c.state_def:
         vname = vrec['name']
 
-        if vrec['state_type'] == 'field':
+        if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
             ##some properties of the variable is defined in its source module
-            src = importlib.import_module('models.'+vrec['source'])
-            assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['source']+'.variables'
+            src = importlib.import_module('models.'+vrec['model_src'])
+            assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['model_src']+'.variables'
 
             #now go through time and zlevels to form a uniq field record
             for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
                 for k in src.variables[vname]['levels']:
                     rec = { 'name': vname,
-                            'source': vrec['source'],
+                            'model_src': vrec['model_src'],
                             'dtype': src.variables[vname]['dtype'],
                             'is_vector': src.variables[vname]['is_vector'],
                             'units': src.variables[vname]['units'],
@@ -79,13 +81,13 @@ def parse_state_info(c):
                     pos += nv * fld_size * type_size[rec['dtype']]
                     rec_id += 1
 
-        if vrec['state_type'] == 'scalar':
+        if vrec['var_type'] == 'scalar':
             ##this is a scalar (model parameter, etc.) to be updated
             ##since there is no difficulty storing the scalars on 1 proc
             ##we don't bother with parallelization (no rec_id needed)
             for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
                 rec = {'name': vname,
-                       'source': vrec['source'],
+                       'model_src': vrec['model_src'],
                        'err_type': vrec['err_type'],
                        'time': time,
                       }
@@ -248,7 +250,7 @@ def read_field(binfile, info, mask, mem_id, rec_id):
         return fld
 
 
-def build_state_tasks(c, state_info):
+def build_state_tasks(state_info):
     """
     Distribute mem_id and rec_id across processors
 
@@ -273,7 +275,7 @@ def build_state_tasks(c, state_info):
     return mem_list, rec_list
 
 
-def prepare_state(c, state_info, mem_list, rec_list):
+def prepare_state(state_info, mem_list, rec_list):
     """
     Collects fields from model restart files, convert them to the analysis grid,
     preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
@@ -371,7 +373,7 @@ def prepare_state(c, state_info, mem_list, rec_list):
     return fields, z_coords
 
 
-def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_list, fields):
+def transpose_field_to_state(state_info, mem_list, rec_list, partitions, par_list, fields):
     """
     transpose_field_to_state send chunks of field owned by a pid to other pid
     so that the field-complete fields get transposed into ensemble-complete state
@@ -457,7 +459,7 @@ def transpose_field_to_state(c, state_info, mem_list, rec_list, partitions, par_
     return state
 
 
-def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_list, state):
+def transpose_state_to_field(state_info, mem_list, rec_list, partitions, par_list, state):
     """
     transpose_state_to_field transposes back the state to field-complete fields
 
@@ -540,7 +542,7 @@ def transpose_state_to_field(c, state_info, mem_list, rec_list, partitions, par_
     return fields
 
 
-def output_state(c, state_info, mem_list, rec_list, fields, state_file):
+def output_state(state_info, mem_list, rec_list, fields, state_file):
     """
     Parallel output the fields to the binary state_file
 
@@ -581,7 +583,7 @@ def output_state(c, state_info, mem_list, rec_list, fields, state_file):
     message(c.comm, ' done.\n', c.pid_show)
 
 
-def output_ens_mean(c, state_info, mem_list, rec_list, fields, mean_file):
+def output_ens_mean(state_info, mem_list, rec_list, fields, mean_file):
     """
     Compute ensemble mean of a field stored distributively on all pid_mem
     collect means on pid_mem=0, and output to mean_file

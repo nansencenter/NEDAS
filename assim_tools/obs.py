@@ -2,12 +2,15 @@ import numpy as np
 import struct
 import importlib
 from datetime import datetime, timedelta
+
 import config as c
-from conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
-from log import message, show_progress
-from parallel import bcast_by_root, distribute_tasks
+
 from perturb import random_field_gaussian
 from grid import Grid
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from utils.log import message, show_progress
+from utils.parallel import bcast_by_root, distribute_tasks
+
 from .state import read_field
 
 """
@@ -92,7 +95,7 @@ def parse_obs_info(c):
     return obs_info
 
 
-def build_obs_tasks(c, obs_info):
+def build_obs_tasks(obs_info):
     """
     Distribute obs_rec_id across processors
 
@@ -111,7 +114,7 @@ def build_obs_tasks(c, obs_info):
     return obs_rec_list
 
 
-def read_mean_z_coords(c, state_info, time):
+def read_mean_z_coords(state_info, time):
     """
     Read the ensemble-mean z coords from z_file at obs time
 
@@ -150,7 +153,7 @@ def read_mean_z_coords(c, state_info, time):
 
 
 @bcast_by_root(c.comm_mem)
-def prepare_obs(c, state_info, obs_info, obs_rec_list):
+def prepare_obs(state_info, obs_info, obs_rec_list):
     """
     Prepare the obs in parallel, read dataset files and convert to obs_seq
     which contains obs value, coordinates and other info
@@ -188,7 +191,7 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
         path = c.data_dir+'/'+obs_rec['source']
 
         ##read ens-mean z coords from z_file for this obs network
-        z = read_mean_z_coords(c, state_info, obs_rec['time'])
+        z = read_mean_z_coords(state_info, obs_rec['time'])
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
@@ -197,7 +200,7 @@ def prepare_obs(c, state_info, obs_info, obs_rec_list):
             seq = src.random_network(path, c.grid, c.mask, z, truth_path, **obs_rec)
 
             ##compute obs values
-            seq['obs'] = state_to_obs(c, state_info, None, None, member=None, **obs_rec, **seq)
+            seq['obs'] = state_to_obs(state_info, None, None, member=None, **obs_rec, **seq)
 
             ##perturb with obs err
             seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec['err']['std']
@@ -264,7 +267,7 @@ def partition_grid(c):
 
 
 @bcast_by_root(c.comm_mem)
-def assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq):
+def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
     """
     Assign the observation sequence to each partition par_id
 
@@ -345,7 +348,7 @@ def assign_obs(c, state_info, obs_info, partitions, obs_rec_list, obs_seq):
 
 
 @bcast_by_root(c.comm_mem)
-def build_par_tasks(c, partitions, obs_info, obs_inds):
+def build_par_tasks(partitions, obs_info, obs_inds):
     """
     Distribute par_id across processors according to the work load on each partition
 
@@ -382,7 +385,7 @@ def build_par_tasks(c, partitions, obs_info, obs_inds):
     return par_list
 
 
-def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
+def prepare_obs_from_state(state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
     """
     Prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_prior_seq
 
@@ -418,7 +421,7 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
             ##this is the obs record to process
             obs_rec = obs_info['records'][obs_rec_id]
 
-            seq = state_to_obs(c, state_info, mem_list, rec_list, member=mem_id,
+            seq = state_to_obs(state_info, mem_list, rec_list, member=mem_id,
                                model_fld=fields, model_z=z_fields,
                                **obs_rec, **obs_seq[obs_rec_id])
 
@@ -429,7 +432,7 @@ def prepare_obs_from_state(c, state_info, mem_list, rec_list, obs_info, obs_rec_
     return obs_prior_seq
 
 
-def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
+def state_to_obs(state_info, mem_list, rec_list, **kwargs):
     """
     Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
     This function includes several ways to compute the obs_prior:
@@ -609,7 +612,7 @@ def state_to_obs(c, state_info, mem_list, rec_list, **kwargs):
     return seq
 
 
-def transpose_obs_to_lobs(c, mem_list, rec_list, obs_rec_list, par_list, obs_inds, input_obs, ensemble=False):
+def transpose_obs_to_lobs(mem_list, rec_list, obs_rec_list, par_list, obs_inds, input_obs, ensemble=False):
     """
     Transpose obs from field-complete to ensemble-complete
 
@@ -817,7 +820,7 @@ def read_obs_seq(binfile, info, obs_seq, member=None):
     return obs_seq_out
 
 
-def output_obs(c, obs_seq):
+def output_obs(obs_seq):
     pass
 
 
