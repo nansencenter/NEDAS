@@ -6,7 +6,7 @@ import yaml
 from distutils.util import strtobool
 from IPython import get_ipython
 
-def parse_config(**kwargs):
+def parse_config(config_file=None):
     """
     Load configuration from yaml files and runtime arguments
 
@@ -21,7 +21,7 @@ def parse_config(**kwargs):
     If user provide a runtime argument --variable=value, then value will be
     used to replace the default value for that variable.
 
-    Returns: Namespace object with config variables
+    Returns: dictionary {config variables: values}
     """
 
     ##if running from jupyter notebook, ignore all arguments
@@ -56,12 +56,12 @@ def parse_config(**kwargs):
     args, remaining_args = parser.parse_known_args(input_args)
 
     ##update config_dict if new config_file is provided
-    if args.config_file is not None:
-        with open(args.config_file, 'r') as f:
+    if config_file is not None:
+        with open(config_file, 'r') as f:
             config_dict = {**config_dict, **yaml.safe_load(f)}
 
-    if 'config_file' in kwargs:
-        with open(kwargs['config_file'], 'r') as f:
+    if args.config_file is not None:
+        with open(args.config_file, 'r') as f:
             config_dict = {**config_dict, **yaml.safe_load(f)}
 
     ##continue building the parser with additional arguments to update
@@ -83,13 +83,13 @@ def parse_config(**kwargs):
         parser.add_argument('--'+key, default=value, type=key_type, help=key_help)
 
     ##show help message
-    if args.help or 'help' in kwargs:
+    if args.help:
         print(f"""Parsing configuration:
 
-Default values are defined in default.yml
+Default values can be defined in default.yml in the code directory
 
 You can specify a yaml config file to overwrite (part of) the default configuration
-usage: [-c YAML_FILE] [--config_file YAML_FILE]
+usage: code.py [-c YAML_FILE] [--config_file YAML_FILE]
 
 The following arguments also allow you to update a configuration variable at runtime:
 """)
@@ -97,7 +97,8 @@ The following arguments also allow you to update a configuration variable at run
 
     ##run the parser to get the config namespace object
     config = parser.parse_args(remaining_args)
+    config_dict = vars(config)
 
-    return config
+    return config_dict
 
 

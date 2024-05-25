@@ -1,6 +1,6 @@
 import numpy as np
 
-from fft_lib import fft2, ifft2, fftwn, get_wn
+from .fft_lib import fft2, ifft2, fftwn, get_wn
 
 ##scale decomposition
 def lowpass_resp(k2d, k1, k2):

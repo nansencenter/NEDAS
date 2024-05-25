@@ -1,18 +1,21 @@
-host: 'betzy'
-nproc: 128
-nproc_mem: 128
+host: 'betzy'   ##name of the host computer
+                ##some directory path defined in env/$host/base.yml
 
-exp_name: 'exp1'
-nens: 8
-run_assim: True
+nproc: 128      ##total number of processors
+nproc_mem: 128  ##number of processor groups
 
-debug: False
+work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
 
-time_start: '202301010000'
-time_end: '202301310000'
-time_assim_start: '202301030000'
-time_assim_end: '202301250000'
-cycle_period: 168
+nens: 8           ##ensemble size
+run_assim: True   ##if true, run the assimilation steps
+
+debug: False      ##if true, show runtime debugging messages
+
+time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '202301310000'         ##end time of the experiment
+time_assim_start: '202301030000' ##start time of the first analysis cycle
+time_assim_end: '202301250000'   ##end time of the last analysis cycle
+cycle_period: 168                ##cycle period, in hours
 
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs

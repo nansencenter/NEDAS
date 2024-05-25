@@ -56,6 +56,19 @@ def parallel_start():
     return comm
 
 
+def run_by_root(comm):
+    """
+    Decorator for func() to be run only by rank 0 in comm
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if comm.Get_rank() == 0:
+                result = func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+
+
 def bcast_by_root(comm):
     """
     Decorator for func() to be run only by rank 0 in comm,
@@ -131,5 +144,4 @@ def distribute_tasks(comm, tasks, load=None):
         task_list[r] = tasks[task_id[r]:task_id[r+1]]
 
     return task_list
-
 
