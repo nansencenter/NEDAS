@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import time
 
 def message(comm, msg, root=None):
     """
@@ -18,6 +19,20 @@ def message(comm, msg, root=None):
     if root is None or root==comm.Get_rank():
         sys.stdout.write(msg)
         sys.stdout.flush()
+
+
+def timer(comm, pid_show=0):
+    """decorator to show the time spent on a function"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            t0 = time.time()
+            result = func(*args, **kwargs)
+            t1 = time.time()
+            if pid_show == comm.Get_rank():
+                print(f"timer: {func.__name__} took {t1 - t0} seconds")
+            return result
+        return wrapper
+    return decorator
 
 
 def progress_bar(task_id, ntask, width=33):

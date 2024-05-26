@@ -6,3 +6,4 @@ from .analysis import batch_assim, serial_assim, local_analysis, obs_increment, 
 
 from .update import update_restart
 
+from .forecast import *

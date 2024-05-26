@@ -1,21 +1,22 @@
 host: 'betzy'   ##name of the host computer
                 ##some directory path defined in env/$host/base.yml
 
-nproc: 128      ##total number of processors
-nproc_mem: 128  ##number of processor groups
+nproc: 4        ##total number of processors
+nproc_mem: 4    ##number of processor groups
 
+nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
 
-nens: 8           ##ensemble size
+nens: 100         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
 
-debug: False      ##if true, show runtime debugging messages
+debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202301310000'         ##end time of the experiment
 time_assim_start: '202301030000' ##start time of the first analysis cycle
 time_assim_end: '202301250000'   ##end time of the last analysis cycle
-cycle_period: 168                ##cycle period, in hours
+cycle_period: 6                  ##cycle period, in hours
 
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
@@ -29,22 +30,14 @@ cycle_period: 168                ##cycle period, in hours
 #obs_time_steps="0"
 #state_time_steps="0"
 
-#grid:
-nx: 256
-ny: 256
-#  type: 'custom'
-#  proj: '+proj=stere'
-#  xmin: 0
-#  xmax: 100
-#  ymin: 0
-#  ymax: 100
-#  dx: 1
-###mask: area in the reference grid that is land or other area that doesn't require analysis,
-###      fields[y,x] will have NaN in those area, binfiles will only store the unmasked region,
-###      the local analysis routine will also skip masked region to evenly distribute work load.
-### the variable mask points to a npz file with 'x', 'y' as a high-res grid defined on proj
-### and 'mask' is int[ny,nx] with 1 for masked grid points and 0 for unmasked.
-##maskfile=$SCRATCH/mask.npz
+grid_def:
+  type: 'custom'
+  proj: '+proj=stere'
+  xmin: 0
+  xmax: 256
+  ymin: 0
+  ymax: 256
+  dx: 1.0
 
 state_def:
 - name: 'velocity'

@@ -10,6 +10,6 @@
 source $HOME/.bashrc
 source $HOME/code/NEDAS/config/env/betzy/python.src
 
-python run_cycle.py --config_file=$SCRATCH/qg/qg_testcase.yml
+srun python $HOME/code/NEDAS/scripts/run_exp.py --config_file=$SCRATCH/qg/config.yml
 
 
