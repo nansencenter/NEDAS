@@ -6,12 +6,17 @@ import yaml
 from distutils.util import strtobool
 from IPython import get_ipython
 
-def parse_config(config_file=None):
+def parse_config(code_dir='.', config_file=None):
     """
     Load configuration from yaml files and runtime arguments
 
-    The default.yml file is expected in the directory of the code calling
-    the parse_config function. The values defined within will be used.
+    Inputs:
+    - code_dir: path to the default.yml
+    - config_file: alternative yaml config file to overwrite the default settings
+
+    Return:
+    - config_dict: dict[key, value]
+      a dictionary with config variables
 
     If user provides --config_file=file.yml then values defined in file.yml
     will overwrite the default values
@@ -20,26 +25,15 @@ def parse_config(config_file=None):
     an ArgumentParser will be created to parse these variables.
     If user provide a runtime argument --variable=value, then value will be
     used to replace the default value for that variable.
-
-    Returns: dictionary {config variables: values}
     """
 
-    ##if running from jupyter notebook, ignore all arguments
+    ##if running from jupyter notebook, ignore all runtime arguments
     if get_ipython() is not None:
         input_args = {}
     else:
         input_args = sys.argv[1:]
 
-    ##try to find a default.yml with definitions of config variables
-    stack = inspect.stack()  ##the call stack
-    if len(stack) > 1:
-        ##this is where the code that calls parse_config() resides
-        code_dir = os.path.dirname(stack[1].filename)
-    else:
-        ##or try to find it in current directory
-        code_dir = os.getcwd()
     default_config_file = os.path.join(code_dir, 'default.yml')
-
     if os.path.exists(default_config_file):
         with open(default_config_file, 'r') as f:
             config_dict = yaml.safe_load(f)
@@ -97,8 +91,8 @@ The following arguments also allow you to update a configuration variable at run
 
     ##run the parser to get the config namespace object
     config = parser.parse_args(remaining_args)
-    config_dict = vars(config)
 
-    return config_dict
+    ##return the dict with config variables
+    return vars(config)
 
 

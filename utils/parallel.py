@@ -72,6 +72,8 @@ def run_by_root(comm):
         def wrapper(*args, **kwargs):
             if comm.Get_rank() == 0:
                 result = func(*args, **kwargs)
+            else:
+                result = None
             return result
         return wrapper
     return decorator
