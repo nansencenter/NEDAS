@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 import time
+from functools import wraps
 
 def message(comm, msg, root=None):
     """
@@ -24,12 +25,13 @@ def message(comm, msg, root=None):
 def timer(comm, pid_show=0):
     """decorator to show the time spent on a function"""
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             t0 = time.time()
             result = func(*args, **kwargs)
             t1 = time.time()
             if pid_show == comm.Get_rank():
-                print(f"timer: {func.__name__} took {t1 - t0} seconds")
+                print(f"timer: {func.__name__} took {t1 - t0} seconds\n")
             return result
         return wrapper
     return decorator
