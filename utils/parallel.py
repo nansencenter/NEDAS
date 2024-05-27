@@ -1,8 +1,29 @@
 import numpy as np
 import os
+from functools import wraps
 
-class dummy_comm(object):
-    """dummy communicator for python without mpi"""
+class Comm(object):
+    """Communicator class with MPI support"""
+
+    def __init__(self):
+        ##detect if mpi environment exists
+        ##possible environ variable names from mpi calls
+        mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
+        if any([ev in os.environ for ev in mpi_env_var]):
+            ##program is called from mpi, initialize comm
+            from mpi4py import MPI
+            self._comm = MPI.COMM_WORLD
+
+        else:
+            ##serial program, use a dummy communicator
+            self._comm = DummyComm()
+
+    def __getattr__(self, attr):
+        return getattr(self._comm, attr)
+
+
+class DummyComm(object):
+    """Dummy communicator for python without mpi"""
     def __init__(self):
         self.size = 1
         self.rank = 0
@@ -42,25 +63,12 @@ class dummy_comm(object):
         return obj
 
 
-def parallel_start():
-    """initialize the communicator for mpi"""
-    ##possible environ variable names from mpi calls
-    mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
-    if any([ev in os.environ for ev in mpi_env_var]):
-        ##program is called from mpi, initialize comm
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-    else:
-        ##serial program, use dummy comm
-        comm = dummy_comm()
-    return comm
-
-
 def run_by_root(comm):
     """
     Decorator for func() to be run only by rank 0 in comm
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             if comm.Get_rank() == 0:
                 result = func(*args, **kwargs)
@@ -75,6 +83,7 @@ def bcast_by_root(comm):
     and result of func() is then broadcasted to all other ranks.
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             if comm.Get_rank() == 0:
                 result = func(*args, **kwargs)
