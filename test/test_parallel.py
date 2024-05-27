@@ -1,19 +1,19 @@
 ##check if your mpi environment is correctly setup
 import numpy as np
 import unittest
-import parallel
+from utils.parallel import Comm, distribute_tasks
 
 class TestParallel(unittest.TestCase):
 
     def test_parallel_start(self):
-        comm = parallel.parallel_start()
+        comm = Comm()
         self.assertIsInstance(comm.Get_size(), int)
         self.assertIsInstance(comm.Get_rank(), int)
         self.assertTrue(comm.Get_rank() < comm.Get_size())
 
 
     def test_bcast(self):
-        comm = parallel.parallel_start()
+        comm = Comm()
 
         if comm.Get_rank() == 0:
             data0 = 100
@@ -39,7 +39,7 @@ class TestParallel(unittest.TestCase):
 
 
     def test_send_recv(self):
-        comm = parallel.parallel_start()
+        comm = Comm()
         pid = comm.Get_rank()
         nproc = comm.Get_size()
         if pid == 0:
@@ -51,7 +51,7 @@ class TestParallel(unittest.TestCase):
 
 
     def test_allgather(self):
-        comm = parallel.parallel_start()
+        comm = Comm()
         pid = comm.Get_rank()
         nproc = comm.Get_size()
         data = [pid]
@@ -66,17 +66,17 @@ class TestParallel(unittest.TestCase):
 
 
     def test_distribute_tasks(self):
-        comm = parallel.parallel_start()
+        comm = Comm()
         pid = comm.Get_rank()
         nproc = comm.Get_size()
 
         ##case1: one task per pid
-        task_list = parallel.distribute_tasks(comm, np.arange(nproc))
+        task_list = distribute_tasks(comm, np.arange(nproc))
         self.assertEqual(task_list[pid][0], pid)
 
         ##case2: more tasks than nproc
         ntasks = 10*nproc
-        task_list = parallel.distribute_tasks(comm, np.arange(ntasks))
+        task_list = distribute_tasks(comm, np.arange(ntasks))
         full_task_list = []
         for p in range(nproc):
             for e in task_list[p]:
@@ -85,7 +85,7 @@ class TestParallel(unittest.TestCase):
 
         ##case3: fewer tasks than nproc
         ntasks = np.max(1, nproc//10)
-        task_list = parallel.distribute_tasks(comm, np.arange(ntasks))
+        task_list = distribute_tasks(comm, np.arange(ntasks))
         full_task_list = []
         for p in range(nproc):
             for e in task_list[p]:
@@ -95,7 +95,7 @@ class TestParallel(unittest.TestCase):
         ##case4: uneven workload for 100 tasks
         ntasks = 100
         workload = np.random.randint(1, 10, ntasks)
-        task_list = parallel.distribute_tasks(comm, np.arange(ntasks), workload)
+        task_list = distribute_tasks(comm, np.arange(ntasks), workload)
         full_task_list = []
         for p in range(nproc):
             for e in task_list[p]:
