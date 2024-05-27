@@ -1,11 +1,16 @@
 host: 'betzy'   ##name of the host computer
-                ##some directory path defined in env/$host/base.yml
-
-nproc: 4        ##total number of processors
-nproc_mem: 4    ##number of processor groups
-
 nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
+
+home_dir: '/cluster/home/yingyue'                ##path to home directory
+code_dir: '/cluster/home/yingyue/code'           ##where model codes are stored
+data_dir: '/cluster/work/users/yingyue/data'     ##where dataset are stored
+scratch_dir: '/cluster/work/users/yingyue'       ##path to scratch disk space
+
+ppn: 128   ##number of processors per node
+
+nproc: 128        ##total number of processors
+nproc_mem: 128    ##number of processor groups
 
 nens: 100         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
@@ -26,9 +31,10 @@ cycle_period: 6                  ##cycle period, in hours
 ##obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
 ##t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
 
-###time steps for obs and state for each analysis cycle
-#obs_time_steps="0"
-#state_time_steps="0"
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
 
 grid_def:
   type: 'custom'
@@ -64,6 +70,8 @@ use_synthetic_obs: False
 
 model_def:
 - name: 'qg'
+  config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
+  kmax: 127
 
 
 assim_mode: 'serial'
