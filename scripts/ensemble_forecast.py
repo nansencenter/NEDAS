@@ -11,8 +11,6 @@ def ensemble_forecast(c):
     """
     This function runs ensemble forecasts to advance to the next cycle
     """
-
-
     for model_config in c.model_def:
 
         ##load the Model class
@@ -33,8 +31,7 @@ def ensemble_forecast(c):
         for mem_id in range(c.nens):
             job = Model()
             job_name = model_name+f'_{mem_id}'
-            # print(job_name)
-            scheduler.submit_job(job_name, job, path, member=mem_id, time=c.time)  ##add job to the queue
+            scheduler.submit_job(job_name, job, c, path, member=mem_id, time=c.time)  ##add job to the queue
 
         scheduler.start_monitor() ##start the thread to monitor the job queue
 

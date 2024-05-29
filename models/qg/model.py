@@ -15,8 +15,14 @@ from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 
 class Model(object):
+    """
+    Class for configuring and running the qg model
+    """
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
+        """
+        """
+
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
@@ -173,8 +179,8 @@ class Model(object):
         return z
 
 
-    def run(self, path, **kwargs):
-        self.status = 'running'
+    def run(self, task_id, c, path, **kwargs):
+        self.run_status = 'running'
 
         fname = self.filename(path, **kwargs)
         run_dir = os.path.dirname(fname)
@@ -187,36 +193,36 @@ class Model(object):
 
         namelist(self, run_dir)
 
-        ##clean up before run
-        subprocess.run("rm -f restart.nml *bin", shell=True)
+        offset = task_id
+
+        env_dir = os.path.join(c.nedas_dir, 'config', 'env', c.host)
+        # submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" 1 1 {offset} "
+        submit_cmd = ''
+        qg_src = os.path.join(env_dir, 'qg.src')
+        qg_exe = os.path.join(c.nedas_dir, 'models', 'qg', 'src', 'qg.exe')
 
         ##build the shell command line
-        nedas_dir = '/cluster/home/yingyue/code/NEDAS'
-        host = 'betzy'
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        # submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {nnode} {nproc} {offset} "
-        submit_cmd = ''
-        qg_exe_path = os.path.join(nedas_dir, 'models', 'qg', 'src', 'qg.exe')
-
-        shell_cmd = "source "+os.path.join(env_dir, 'qg.src')+"; "
-        shell_cmd += "cd "+run_dir+"; "
-        shell_cmd += submit_cmd
-        shell_cmd += qg_exe_path+" . "
-        shell_cmd += ">& run.log"
+        shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
+        shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
+        shell_cmd += "rm -f restart.nml *bin; " ##clean up before run
+        shell_cmd += submit_cmd                 ##job_submitter
+        shell_cmd += qg_exe+" . "               ##the qg model exe
+        shell_cmd += ">& run.log"               ##output to log
         # print(shell_cmd, flush=True)
 
-        p = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
-        self.run_process = p
+        self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
 
         ## Check the status of the process
         while True:
             # Use poll() to check if the process has terminated
-            status = p.poll()
+            status = self.run_process.poll()
             if status is not None:
                 if status == 0:
-                    self.status = 'finished'
+                    self.run_status = 'finished'
+                elif status == -9:
+                    self.run_status = 'killed'
                 elif status == -15:
-                    self.status = 'terminated'
+                    self.run_status = 'terminated'
                 break
             time.sleep(1)
 
@@ -225,11 +231,11 @@ class Model(object):
 
 
     def is_running(self):
-        if self.status == 'running':
+        if self.run_status == 'running':
             return True
         return False
 
 
     def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGTERM)
+        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 
