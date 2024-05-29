@@ -1,3 +1,5 @@
+import os
+
 def value_str(value):
     ##convert values to string in namelist
     if isinstance(value, bool):
@@ -12,7 +14,7 @@ def value_str(value):
     return vstr
 
 
-def namelist(m):
+def namelist(m, run_dir):
     """Generate namelist for qg model
     Input:
     - m: Model class object with model configurations
@@ -63,6 +65,6 @@ def namelist(m):
     nmlstr += " /"
 
     ##write the namelist to input.nml file
-    with open('input.nml', 'wt') as f:
+    with open(os.path.join(run_dir, 'input.nml'), 'wt') as f:
         f.write(nmlstr)
 
