@@ -2,13 +2,10 @@ import numpy as np
 import sys
 import struct
 import importlib
-from datetime import datetime, timedelta
 
-import config as c
-
-from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
 from utils.log import message, show_progress
-from utils.parallel import bcast_by_root, distribute_tasks
+from utils.parallel import distribute_tasks
 
 """
 Note: The analysis is performed on a regular grid.
@@ -34,19 +31,19 @@ It is easier to perform i/o and pre/post processing on field-complete state,
 while easier to run assimilation algorithms with ensemble-complete state.
 """
 
-@bcast_by_root(c.comm)
-def parse_state_info():
+# @bcast_by_root(c.comm)
+def parse_field_info(c):
     """
     Parses info for the nrec fields in the state.
 
     Input:
-    - c: config module with the environment variables
+    - c: config obj with the environment variables
 
     Returns:
     - info: dict
       A dictionary with some dimensions and list of unique field records
     """
-    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}, 'scalars':[]}
+    info = {'nx':c.grid.nx, 'ny':c.grid.ny, 'size':0, 'fields':{}, 'scalars':[]}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
 
@@ -57,11 +54,12 @@ def parse_state_info():
         if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
             ##some properties of the variable is defined in its source module
-            src = importlib.import_module('models.'+vrec['model_src'])
+            module = importlib.import_module('models.'+vrec['model_src'])
+            src = getattr(module, 'Model')()
             assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['model_src']+'.variables'
 
             #now go through time and zlevels to form a uniq field record
-            for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
+            for time in c.time + np.array(c.state_time_steps)*dt1h:
                 for k in src.variables[vname]['levels']:
                     rec = { 'name': vname,
                             'model_src': vrec['model_src'],
@@ -85,7 +83,7 @@ def parse_state_info():
             ##this is a scalar (model parameter, etc.) to be updated
             ##since there is no difficulty storing the scalars on 1 proc
             ##we don't bother with parallelization (no rec_id needed)
-            for time in s2t(c.time) + c.state_time_steps*timedelta(hours=1):
+            for time in c.time + np.array(c.state_time_steps)*dt1h:
                 rec = {'name': vname,
                        'model_src': vrec['model_src'],
                        'err_type': vrec['err_type'],
@@ -117,7 +115,7 @@ def write_field_info(binfile, info):
         ##followed by nfield lines: each for a field record
         for i, rec in info['fields'].items():
             name = rec['name']
-            source = rec['source']
+            model_src = rec['model_src']
             dtype = rec['dtype']
             is_vector = int(rec['is_vector'])
             units = rec['units']
@@ -126,7 +124,7 @@ def write_field_info(binfile, info):
             dt = rec['dt']
             k = rec['k']
             pos = rec['pos']
-            f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, source, dtype, is_vector, units, err_type, time, dt, k, pos))
+            f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, model_src, dtype, is_vector, units, err_type, time, dt, k, pos))
 
 
 def read_field_info(binfile):
@@ -151,7 +149,7 @@ def read_field_info(binfile):
         for lin in lines[1:]:
             ss = lin.split()
             rec = {'name': ss[0],
-                   'source': ss[1],
+                   'model_src': ss[1],
                    'dtype': ss[2],
                    'is_vector': bool(int(ss[3])),
                    'units': ss[4],
@@ -275,13 +273,13 @@ def build_state_tasks(state_info):
     return mem_list, rec_list
 
 
-def prepare_state(state_info, mem_list, rec_list):
+def process_all_fields(c, state_info, mem_list, rec_list):
     """
     Collects fields from model restart files, convert them to the analysis grid,
     preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
 
     Inputs:
-    - c: config module
+    - c: config object
     - state_info: from parse_state_info()
     - mem_list, rec_list: from build_state_tasks()
 
@@ -315,7 +313,7 @@ def prepare_state(state_info, mem_list, rec_list):
             rec = state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = c.work_dir+'/cycle/'+t2s(rec['time'])+'/'+rec['source']
+            path = os.path.join(c.work_dir, 'cycle/', t2s(rec['time']), rec['model_src'])
 
             ##load the module for handling source model
             src = importlib.import_module('models.'+rec['source'])
@@ -542,7 +540,7 @@ def transpose_state_to_field(state_info, mem_list, rec_list, partitions, par_lis
     return fields
 
 
-def output_state(state_info, mem_list, rec_list, fields, state_file):
+def output_fields(state_info, mem_list, rec_list, fields, state_file):
     """
     Parallel output the fields to the binary state_file
 

@@ -1,6 +1,6 @@
 import numpy as np
-from random_field import random_field_gaussian
 from utils.space_op import gradx, grady
+from .random_field import random_field_gaussian
 
 ###generate a random perturbation for wind u,v and pressure
 def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D domain; dt: time interval (hours)

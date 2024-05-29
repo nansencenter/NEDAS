@@ -12,19 +12,17 @@ from utils.log import message
 
 class Config(object):
 
-    def __init__(self, **kwargs):
+    def __init__(self, config_file=None, parse_args=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
-        config_file = kwargs['config_file'] if 'config_file' in kwargs else None
-        config_dict = parse_config(code_dir, config_file)
+        config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
             setattr(self, key, value)
 
         ##create work_dir
         if not os.path.exists(self.work_dir):
             os.makedirs(self.work_dir)
-        os.chdir(self.work_dir)
 
         ##convert time string to datetime object
         self.time_start = s2t(self.time_start)
@@ -71,9 +69,10 @@ class Config(object):
         else:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
-            model_src = importlib.import_module('models.'+model_name)
+            module = importlib.import_module('models.'+model_name)
             model_dir = os.path.join(self.data_dir, model_name)
-            self.grid = model_src.read_grid(model_dir)
+            m = getattr(module, 'Model')()
+            self.grid = m.read_grid(model_dir)
 
         ##mask for invalid grid points
         # if self.mask

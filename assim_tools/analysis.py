@@ -1,14 +1,11 @@
 import numpy as np
 from numba import njit
 
-import config as c
-
 from utils.log import message, show_progress
 from utils.conversion import t2h, h2t
-from utils.parallel import bcast_by_root
 
 ###pack/unpack local state and obs data for jitted functions:
-def pack_local_state_data(state_info, rec_list, partitions, par_id, state_prior, z_state):
+def pack_local_state_data(c, state_info, rec_list, partitions, par_id, state_prior, z_state):
     """pack state dict into arrays to be more easily handled by jitted funcs"""
     data = {}
 
@@ -428,7 +425,7 @@ def serial_assim(state_info, obs_info, obs_inds, partitions, par_list, rec_list,
     return state_prior
 
 
-@bcast_by_root(c.comm)
+# @bcast_by_root(c.comm)
 def global_obs_list(obs_info, obs_inds):
     ##count number of obs for each obs_rec_id
     nobs = np.array([np.sum([len(ind) for ind in obs_inds[r].values()])
