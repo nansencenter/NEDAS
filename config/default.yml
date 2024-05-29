@@ -9,8 +9,8 @@ scratch_dir: '/cluster/work/users/yingyue'       ##path to scratch disk space
 
 ppn: 128   ##number of processors per node
 
-nproc: 128        ##total number of processors
-nproc_mem: 128    ##number of processor groups
+nproc: 1        ##total number of processors
+nproc_mem: 1    ##number of processor groups
 
 nens: 100         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
@@ -22,6 +22,8 @@ time_end: '202301310000'         ##end time of the experiment
 time_assim_start: '202301030000' ##start time of the first analysis cycle
 time_assim_end: '202301250000'   ##end time of the last analysis cycle
 cycle_period: 6                  ##cycle period, in hours
+
+time: '202301010000'
 
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
@@ -37,7 +39,7 @@ state_time_steps: [0]
 state_time_scale: 0
 
 grid_def:
-  type: 'custom'
+  type: 'qg'
   proj: '+proj=stere'
   xmin: 0
   xmax: 256
@@ -71,6 +73,8 @@ use_synthetic_obs: False
 model_def:
 - name: 'qg'
   config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
+  nproc_per_mem: 1    ##number of processors to run a forecast
+  walltime: 10000     ##walltime in seconds
   kmax: 127
 
 
