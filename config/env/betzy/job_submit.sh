@@ -1,11 +1,12 @@
 #!/bin/bash
 
-nnode=$1
-nproc=$2
-offset=$3
-exe_command=$4
+nproc=$1
+offset=$2
+shift 2
+exe_command=$@
 
-offset_node=$((offset/$SLURM_NTASKS_PER_NODE))
+offset_node=$((offset/$SLURM_TASKS_PER_NODE))
 
-srun -N $nnode -n $nproc -r $offset_node --exact --unbuffered $exe_command
+echo srun -n $nproc -r $offset_node --exact --unbuffered $exe_command
+srun -n $nproc -r $offset_node --exact --unbuffered $exe_command
 
