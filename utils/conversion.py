@@ -66,6 +66,9 @@ type_size = {'double':8, 'float':4, 'int':4}
 
 
 from datetime import datetime, timedelta
+
+dt1h = timedelta(hours=1)
+
 def t2h(t):
     """convert datetime obj to hours since 1900-1-1 00:00"""
     return (t - datetime(1900,1,1))/timedelta(hours=1)

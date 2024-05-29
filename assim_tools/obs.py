@@ -34,7 +34,7 @@ computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
 """
 
 
-@bcast_by_root(c.comm)
+# @bcast_by_root(c.comm)
 def parse_obs_info(c):
     """
     Parse info for the observation records defined in config.
@@ -90,7 +90,7 @@ def parse_obs_info(c):
             obs_rec_id += 1
 
             ##we don't know the size of obs_seq yet
-            ##will wait for prepare_obs to update the seek position
+            ##will wait for process_all_obs to update the seek position
 
     return obs_info
 
@@ -152,10 +152,10 @@ def read_mean_z_coords(state_info, time):
     return z
 
 
-@bcast_by_root(c.comm_mem)
-def prepare_obs(state_info, obs_info, obs_rec_list):
+# @bcast_by_root(c.comm_mem)
+def process_all_obs(state_info, obs_info, obs_rec_list):
     """
-    Prepare the obs in parallel, read dataset files and convert to obs_seq
+    Process the obs in parallel, read dataset files and convert to obs_seq
     which contains obs value, coordinates and other info
 
     Since this is the actual obs (1 copy), only pid_mem==0 will do the work
@@ -218,7 +218,7 @@ def prepare_obs(state_info, obs_info, obs_rec_list):
     return obs_seq
 
 
-@bcast_by_root(c.comm)
+# @bcast_by_root(c.comm)
 def partition_grid(c):
     """
     Generate spatial partitioning of the domain
@@ -266,7 +266,7 @@ def partition_grid(c):
     return partitions
 
 
-@bcast_by_root(c.comm_mem)
+# @bcast_by_root(c.comm_mem)
 def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
     """
     Assign the observation sequence to each partition par_id
@@ -277,7 +277,7 @@ def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
     - obs_info: from parse_obs_info()
     - partitions: from partition_grid()
     - obs_rec_list: from build_obs_tasks()
-    - obs_seq: from prepare_obs()
+    - obs_seq: from process_all_obs()
 
     Returns:
     - obs_inds: dict[obs_rec_id, dict[par_id, inds]]
@@ -347,7 +347,7 @@ def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
     return obs_inds
 
 
-@bcast_by_root(c.comm_mem)
+# @bcast_by_root(c.comm_mem)
 def build_par_tasks(partitions, obs_info, obs_inds):
     """
     Distribute par_id across processors according to the work load on each partition
@@ -385,9 +385,9 @@ def build_par_tasks(partitions, obs_info, obs_inds):
     return par_list
 
 
-def prepare_obs_from_state(state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
+def process_all_obs_priors(state_info, mem_list, rec_list, obs_info, obs_rec_list, obs_seq, fields, z_fields):
     """
-    Prepare the obs from state (obs_prior) in parallel, run state_to_obs to obtain obs_prior_seq
+    Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
     Inputs:
     - c: config module
@@ -395,8 +395,8 @@ def prepare_obs_from_state(state_info, mem_list, rec_list, obs_info, obs_rec_lis
     - mem_list, rec_list: from build_state_tasks()
     - obs_info: from parse_obs_info()
     - obs_rec_list: from build_obs_tasks()
-    - obs_seq: from prepare_obs()
-    - fields, z_fiels: from prepare_state()
+    - obs_seq: from process_all_obs()
+    - fields, z_fiels: from process_all_fields()
 
     Return:
     - obs_prior_seq: dict[(mem_id, obs_rec_id), seq]
@@ -622,13 +622,12 @@ def transpose_obs_to_lobs(mem_list, rec_list, obs_rec_list, par_list, obs_inds, 
     Step 2: Gather all obs_rec_id within comm_rec, so that each pid_rec will have the
             entire obs record for assimilation
 
-    Inputs:
-    - c: config module
+    Requires attributes in config:
     - mem_list, rec_list: from build_state_tasks()
     - obs_rec_list: from build_obs_tasks()
     - par_list: from build_par_tasks()
     - obs_inds: from assign_obs()
-    - input_obs: obs_seq from prepare_obs() or obs_prior_seq from prepare_obs_from_state()
+    - input_obs: obs_seq from process_all_obs() or obs_prior_seq from process_all_obs_priors()
     - ensemble: bool
 
     Returns:
