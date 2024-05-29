@@ -185,7 +185,7 @@ class Model(object):
         fname = self.filename(path, **kwargs)
         run_dir = os.path.dirname(fname)
 
-        print('running qg model in '+run_dir)
+        print('running qg model in '+run_dir, flush=True)
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
 
@@ -213,27 +213,28 @@ class Model(object):
         self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
 
         ## Check the status of the process
-        while True:
-            # Use poll() to check if the process has terminated
-            status = self.run_process.poll()
-            if status is not None:
-                if status == 0:
-                    self.run_status = 'finished'
-                elif status == -9:
-                    self.run_status = 'killed'
-                elif status == -15:
-                    self.run_status = 'terminated'
-                break
-            time.sleep(1)
+        # while True:
+        #     # Use poll() to check if the process has terminated
+        #     status = self.run_process.poll()
+        #     if status is not None:
+        #         if status == 0:
+        #             self.run_status = 'finished'
+        #         elif status == -9:
+        #             self.run_status = 'killed'
+        #         elif status == -15:
+        #             self.run_status = 'terminated'
+        #         break
+        #     time.sleep(1)
+        self.run_process.wait()
 
         ##collect output
         ##check output valid here
 
 
-    def is_running(self):
-        if self.run_status == 'running':
-            return True
-        return False
+    # def is_running(self):
+    #     if self.run_status == 'running':
+    #         return True
+    #     return False
 
 
     def kill(self):

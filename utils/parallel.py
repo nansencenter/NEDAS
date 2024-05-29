@@ -169,68 +169,74 @@ class Scheduler(object):
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
-        self.job_queue = {}
+        self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=nworker)
-        self.lock = threading.Lock()
+        # self.lock = threading.Lock()
         self.running_jobs = []
         self.pending_jobs = []
+        self.completed_jobs = []
+        self.njob = 0
 
 
     def submit_job(self, job_name, job, *args, **kwargs):
         """
+        Submit a job to the scheduler, hold info in jobs dict
         Input:
         - job_name is a unique name (str) to identify this job
         - job is an object with run, is_running and kill methods
         - job_args are the args passing into job.run()
         """
-        job_info = {'worker_id':None,
-                    'start_time':None,
-                    'job':job,
-                    'args': args,
-                    'kwargs': kwargs,
-                    'future':None }
-        with self.lock:
-            self.job_queue[job_name] = job_info
-            self.pending_jobs.append(job_name)
+        info = {'worker_id':None,
+                'start_time':None,
+                'job':job,
+                'args': args,
+                'kwargs': kwargs,
+                'future':None }
+        self.jobs[job_name] = info
+        self.pending_jobs.append(job_name)
+        self.njob += 1
 
 
-    def monitor_jobs(self):
+    def monitor_job_queue(self):
         """
-        Monitor the job queue, for each job, if finished running or killed due to walltime,
-        mark the worker as available again
         """
+        while len(self.completed_jobs) < self.njob:
 
-        while any(info['future'] is None or info['future'].running() for _,info in self.job_queue.items()):
-            with self.lock:
-                for name, info in self.job_queue.items():
-                    # print(self.available_workers, name, info, flush=True)
-                    if info['future'] is None:  ##job waiting for a worker
-                        if self.available_workers:
-                            worker_id = self.available_workers.pop(0)
-                            info['worker_id'] = worker_id
-                            info['start_time'] = time.time()
-                            info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
-                            # print('job '+name+f' submitted to {worker_id}', flush=True)
+            ##assign pending job to available workers
+            if self.available_workers and self.pending_jobs:
+                worker_id = self.available_workers.pop(0)
+                name = self.pending_jobs.pop(0)
+                info = self.jobs[name]
+                info['worker_id'] = worker_id
+                info['start_time'] = time.time()
+                info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
+                self.running_jobs.append(name)
+                # print('job '+name+f' submitted to {worker_id}', flush=True)
 
-                    elif info['job'].is_running():
-                        elapsed_time = time.time() - info['start_time']
-                        if elapsed_time > self.walltime:
-                            info['job'].kill()
-                            # print(f'{job_name} exceeds walltime {self.walltime}s and got killed', flush=True)
+            for name in self.running_jobs:
+                info = self.jobs[name]
 
-                    elif info['future'].done():  ##free up the worker when job finished
-                        if info['worker_id'] is not None:
-                            self.available_workers.append(info['worker_id'])
-                            info['worker_id'] = None
-            time.sleep(1)
+                ##if job run exceeds walltime, kill it
+                if info['future'].running():
+                    elapsed_time = time.time() - info['start_time']
+                    if elapsed_time > self.walltime:
+                        info['job'].kill()
+                        print(f'job {name} exceeds walltime {self.walltime}s and got killed', flush=True)
+
+                ##if job completes, free up worker
+                if info['future'].done():
+                    self.running_jobs.remove(name)
+                    self.completed_jobs.append(name)
+                    self.available_workers.append(info['worker_id'])
+
+            # time.sleep(1)
 
 
-    def start_monitor(self):
+    def start_queue(self):
         """
-        Start the monitoring thread, and wait for it to complete
+        Start the scheduler, and wait for jobs to complete
         """
-        monitor_thread = threading.Thread(target=self.monitor_jobs)
+        monitor_thread = threading.Thread(target=self.monitor_job_queue)
         monitor_thread.start()
         monitor_thread.join()
-        # print("All jobs finished.")
 

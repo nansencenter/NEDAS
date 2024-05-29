@@ -33,7 +33,7 @@ def ensemble_forecast(c):
             job_name = model_name+f'_{mem_id}'
             scheduler.submit_job(job_name, job, c, path, member=mem_id, time=c.time)  ##add job to the queue
 
-        scheduler.start_monitor() ##start the thread to monitor the job queue
+        scheduler.start_queue() ##start the job queue
 
         message(c.comm, model_name+' model ensemble runs complete\n\n', c.pid_show)
 
