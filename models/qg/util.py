@@ -1,29 +1,30 @@
 ###Utility function for handling qgmodel fields
 import numpy as np
+from utils.fft_lib import fft2, ifft2
 
 ##file i/o
-def read_data_bin(filename, kmax, nz, k):
+def read_data_bin(filename, kmax, nz, k, r=0):
     nkx = 2*kmax+1
     nky = kmax+1
     fieldk = np.zeros((nkx, nky), dtype=complex)
     with open(filename, 'rb') as f:
         for i in range(nky):
-            f.seek((k*nky+i)*nkx*8)
+            f.seek(((2*r*nz+k)*nky+i)*nkx*8)
             fieldk[:, i].real = np.fromfile(f, dtype=float, count=nkx)
-            f.seek((nz*nky+k*nky+i)*nkx*8)
+            f.seek(((2*r*nz+nz+k)*nky+i)*nkx*8)
             fieldk[:, i].imag = np.fromfile(f, dtype=float, count=nkx)
         return fieldk
 
 
-def write_data_bin(filename, kmax, nz, k, fieldk):
+def write_data_bin(filename, fieldk, kmax, nz, k, r=0):
     nkx = 2*kmax+1
     nky = kmax+1
     assert fieldk.shape == (nkx, nky), 'input fieldk shape mismatch with kmax'
     with open(filename, 'r+b') as f:
         for i in range(nky):
-            f.seek((k*nky+i)*nkx*8)
+            f.seek(((2*r*nz+k)*nky+i)*nkx*8)
             f.write(fieldk[:, i].real.tobytes())
-            f.seek((nz*nky+k*nky+i)*nkx*8)
+            f.seek(((2*r*nz+nz+k)*nky+i)*nkx*8)
             f.write(fieldk[:, i].imag.tobytes())
 
 
@@ -53,7 +54,7 @@ def spec2grid(fieldk):
     nx = nkx+1
     ny = 2*nky
     fieldk = np.fft.ifftshift(fullspec(fieldk))
-    field = nx*ny*np.real(np.fft.ifft2(fieldk))
+    field = nx*ny*np.real(ifft2(fieldk))
     return field
 
 
@@ -61,7 +62,7 @@ def grid2spec(field):
     nx, ny = field.shape
     nkx = nx-1
     nky = int(ny/2)
-    fieldk = np.fft.fft2(field)/nx/ny
+    fieldk = fft2(field)/nx/ny
     fieldk = halfspec(np.fft.fftshift(fieldk))
     return fieldk
 
@@ -78,10 +79,6 @@ def psi2zeta(psik):
     kx_, ky_ = get_wn(psik)
     zetak = -(kx_**2 + ky_**2) * psik
     return zetak
-
-
-def psi2psi(psik):
-    return psik
 
 
 def psi2temp(psik):
