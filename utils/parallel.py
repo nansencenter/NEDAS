@@ -162,8 +162,9 @@ def distribute_tasks(comm, tasks, load=None):
 
 class Scheduler(object):
     """
-    A scheduler for multiple jobs submitted by one processor to run
-    simultaneously on the available resources.
+    A scheduler class for queuing and running multiple jobs on available workers (group of processors).
+    The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
+    to be run on the worker
     """
     def __init__(self, nworker, walltime):
         self.nworker = nworker
@@ -171,39 +172,35 @@ class Scheduler(object):
         self.walltime = walltime
         self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=nworker)
-        # self.lock = threading.Lock()
         self.running_jobs = []
         self.pending_jobs = []
         self.completed_jobs = []
         self.njob = 0
 
 
-    def submit_job(self, job_name, job, *args, **kwargs):
+    def submit_job(self, name, job, *args, **kwargs):
         """
         Submit a job to the scheduler, hold info in jobs dict
         Input:
-        - job_name is a unique name (str) to identify this job
+        - name is a unique name (str) to identify this job
         - job is an object with run, is_running and kill methods
-        - job_args are the args passing into job.run()
+        - args,kwargs are to be passed into job.run()
         """
-        info = {'worker_id':None,
-                'start_time':None,
-                'job':job,
-                'args': args,
-                'kwargs': kwargs,
-                'future':None }
-        self.jobs[job_name] = info
-        self.pending_jobs.append(job_name)
+        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job':job, 'args': args, 'kwargs': kwargs, 'future':None }
+        self.pending_jobs.append(name)
         self.njob += 1
 
 
     def monitor_job_queue(self):
         """
+        Monitor the available_workers and pending_jobs, assign a job to a worker if possible
+        Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
+        and move the finished jobs to completed_jobs
         """
         while len(self.completed_jobs) < self.njob:
 
             ##assign pending job to available workers
-            if self.available_workers and self.pending_jobs:
+            while self.available_workers and self.pending_jobs:
                 worker_id = self.available_workers.pop(0)
                 name = self.pending_jobs.pop(0)
                 info = self.jobs[name]
@@ -213,28 +210,26 @@ class Scheduler(object):
                 self.running_jobs.append(name)
                 # print('job '+name+f' submitted to {worker_id}', flush=True)
 
+            ##if there are completed jobs, free up their workers
+            names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
+            for name in names:
+                self.running_jobs.remove(name)
+                self.completed_jobs.append(name)
+                self.available_workers.append(self.jobs[name]['worker_id'])
+
+            ##kill jobs that exceed walltime
             for name in self.running_jobs:
-                info = self.jobs[name]
+                elapsed_time = time.time() - self.jobs[name]['start_time']
+                if elapsed_time > self.walltime:
+                    self.jobs[name]['job'].kill()
+                    print(f'job {name} exceeds walltime ({self.walltime}s), killed', flush=True)
 
-                ##if job run exceeds walltime, kill it
-                if info['future'].running():
-                    elapsed_time = time.time() - info['start_time']
-                    if elapsed_time > self.walltime:
-                        info['job'].kill()
-                        print(f'job {name} exceeds walltime {self.walltime}s and got killed', flush=True)
-
-                ##if job completes, free up worker
-                if info['future'].done():
-                    self.running_jobs.remove(name)
-                    self.completed_jobs.append(name)
-                    self.available_workers.append(info['worker_id'])
-
-            # time.sleep(1)
+            time.sleep(0.1)  ##don't check too frequently to reduce overhead
 
 
     def start_queue(self):
         """
-        Start the scheduler, and wait for jobs to complete
+        Start the job queue, and wait for jobs to complete
         """
         monitor_thread = threading.Thread(target=self.monitor_job_queue)
         monitor_thread.start()
