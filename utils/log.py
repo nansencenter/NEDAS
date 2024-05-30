@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+import shutil
 import time
 from functools import wraps
 
@@ -37,7 +38,7 @@ def timer(comm, pid_show=0):
     return decorator
 
 
-def progress_bar(task_id, ntask, width=33):
+def progress_bar(task_id, ntask, width=None):
     """
     Generate a progress bar based on task_id and ntask
 
@@ -49,7 +50,7 @@ def progress_bar(task_id, ntask, width=33):
       Total number of tasks
 
     - width: int, optional
-      The length of the progress bar (number of characters), default is 33.
+      The length of the progress bar (number of characters)
 
     Return:
     - pstr: str
@@ -60,6 +61,10 @@ def progress_bar(task_id, ntask, width=33):
     else:
         progress = (task_id+1) / ntask
 
+    if width is None:
+        console_width = shutil.get_terminal_size().columns
+        width = int(0.5 * console_width)
+
     ##the progress bar looks like this: .....  | ??%
     pstr = '\r{:{}}| '.format('.'*int(np.ceil(progress * width)), width)
 
@@ -69,10 +74,17 @@ def progress_bar(task_id, ntask, width=33):
     return pstr
 
 
-def show_progress(comm, task_id, ntask, root=None, nmsg=100, width=33):
+def show_progress(comm, task_id, ntask, root=None, nmsg=100):
+    ##previous message is cached so that new message is displayed only
+    ##when it's different from the previous one (avoid redundant output)
+    if not hasattr(show_progress, 'prev_msg'):
+        show_progress.prev_msg = ''
+
     ##only show at most nmsg messages
     d = ntask/nmsg
     if int((task_id-1)/d)<int(task_id/d) or d<1 or task_id+1==ntask:
-        message(comm, progress_bar(task_id, ntask, width), root)
-
+        msg = progress_bar(task_id, ntask)
+        if msg != show_progress.prev_msg:
+            message(comm, msg, root)
+            show_progress.prev_msg = msg
 

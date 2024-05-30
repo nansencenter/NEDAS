@@ -4,6 +4,7 @@ from functools import wraps
 import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from utils.log import message, show_progress
 
 class Comm(object):
     """Communicator class with MPI support"""
@@ -166,7 +167,8 @@ class Scheduler(object):
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker, walltime):
+    def __init__(self, comm, nworker, walltime):
+        self.comm = comm
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
@@ -197,6 +199,7 @@ class Scheduler(object):
         Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
         and move the finished jobs to completed_jobs
         """
+
         while len(self.completed_jobs) < self.njob:
 
             ##assign pending job to available workers
@@ -208,11 +211,17 @@ class Scheduler(object):
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
-                # print('job '+name+f' submitted to {worker_id}', flush=True)
+                # message(self.comm, 'job '+name+f' submitted to {worker_id}')
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
             for name in names:
+                ##catch errors from job.run
+                try:
+                    self.jobs[name]['future'].result()
+                except Exception as e:
+                    message(self.comm, f'job {name} raised an exception: {e}')
+
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
@@ -222,9 +231,11 @@ class Scheduler(object):
                 elapsed_time = time.time() - self.jobs[name]['start_time']
                 if elapsed_time > self.walltime:
                     self.jobs[name]['job'].kill()
-                    print(f'job {name} exceeds walltime ({self.walltime}s), killed', flush=True)
+                    message(self.comm, f'job {name} exceeds walltime ({self.walltime}s), killed')
 
-            time.sleep(0.1)  ##don't check too frequently to reduce overhead
+            show_progress(self.comm, len(self.completed_jobs), self.njob+1)
+
+            time.sleep(0.1)  ##don't check too frequently, will increase overhead
 
 
     def start_queue(self):
