@@ -225,16 +225,12 @@ class Model(object):
         #             self.run_status = 'terminated'
         #         break
         #     time.sleep(1)
+
+        ##wait for process to complete
         self.run_process.wait()
 
         ##collect output
         ##check output valid here
-
-
-    # def is_running(self):
-    #     if self.run_status == 'running':
-    #         return True
-    #     return False
 
 
     def kill(self):
