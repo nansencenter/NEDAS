@@ -48,7 +48,7 @@ therm_drag: 0  ## thermal drag coef
 
 idum: 0  ## random seed number
 
-total_counts: 1000  ## total time steps to run
+total_counts: 1200  ## total time steps to run
 write_step: 200  ## frame snapshop step
 diag1_step: 200  ## diagnostics 1 step
 diag2_step: 200  ## diagnostics 2 step

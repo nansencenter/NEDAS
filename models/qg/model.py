@@ -20,8 +20,6 @@ class Model(object):
     """
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
-        """
-        """
 
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -29,18 +27,22 @@ class Model(object):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
-        ##the model is nondimensionalized, but it's convenient to introduce a scaling
-        ##for time control in cycling experiments
         self.dx = kwargs['dx'] if 'dx' in kwargs else 1.0
         n = 2*(self.kmax+1)
         self.ny, self.nx = n, n
         x, y = np.meshgrid(np.arange(n), np.arange(n))
         self.grid = Grid(Proj('+proj=stere'), x, y, cyclic_dim='xy')
+        self.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
 
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
 
-        restart_dt = 6
+        ##the model is nondimensionalized, but it's convenient to introduce
+        ##a scaling for time control in cycling experiments:
+        ##0.05 time units ~ 12 hours
+        ##dt = 0.00025 ~ 216 seconds
+        restart_dt = self.total_counts * self.dt
+
         self.restart_dt = restart_dt
 
         self.variables = {
@@ -59,7 +61,12 @@ class Model(object):
         self.run_status = 'pending'
 
 
-    def filename(self, path, **kwargs):
+    def filename(self, **kwargs):
+        if 'path' in kwargs:
+            path = kwargs['path']
+        else:
+            path = '.'
+
         if 'member' in kwargs and kwargs['member'] is not None:
             mstr = '{:04d}'.format(kwargs['member']+1)
         else:
@@ -71,24 +78,23 @@ class Model(object):
         return os.path.join(path, mstr, 'output_'+tstr+'.bin')
 
 
-    def read_grid(self, path, **kwargs):
+    def read_grid(self, **kwargs):
         return self.grid
 
 
-    def write_grid(self, path, grid, **kwargs):
+    def write_grid(self, grid, **kwargs):
         pass
 
 
-    def read_mask(self, path, grid):
-        mask = np.full(grid.x.shape, False)  ##no grid points are masked
-        return mask
+    def read_mask(self, **kwargs):
+        return self.mask
 
 
-    def read_var(self, path, grid, **kwargs):
+    def read_var(self, **kwargs):
         assert 'name' in kwargs, 'missing variable name in kwargs'
         name = kwargs['name']
         assert name in self.variables, 'variable name '+name+' not listed in variables'
-        fname = self.filename(path, **kwargs)
+        fname = self.filename(**kwargs)
 
         if 'k' in kwargs:
             k = kwargs['k']
@@ -140,12 +146,12 @@ class Model(object):
             return var1
 
 
-    def write_var(self, path, grid, var, **kwargs):
+    def write_var(self, var, **kwargs):
         ##check kwargs
         assert 'name' in kwargs, 'missing variable name in kwargs'
         name = kwargs['name']
         assert name in self.variables, 'variable name '+name+' not listed in variables'
-        fname = self.filename(path, **kwargs)
+        fname = self.filename(**kwargs)
 
         if 'k' in kwargs:
             k = kwargs['k']
@@ -173,64 +179,70 @@ class Model(object):
             write_data_bin(fname, psik, self.kmax, self.nz, int(k))
 
 
-    def z_coords(self, path, grid, **kwargs):
+    def z_coords(self, **kwargs):
         assert 'k' in kwargs, 'qg.z_coords: missing k in kwargs'
-        z = np.ones(grid.x.shape) * kwargs['k']
+        z = np.ones(self.grid.x.shape) * kwargs['k']
         return z
 
 
-    def run(self, task_id, c, path, **kwargs):
+    def run(self, task_id=0, task_nproc=1, **kwargs):
         self.run_status = 'running'
 
-        fname = self.filename(path, **kwargs)
+        host = kwargs['host']
+        nedas_dir = kwargs['nedas_dir']
+
+        fname = self.filename(**kwargs)
         run_dir = os.path.dirname(fname)
 
-        print('running qg model in '+run_dir, flush=True)
+        # print('running qg model in '+run_dir, flush=True)
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
 
+        output_file = kwargs['output_file']
+
         ##check status, skip if already run
+        if os.path.exists(output_file):
+            return
+
+        if self.psi_init_type == 'read':
+            prep_input_cmd = 'cp -L '+kwargs['input_file']+' input.bin; '
+        else:
+            prep_input_cmd = ''
 
         namelist(self, run_dir)
 
-        offset = task_id
-
-        env_dir = os.path.join(c.nedas_dir, 'config', 'env', c.host)
-        # submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" 1 1 {offset} "
-        submit_cmd = ''
+        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
         qg_src = os.path.join(env_dir, 'qg.src')
-        qg_exe = os.path.join(c.nedas_dir, 'models', 'qg', 'src', 'qg.exe')
+        qg_exe = os.path.join(nedas_dir, 'models', 'qg', 'src', 'qg.exe')
+
+        offset = task_id*task_nproc
+        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
 
         ##build the shell command line
         shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
         shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
         shell_cmd += "rm -f restart.nml *bin; " ##clean up before run
+        shell_cmd += prep_input_cmd             ##prepare input file
         shell_cmd += submit_cmd                 ##job_submitter
         shell_cmd += qg_exe+" . "               ##the qg model exe
         shell_cmd += ">& run.log"               ##output to log
         # print(shell_cmd, flush=True)
 
         self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
-
-        ## Check the status of the process
-        # while True:
-        #     # Use poll() to check if the process has terminated
-        #     status = self.run_process.poll()
-        #     if status is not None:
-        #         if status == 0:
-        #             self.run_status = 'finished'
-        #         elif status == -9:
-        #             self.run_status = 'killed'
-        #         elif status == -15:
-        #             self.run_status = 'terminated'
-        #         break
-        #     time.sleep(1)
-
-        ##wait for process to complete
         self.run_process.wait()
 
-        ##collect output
-        ##check output valid here
+        ##check output
+        log_file = os.path.join(run_dir, 'run.log')
+        with open(log_file, 'rt') as f:
+            if 'Calculation done' not in f.read():
+                raise RuntimeError('errors in '+log_file)
+
+        if not os.path.exists(os.path.join(run_dir, 'output.bin')):
+            raise RuntimeError('output.bin file not found')
+
+        shell_cmd = "cd "+run_dir+"; "
+        shell_cmd += "mv output.bin "+output_file
+        subprocess.run(shell_cmd, shell=True)
 
 
     def kill(self):

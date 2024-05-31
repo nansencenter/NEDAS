@@ -14,7 +14,7 @@ def value_str(value):
     return vstr
 
 
-def namelist(m, run_dir):
+def namelist(m, run_dir='.'):
     """Generate namelist for qg model
     Input:
     - m: Model class object with model configurations
