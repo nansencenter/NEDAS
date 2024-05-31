@@ -1,34 +1,26 @@
-from datetime import datetime, timedelta
-
 from config import Config
 from utils.log import message, timer
-from utils.parallel import run_by_root
-# from scripts.prepare_icbc import prepare_icbc
+from utils.conversion import t2s, s2t, dt1h
+from utils.parallel import bcast_by_root
 from scripts.ensemble_forecast import ensemble_forecast
-# from scripts.prepare_state import prepare_state
+from scripts.assimilate import assimilate
 
-import time
-
-c = Config()
+c = Config(parse_args=True)
 
 message(c.comm, "Cycling start...\n\n", c.pid_show)
 
-prev_time = c.time
+c.prev_time = c.time
 while c.time < c.time_end:
-    next_time = c.time + timedelta(hours=c.cycle_period)
-    message(c.comm, f"*** cycle {c.time} => {next_time} *** \n\n", c.pid_show)
+    c.next_time = c.time + c.cycle_period * dt1h
+    message(c.comm, f"*** cycle {c.time} => {c.next_time} *** \n\n", c.pid_show)
 
-    #prepare_icbc()
+    timer(c.comm)(ensemble_forecast)(c)
 
-    timer(c.comm, c.pid_show)(run_by_root(c.comm)(ensemble_forecast))(c)
-
-    # prepare_state(c, data)
-
-
+    assimilate(c)
 
     ##advance to next cycle
-    prev_time = c.time
-    c.time = next_time
+    c.prev_time = c.time
+    c.time = c.next_time
 
 message(c.comm, "Cycling complete.\n", c.pid_show)
 

@@ -1,10 +1,21 @@
-from datetime import datetime as dt
+##demo of how to run the qg model
+
+from datetime import datetime
 
 from models.qg import Model
 
-from config import Config
+model_param = {'kmax': 127,
+               'psi_init_type': 'read'
+               }
 
-c = Config()
-m = Model()
-m.run(1, c, '/cluster/work/users/yingyue/qg/run', time=dt(2001,1,1), member=0)
+model = Model(**model_param)
+
+run_opt = {'nedas_dir': '/cluster/home/yingyue/code/NEDAS',
+           'host': 'betzy',
+           'path': '/cluster/work/users/yingyue/qg/run',
+           'time': datetime(2023,1,1),
+           'input_file': '/cluster/work/users/yingyue/qg_ens_runs/0001/output.bin',
+           'output_file': '/cluster/work/users/yingyue/qg/run/output.bin',
+           }
+model.run(**run_opt)
 

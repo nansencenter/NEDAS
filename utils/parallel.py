@@ -177,6 +177,7 @@ class Scheduler(object):
         self.running_jobs = []
         self.pending_jobs = []
         self.completed_jobs = []
+        self.error_jobs = []
         self.njob = 0
 
 
@@ -211,7 +212,7 @@ class Scheduler(object):
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
-                # message(self.comm, 'job '+name+f' submitted to {worker_id}')
+                # message(self.comm, 'job '+name+f' submitted to {worker_id}\n')
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -220,8 +221,9 @@ class Scheduler(object):
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    message(self.comm, f'job {name} raised an exception: {e}')
-
+                    message(self.comm, f'job {name} raised exception: {e}\n')
+                    self.error_jobs.append(name)
+                    return
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
@@ -231,7 +233,9 @@ class Scheduler(object):
                 elapsed_time = time.time() - self.jobs[name]['start_time']
                 if elapsed_time > self.walltime:
                     self.jobs[name]['job'].kill()
-                    message(self.comm, f'job {name} exceeds walltime ({self.walltime}s), killed')
+                    message(self.comm, f'job {name} exceeds walltime ({self.walltime}s), killed\n')
+                    self.error_jobs.append(name)
+                    return
 
             show_progress(self.comm, len(self.completed_jobs), self.njob+1)
 
