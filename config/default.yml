@@ -21,8 +21,6 @@ time_assim_start: '202301011200' ##start time of the first analysis cycle
 time_assim_end: '202302190000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
-time: '202301010000'
-
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
 ### for each cycle, so watch out for overfitting
@@ -37,7 +35,7 @@ state_time_steps: [0]
 state_time_scale: 0
 
 grid_def:
-  type: 'qg'
+  type: 'custom'
   proj: '+proj=stere'
   xmin: 0
   xmax: 256
