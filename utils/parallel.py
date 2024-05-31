@@ -4,7 +4,7 @@ from functools import wraps
 import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
-from utils.log import message, show_progress
+from utils.progress import show_progress
 
 class Comm(object):
     """Communicator class with MPI support"""
@@ -212,7 +212,7 @@ class Scheduler(object):
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
-                # message(self.comm, 'job '+name+f' submitted to {worker_id}\n')
+                # print('job '+name+f' submitted to {worker_id}', flush=True)
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -221,7 +221,7 @@ class Scheduler(object):
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    message(self.comm, f'job {name} raised exception: {e}\n')
+                    print(f'job {name} raised exception: {e}', flush=True)
                     self.error_jobs.append(name)
                     return
                 self.running_jobs.remove(name)
@@ -233,7 +233,7 @@ class Scheduler(object):
                 elapsed_time = time.time() - self.jobs[name]['start_time']
                 if elapsed_time > self.walltime:
                     self.jobs[name]['job'].kill()
-                    message(self.comm, f'job {name} exceeds walltime ({self.walltime}s), killed\n')
+                    print(f'job {name} exceeds walltime ({self.walltime}s), killed', flush=True)
                     self.error_jobs.append(name)
                     return
 
