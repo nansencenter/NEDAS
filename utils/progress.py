@@ -3,15 +3,20 @@ import shutil
 import time
 from functools import wraps
 
-def timer():
-    """decorator to show the time spent on a function"""
+def timer(c):
+    """
+    Decorator to show the time spent on a function
+    Input: -c: config object
+    only processor c.pid_show in c.comm will show the timer message
+    """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             t0 = time.time()
             result = func(*args, **kwargs)
             t1 = time.time()
-            print(f"timer: {func.__name__} took {t1 - t0} seconds\n")
+            if c.comm.Get_rank() == c.pid_show:
+                print(f"timer: {func.__name__} took {t1 - t0} seconds\n")
             return result
         return wrapper
     return decorator
@@ -53,17 +58,14 @@ def progress_bar(task_id, ntask, width=None):
     return pstr
 
 
-def show_progress(task_id, ntask, nmsg=100):
+def print_with_cache(msg):
     ##previous message is cached so that new message is displayed only
     ##when it's different from the previous one (avoid redundant output)
-    if not hasattr(show_progress, 'prev_msg'):
-        show_progress.prev_msg = ''
+    if not hasattr(print_with_cache, 'prev_msg'):
+        print_with_cache.prev_msg = ''
 
     ##only show at most nmsg messages
-    d = ntask/nmsg
-    if int((task_id-1)/d)<int(task_id/d) or d<1 or task_id+1==ntask:
-        msg = progress_bar(task_id, ntask)
-        if msg != show_progress.prev_msg:
-            print(msg, flush=True, end="")
-            show_progress.prev_msg = msg
+    if msg != print_with_cache.prev_msg:
+        print(msg, flush=True, end="")
+        print_with_cache.prev_msg = msg
 

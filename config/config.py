@@ -21,15 +21,22 @@ class Config(object):
             setattr(self, key, value)
             self.keys.append(key)
 
+        ##some attributes are useful in runtime
         self.set_time()
         self.set_comm()
         self.set_analysis_grid()
         self.set_model_config()
 
+        ##these attributes will also be useful during runtime
+        for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
+            setattr(self, key, None)
+
 
     def set_time(self):
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end']:
             assert key in self.keys, f"'{key}' is missing in config file"
+
+        ##these keys become available at runtime
         for key in ['time', 'prev_time', 'next_time']:
             if key not in self.keys:
                 setattr(self, key, self.time_start)
@@ -76,6 +83,8 @@ class Config(object):
             model_dir = os.path.join(self.data_dir, model_name)
             model = getattr(module, 'Model')()
             self.grid = model.read_grid(path=model_dir)
+
+        self.ny, self.nx = self.grid.x.shape
 
         ##mask for invalid grid points
         # if self.mask

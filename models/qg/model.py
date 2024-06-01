@@ -140,7 +140,7 @@ class Model(object):
             var2 = spec2grid(tempk2).T
 
         ##vertical interp between var1 and var2
-        if k1 < nz-1:
+        if k1 < self.nz-1:
             return (var1*(k2-k) + var2*(k-k1)) / (k2-k1)
         else:
             return var1
