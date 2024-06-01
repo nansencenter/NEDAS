@@ -21,6 +21,10 @@ time_assim_start: '202301011200' ##start time of the first analysis cycle
 time_assim_end: '202302190000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
+time: '202301011200'
+prev_time: '202301010000'
+next_time: '202301020000'
+
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
 ### for each cycle, so watch out for overfitting
@@ -55,10 +59,15 @@ obs_def:
   model_src: 'qg'
   obs_window_min: -6
   obs_window_max: 0
-  err_type: 'normal'
-  err_std: 0.5
+  err:
+    type: 'normal'
+    std: 0.5
+  hroi: 100
+  vroi: 1e10
+  troi: 24
+  impact_on_state:
 
-use_synthetic_obs: False
+use_synthetic_obs: True
 
 ###ensemble perturbation settings
 #perturb_variables="seaice_drift ocean_surf_height"

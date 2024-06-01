@@ -1,11 +1,10 @@
 import numpy as np
-import sys
+import os
 import struct
-import importlib
 
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
-from utils.log import message, show_progress
-from utils.parallel import distribute_tasks
+from utils.progress import print_with_cache, progress_bar
+from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 
 """
 Note: The analysis is performed on a regular grid.
@@ -21,18 +20,9 @@ rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
 par_id indexes the spatial partitions, which are subset of the 2D grid
          given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
          the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
-
-The entire state is distributed across the memory of many processors,
-at any moment, a processor only stores a subset of state in its memory:
-either having all the mem_id,rec_id but only a subset of par_id (we call this
-ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
-(we call this field-complete).
-It is easier to perform i/o and pre/post processing on field-complete state,
-while easier to run assimilation algorithms with ensemble-complete state.
 """
 
-# @bcast_by_root(c.comm)
-def parse_field_info(c):
+def parse_state_info(c):
     """
     Parses info for the nrec fields in the state.
 
@@ -43,20 +33,21 @@ def parse_field_info(c):
     - info: dict
       A dictionary with some dimensions and list of unique field records
     """
-    info = {'nx':c.grid.nx, 'ny':c.grid.ny, 'size':0, 'fields':{}, 'scalars':[]}
+    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}, 'scalars':[]}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
+    variables = set()
 
     ##loop through variables in state_def
     for vrec in c.state_def:
         vname = vrec['name']
+        variables.add(vname)
 
         if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
             ##some properties of the variable is defined in its source module
-            module = importlib.import_module('models.'+vrec['model_src'])
-            src = getattr(module, 'Model')()
-            assert vname in src.variables, 'variable '+vname+' not defined in models.'+vrec['model_src']+'.variables'
+            src = c.model_config[vrec['model_src']]
+            assert vname in src.variables, 'variable '+vname+' not defined in '+vrec['model_src']+' Model.variables'
 
             #now go through time and zlevels to form a uniq field record
             for time in c.time + np.array(c.state_time_steps)*dt1h:
@@ -91,14 +82,16 @@ def parse_field_info(c):
                       }
                 info['scalars'].append(rec)
 
-    message(c.comm, 'number of unique field records, nrec={}\n'.format(len(info['fields'])), c.pid_show)
+    print(f"number of ensemble members, nens={c.nens}", flush=True)
+    print(f"number of unique field records, nrec={len(info['fields'])}", flush=True)
+    print(f"variables: {variables}", flush=True)
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
 
     return info
 
 
-def write_field_info(binfile, info):
+def write_state_info(binfile, info):
     """
     Write state_info to a .dat file accompanying the .bin file
 
@@ -127,7 +120,7 @@ def write_field_info(binfile, info):
             f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, model_src, dtype, is_vector, units, err_type, time, dt, k, pos))
 
 
-def read_field_info(binfile):
+def read_state_info(binfile):
     """
     Read .dat file accompanying the .bin file and obtain state_info
 
@@ -248,40 +241,159 @@ def read_field(binfile, info, mask, mem_id, rec_id):
         return fld
 
 
-def build_state_tasks(state_info):
+def distribute_state_tasks(c):
     """
     Distribute mem_id and rec_id across processors
 
     Inputs:
     - c: config module
 
-    - state_info from parse_state_info()
-
     Returns:
     - mem_list: dict[pid_mem, list[mem_id]]
-
     - rec_list: dict[pid_rec, list[rec_id]]
     """
     ##list of mem_id as tasks
     mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
 
     ##list rec_id as tasks
-    rec_list_full = [i for i in state_info['fields'].keys()]
-    rec_size = np.array([2 if r['is_vector'] else 1 for i,r in state_info['fields'].items()])
+    rec_list_full = [i for i in c.state_info['fields'].keys()]
+    rec_size = np.array([2 if r['is_vector'] else 1 for i,r in c.state_info['fields'].items()])
     rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
 
     return mem_list, rec_list
 
 
-def process_all_fields(c, state_info, mem_list, rec_list):
+def partition_grid(c):
+    """
+    Generate spatial partitioning of the domain
+    partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
+    for each partition indexed by par_id, the tuple contains indices for slicing the domain
+    """
+    if c.assim_mode == 'batch':
+        ##divide into square tiles with nx_tile grid points in each direction
+        ##the workload on each tile is uneven since there are masked points
+        ##so we divide into 3*nproc tiles so that they can be distributed
+        ##according to their load (number of unmasked points)
+        nx_tile = np.maximum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc_mem / 3))), 1)
+
+        ##a list of (istart, iend, di, jstart, jend, dj) for tiles
+        ##note: we have 3*nproc entries in the list
+        partitions = [(i, np.minimum(i+nx_tile, c.nx), 1,   ##istart, iend, di
+                       j, np.minimum(j+nx_tile, c.ny), 1)   ##jstart, jend, dj
+                      for j in np.arange(0, c.ny, nx_tile)
+                      for i in np.arange(0, c.nx, nx_tile) ]
+
+    elif c.assim_mode == 'serial':
+        ##the domain is divided into tiles, each is formed by nproc_mem elements
+        ##each element is stored on a different pid_mem
+        ##for each pid, its loc points cover the entire domain with some spacing
+
+        ##list of possible factoring of nproc_mem = nx_intv * ny_intv
+        ##pick the last factoring that is most 'square', so that the interval
+        ##is relatively even in both directions for each pid
+        nx_intv, ny_intv = [(i, int(c.nproc_mem / i))
+                            for i in range(1, int(np.ceil(np.sqrt(c.nproc_mem))) + 1)
+                            if c.nproc_mem % i == 0][-1]
+
+        ##a list of (ist, ied, di, jst, jed, dj) for slicing
+        ##note: we have nproc_mem entries in the list
+        partitions = [(i, c.nx, nx_intv, j, c.ny, ny_intv)
+                      for j in np.arange(ny_intv)
+                      for i in np.arange(nx_intv) ]
+    return partitions
+
+
+def output_state(c, fields, state_file):
+    """
+    Parallel output the fields to the binary state_file
+
+    Inputs:
+    - c: config module
+    - fields: dict[(mem_id, rec_id), fld]
+      the locally stored field-complete fields for output
+    - state_file: str
+      path to the output binary file
+    """
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print('save state to '+state_file+'\n')
+
+    if c.pid == 0:
+        ##if file doesn't exist, create the file
+        open(state_file, 'wb')
+        ##write state_info to the accompanying .dat file
+        write_state_info(state_file, c.state_info)
+    c.comm.Barrier()
+
+    nm = len(c.mem_list[c.pid_mem])
+    nr = len(c.rec_list[c.pid_rec])
+
+    for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
+        for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
+            print(progress_bar(m*nr+r, nm*nr))
+
+            ##get the field record for output
+            fld = fields[mem_id, rec_id]
+
+            ##write the data to binary file
+            write_field(state_file, c.state_info, c.mask, mem_id, rec_id, fld)
+
+    print(' done.\n')
+
+
+def output_ens_mean(c, fields, mean_file):
+    """
+    Compute ensemble mean of a field stored distributively on all pid_mem
+    collect means on pid_mem=0, and output to mean_file
+
+    Inputs:
+    - c: config module
+    - fields, dict[(mem_id, rec_id), fld]
+      the locally stored field-complete fields for output
+    - mean_file: str
+      path to the output binary file for the ensemble mean
+    """
+
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print('compute ensemble mean, save to '+mean_file+'\n')
+    if c.pid == 0:
+        open(mean_file, 'wb')
+        write_state_info(mean_file, c.state_info)
+    c.comm.Barrier()
+
+    for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
+        print(progress_bar(r, len(c.rec_list[c.pid_rec])))
+
+        ##initialize a zero field with right dimensions for rec_id
+        if c.state_info['fields'][rec_id]['is_vector']:
+            sum_fld_pid = np.zeros((2, c.ny, c.nx))
+        else:
+            sum_fld_pid = np.zeros((c.ny, c.nx))
+
+        ##sum over all fields locally stored on pid
+        for mem_id in c.mem_list[c.pid_mem]:
+            sum_fld_pid += fields[mem_id, rec_id]
+
+        ##sum over all field sums on different pids together to get the total sum
+        ##TODO:reduce is expensive if only part of pid holds state in memory
+        sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
+
+        if c.pid_mem == 0:
+            mean_fld = sum_fld / c.nens
+            write_field(mean_file, c.state_info, c.mask, 0, rec_id, mean_fld)
+
+    print(' done.\n')
+
+    ##clean up
+    # del sum_fld_pid, sum_fld
+
+
+def prepare_state(c):
     """
     Collects fields from model restart files, convert them to the analysis grid,
     preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
 
     Inputs:
     - c: config object
-    - state_info: from parse_state_info()
-    - mem_list, rec_list: from build_state_tasks()
 
     Returns:
     - fields: dict[(mem_id, rec_id), fld]
@@ -290,12 +402,14 @@ def process_all_fields(c, state_info, mem_list, rec_list):
       where zfld is same shape as fld, it's he z coordinates corresponding to each field
     """
 
-    pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
-    pid_rec_show = [p for p,lst in rec_list.items() if len(lst)>0][0]
+    pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
+    pid_rec_show = [p for p,lst in c.rec_list.items() if len(lst)>0][0]
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
 
-    message(c.comm, 'prepare state by reading fields from model restart\n', c.pid_show)
+    ##pid_show has some workload, it will print progress message
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
 
+    print('prepare state by reading fields from model restart\n')
     fields = {}
     z_coords = {}
     grid_bank = {}
@@ -303,20 +417,20 @@ def process_all_fields(c, state_info, mem_list, rec_list):
 
     ##process the fields, each proc gets its own workload as a subset of
     ##mem_id,rec_id; all pid goes through their own task list simultaneously
-    nm = len(mem_list[c.pid_mem])
-    nr = len(rec_list[c.pid_rec])
+    nm = len(c.mem_list[c.pid_mem])
+    nr = len(c.rec_list[c.pid_rec])
 
-    for m, mem_id in enumerate(mem_list[c.pid_mem]):
-        for r, rec_id in enumerate(rec_list[c.pid_rec]):
-            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
+    for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
+        for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
+            print(progress_bar(m*nr+r, nm*nr))
 
-            rec = state_info['fields'][rec_id]
+            rec = c.state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = os.path.join(c.work_dir, 'cycle/', t2s(rec['time']), rec['model_src'])
+            path = os.path.join(c.work_dir, 'cycle', t2s(rec['time']), rec['model_src'])
 
-            ##load the module for handling source model
-            src = importlib.import_module('models.'+rec['source'])
+            ##the model object for handling this variable
+            src = c.model_config[rec['model_src']]
 
             ##only need to generate the uniq grid objs, store them in memory bank
             member = mem_id if 'member' in src.uniq_grid_key else None
@@ -324,17 +438,17 @@ def process_all_fields(c, state_info, mem_list, rec_list):
             time = rec['time'] if 'time' in src.uniq_grid_key else None
             k = rec['k'] if 'k' in src.uniq_grid_key else None
 
-            grid_key = (member, rec['source'], var_name, time, k)
+            grid_key = (member, rec['model_src'], var_name, time, k)
             if grid_key in grid_bank:
                 grid = grid_bank[grid_key]
 
             else:
-                grid = src.read_grid(path, member=mem_id, **rec)
+                grid = src.read_grid(path=path, member=mem_id, **rec)
                 grid.set_destination_grid(c.grid)
                 grid_bank[grid_key] = grid
 
             ##read field and save to dict
-            var = src.read_var(path, grid, member=mem_id, **rec)
+            var = src.read_var(path=path, member=mem_id, **rec)
             fld = grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
             fields[mem_id, rec_id] = fld
 
@@ -346,12 +460,12 @@ def process_all_fields(c, state_info, mem_list, rec_list):
             var_name = rec['name'] if 'variable' in src.uniq_z_key else None
             time = rec['time'] if 'time' in src.uniq_z_key else None
             k = rec['k'] if 'k' in src.uniq_z_key else None
-            z_key = (member, rec['source'], var_name, time, k)
+            z_key = (member, rec['model_src'], var_name, time, k)
             if z_key in z_bank:
                 z = z_bank[z_key]
 
             else:
-                zvar = src.z_coords(path, grid, member=mem_id, time=rec['time'], k=rec['k'])
+                zvar = src.z_coords(path=path, member=mem_id, time=rec['time'], k=rec['k'])
                 z = grid.convert(zvar, is_vector=False, method='linear', coarse_grain=True)
 
                 ##misc.transform
@@ -363,271 +477,12 @@ def process_all_fields(c, state_info, mem_list, rec_list):
             else:
                 z_coords[mem_id, rec_id] = z
 
-    message(c.comm, ' done.\n', c.pid_show)
+    print(' done.\n')
 
     ##clean up
     # del grid_bank, z_bank, var, zvar
+    c.comm.Barrier()
 
     return fields, z_coords
-
-
-def transpose_field_to_state(state_info, mem_list, rec_list, partitions, par_list, fields):
-    """
-    transpose_field_to_state send chunks of field owned by a pid to other pid
-    so that the field-complete fields get transposed into ensemble-complete state
-    with keys (mem_id, rec_id) pointing to the partition in par_list
-
-    Inputs:
-    - c: config module
-    - state_info: from parse_state_info()
-    - mem_list, rec_list: from build_state_tasks()
-    - partitions: from partition_grid()
-    - par_list: from build_par_tasks()
-
-    - fields: dict[(mem_id, rec_id), fld]
-      The locally stored field-complete fields with subset of mem_id,rec_id
-
-    Returns:
-    - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
-      The locally stored ensemble-complete field chunks on partitions.
-    """
-
-    message(c.comm, 'transpose field to state\n', c.pid_show)
-    state = {}
-
-    nr = len(rec_list[c.pid_rec])
-    for r, rec_id in enumerate(rec_list[c.pid_rec]):
-
-        ##all pid goes through their own mem_list simultaneously
-        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
-
-        for m in range(nm_max):
-            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
-
-            ##prepare the fld for sending if not at the end of mem_list
-            if m < len(mem_list[c.pid_mem]):
-                mem_id = mem_list[c.pid_mem][m]
-                rec = state_info['fields'][rec_id]
-                fld = fields[mem_id, rec_id].copy()
-
-            ## - for each source pid_mem (src_pid) with fields[mem_id, rec_id],
-            ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to
-            ##   destination pid_mem (dst_pid) with its partition in par_list
-            ## - every pid needs to send/recv to/from every pid, so we use cyclic
-            ##   coreography here to prevent deadlock
-
-            ## 1) receive fld_chk from src_pid, for src_pid<pid first
-            for src_pid in np.arange(0, c.pid_mem):
-                if m < len(mem_list[src_pid]):
-                    src_mem_id = mem_list[src_pid][m]
-                    state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-
-            ## 2) send my fld chunk to a list of dst_pid, send to dst_pid>=pid first
-            ##    because they wait to receive before able to send their own stuff;
-            ##    when finished with dst_pid>=pid, cycle back to send to dst_pid<pid,
-            ##    i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
-            if m < len(mem_list[c.pid_mem]):
-                for dst_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
-                    fld_chk = {}
-                    for par_id in par_list[dst_pid]:
-                        ##slice for this par_id
-                        istart,iend,di,jstart,jend,dj = partitions[par_id]
-                        ##save the unmasked points in slice to fld_chk for this par_id
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        if rec['is_vector']:
-                            fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
-                        else:
-                            fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
-
-                    if dst_pid == c.pid_mem:
-                        ##same pid, so just write to state
-                        state[mem_id, rec_id] = fld_chk
-                    else:
-                        ##send fld_chk to dst_pid's state
-                        c.comm_mem.send(fld_chk, dest=dst_pid, tag=m)
-
-            ## 3) finish receiving fld_chk from src_pid, for src_pid>pid now
-            for src_pid in np.arange(c.pid_mem+1, c.nproc_mem):
-                if m < len(mem_list[src_pid]):
-                    src_mem_id = mem_list[src_pid][m]
-                    state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-
-    message(c.comm, ' done.\n', c.pid_show)
-
-    return state
-
-
-def transpose_state_to_field(state_info, mem_list, rec_list, partitions, par_list, state):
-    """
-    transpose_state_to_field transposes back the state to field-complete fields
-
-    Inputs:
-    - c: config module
-    - state_info: from parse_state_info()
-    - mem_list, rec_list: from build_state_tasks()
-    - partitions: from partition_grid()
-    - par_list: from build_par_tasks()
-
-    - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
-      the locally stored ensemble-complete field chunks for subset of par_id
-
-    Returns:
-    - fields: dict[(mem_id, rec_id), fld]
-      the locally stored field-complete fields for subset of mem_id,rec_id.
-    """
-
-    message(c.comm, 'transpose state to field\n', c.pid_show)
-    fields = {}
-
-    ##all pid goes through their own task list simultaneously
-    nr = len(rec_list[c.pid_rec])
-    for r, rec_id in enumerate(rec_list[c.pid_rec]):
-
-        ##all pid goes through their own mem_list simultaneously
-        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
-
-        for m in range(nm_max):
-            show_progress(c.comm, r*nm_max+m, nr*nm_max, c.pid_show)
-
-            ##prepare an empty fld for receiving if not at the end of mem_list
-            if m < len(mem_list[c.pid_mem]):
-                mem_id = mem_list[c.pid_mem][m]
-                rec = state_info['fields'][rec_id]
-                if rec['is_vector']:
-                    fld = np.full((2, c.ny, c.nx), np.nan)
-                else:
-                    fld = np.full((c.ny, c.nx), np.nan)
-
-            ##this is just the reverse of transpose_field_to_state
-            ## we take the exact steps, but swap send and recv operations here
-            ##
-            ## 1) send my fld_chk to dst_pid, for dst_pid<pid first
-            for dst_pid in np.arange(0, c.pid_mem):
-                if m < len(mem_list[dst_pid]):
-                    dst_mem_id = mem_list[dst_pid][m]
-                    c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
-                    del state[dst_mem_id, rec_id]   ##free up memory
-
-            ## 2) receive fld_chk from a list of src_pid, from src_pid>=pid first
-            ##    because they wait to send stuff before able to receive themselves,
-            ##    cycle back to receive from src_pid<pid then.
-            if m < len(mem_list[c.pid_mem]):
-                for src_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
-                    if src_pid == c.pid_mem:
-                        ##same pid, so just copy fld_chk from state
-                        fld_chk = state[mem_id, rec_id].copy()
-                    else:
-                        ##receive fld_chk from src_pid's state
-                        fld_chk = c.comm_mem.recv(source=src_pid, tag=m)
-
-                    ##unpack the fld_chk to form a complete field
-                    for par_id in par_list[src_pid]:
-                        istart,iend,di,jstart,jend,dj = partitions[par_id]
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
-
-                    fields[mem_id, rec_id] = fld
-
-            ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
-            for dst_pid in np.arange(c.pid_mem+1, c.nproc_mem):
-                if m < len(mem_list[dst_pid]):
-                    dst_mem_id = mem_list[dst_pid][m]
-                    c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
-                    del state[dst_mem_id, rec_id]   ##free up memory
-
-    message(c.comm, ' done.\n', c.pid_show)
-
-    return fields
-
-
-def output_fields(state_info, mem_list, rec_list, fields, state_file):
-    """
-    Parallel output the fields to the binary state_file
-
-    Inputs:
-    - c: config module
-    - state_info: from parse_state_info()
-    - mem_list, rec_list: from build_state_tasks()
-
-    - fields: dict[(mem_id, rec_id), fld]
-      the locally stored field-complete fields for output
-
-    - state_file: str
-      path to the output binary file
-    """
-
-    message(c.comm, 'save state to '+state_file+'\n', c.pid_show)
-
-    if c.pid == 0:
-        ##if file doesn't exist, create the file
-        open(state_file, 'wb')
-        ##write state_info to the accompanying .dat file
-        write_field_info(state_file, state_info)
-    c.comm.Barrier()
-
-    nm = len(mem_list[c.pid_mem])
-    nr = len(rec_list[c.pid_rec])
-
-    for m, mem_id in enumerate(mem_list[c.pid_mem]):
-        for r, rec_id in enumerate(rec_list[c.pid_rec]):
-            show_progress(c.comm, m*nr+r, nm*nr, c.pid_show)
-
-            ##get the field record for output
-            fld = fields[mem_id, rec_id]
-
-            ##write the data to binary file
-            write_field(state_file, state_info, c.mask, mem_id, rec_id, fld)
-
-    message(c.comm, ' done.\n', c.pid_show)
-
-
-def output_ens_mean(state_info, mem_list, rec_list, fields, mean_file):
-    """
-    Compute ensemble mean of a field stored distributively on all pid_mem
-    collect means on pid_mem=0, and output to mean_file
-
-    Inputs:
-    - c: config module
-    - state_info: from parse_state_info()
-    - mem_list, rec_list: from build_state_tasks()
-
-    - fields, dict[(mem_id, rec_id), fld]
-      the locally stored field-complete fields for output
-
-    - mean_file: str
-      path to the output binary file for the ensemble mean
-    """
-
-    message(c.comm, 'compute ensemble mean, save to '+mean_file+'\n', c.pid_show)
-    if c.pid == 0:
-        open(mean_file, 'wb')
-        write_field_info(mean_file, state_info)
-    c.comm.Barrier()
-
-    for r, rec_id in enumerate(rec_list[c.pid_rec]):
-        show_progress(c.comm, r, len(rec_list[c.pid_rec]), c.pid_show)
-
-        ##initialize a zero field with right dimensions for rec_id
-        if state_info['fields'][rec_id]['is_vector']:
-            sum_fld_pid = np.zeros((2, c.ny, c.nx))
-        else:
-            sum_fld_pid = np.zeros((c.ny, c.nx))
-
-        ##sum over all fields locally stored on pid
-        for mem_id in mem_list[c.pid_mem]:
-            sum_fld_pid += fields[mem_id, rec_id]
-
-        ##sum over all field sums on different pids together to get the total sum
-        ##TODO:reduce is expensive if only part of pid holds state in memory
-        sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
-
-        if c.pid_mem == 0:
-            mean_fld = sum_fld / c.nens
-            write_field(mean_file, state_info, c.mask, 0, rec_id, mean_fld)
-
-    message(c.comm, ' done.\n', c.pid_show)
-
-    ##clean up
-    # del sum_fld_pid, sum_fld
 
 
