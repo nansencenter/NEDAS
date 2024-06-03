@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import struct
+import importlib
 
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
 from utils.progress import print_with_cache, progress_bar
@@ -46,6 +47,7 @@ def parse_state_info(c):
         if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
             ##some properties of the variable is defined in its source module
+            # src = importlib.import_module('models.'+vrec['model_src'])
             src = c.model_config[vrec['model_src']]
             assert vname in src.variables, 'variable '+vname+' not defined in '+vrec['model_src']+' Model.variables'
 
@@ -82,9 +84,10 @@ def parse_state_info(c):
                       }
                 info['scalars'].append(rec)
 
-    print(f"number of ensemble members, nens={c.nens}", flush=True)
-    print(f"number of unique field records, nrec={len(info['fields'])}", flush=True)
-    print(f"variables: {variables}", flush=True)
+    if c.debug:
+        print(f"number of ensemble members, nens={c.nens}", flush=True)
+        print(f"number of unique field records, nrec={len(info['fields'])}", flush=True)
+        print(f"variables: {variables}", flush=True)
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
 
@@ -315,7 +318,8 @@ def output_state(c, fields, state_file):
       path to the output binary file
     """
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print('save state to '+state_file+'\n')
+    if c.debug:
+        print('save state to '+state_file+'\n')
 
     if c.pid == 0:
         ##if file doesn't exist, create the file
@@ -329,7 +333,8 @@ def output_state(c, fields, state_file):
 
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
-            print(progress_bar(m*nr+r, nm*nr))
+            if c.debug:
+                print(progress_bar(m*nr+r, nm*nr))
 
             ##get the field record for output
             fld = fields[mem_id, rec_id]
@@ -337,7 +342,8 @@ def output_state(c, fields, state_file):
             ##write the data to binary file
             write_field(state_file, c.state_info, c.mask, mem_id, rec_id, fld)
 
-    print(' done.\n')
+    if c.debug:
+        print(' done.\n')
 
 
 def output_ens_mean(c, fields, mean_file):
@@ -354,14 +360,16 @@ def output_ens_mean(c, fields, mean_file):
     """
 
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print('compute ensemble mean, save to '+mean_file+'\n')
+    if c.debug:
+        print('compute ensemble mean, save to '+mean_file+'\n')
     if c.pid == 0:
         open(mean_file, 'wb')
         write_state_info(mean_file, c.state_info)
     c.comm.Barrier()
 
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
-        print(progress_bar(r, len(c.rec_list[c.pid_rec])))
+        if c.debug:
+            print(progress_bar(r, len(c.rec_list[c.pid_rec])))
 
         ##initialize a zero field with right dimensions for rec_id
         if c.state_info['fields'][rec_id]['is_vector']:
@@ -381,7 +389,8 @@ def output_ens_mean(c, fields, mean_file):
             mean_fld = sum_fld / c.nens
             write_field(mean_file, c.state_info, c.mask, 0, rec_id, mean_fld)
 
-    print(' done.\n')
+    if c.debug:
+        print(' done.\n')
 
     ##clean up
     # del sum_fld_pid, sum_fld
@@ -408,8 +417,8 @@ def prepare_state(c):
 
     ##pid_show has some workload, it will print progress message
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-
-    print('prepare state by reading fields from model restart\n')
+    if c.debug:
+        print('prepare state by reading fields from model restart\n')
     fields = {}
     z_coords = {}
     grid_bank = {}
@@ -422,7 +431,8 @@ def prepare_state(c):
 
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
-            print(progress_bar(m*nr+r, nm*nr))
+            if c.debug:
+                print(progress_bar(m*nr+r, nm*nr))
 
             rec = c.state_info['fields'][rec_id]
 
@@ -430,6 +440,7 @@ def prepare_state(c):
             path = os.path.join(c.work_dir, 'cycle', t2s(rec['time']), rec['model_src'])
 
             ##the model object for handling this variable
+            # src = importlib.import_module('models.'+rec['model_src'])
             src = c.model_config[rec['model_src']]
 
             ##only need to generate the uniq grid objs, store them in memory bank
@@ -476,8 +487,8 @@ def prepare_state(c):
                 z_coords[mem_id, rec_id] = np.array([z, z])
             else:
                 z_coords[mem_id, rec_id] = z
-
-    print(' done.\n')
+    if c.debug:
+        print(' done.\n')
 
     ##clean up
     # del grid_bank, z_bank, var, zvar

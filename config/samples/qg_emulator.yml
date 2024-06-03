@@ -21,9 +21,9 @@ time_assim_start: '202301011200' ##start time of the first analysis cycle
 time_assim_end: '202302190000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
-time: '202301011200'
+time: '202301010000'
 prev_time: '202301010000'
-next_time: '202301020000'
+next_time: '202301011200'
 
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
@@ -49,20 +49,20 @@ grid_def:
 
 state_def:
 - name: 'velocity'
-  model_src: 'qg'
+  model_src: 'qg.emulator'
   var_type: 'field'
   err_type: 'normal'
 
 obs_def:
 - name: 'velocity'
   dataset_src: 'qg'
-  model_src: 'qg'
+  model_src: 'qg.emulator'
   obs_window_min: -6
   obs_window_max: 0
   err:
     type: 'normal'
     std: 0.5
-  hroi: 100
+  hroi: 20
   vroi: 100000000
   troi: 24
   impact_on_state:
@@ -76,8 +76,8 @@ use_synthetic_obs: True
 ###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 
 model_def:
-  qg:
-    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
+  qg.emulator:
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/emulator/default.yml'
     nproc_per_mem: 1    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     kmax: 127

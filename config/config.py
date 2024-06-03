@@ -79,9 +79,10 @@ class Config(object):
         else:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
-            module = importlib.import_module('models.'+model_name)
+            # module = importlib.import_module('models.'+model_name)
+            # model = getattr(module, 'Model')()
+            model = importlib.import_module('models.'+model_name)
             model_dir = os.path.join(self.data_dir, model_name)
-            model = getattr(module, 'Model')()
             self.grid = model.read_grid(path=model_dir)
 
         self.ny, self.nx = self.grid.x.shape
