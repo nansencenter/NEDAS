@@ -186,6 +186,7 @@ class Model(object):
 
 
     def run(self, task_id=0, task_nproc=1, **kwargs):
+        assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
         host = kwargs['host']
@@ -201,11 +202,11 @@ class Model(object):
         output_file = kwargs['output_file']
 
         ##check status, skip if already run
-        if os.path.exists(output_file):
-            return
+        # if os.path.exists(output_file):
+        #     return
 
         if self.psi_init_type == 'read':
-            prep_input_cmd = 'cp -L '+kwargs['input_file']+' input.bin; '
+            prep_input_cmd = 'ln -fs '+kwargs['input_file']+' input.bin; '
         else:
             prep_input_cmd = ''
 
@@ -221,7 +222,7 @@ class Model(object):
         ##build the shell command line
         shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
         shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
-        shell_cmd += "rm -f restart.nml *bin; " ##clean up before run
+        shell_cmd += "rm -f restart.nml; "      ##clean up before run
         shell_cmd += prep_input_cmd             ##prepare input file
         shell_cmd += submit_cmd                 ##job_submitter
         shell_cmd += qg_exe+" . "               ##the qg model exe

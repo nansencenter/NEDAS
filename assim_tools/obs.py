@@ -57,6 +57,7 @@ def parse_obs_info(c):
             obs_rec = {'name': vname,
                        'dataset_src': vrec['dataset_src'],
                        'model_src': vrec['model_src'],
+                       'nobs': vrec.get('nobs', 0),
                        'obs_window_min': vrec['obs_window_min'],
                        'obs_window_max': vrec['obs_window_max'],
                        'dtype': src.variables[vname]['dtype'],
@@ -141,17 +142,12 @@ def read_mean_z_coords(c, time):
     return z
 
 
-# @bcast_by_root(c.comm_mem)
-def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
+def assign_obs(c, obs_seq):
     """
     Assign the observation sequence to each partition par_id
 
     Inputs:
     - c: config module
-    - state_info: from parse_state_info()
-    - obs_info: from parse_obs_info()
-    - partitions: from partition_grid()
-    - obs_rec_list: from build_obs_tasks()
     - obs_seq: from process_all_obs()
 
     Returns:
@@ -162,21 +158,21 @@ def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
 
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
-    for obs_rec_id in obs_rec_list[c.pid_rec]:
+    for obs_rec_id in c.obs_rec_list[c.pid_rec]:
         obs_rec = obs_seq[obs_rec_id]
         obs_inds_pid[obs_rec_id] = {}
 
         if c.assim_mode == 'batch':
             ##1. screen horizontally for obs inside hroi of partition par_id
-            hroi = obs_info['records'][obs_rec_id]['hroi']
+            hroi = c.obs_info['records'][obs_rec_id]['hroi']
             xo = np.array(obs_rec['x'])  ##obs x,y
             yo = np.array(obs_rec['y'])
             x = c.grid.x[0,:]   ##grid x,y
             y = c.grid.y[:,0]
 
             ##loop over partitions with par_id
-            for par_id in range(len(partitions)):
-                ist,ied,di,jst,jed,dj = partitions[par_id]
+            for par_id in range(len(c.partitions)):
+                ist,ied,di,jst,jed,dj = c.partitions[par_id]
 
                 ##condition 1: within the four corner points of the tile
                 hdist = np.hypot(np.minimum(np.abs(xo - x[ist]),
@@ -222,32 +218,22 @@ def assign_obs(state_info, obs_info, partitions, obs_rec_list, obs_seq):
     return obs_inds
 
 
-# @bcast_by_root(c.comm_mem)
-def distribute_partitions(partitions, obs_info, obs_inds):
+def distribute_partitions(c):
     """
     Distribute par_id across processors according to the work load on each partition
-
-    Inputs:
-    - c: config module
-    - partitions: from partition_grid()
-    - obs_info: from parse_obs_info()
-    - obs_inds: from assign_obs()
-
-    Returns:
-    - par_list: dict[pid_mem, list[par_id]]
     """
-    par_list_full = np.arange(len(partitions))
+    par_list_full = np.arange(len(c.partitions))
 
     if c.assim_mode == 'batch':
         ##distribute the list of par_id according to workload to each pid
         ##number of unmasked grid points in each tile
         nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
-                              for ist,ied,di,jst,jed,dj in partitions] )
+                              for ist,ied,di,jst,jed,dj in c.partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
-        nlobs_loc = np.array([np.sum([len(obs_inds[r][p])
-                                      for r in obs_info['records'].keys()])
+        nlobs_loc = np.array([np.sum([len(c.obs_inds[r][p])
+                                      for r in c.obs_info['records'].keys()])
                               for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
@@ -401,6 +387,7 @@ def state_to_obs(c, **kwargs):
     ##obs dataset source module
     obs_src = importlib.import_module('dataset.'+kwargs['dataset_src'])
     ##model source module
+    # model_src = importlib.import_module('models.'+kwargs['model_src'])
     model_src = c.model_config[kwargs['model_src']]
 
     ##option 1  TODO: update README
@@ -534,7 +521,8 @@ def prepare_obs(c):
         'err_std' the uncertainties for each measurement
         there can be other optional keys provided by read_obs() but we don't use them
     """
-    by_rank(c.comm,0)(print_with_cache)('read obs sequence from datasets\n')
+    if c.debug:
+        by_rank(c.comm,0)(print_with_cache)('read obs sequence from datasets\n')
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
     obs_seq = {}
@@ -566,12 +554,13 @@ def prepare_obs(c):
         else:
             ##read dataset files and obtain obs sequence
             seq = src.read_obs(path, c.grid, c.mask, z, **obs_rec)
-
         del z
 
-        by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
+        if c.debug:
+            by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 
         obs_seq[obs_rec_id] = seq
+        obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
     return obs_seq
 
@@ -595,7 +584,8 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
 
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print('compute obs priors\n')
+    if c.debug:
+        print('compute obs priors\n')
     obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
@@ -604,7 +594,8 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     nm = len(c.mem_list[c.pid_mem])
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
-            print(progress_bar(m*nr+r, nr*nm))
+            if c.debug:
+                print(progress_bar(m*nr+r, nr*nm))
 
             ##this is the obs record to process
             obs_rec = c.obs_info['records'][obs_rec_id]
@@ -614,7 +605,8 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
                                **obs_rec, **obs_seq[obs_rec_id])
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
-    print(' done.\n')
+    if c.debug:
+        print(' done.\n')
 
     return obs_prior_seq
 

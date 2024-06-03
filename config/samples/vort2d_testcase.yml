@@ -1,0 +1,69 @@
+host: 'betzy'   ##name of the host computer
+nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
+work_dir: '/cluster/work/users/yingyue/vort2d_testcase'   ##working directory for the experiment
+
+home_dir: '/cluster/home/yingyue'                ##path to home directory
+code_dir: '/cluster/home/yingyue/code'           ##where model codes are stored
+data_dir: '/cluster/work/users/yingyue/data'     ##where dataset are stored
+scratch_dir: '/cluster/work/users/yingyue'       ##path to scratch disk space
+
+nproc: 1        ##total number of processors
+nproc_mem: 1    ##number of processor groups
+
+nens: 20         ##ensemble size
+run_assim: True   ##if true, run the assimilation steps
+
+debug: False      ##if true, output debug data/message
+
+time_start: '200101010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '200101030000'         ##end time of the experiment
+time_assim_start: '200101010300' ##start time of the first analysis cycle
+time_assim_end: '200101022100'   ##end time of the last analysis cycle
+cycle_period: 3                 ##cycle period, in hours
+
+time: '200101010000'
+prev_time: '200101010000'
+next_time: '200101010000'
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'vort2d'
+
+state_def:
+- name: 'velocity'
+  model_src: 'vort2d'
+  var_type: 'field'
+  err_type: 'normal'
+
+obs_def:
+- name: 'velocity'
+  dataset_src: 'vort2d'
+  model_src: 'vort2d'
+  obs_window_min: -3
+  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 3.3
+  hroi: 200000
+  vroi: 10
+  troi: 10
+  impact_on_state:
+
+use_synthetic_obs: True
+
+model_def:
+  vort2d:
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/vort2d/default.yml'
+    nproc_per_mem: 1    ##number of processors to run a forecast
+    walltime: 10000     ##walltime in seconds
+
+assim_mode: 'serial'
+filter_type: 'EAKF'
+regress_type: 'linear'
+
+localize_type: GC  ##GC, boxcar, adaptive
+
