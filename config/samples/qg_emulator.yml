@@ -57,13 +57,14 @@ obs_def:
 - name: 'velocity'
   dataset_src: 'qg'
   model_src: 'qg.emulator'
+  nobs: 10000
   obs_window_min: -6
   obs_window_max: 0
   err:
     type: 'normal'
-    std: 0.5
-  hroi: 20
-  vroi: 100000000
+    std: 1.
+  hroi: 30
+  vroi: 5
   troi: 24
   impact_on_state:
 
