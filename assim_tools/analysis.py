@@ -38,8 +38,8 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
             rec = c.state_info['fields'][rec_id]
             data['rec_id'][n] = rec_id
             data['t'][n] = t2h(rec['time'])
-            data['z'][n, :] += z_state[m, rec_id][par_id][v, :].astype(np.float32) / c.nens  ##ens mean z
-            data['state_prior'][m, n, :] = state_prior[m, rec_id][par_id][v, :]
+            data['z'][n, :] += np.squeeze(z_state[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  ##ens mean z
+            data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :])
     return data
 
 
