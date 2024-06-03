@@ -1,6 +1,6 @@
 ###Utility function for handling qgmodel fields
 import numpy as np
-from utils.fft_lib import fft2, ifft2
+from numpy.fft import fft2, ifft2, fftshift, ifftshift
 
 ##file i/o
 def read_data_bin(filename, kmax, nz, k, r=0):
@@ -17,6 +17,7 @@ def read_data_bin(filename, kmax, nz, k, r=0):
 
 
 def write_data_bin(filename, fieldk, kmax, nz, k, r=0):
+    ##note: filename should exists before calling this to write content to it
     nkx = 2*kmax+1
     nky = kmax+1
     assert fieldk.shape == (nkx, nky), 'input fieldk shape mismatch with kmax'
@@ -53,7 +54,7 @@ def spec2grid(fieldk):
     nkx, nky = fieldk.shape
     nx = nkx+1
     ny = 2*nky
-    fieldk = np.fft.ifftshift(fullspec(fieldk))
+    fieldk = ifftshift(fullspec(fieldk))
     field = nx*ny*np.real(ifft2(fieldk))
     return field
 
@@ -63,7 +64,7 @@ def grid2spec(field):
     nkx = nx-1
     nky = int(ny/2)
     fieldk = fft2(field)/nx/ny
-    fieldk = halfspec(np.fft.fftshift(fieldk))
+    fieldk = halfspec(fftshift(fieldk))
     return fieldk
 
 
