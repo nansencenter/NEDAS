@@ -24,22 +24,15 @@ def ensemble_forecast(c):
             job_name = model_name+f'_mem{mem_id+1}'
             job = model
 
-            if c.time == c.time_start:
-                icbc_path = c.model_def[model_name]['icbc_path']
-                input_file = model.filename(path=icbc_path, member=mem_id, time=c.time)
-            else:
-                prev_path = os.path.join(c.work_dir, 'cycle', t2s(c.prev_time), model_name)
-                input_file = model.filename(path=prev_path, member=mem_id, time=c.time)
-            output_file = model.filename(path=path, member=mem_id, time=c.next_time)
+            path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
 
             job_opt = {'host': c.host,
                        'nedas_dir': c.nedas_dir,
                        'path': path,
                        'member': mem_id,
                        'time': c.time,
-                       'input_file': input_file,
-                       'output_file': output_file,
                        }
+            # print(job_opt)
 
             scheduler.submit_job(job_name, job, **job_opt)  ##add job to the queue
 
@@ -49,6 +42,19 @@ def ensemble_forecast(c):
             raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
 
         print(' done.', flush=True)
+
+
+def ensemble_forecast_batch(c):
+    for model_name, model in c.model_config.items():
+        print(f"start {model_name} ensemble forecast ...", flush=True)
+
+        path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        model.run(nens=c.nens, path=path, time=c.time)
+
+        print('done.', flush=True)
 
 
 if __name__ == "__main__":

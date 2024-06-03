@@ -48,13 +48,13 @@ grid_def:
   dx: 1.0
 
 state_def:
-- name: 'streamfunc'
+- name: 'velocity'
   model_src: 'qg'
   var_type: 'field'
   err_type: 'normal'
 
 obs_def:
-- name: 'streamfunc'
+- name: 'velocity'
   dataset_src: 'qg'
   model_src: 'qg'
   nobs: 10000

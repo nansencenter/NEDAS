@@ -1,21 +1,23 @@
 import numpy as np
 import os
+import sys
 import inspect
-import signal
-import subprocess
+import time
 from pyproj import Proj
 
 from config import parse_config
 from grid import Grid
 from utils.conversion import t2s, dt1h
+from utils.netcdf_lib import nc_write_var
 
-from .namelist import namelist
-from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
+from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
+from ..util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
+
+from .netutils import Att_Res_UNet
 
 class Model(object):
     """
-    Class for configuring and running the qg model
+    Class for configuring and running the qg model emulator
     """
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
@@ -35,11 +37,6 @@ class Model(object):
 
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
-
-        ##the model is nondimensionalized, but it's convenient to introduce
-        ##a scaling for time control in cycling experiments:
-        ##0.05 time units ~ 12 hours
-        ##dt = 0.00025 ~ 216 seconds
         restart_dt = self.total_counts * self.dt * 240
         self.restart_dt = restart_dt
 
@@ -54,7 +51,8 @@ class Model(object):
         self.uniq_z_key = ('k')
         self.z_units = '*'
 
-        ##
+        self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
+        self.unet_model.load_weights(self.weightfile)
         self.run_process = None
         self.run_status = 'pending'
 
@@ -183,71 +181,49 @@ class Model(object):
         return z
 
 
-    def run(self, task_id=0, task_nproc=1, **kwargs):
-        assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
+    def run(self, nens=1, task_id=0, task_nproc=1, **kwargs):
+        assert task_nproc==1, f'qg emulator only support serial runs (got task_nproc={task_nproc})'
+
         self.run_status = 'running'
 
-        host = kwargs['host']
-        nedas_dir = kwargs['nedas_dir']
-
-        fname = self.filename(**kwargs)
-        run_dir = os.path.dirname(fname)
-
-        # print('running qg model in '+run_dir, flush=True)
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
+        if nens>1:
+            ##running ensmeble together, ignore kwargs['member']
+            members = list(range(nens))
+        else:
+            members = [kwargs['member']]
 
         time = kwargs['time']
         next_time = time + self.restart_dt * dt1h
-        input_file = self.filename(**kwargs)
-        kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.filename(**kwargs_out)
 
-        ##check status, skip if already run
-        # if os.path.exists(output_file):
-        #     return
+        state = np.zeros((nens,self.ny,self.nx,self.nz))
+        for m in range(nens):
+            kwargs_in = {**kwargs, 'member':members[m], 'time':time}
+            fname = self.filename(**kwargs_in)
+            run_dir = os.path.dirname(fname)
+            if not os.path.exists(run_dir):
+                os.makedirs(run_dir)
 
-        if self.psi_init_type == 'read':
-            prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
-        else:
-            prep_input_cmd = ''
+            for k in range(self.nz):
+                state[m,...,k] = self.read_var(name='streamfunc', k=k, **kwargs_in)
+                # psik = read_data_bin(input_file, self.kmax, self.nz, k)
+                # state[m,...,k] = spec2grid(psik).T
 
-        namelist(self, run_dir)
+        state_out = self.unet_model.predict(state, verbose=0)
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        qg_src = os.path.join(env_dir, 'qg.src')
-        qg_exe = os.path.join(nedas_dir, 'models', 'qg', 'src', 'qg.exe')
+        for m in range(nens):
+            kwargs_out = {**kwargs, 'member':members[m], 'time':next_time}
+            fname = self.filename(**kwargs_out)
+            if not os.path.exists(fname):
+                with open(fname, 'wb'):
+                    pass
+            for k in range(self.nz):
+                self.write_var(state_out[m,...,k], name='streamfunc', k=k, **kwargs_out)
+                # psik = grid2spec(predict_state[0,...,k].T)
+                # write_data_bin(output_file, psik, self.kmax, self.nz, k)
 
-        offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
-
-        ##build the shell command line
-        shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
-        shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
-        shell_cmd += "rm -f restart.nml; "      ##clean up before run
-        shell_cmd += prep_input_cmd             ##prepare input file
-        shell_cmd += submit_cmd                 ##job_submitter
-        shell_cmd += qg_exe+" . "               ##the qg model exe
-        shell_cmd += ">& run.log"               ##output to log
-        # print(shell_cmd, flush=True)
-
-        self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
-        self.run_process.wait()
-
-        ##check output
-        log_file = os.path.join(run_dir, 'run.log')
-        with open(log_file, 'rt') as f:
-            if 'Calculation done' not in f.read():
-                raise RuntimeError('errors in '+log_file)
-
-        if not os.path.exists(os.path.join(run_dir, 'output.bin')):
-            raise RuntimeError('output.bin file not found')
-
-        shell_cmd = "cd "+run_dir+"; "
-        shell_cmd += "mv output.bin "+output_file
-        subprocess.run(shell_cmd, shell=True)
+        # nc_write_var(output_file.replace('.bin','.nc'), {'t':None, 'z':self.nz, 'y':self.ny, 'x':self.nx}, 'psi', predict_state[0,...].transpose((2,0,1)), recno={'t':0})
 
 
     def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
+        pass
 
