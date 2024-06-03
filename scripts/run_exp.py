@@ -25,6 +25,10 @@ while c.time < c.time_end:
     cycle_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time))
     if not os.path.exists(cycle_dir):
         os.makedirs(cycle_dir)
+    for name in ['analysis', *c.model_config.keys()]:
+        subdir = os.path.join(cycle_dir, name)
+        if not os.path.exists(subdir):
+            os.makedirs(subdir)
 
     if c.time == c.time_start:
         ##copy initial ensemble

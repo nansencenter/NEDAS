@@ -18,8 +18,6 @@ c = Config(parse_args=True)
 ##if nscale = 1, then just
 c.s_dir = ''
 assim_dir = os.path.join(c.work_dir,'cycle', t2s(c.time), 'analysis', c.s_dir)
-if not os.path.exists(assim_dir):
-    os.makedirs(assim_dir)
 
 c.state_info = bcast_by_root(c.comm)(parse_state_info)(c)
 c.mem_list, c.rec_list = bcast_by_root(c.comm)(distribute_state_tasks)(c)
