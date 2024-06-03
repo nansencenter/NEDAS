@@ -81,10 +81,10 @@ def update_restart(c, fields_prior, fields_post, relax_coef=0):
 
             ##convert the posterior variable back to native model grid
             var_prior = src.read_var(path=path, member=mem_id, **rec)
-            if rec['is_vector']:
-                var_post = c.grid.convert(fld_post, is_vector=rec['is_vector'], method='linear')
-            else:
-                var_post = c.grid.interp(fld_post, grid.x_elem, grid.y_elem)
+            var_post = c.grid.convert(fld_post, is_vector=rec['is_vector'], method='linear')
+            # if rec['is_vector']:
+            # else:
+            #     var_post = c.grid.interp(fld_post, grid.x_elem, grid.y_elem)
                 # var_post_coarse = c.grid.convert(fld_post, method='linear', coarse_grain=True)
                 # var_post_coarse = np.nanmean(var_post_coarse[grid.tri.triangles], axis=1)
 
