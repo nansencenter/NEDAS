@@ -56,10 +56,6 @@ while c.time < c.time_end:
     c.dump_yaml(config_file)
 
     ###
-    analysis_dir = os.path.join(c.work_dir,'cycle', t2s(c.time), 'analysis', c.s_dir)
-    if not os.path.exists(analysis_dir):
-        os.makedirs(analysis_dir)
-
     job_submitter = os.path.join(c.nedas_dir, 'config', 'env', c.host, 'job_submit.sh')
     assimilate_code = os.path.join(c.nedas_dir, 'scripts', 'assimilate.py')
     shell_cmd = job_submitter+f" {c.nproc} {0}"
