@@ -184,7 +184,6 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     return state_prior
 
 
-@njit
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,
@@ -421,15 +420,19 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         obs_incr = obs_increment(obs['prior'], obs['obs'], obs['err_std'], c.filter_type)
 
         ##2. all pid update their own locally stored state:
+        state_h_dist = c.grid.distance(obs['x'], obs['y'], state_data['x'], state_data['y'])
+        state_v_dist = np.abs(obs['z'] - state_data['z'])
+        state_t_dist = np.abs(obs['t'] - state_data['t'])
         update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
-                           state_data['x'], state_data['y'], state_data['z'], state_data['t'],
-                           obs['x'], obs['y'], obs['z'], obs['t'],
+                           state_h_dist, state_v_dist, state_t_dist,
                            obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
 
         ##3. all pid update their own locally stored obs:
+        obs_h_dist = c.grid.distance(obs['x'], obs['y'], obs_data['x'], obs_data['y'])
+        obs_v_dist = np.abs(obs['z'] - obs_data['z'])
+        obs_t_dist = np.abs(obs['t'] - obs_data['t'])
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
-                         obs_data['x'], obs_data['y'], obs_data['z'], obs_data['t'],
-                         obs['x'], obs['y'], obs['z'], obs['t'],
+                         obs_h_dist, obs_v_dist, obs_t_dist,
                          obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
 
     print(' done.\n')
@@ -518,25 +521,17 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
 
 @njit
 def update_local_state(state_data, obs_prior, obs_incr,
-                       state_data_x, state_data_y, state_data_z, state_data_t,
-                       obs_x, obs_y, obs_z, obs_t,
+                       h_dist, v_dist, t_dist,
                        hroi, vroi, troi, localize_type, regress_type):
 
     nens, nfld, nloc = state_data.shape
 
-    ##horizontal localization factor
-    h_dist = np.hypot(state_data_x - obs_x, state_data_y - obs_y)
+    ##localization factor
     h_lfactor = local_factor(h_dist, hroi, localize_type)
-
-    ##temporal localization factor
-    t_dist = np.abs(state_data_t - obs_t)
+    v_lfactor = local_factor(v_dist, vroi, localize_type)
     t_lfactor = local_factor(t_dist, troi, localize_type)
 
     nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
-
-    ##vertical localization factor
-    v_dist = np.abs(state_data_z - obs_z)
-    v_lfactor = local_factor(v_dist, vroi, localize_type)
 
     lfactor = np.zeros((nfld, nloc))
     for l in nloc_sub:
@@ -548,20 +543,14 @@ def update_local_state(state_data, obs_prior, obs_incr,
 
 @njit
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
-                     obs_data_x, obs_data_y, obs_data_z, obs_data_t,
-                     obs_x, obs_y, obs_z, obs_t,
+                     h_dist, v_dist, t_dist,
                      hroi, vroi, troi, localize_type, regress_type):
 
     nens, nlobs = obs_data.shape
 
     ##distance between local obs_data and the obs being assimilated
-    h_dist = np.hypot(obs_data_x - obs_x, obs_data_y - obs_y)
     h_lfactor = local_factor(h_dist, hroi, localize_type)
-
-    v_dist = np.abs(obs_data_z - obs_z)
     v_lfactor = local_factor(v_dist, vroi, localize_type)
-
-    t_dist = np.abs(obs_data_t - obs_t)
     t_lfactor = local_factor(t_dist, troi, localize_type)
 
     lfactor = h_lfactor * v_lfactor * t_lfactor
