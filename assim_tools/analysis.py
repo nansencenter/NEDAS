@@ -83,7 +83,7 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
 
         for v in v_list:
             data['start_i'][r, v] = i
-            data['obs'][i:i+d] = lobs[r][par_id]['obs'][v, :]
+            data['obs'][i:i+d] = np.squeeze(lobs[r][par_id]['obs'][v, :])
             data['obs_rec_id'][i:i+d] = r
             data['x'][i:i+d] = lobs[r][par_id]['x']
             data['y'][i:i+d] = lobs[r][par_id]['y']
@@ -94,11 +94,25 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
             data['vroi'][i:i+d] = np.ones(d) * c.obs_info['records'][r]['vroi']
             data['troi'][i:i+d] = np.ones(d) * c.obs_info['records'][r]['troi']
             for m in range(c.nens):
-                data['obs_prior'][m, i:i+d] = lobs_prior[m, r][par_id][v, :]
+                data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, r][par_id][v, :])
 
             i += d
 
     return data
+
+
+def unpack_local_obs_data(c, par_id, lobs, lobs_prior, data):
+    """unpack data and write back to the original lobs_prior dict"""
+    i = 0
+    for r, obs_rec in c.obs_info['records'].items():
+
+        d = lobs[r][par_id]['x'].size
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+
+        for v in v_list:
+            for m in range(c.nens):
+                lobs_prior[m, r][par_id][v, :] = data['obs_prior'][m, i:i+d]
+            i += d
 
 
 ###functions for the batch assimilation mode:
@@ -421,8 +435,9 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     print(' done.\n')
 
     unpack_local_state_data(c, par_id, state_prior, state_data)
+    unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
 
-    return state_prior
+    return state_prior, lobs_prior
 
 
 def global_obs_list(c):
