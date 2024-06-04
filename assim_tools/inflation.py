@@ -38,8 +38,10 @@ def inflate_state(c, fields, mean_file):
 
 def adaptive_prior_inflation(c, obs_seq, obs_prior_seq):
     ##compute inflate coef by obs-space statistics (Desroziers et al. 2005)
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     ##collect obs-space statistics
+    total_nobs = 0
     omb2 = 0.0  ##obs-minus-background differences squared
     varo = 0.0  ##obs err variance
     varb = 0.0  ##obs_prior (background) ensemble variances
@@ -73,15 +75,15 @@ def adaptive_prior_inflation(c, obs_seq, obs_prior_seq):
         variance_obs_prior = pert2_obs_prior / (c.nens - 1)
 
         obs = obs_seq[obs_rec_id]['obs']
+        total_nobs += nv * nobs
+        omb2 += np.sum((obs - mean_obs_prior)**2)
+        varo += np.sum(obs_seq[obs_rec_id]['err_std']**2) * nv
+        varb += np.sum(variance_obs_prior)
 
-        omb2 += np.sum((obs - mean_obs_prior)**2) / nv
-
-        obs_err_std = obs_seq[obs_rec_id]['err_std']
-        varo += np.sum(obs_err_std**2)
-
-        varb += np.sum(variance_obs_prior) / nv
-
-    inflate_coef = np.sqrt((omb2 - varo) / varb)
+    print("adaptive prior inflation:\n")
+    print(f"varb = {varb/total_nobs}, varo={varo/total_nobs}\n")
+    print(f"omb2 = {omb2/total_nobs}\n")
+    inflate_coef = np.sqrt(max(0.1, (omb2 - varo) / varb))
     return inflate_coef
 
 
@@ -90,8 +92,9 @@ def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     ##collect obs-space statistics
-    nobs = 0
+    total_nobs = 0
     omb2 = 0.0  ##obs-minus-background differences squared
+    oma2 = 0.0
     amb2 = 0.0  ##analysis-minus-background diff squared
     varo = 0.0  ##obs err variance
     varb = 0.0  ##obs_prior (background) ensemble variances
@@ -134,25 +137,23 @@ def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
         variance_obs_post = pert2_obs_post / (c.nens - 1)
 
         obs = obs_seq[obs_rec_id]['obs']
+        total_nobs += nv * nobs
+        omb2 += np.sum((obs - mean_obs_prior)**2)
+        oma2 += np.sum((obs - mean_obs_post)**2)
+        amb2 += np.sum((mean_obs_post - mean_obs_prior)**2)
+        varo += np.sum(obs_seq[obs_rec_id]['err_std']**2) * nv
+        varb += np.sum(variance_obs_prior)
+        vara += np.sum(variance_obs_post)
+        print(f"{obs_rec,obs.shape, total_nobs, mean_obs_prior.shape, variance_obs_prior.shape, obs_seq[obs_rec_id]['err_std'].shape}\n")
 
-        nobs += obs.shape[-1]
-        omb2 += np.sum((obs - mean_obs_prior)**2) / nv
-        amb2 += np.sum((mean_obs_post - mean_obs_prior)**2) / nv
-        varo += np.sum(obs_seq[obs_rec_id]['err_std']**2)
-        varb += np.sum(variance_obs_prior) / nv
-        vara += np.sum(variance_obs_post) / nv
-
-    # inflate_coef = np.maximum(1.0, (omb2 - varo) / varb)
-    # inflate_coef = (omb2 - varo) / varb
     print("adaptive posterior inflation:\n")
-    print(f"varb = {varb/nobs}, vara = {vara/nobs}, varo={varo/nobs}\n")
-    print(f"omb2 = {omb2/nobs}, amb2 = {amb2/nobs}\n")
-    beta = np.sqrt(varb/vara)
-    print(f"beta = {beta}\n")
+    print(f"varb = {varb/total_nobs}, vara = {vara/total_nobs}, varo={varo/total_nobs}\n")
+    print(f"omb2 = {omb2/total_nobs}, oma2 = {oma2/total_nobs}, amb2={amb2/total_nobs}\n")
+    beta = np.sqrt(vara/varb)
+    print(f"spread reduction ratio = {np.sqrt(beta)}\n")
 
-    inflate_coef = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
-    print(f"lambda = {inflate_coef}\n")
-
+    inflate_coef = np.sqrt(max(0.1, (omb2-varo-amb2)/vara))
+    # inflate_coef = np.sqrt(max(0.1, (oma2-varo)/vara))
     return inflate_coef
 
 
