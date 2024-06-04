@@ -6,9 +6,9 @@ from utils.parallel import bcast_by_root
 from utils.progress import timer
 from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
-from assim_tools.transpose import transpose, transpose_state_to_field
+from assim_tools.transpose import transpose_forward, transpose_backward
 from assim_tools.analysis import batch_assim, serial_assim
-from assim_tools.inflation import inflate_prior_state
+from assim_tools.inflation import inflate_state, adaptive_prior_inflation, adaptive_post_inflation
 from assim_tools.update import update_restart
 
 c = Config(parse_args=True)
@@ -64,7 +64,13 @@ c.comm.Barrier()
 # if c.debug:
 #     np.save(analysis_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
 
-state_prior, z_state, lobs, lobs_prior = timer(c)(transpose)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
+##prior inflation
+if c.inflate_type == 'prior':
+    if c.adaptive_inflation:
+        c.inflate_coef = adaptive_prior_inflation(c, obs_seq, obs_prior_seq)
+    inflate_state(c, fields_prior, os.path.join(analysis_dir,'prior_mean_state.bin'))
+
+state_prior, z_state, lobs, lobs_prior = transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
 c.comm.Barrier()
 
 # if c.debug:
@@ -78,13 +84,20 @@ if c.assim_mode == 'batch':
 elif c.assim_mode == 'serial':
     assim = timer(c)(serial_assim)
 
-state_post = assim(c, state_prior, z_state, lobs, lobs_prior)
+state_post, lobs_post = assim(c, state_prior, z_state, lobs, lobs_prior)
 
-fields_post = transpose_state_to_field(c, state_post)
+fields_post, obs_post_seq = transpose_backward(c, state_post, lobs_post)
 c.comm.Barrier()
 
-timer(c)(output_state)(c, fields_post, os.path.join(analysis_dir,'post_state.bin'))
 timer(c)(output_ens_mean)(c, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'))
+
+##posterior inflation
+if c.inflate_type == 'posterior':
+    if c.adaptive_inflation:
+        c.inflate_coef = adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq)
+    inflate_state(c, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'))
+
+timer(c)(output_state)(c, fields_post, os.path.join(analysis_dir,'post_state.bin'))
 
 timer(c)(update_restart)(c, fields_prior, fields_post)
 

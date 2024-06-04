@@ -92,6 +92,10 @@ regress_type: 'linear'
 #run_align_space=false  ##if true, run alignment after filter update in space/time
 #run_align_time=false
 
+inflate_type: prior
+inflate_coef: 1.0
+adaptive_inflation: True
+
 ###number of scale components
 ###if > 1, use multiscale approach:
 ###  1. coarse-graining the analysis 4D grid [t, z, y, x] to save computational cost
