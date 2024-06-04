@@ -311,20 +311,123 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     return output_obs
 
 
-def transpose(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
+def transpose_lobs_to_obs(c, lobs):
+    """
+    Transpose obs from ensemble-complete to field-complete
+
+    Requires attributes in config:
+    - c: config obj
+    - lobs_post after analysis
+
+    Returns:
+    - obs_post_seq:
+      dict[(mem_id, obs_rec_id), np.array]
+    """
+
+    pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
+    pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
+    c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+
+    if c.debug:
+        print('obs post sequences: ')
+        print('transpose local obs to obs\n')
+
+    obs_seq = {}
+
+    nr = len(c.obs_rec_list[c.pid_rec])
+    for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
+
+        ##all pid goes through their own mem_list simultaneously
+        nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
+        for m in range(nm_max):
+
+            if c.debug:
+                print(progress_bar(r*nm_max+m, nr*nm_max))
+
+            ##prepare an empty obs_seq for receiving if not at the end of mem_list
+            if m < len(c.mem_list[c.pid_mem]):
+                mem_id = c.mem_list[c.pid_mem][m]
+                rec = c.obs_info['records'][obs_rec_id]
+                if rec['is_vector']:
+                    seq = np.full((2, rec['nobs']), np.nan)
+                else:
+                    seq = np.full((rec['nobs'],), np.nan)
+
+            ##this is just the reverse of transpose_obs_to_lobs
+            ## we take the exact steps, but swap send and recv operations here
+            ##
+            ## 1) send my lobs to dst_pid, for dst_pid<pid first
+            for dst_pid in np.arange(0, c.pid_mem):
+                if m < len(c.mem_list[dst_pid]):
+                    dst_mem_id = c.mem_list[dst_pid][m]
+                    c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
+
+            ## 2) receive fld_chk from a list of src_pid, from src_pid>=pid first
+            ##    because they wait to send stuff before able to receive themselves,
+            ##    cycle back to receive from src_pid<pid then.
+            if m < len(c.mem_list[c.pid_mem]):
+                for src_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
+
+                    if src_pid == c.pid_mem:
+                        ##pid already stores the lobs_seq, just copy
+                        lobs_seq = lobs[mem_id, obs_rec_id].copy()
+                    else:
+                        ##send lobs_seq to dst_pid
+                        lobs_seq = c.comm_mem.recv(source=src_pid, tag=m)
+
+                    ##unpack the lobs_seq to form a complete seq
+                    for par_id in c.par_list[src_pid]:
+                        inds = c.obs_inds[obs_rec_id][par_id]
+                        seq[..., inds] = lobs_seq[par_id]
+
+                    obs_seq[mem_id, obs_rec_id] = seq
+
+            ## 3) finish sending lobs_seq to dst_pid, for dst_pid>pid now
+            for dst_pid in np.arange(c.pid_mem+1, c.nproc_mem):
+                if m < len(c.mem_list[dst_pid]):
+                    dst_mem_id = c.mem_list[dst_pid][m]
+                    c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
+
+    if c.debug:
+        print(' done.\n')
+
+    return obs_seq
+
+
+def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     """
     transpose funcs called by assimilate.py
     """
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    # print('tranpose:\n')
+    if c.debug:
+        print('tranpose:\n')
 
-    # print('state variable fields: ')
+    if c.debug:
+        print('state variable fields: ')
     state_prior = transpose_field_to_state(c, fields_prior)
-    # print('z coords fields: ')
+
+    if c.debug:
+        print('z coords fields: ')
     z_state = transpose_field_to_state(c, z_fields)
 
     lobs = transpose_obs_to_lobs(c, obs_seq)
+
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
 
     return state_prior, z_state, lobs, lobs_prior
+
+
+def transpose_backward(c, state_post, lobs_post):
+
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    if c.debug:
+        print('transpose back:\n')
+
+    fields_post = transpose_state_to_field(c, state_post)
+
+    obs_post_seq = transpose_lobs_to_obs(c, lobs_post)
+
+    return fields_post, obs_post_seq
+
 
