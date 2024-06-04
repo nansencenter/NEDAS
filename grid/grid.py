@@ -1,4 +1,5 @@
 import numpy as np
+from numba import njit
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
@@ -850,6 +851,36 @@ class Grid(object):
         else:
             fld_out = fld
         return fld_out
+
+
+    def distance(self, ref_x, ref_y, x, y):
+        """
+        Compute distance for points (x,y) to the reference point
+        Input:
+        - ref_x, ref_y: float
+          reference point coordinates
+        - x, y: np.array(float)
+          points whose distance to the reference points will be computed
+        Output:
+        - dist: np.array(float)
+        """
+
+        ##normal cartesian distances in x and y
+        dist_x = np.abs(x-ref_x)
+        dist_y = np.abs(y-ref_y)
+
+        ##if there are cyclic boundary condition, take care of the wrap around
+        if self.cyclic_dim is not None:
+            for d in self.cyclic_dim:
+                if d=='x':
+                    dist_x = np.minimum(dist_x, self.Lx - dist_x)
+                elif d=='y':
+                    dist_y = np.minimum(dist_y, self.Ly - dist_y)
+
+        ##TODO: account for other geometry (neighbors) here
+
+        dist = np.hypot(dist_x, dist_y)
+        return dist
 
 
     ### Some methods for basic data visulisation and map plotting
