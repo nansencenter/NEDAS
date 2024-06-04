@@ -7,7 +7,7 @@ from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s
 from utils.progress import print_with_cache, progress_bar
 from .state import read_field
 
-def update_restart(c, fields_prior, fields_post, relax_coef=0):
+def update_restart(c, fields_prior, fields_post):
     """
     Top-level routine to apply the analysis increments to the original model
     restart files (as initial conditions for the next forecast)
@@ -36,12 +36,12 @@ def update_restart(c, fields_prior, fields_post, relax_coef=0):
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
         rec = c.state_info['fields'][rec_id]
 
-        if relax_coef > 0:
-            ##read the prior and post mean field with rec_id
-            prior_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','prior_mean_state.bin')
-            fld_prior_mean = read_field(prior_mean_file, c.state_info, c.mask, 0, rec_id)
-            post_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','prior_mean_state.bin')
-            fld_post_mean = read_field(post_mean_file, c.state_info, c.mask, 0, rec_id)
+        # if c.relax_coef > 0:
+        #     ##read the prior and post mean field with rec_id
+        #     prior_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','prior_mean_state.bin')
+        #     fld_prior_mean = read_field(prior_mean_file, c.state_info, c.mask, 0, rec_id)
+        #     post_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','prior_mean_state.bin')
+        #     fld_post_mean = read_field(post_mean_file, c.state_info, c.mask, 0, rec_id)
 
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
@@ -74,8 +74,8 @@ def update_restart(c, fields_prior, fields_post, relax_coef=0):
             fld_post = fields_post[mem_id, rec_id]
 
             ##inflation by relaxing to prior perturbation
-            if relax_coef > 0:
-                fld_post = fld_post_mean + relax_coef*(fld_prior-fld_prior_mean) + (1.-relax_coef)*(fld_post-fld_post_mean)
+            # if c.relax_coef > 0:
+            #     fld_post = fld_post_mean + c.relax_coef*(fld_prior-fld_prior_mean) + (1.-c.relax_coef)*(fld_post-fld_post_mean)
 
             ##misc. inverse transform
 
