@@ -57,13 +57,13 @@ obs_def:
 - name: 'velocity'
   dataset_src: 'qg'
   model_src: 'qg'
-  nobs: 10000
+  nobs: 3000
   obs_window_min: -6
   obs_window_max: 0
   err:
     type: 'normal'
     std: 1
-  hroi: 30
+  hroi: 40
   vroi: 5
   troi: 24
   impact_on_state:
@@ -87,8 +87,8 @@ model_def:
     icbc_path: '/cluster/work/users/yingyue/qg_ens_runs'
     total_counts: 200
 
-assim_mode: 'batch'
-filter_type: 'ETKF'
+assim_mode: 'serial'
+filter_type: 'EAKF'
 regress_type: 'linear'
 #run_align_space=false  ##if true, run alignment after filter update in space/time
 #run_align_time=false
@@ -100,6 +100,10 @@ regress_type: 'linear'
 ###  2. separately defined smoothing length scales (H,Z,T) and localization, inflation
 ##`scale` indexes the nscale components
 #nscale=1
+
+inflate_type: posterior
+inflate_coef: 1.0
+adaptive_inflation: True
 
 ###localization setting
 localize_type: GC  ##GC, boxcar, adaptive
