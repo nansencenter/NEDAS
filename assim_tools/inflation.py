@@ -129,8 +129,8 @@ def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
     amb2 = stats['amb2'] / stats['total_nobs']
     print(f"varb = {varb}, vara = {vara}, varo={varo}\n")
     print(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-    # inflate_coef = np.sqrt(omaamb/vara))
-    c.inflate_coef = np.sqrt((omb2-varo-amb2)/vara))
+    # inflate_coef = np.sqrt(omaamb/vara)
+    c.inflate_coef = np.sqrt((omb2-varo-amb2)/vara)
 
 
 def adaptive_relaxation(c, obs_seq, obs_prior_seq, obs_post_seq):
@@ -148,7 +148,7 @@ def adaptive_relaxation(c, obs_seq, obs_prior_seq, obs_post_seq):
     print(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
     beta = np.sqrt(varb/vara)
     lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
-    print(f"beta = {np.sqrt(beta)}, lambda = {lamb}\n")
+    print(f"beta = {beta}, lambda = {lamb}\n")
     c.relax_coef = (lamb - 1) / (beta - 1)
     if c.relax_coef > 2:
         c.relax_coef = 2
