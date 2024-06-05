@@ -212,8 +212,6 @@ class Model(object):
         else:
             prep_input_cmd = ''
 
-        namelist(self, run_dir)
-
         env_dir = os.path.join(nedas_dir, 'config', 'env', host)
         qg_src = os.path.join(env_dir, 'qg.src')
         qg_exe = os.path.join(nedas_dir, 'models', 'qg', 'src', 'qg.exe')
@@ -231,15 +229,35 @@ class Model(object):
         shell_cmd += ">& run.log"               ##output to log
         # print(shell_cmd, flush=True)
 
-        self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
-        self.run_process.wait()
+        log_file = os.path.join(run_dir, 'run.log')
+
+        ##give it several tries, each time decreasing time step
+        for dt_ratio in [1, 0.6, 0.2]:
+
+            self.dt *= dt_ratio
+            self.total_counts /= dt_ratio
+            self.write_steps = self.total_counts
+            self.diag1_step = self.total_counts
+            self.diag2_step = self.total_counts
+
+            namelist(self, run_dir)
+
+            self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+            self.run_process.wait()
+
+            ##check output
+            with open(log_file, 'rt') as f:
+                if 'Calculation done' in f.read():
+                    break
+
+            if self.run_process.returncode < 0:
+                ##kill signal received, exit the run func
+                return
 
         ##check output
-        log_file = os.path.join(run_dir, 'run.log')
         with open(log_file, 'rt') as f:
             if 'Calculation done' not in f.read():
                 raise RuntimeError('errors in '+log_file)
-
         if not os.path.exists(os.path.join(run_dir, 'output.bin')):
             raise RuntimeError('output.bin file not found')
 
