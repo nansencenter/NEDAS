@@ -113,7 +113,7 @@ def adaptive_prior_inflation(c, obs_seq, obs_prior_seq):
     omb2 = stats['omb2'] / stats['total_nobs']
     print(f"varb = {varb}, varo={varo}\n")
     print(f"omb2 = {omb2}\n")
-    c.inflate_coef = np.sqrt((omb2 - varo) / varb))
+    c.inflate_coef = np.sqrt((omb2 - varo) / varb)
 
 
 def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
