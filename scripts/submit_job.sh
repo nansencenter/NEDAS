@@ -10,5 +10,5 @@
 source $HOME/.bashrc
 source $HOME/code/NEDAS/config/env/betzy/python.src
 
-python $HOME/code/NEDAS/scripts/run_exp.py --config_file=$NEDAS/config/samples/qg.yml --nproc $SLURM_NTASKS --nproc_mem $SLURM_NTASKS --nens 100 --work_dir $SCRATCH/qg2
+python $HOME/code/NEDAS/scripts/run_exp.py --config_file=$NEDAS/config/samples/qg.yml --nproc $SLURM_NTASKS --nproc_mem $SLURM_NTASKS --nens 60 --work_dir $SCRATCH/qg2
 
