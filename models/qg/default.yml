@@ -11,7 +11,7 @@ psi_init_file: 'input'  ## name of the input file
 
 psi_init_type: 'spectral_m'  ## initial condition input source: read/spectral_m/spectral_z/elliptical_vortex
 
-initialize_energy: True  ## if true, the input field will be normalized
+initialize_energy: False ## if true, the input field will be normalized
 e_o: 10  ## initial energy
 k_o: 3  ## initial peak wavenumber
 delk: 5  ## initial spread in wavenumber
@@ -48,7 +48,7 @@ therm_drag: 0  ## thermal drag coef
 
 idum: 0  ## random seed number
 
-total_counts: 1200  ## total time steps to run
+total_counts: 200  ## total time steps to run
 write_step: 200  ## frame snapshop step
 diag1_step: 200  ## diagnostics 1 step
 diag2_step: 200  ## diagnostics 2 step
