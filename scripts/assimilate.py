@@ -8,7 +8,7 @@ from assim_tools.state import parse_state_info, distribute_state_tasks, partitio
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
 from assim_tools.transpose import transpose_forward, transpose_backward
 from assim_tools.analysis import batch_assim, serial_assim
-from assim_tools.inflation import inflate_state, adaptive_prior_inflation, adaptive_post_inflation
+from assim_tools.inflation import inflate_state, adaptive_prior_inflation, adaptive_post_inflation, adaptive_relaxation
 from assim_tools.update import update_restart
 
 c = Config(parse_args=True)
@@ -65,9 +65,9 @@ c.comm.Barrier()
 #     np.save(analysis_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
 
 ##prior inflation
-if c.inflate_type == 'prior':
+if 'prior' in c.inflate_type:
     if c.adaptive_inflation:
-        c.inflate_coef = adaptive_prior_inflation(c, obs_seq, obs_prior_seq)
+        adaptive_prior_inflation(c, obs_seq, obs_prior_seq)
     inflate_state(c, fields_prior, os.path.join(analysis_dir,'prior_mean_state.bin'))
 
 state_prior, z_state, lobs, lobs_prior = transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
@@ -92,10 +92,13 @@ c.comm.Barrier()
 timer(c)(output_ens_mean)(c, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'))
 
 ##posterior inflation
-if c.inflate_type == 'posterior':
+if 'posterior' in c.inflate_type:
     if c.adaptive_inflation:
-        c.inflate_coef = adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq)
+        adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq)
     inflate_state(c, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'))
+
+if c.adaptive_relaxation:
+    adaptive_relaxation(c, obs_seq, obs_prior_seq, obs_post_seq)
 
 timer(c)(output_state)(c, fields_post, os.path.join(analysis_dir,'post_state.bin'))
 
