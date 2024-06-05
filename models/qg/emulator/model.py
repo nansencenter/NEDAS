@@ -40,6 +40,9 @@ class Model(object):
         restart_dt = self.total_counts * self.dt * 240
         self.restart_dt = restart_dt
 
+        ##NB: total_counts = 200 used in training the model, so the emulator needs to run self.total_counts/200 iterations
+        self.nsteps = self.total_counts // 200
+
         self.variables = {
             'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
             'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
@@ -208,7 +211,9 @@ class Model(object):
                 # psik = read_data_bin(input_file, self.kmax, self.nz, k)
                 # state[m,...,k] = spec2grid(psik).T
 
-        state_out = self.unet_model.predict(state, verbose=0)
+        for i in range(self.nsteps):
+            state = self.unet_model.predict(state, verbose=0)
+        state_out = state
 
         for m in range(nens):
             kwargs_out = {**kwargs, 'member':members[m], 'time':next_time}
