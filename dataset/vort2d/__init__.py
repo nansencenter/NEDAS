@@ -137,7 +137,7 @@ def get_velocity(path, grid, **kwargs):
     model = importlib.import_module('models.vort2d')
     ##get the velocity field from model
     kwargs['name'] = 'velocity'
-    return model.read_var(path, grid, **kwargs)
+    return model.read_var(path=path, **kwargs)
 
 
 def get_vortex_position(path, grid, mask, z, **kwargs):
