@@ -1,4 +1,5 @@
-# NEDAS: The Next-generation Ensemble Data Assimilation System
+![](https://github.com/nansencenter/NEDAS/blob/main/doc/nedas_logo.png "NEDAS logo") 
+#The Next-generation Ensemble Data Assimilation System
 
 NEDAS provides a light-weight Python solution to the ensemble data assimilation (DA) problem for geophysical models. It serves as a new test environment for DA researchers. Thanks to its modular and scalable design, new DA algorithms can be rapidly tested and developed even for large-dimensional models. NEDAS offers a collection of state-of-the-art DA algorithms, including serial assimilation approaches (similar to [DART](https://github.com/NCAR/DART) and [PSU EnKF](https://github.com/myying/PSU_WRF_EnKF) systems), and batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.de/trac/wiki), [JEDI](https://www.jcsda.org/jcsda-project-jedi), etc.). NEDAS offers DA researchers with new ideas to test/compare their methods/prototypes early-on in real-model-like environments, before committing resources to full implementation in operational systems.
 
@@ -41,24 +42,6 @@ To let Python find NEDAS modules, you need to add the directory to the Python se
 `export PYTHONPATH=$PYTHONPATH:$CODE/NEDAS`
 
 The runtime parameters for NEDAS are handled by the `config` module, it reads system environment variables through `os.environ`. A full list of config parameters is provided by `config/defaults`. For your experiment, make a copy of the config file and change parameters accordingly. In NEDAS, `$config_file` points to the config file you will use. We recommend you keep a separate config file for each experiment.
-
-Before sourcing the `$config_file`, you need to mark the variables for export to the environment of subsequent commands (in bash it is done by `set -a`), so that the Python subprocesses will have access to those config parameters:
-
-`set -a; source $config_file; set +a`
-
-Then, you can go to the `scripts` directory to run the top-level control scripts:
-
-`cd $CODE/NEDAS/scripts`
-
-The bash scripts are typically submitted to a job scheduler on host supercomputers. In `config/env` you can create an initialization script for loading modules for the specific host machine. And in `scripts/job_submit.sh` make sure to provide the command for running jobs for this host machine. For example, in `config/defaults` the `env/betzy/base.src` is sourced, and we submit the job with
-
-`sbatch run_cycle.sh`
-
-Alternatively, the `run_cycle.sh` script can be run directly, if you are running the script on your local computer. For example, `config/env/localhost` sets up a local computer using `mpiexec`. Then, you run the job with
-
-`./run_cycle.sh`
-
-Results can then be found in the `$work_dir/$exp_name` directory.
 
 
 ## Code Directories and Components <a name='code_structure'></a>
@@ -104,9 +87,10 @@ The first challenge on dimensionality demands a careful design of memory layout 
 
 In NEDAS, for each member the model state is further divided into "fields" with dimensions (`y`,`x`) and "records" with dimensions (`variable`, `time`, `z`). Because, as the model dimension grows, even the entire state for one member maybe too big for one processor to hold in its memory. The smallest unit is now the 2D field, and each processor holds only a subset along the record dimension. Accordingly, the processors (`pid`) are divided into "member groups" (with same `pid_rec`) and "record groups" (with same `pid_mem`), see Fig. 1 for example. "State-complete" now becomes "field-complete". The record dimension allows parallel processing of different fields by the `read_var` functions in model modules. And during assimilation, each `pid_rec` only solves the analysis for its own list of `rec_id`.
 
-| ![](https://github.com/nansencenter/NEDAS/blob/main/tutorials/imgs/transpose_state.png "Parallel memory layout for the state") |
+| ![](https://github.com/nansencenter/NEDAS/blob/main/doc/fig_transpose.png "Parallel memory layout for the state") |
 |:---|
 | **Figure 1**: Memory layout for 6 processors (`pid` = 0, ..., 5), divided into 2 member groups (`pid_rec` = 0, 1) and 3 record groups (`pid_mem` = 0, 1, 2). The state has dimensions: 100 members (`mem_id`), 16 partitions (`par_id`), and 50 records (`rec_id`). The field-complete **fields** hold all the partitions but only subset of the ensemble, after transpose (gray arrows), the ensemble-complete **state** holds all the members but only subset of partitions. |
+|showing the memory layout for observations. There are 5 observation records distributed over `pid_rec`. An additional transpose along the record dimension (yellow arrows) is necessary to allow observation records stored in other `pid_rec` to update the field records stored in each `pid_rec`. |
 
 For observations, it is easier to process the entire observing network at once, instead of going through the measurements one by one. Therefore, each observing network (record) is assigned a unique `obs_rec_id` to be handled by one processor.
 
@@ -114,15 +98,10 @@ Each `pid_rec` only need to process its own list of `obs_rec_id`. Processors wit
 
 As shown in Fig. 2, a transpose among different `pid_mem` brings the observations **obs** from field-complete to ensemble-complete, an additional transpose among different `pid_rec` gathers all `obs_rec_id` for each `rec_id` to form the final local observation **lobs**.
 
-| ![](https://github.com/nansencenter/NEDAS/blob/main/tutorials/imgs/transpose_obs.png "Parallel memory layout for the observation") |
-|:--|
-| **Figure 2**: Same as Fig. 1 but showing the memory layout for observations. There are 5 observation records distributed over `pid_rec`. An additional transpose along the record dimension (yellow arrows) is necessary to allow observation records stored in other `pid_rec` to update the field records stored in each `pid_rec`. |
 
 When the transpose is complete, on each `pid`, the local ensemble **state\_prior**[`mem_id`, `rec_id`][`par_id`] is updated to the posterior **state\_post**, using local observations **lobs**[`obs_rec_id`][`par_id`] and observation priors **lobs\_prior**[`mem_id`, `obs_rec_id`][`par_id`].
 
-NEDAS provides two assimilation modes:
-
-In batch mode, the analysis domain is divided into small local partitions (indexed by `par_id`) and each `pid_mem` solves the analysis for its own list of `par_id`. The local observations are those falling inside the localization radius for each [`par_id`,`rec_id`]. The "local analysis" for each state variable is computed using the matrix-version ensemble filtering equations (such as [LETKF](https://doi.org/10.1016/j.physd.2006.11.008), [DEnKF](https://doi.org/10.1111/j.1600-0870.2007.00299.x)). The batch mode is favorable when the local observation volume is small and the matrix solution allows more flexible error covariance modeling (e.g., to include correlations in observation errors).
+NEDAS provides two assimilation modes:ain is divided into small local partitions (indexed by `par_id`) and each `pid_mem` solves the analysis for its own list of `par_id`. The local observations are those falling inside the localization radius for each [`par_id`,`rec_id`]. The "local analysis" for each state variable is computed using the matrix-version ensemble filtering equations (such as [LETKF](https://doi.org/10.1016/j.physd.2006.11.008), [DEnKF](https://doi.org/10.1111/j.1600-0870.2007.00299.x)). The batch mode is favorable when the local observation volume is small and the matrix solution allows more flexible error covariance modeling (e.g., to include correlations in observation errors).
 
 In serial mode, we go through the observation sequence and assimilation one observation at a time. Each `pid` stores a subset of state variables and observations with `par_id`, here locality doesn't matter in storage, the `pid` owning the observation being assimilated will first compute observation-space increments, then broadcast them to all the `pid` with state\_prior and/or lobs\_prior within the observation's localization radius and they will be updated. For the next observation, the updated observation priors will be used for computing increments. The whole process iteratively updates the state variables on each `pid`. The serial mode is more scalable especially for inhomogeneous network where load balancing is difficult, or when local observation volume is large. The scalar update equations allow more flexible use of nonlinear filtering approaches (such as particle filter, rank regression).
 
@@ -135,7 +114,7 @@ Miscellaneous transform functions can be added for state and/or observations, fo
 
 ## Description of Key Variables and Functions <a name='descriptions'></a>
 
-| ![](https://github.com/nansencenter/NEDAS/blob/main/tutorials/imgs/flowchart.png "Workflow for one assimilation cycle") |
+| ![](https://github.com/nansencenter/NEDAS/blob/main/doc/fig_flowchart.png "Workflow for one assimilation cycle") |
 |:--|
 | **Figure 3**. Workflow for one assimilation cycle/iteration. For the sake of clarity, only the key variables and functions are shown. Black arrows show the flow of information through functions.|
 
