@@ -1,0 +1,20 @@
+nx: 128   ##grid dimensions
+ny: 128
+
+dx: 9000  ##grid spacing, in meters
+
+dt: 60   ##time step in seconds
+
+restart_dt: 1  ##model restart output interval in hours
+
+gen: 0.00002   ##vorticity generation rate
+diss: 3000.0    ##dissipation rate
+
+Vmax: 35.    ## maximum wind speed (vortex intensity), m/s
+Rmw: 45000.  ## radius of maximum wind (vortex size), m
+
+Vbg: 5.      ##background flow wind speed (std), m/s
+Vslope: -3.  ##background flow kinetic energy spectrum power law
+
+loc_sprd: 30000.  ##initial spread in vortex position, m
+

@@ -1,216 +1,116 @@
 import numpy as np
-from perturb import random_field_powerlaw
-from fft_lib import fft2, ifft2, get_wn
+import os
+import inspect
+import time
+import multiprocessing
 
-def initialize(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
-    """
-    Initialize the 2d vortex model
-    initial condition: a rankine vortex embedded in a random wind flow
+from pyproj import Proj
+from grid import Grid
+from config import parse_config
+from utils.conversion import t2s
+from utils.netcdf_lib import nc_read_var, nc_write_var
 
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
+from .util import initial_condition, advance_time
 
-    - Vmax: float
-      Maximum wind speed (vortex intensity), m/s
+class Model(object):
+    def __init__(self, config_file=None, parse_args=False, **kwargs):
 
-    - Rmw: float
-      Radius of maximum wind (vortex size), m
+        code_dir = os.path.dirname(inspect.getfile(self.__class__))
+        config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
+        for key, value in config_dict.items():
+            setattr(self, key, value)
 
-    - Vbg: float
-      Background flow average wind speed, m/s
+        ##define the model grid
+        ii, jj = np.meshgrid(np.arange(self.nx), np.arange(self.ny))
+        x = ii*self.dx
+        y = jj*self.dx
+        self.grid = Grid(Proj('+proj=stere'), x, y, cyclic_dim='xy')
+        self.mask = np.full(self.grid.x.shape, False)  ##no mask
 
-    - Vslope: int
-      Background flow kinetic energy spectrum power law (typically -2)
+        levels = np.array([0])  ##there is no vertical levels
 
-    - loc_sprd: float, optional
-      The ensemble spread in vortex center position, m
+        self.variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':self.restart_dt, 'levels':levels, 'units':'m/s'}, }
 
-    Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field, u- and v-component in first dimension.
-    """
+        self.uniq_grid_key = ()
+        self.uniq_z_key = ()
+        self.z_units = '*'
 
-    ##the vortex is randomly placed in the domain
-    center_x = 0.5*(grid.xmin+grid.xmax) + np.random.normal(0, loc_sprd)
-    center_y = 0.5*(grid.ymin+grid.ymax) + np.random.normal(0, loc_sprd)
-
-    vortex = rankine_vortex(grid, Vmax, Rmw, center_x, center_y)
-
-    ##the background wind field is randomly drawn
-    bkg_flow = random_flow(grid, Vbg, Vslope)
-
-    return vortex + bkg_flow
+        self.run_process = None
+        self.run_status = 'pending'
 
 
-def rankine_vortex(grid, Vmax, Rmw, center_x, center_y):
-    """
-    Generate a Rankine vortex velocity field
+    def filename(self, **kwargs):
+        """parse kwargs and find matching filename"""
+        if 'path' in kwargs:
+            path = kwargs['path']
+        else:
+            path = '.'
 
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
+        if 'member' in kwargs and kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
 
-    - Vmax: float
-      Maximum wind speed (vortex intensity), m/s
+        assert 'time' in kwargs, 'missing time in kwargs'
+        tstr = kwargs['time'].strftime('%Y%m%d_%H')
 
-    - Rmw: float
-      Radius of maximum wind (vortex size), m
-
-    - center_x, center_y: float
-      Vortex center coordinates x,y
-
-    Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field
-    """
-
-    ##radius from vortex center
-    r = np.hypot(grid.x - center_x, grid.y - center_y)
-    r[np.where(r==0)] = 1e-10  ##avoid divide by 0
-
-    ##wind speed profile with radius
-    wspd = np.zeros(r.shape)
-    ind = np.where(r <= Rmw)
-    wspd[ind] = Vmax * r[ind] / Rmw
-    ind = np.where(r > Rmw)
-    wspd[ind] = Vmax * (Rmw / r[ind])**1.5
-    wspd[np.where(r==0)] = 0
-
-    u = -wspd * (grid.y - center_y) / r
-    v = wspd * (grid.x - center_x) / r
-
-    return np.array([u, v])
+        return path+'/'+tstr+mstr+'.nc'
 
 
-def random_flow(grid, amp, power_law):
-    """
-    Generate a random velocity field as the background flow
-
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
-
-    - amp: float
-      wind speed amplitude, m/s
-
-    - power_law: int
-      wind kinetic energy spectrum power law (typically -2)
-
-    Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field
-    """
-    ny, nx = grid.x.shape
-    fld = np.zeros((2, ny, nx))
-    dx = grid.dx
-
-    ##generate random streamfunction for the wind
-    ##note: streamfunc powerlaw = wind powerlaw - 2
-    psi = random_field_powerlaw(nx, ny, 1, power_law-2)
-
-    ##convert to wind
-    u = -(np.roll(psi, -1, axis=0) - np.roll(psi, 1, axis=0)) / (2.0*dx)
-    v = (np.roll(psi, -1, axis=1) - np.roll(psi, 1, axis=1)) / (2.0*dx)
-
-    ##normalize and scale to the required wind amp
-    u = amp * (u - np.mean(u)) / np.std(u)
-    v = amp * (v - np.mean(v)) / np.std(v)
-
-    return np.array([u, v])
+    def read_grid(self, **kwargs):
+        return self.grid
 
 
-def advance_time(fld, dx, t_intv, dt, gen, diss):
-    """
-    Advance forward in time to integrate the model (forecasting)
-
-    Inputs:
-    - fld: np.array(2,ny,nx)
-      The prognostic velocity field
-
-    - dx: float
-      Model grid spacing, meter
-
-    - t_intv: float
-      Integration time period, hour
-
-    - dt: float
-      Model time step, second
-
-    - gen: float
-      Vorticity generation rate
-
-    - diss: float
-      Dissipation rate
-
-    Returns:
-    - fld: np.array(2,ny,nx)
-      The forecast velocity field
-    """
-    ##input wind components, convert to spectral space
-    uh = fft2(fld[0, :, :])
-    vh = fft2(fld[1, :, :])
-
-    ##convert to zeta
-    ki, kj = get_scaled_wn(uh, dx)
-    zetah = 1j * (ki*vh - kj*uh)
-    k2 = ki**2 + kj**2
-    k2[0, 0] = 1.
-    #k2 = np.where(k2!=0, k2, np.ones_like(k2)) #avoid singularity in inversion
-
-    ##run time loop:
-    ##t_intv is run period in hours
-    ##dt is model time step in seconds
-    for n in range(int(t_intv*3600/dt)):
-        ##use rk4 numeric scheme to integrate forward in time:
-        rhs1 = forcing(uh, vh, zetah, dx, gen, diss)
-        zetah1 = zetah + 0.5*dt*rhs1
-        rhs2 = forcing(uh, vh, zetah1, dx, gen, diss)
-        zetah2 = zetah + 0.5*dt*rhs2
-        rhs3 = forcing(uh, vh, zetah2, dx, gen, diss)
-        zetah3 = zetah + dt*rhs3
-        rhs4 = forcing(uh, vh, zetah3, dx, gen, diss)
-        zetah = zetah + dt*(rhs1/6.0 + rhs2/3.0 + rhs3/3.0 + rhs4/6.0)
-
-        ##inverse zeta to get u, v
-        psih = -zetah / k2
-        uh = -1j * kj * psih
-        vh = 1j * ki * psih
-
-    u = ifft2(uh)
-    v = ifft2(vh)
-
-    return np.array([u, v])
+    def write_grid(self, grid, **kwargs):
+        pass
 
 
-def get_scaled_wn(x, dx):
-    """scaled wavenumber k for pseudospectral method"""
-    n = x.shape[0]
-    wni, wnj = get_wn(x)
-    ki = (2.*np.pi) * wni / (n*dx)
-    kj = (2.*np.pi) * wnj / (n*dx)
-    return ki, kj
+    def read_mask(self, **kwargs):
+        return self.mask
 
 
-def forcing(u, v, zeta, dx, gen, diss):
-    """forcing terms on RHS of prognostic equations"""
-    ki, kj = get_scaled_wn(zeta, dx)
-    ug = ifft2(u)
-    vg = ifft2(v)
-    ##advection term:
-    f = -fft2(ug*ifft2(1j*ki*zeta) + vg*ifft2(1j*kj*zeta))
-    ##generation term:
-    vmax = np.max(np.sqrt(ug**2+vg**2))
-    if vmax > 75:  ##cut off generation if vortex intensity exceeds limit
-        gen = 0
-    n = zeta.shape[0]
-    k2d = np.sqrt(ki**2 + kj**2)*(n*dx)/(2.*np.pi)
-    kc = 8
-    dk = 3
-    gen_response = np.exp(-0.5*(k2d-kc)**2/dk**2)
-    f += gen*gen_response*zeta
-    ##dissipation term:
-    f -= diss*(ki**2+kj**2)*zeta
-    return f
+    def read_var(self, **kwargs):
+        ##check name in kwargs and read the variables from file
+        assert 'name' in kwargs, 'please specify which variable to get, name=?'
+        name = kwargs['name']
+        assert name in self.variables, 'variable name '+name+' not listed in variables'
+        fname = filename(**kwargs)
 
+        is_vector = self.variables[name]['is_vector']
+        if is_vector:
+            var1 = nc_read_var(fname, self.variables[name]['name'][0])[0, ...]
+            var2 = nc_read_var(fname, self.variables[name]['name'][1])[0, ...]
+            var = np.array([var1, var2])
+        else:
+            var = nc_read_var(fname, self.variables[name]['name'])[0, ...]
+        return var
+
+
+    def write_var(self, var, **kwargs):
+        ##check kwargs
+        assert 'name' in kwargs, 'missing name in kwargs'
+        name = kwargs['name']
+        assert name in self.variables, 'variable name '+name+' not listed in variables'
+        fname = filename(**kwargs)
+
+        is_vector = self.variables[name]['is_vector']
+        if is_vector:
+            for i in range(2):
+                nc_write_var(fname, {'t':None, 'y':self.ny, 'x':self.nx}, self.variables[name]['name'][i], var[i,...], recno={'t':0})
+        else:
+            nc_write_var(fname, {'t':None, 'y':self.ny, 'x':self.nx}, var, self.variables[name]['name'], var, recno={'t':0})
+
+
+    def z_coords(**kwargs):
+        return np.zeros(self.grid.x.shape)
+
+
+    def run(self, task_id=0, task_nproc=1, **kwargs):
+        assert task_nproc==1, f"vort2d model only support serial runs (got task_nproc={task_nproc})"
+        self.run_status = 'running'
+
+##model.run()
+##p = multiprocess.Process(target=func, args)
+##p.run()
+##p.kill()
 
