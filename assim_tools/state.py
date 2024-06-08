@@ -152,7 +152,7 @@ def read_state_info(binfile):
                    'err_type': ss[5],
                    'time': h2t(np.float32(ss[6])),
                    'dt': np.float32(ss[7]),
-                   'k': int(ss[8]),
+                   'k': np.float32(ss[8]),
                    'pos': int(ss[9]), }
             info['fields'][rec_id] = rec
             rec_id += 1
