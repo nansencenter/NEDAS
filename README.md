@@ -1,4 +1,5 @@
 <img src='/docs/imgs/nedas_logo.png' width='250' align='left' style='padding-right:20px'/>
+
 The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-weight Python solution to the ensemble data assimilation (DA) problem for geophysical models. It allows DA researchers to test and develop new DA ideas early-on in real models, before committing resources to full implementation in operational systems. NEDAS is armed with parallel computation (mpi4py) and pre-compiled numerical libraries (numpy, numba.njit) to ensure runtime efficiency. The modular design allows the user to add customized algorithmic components to enhance the DA performance. NEDAS offers a collection of state-of-the-art DA algorithms, including serial assimilation approaches (similar to [DART](https://github.com/NCAR/DART) and [PSU EnKF](https://github.com/myying/PSU_WRF_EnKF) systems), and batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.de/trac/wiki), [JEDI](https://www.jcsda.org/jcsda-project-jedi), etc.), making it easy to benchmark new methods with the classic methods in the literature.
 
 # Table of Contents
