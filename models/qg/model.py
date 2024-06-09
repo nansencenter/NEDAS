@@ -77,7 +77,7 @@ class Model(object):
 
 
     def read_grid(self, **kwargs):
-        return self.grid
+        pass
 
 
     def write_grid(self, grid, **kwargs):
@@ -250,7 +250,8 @@ class Model(object):
                 if 'Calculation done' in f.read():
                     break
 
-            if self.run_process.returncode < 0:
+            returncode = self.run_process.returncode
+            if returncode is not None and returncode < 0:
                 ##kill signal received, exit the run func
                 return
 

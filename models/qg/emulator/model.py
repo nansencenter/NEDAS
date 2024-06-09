@@ -15,6 +15,7 @@ from ..util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 
 from .netutils import Att_Res_UNet
 
+
 class Model(object):
     """
     Class for configuring and running the qg model emulator
@@ -37,11 +38,12 @@ class Model(object):
 
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
-        restart_dt = self.total_counts * self.dt * 240
-        self.restart_dt = restart_dt
 
         ##NB: total_counts = 200 used in training the model, so the emulator needs to run self.total_counts/200 iterations
-        self.nsteps = self.total_counts // 200
+        self.nsteps = 1
+        restart_dt = 200 * self.dt * 240
+        self.restart_dt = restart_dt
+
 
         self.variables = {
             'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
@@ -212,7 +214,7 @@ class Model(object):
                 # state[m,...,k] = spec2grid(psik).T
 
         for i in range(self.nsteps):
-            state = self.unet_model.predict(state, verbose=0)
+            state = self.unet_model.predict(state, verbose=1)
         state_out = state
 
         for m in range(nens):

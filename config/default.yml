@@ -104,6 +104,12 @@ adaptive_inflation: True
 ##`scale` indexes the nscale components
 #nscale=1
 
+inflate_type: ['relax']
+inflate_coef: 1.0
+relax_coef: 0.8
+adaptive_inflation: False
+adaptive_relaxation: True
+
 ###localization setting
 localize_type: GC  ##GC, boxcar, adaptive
 

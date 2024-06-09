@@ -15,15 +15,16 @@ run_assim: True   ##if true, run the assimilation steps
 
 debug: False      ##if true, output debug data/message
 
-time_start: '202301090000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '202302200000'         ##end time of the experiment
-time_assim_start: '202301090000' ##start time of the first analysis cycle
-time_assim_end: '202302190000'   ##end time of the last analysis cycle
+time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '202302180000'         ##end time of the experiment
+time_assim_start: '202301010000' ##start time of the first analysis cycle
+time_assim_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
+assim_period: 168
 
-time: '202301090000'
-prev_time: '202301090000'
-next_time: '202301091200'
+time: '202301010000'
+prev_time: '202301010000'
+next_time: '202301011200'
 
 ###define analysis window relative to `time`, in hours
 ###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
@@ -39,30 +40,24 @@ state_time_steps: [0]
 state_time_scale: 0
 
 grid_def:
-  type: 'custom'
-  proj: '+proj=stere'
-  xmin: 0
-  xmax: 256
-  ymin: 0
-  ymax: 256
-  dx: 1.0
+  type: 'qg'
 
 state_def:
-- name: 'velocity'
+- name: 'streamfunc'
   model_src: 'qg'
   var_type: 'field'
   err_type: 'normal'
 
 obs_def:
-- name: 'velocity'
+- name: 'streamfunc'
   dataset_src: 'qg'
   model_src: 'qg'
-  nobs: 10000
+  nobs: 3000
   obs_window_min: -6
   obs_window_max: 0
   err:
     type: 'normal'
-    std: 1.0
+    std: 0.2
   hroi: 100
   vroi: 5
   troi: 24
@@ -81,6 +76,7 @@ model_def:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     nproc_per_mem: 1    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
+    ens_run_type: scheduler
     kmax: 127
     nz: 2
     psi_init_type: 'read'

@@ -1,7 +1,9 @@
-import tensorflow as tf
 import netCDF4
 import os
 import numpy as np
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
 
 class Att_Res_UNet():
     def __init__(self, list_predictors, list_targets, patch_dim, batch_size, n_filters, activation, kernel_initializer, batch_norm, pooling_type, dropout):
