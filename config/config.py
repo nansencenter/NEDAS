@@ -74,16 +74,17 @@ class Config(object):
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx)
 
         else:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
-            # module = importlib.import_module('models.'+model_name)
-            # model = getattr(module, 'Model')()
-            model = importlib.import_module('models.'+model_name)
+            kwargs = self.model_def[model_name]
+            module = importlib.import_module('models.'+model_name)
+            model = getattr(module, 'Model')(**kwargs)
             model_dir = os.path.join(self.data_dir, model_name)
-            self.grid = model.read_grid(path=model_dir)
+            model.read_grid(path=model_dir)
+            self.grid = model.grid
 
         self.ny, self.nx = self.grid.x.shape
 
@@ -93,9 +94,10 @@ class Config(object):
 
 
     def set_model_config(self):
-        ##initialize model config
+        ##initialize model config dict
         self.model_config = {}
         for model_name, kwargs in self.model_def.items():
+            ##load model class instance
             module = importlib.import_module('models.'+model_name)
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
 
