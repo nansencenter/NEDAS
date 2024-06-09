@@ -1,7 +1,5 @@
-![](https://github.com/nansencenter/NEDAS/blob/main/doc/nedas_logo.png "NEDAS logo") 
-#The Next-generation Ensemble Data Assimilation System
-
-NEDAS provides a light-weight Python solution to the ensemble data assimilation (DA) problem for geophysical models. It serves as a new test environment for DA researchers. Thanks to its modular and scalable design, new DA algorithms can be rapidly tested and developed even for large-dimensional models. NEDAS offers a collection of state-of-the-art DA algorithms, including serial assimilation approaches (similar to [DART](https://github.com/NCAR/DART) and [PSU EnKF](https://github.com/myying/PSU_WRF_EnKF) systems), and batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.de/trac/wiki), [JEDI](https://www.jcsda.org/jcsda-project-jedi), etc.). NEDAS offers DA researchers with new ideas to test/compare their methods/prototypes early-on in real-model-like environments, before committing resources to full implementation in operational systems.
+<img src='/docs/imgs/nedas_logo.png' width='250' align='left' style='padding-right:20px'/>
+The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-weight Python solution to the ensemble data assimilation (DA) problem for geophysical models. It allows DA researchers to test and develop new DA ideas early-on in real models, before committing resources to full implementation in operational systems. NEDAS is armed with parallel computation (mpi4py) and pre-compiled numerical libraries (numpy, numba.njit) to ensure runtime efficiency. The modular design allows the user to add customized algorithmic components to enhance the DA performance. NEDAS offers a collection of state-of-the-art DA algorithms, including serial assimilation approaches (similar to [DART](https://github.com/NCAR/DART) and [PSU EnKF](https://github.com/myying/PSU_WRF_EnKF) systems), and batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.de/trac/wiki), [JEDI](https://www.jcsda.org/jcsda-project-jedi), etc.), making it easy to benchmark new methods with the classic methods in the literature.
 
 # Table of Contents
 [Quick Start Guide](#quick_start)
@@ -19,42 +17,77 @@ NEDAS provides a light-weight Python solution to the ensemble data assimilation 
 
 ## Quick Start Guide <a name='quick_start'></a>
 
-NEDAS is written in Python and Bash. To get started, you first need to setup your environment.
+- Create a python environment for your experiment (optional but recommended)
 
-To get a copy of NEDAS, clone the repository in your `$CODE` directory:
+    Install Python then create environment named `<my_python_env>`
 
-`git clone git@github.com:nansencenter/NEDAS.git`
+    `python -m venv <my_python_env>`
 
-Install Python and the required libraries in `requirements.txt`, we recommend creating a separate environment for each project:
+    Enter the environment by
 
-`python -m venv <my_python_env>`
+    `source <my_python_env>/bin/activiate`
 
-Enter the environment by
+- Make a copy of the NEDAS code and place it in your `<code_dir>`
 
-`source <my_python_env>/bin/activiate`
+    `cd <code_dir>`
 
-and use a package manager to install the libraries, such as
+    `git clone git@github.com:nansencenter/NEDAS.git`
 
-`pip install -r requirements.txt`
+- Install the required libraries, as listed in `requirements.txt`
 
-To let Python find NEDAS modules, you need to add the directory to the Python search path. In your .bashrc (or other system configuration files), add the following line and then source:
+    Using a package manager such as pip, you can install them by
 
-`export PYTHONPATH=$PYTHONPATH:$CODE/NEDAS`
+    `pip install -r requirements.txt`
 
-The runtime parameters for NEDAS are handled by the `config` module, it reads system environment variables through `os.environ`. A full list of config parameters is provided by `config/defaults`. For your experiment, make a copy of the config file and change parameters accordingly. In NEDAS, `$config_file` points to the config file you will use. We recommend you keep a separate config file for each experiment.
+- Add NEDAS directory to the Python search path
 
+    To let Python find NEDAS modules, you can add the NEDAS directory to the search paths. In your .bashrc (or other system configuration files), add the following line and then source:
+
+    `export PYTHONPATH=$PYTHONPATH:<code_dir>/NEDAS`
+
+- Make the yaml configuration file for your experiment
+
+    A full list of configuration variables and their default values are stored in `config/default.yml`. There are sample configuration files in `config/samples/*`, you can make a copy to `<my_config_file>` and make changes.
+
+- Setup runtime environment for the host machine
+
+    In `<my_config_file>`:
+
+    set `host` to `<my_host_machine>`
+
+    set `nedas_dir` to the directory where NEDAS code is placed
+
+    set `work_dir` to the working directory for the experiment
+
+    set other directories `home_dir`, `code_dir`, etc. accordingly
+
+    In `config/env/<my_host_machine>`, you can create source files for running model on `<my_host_machine>`. For example, `config/env/betzy/qg.src` is sourced when running the 'qg' model on the 'betzy' machine.
+
+- Start the experiment
+
+    In `tutorials` there are some jupyter notebooks to demonstrate the DA workflow for some supported models.
+
+    On <my_host_machine>, you can start a notebook by
+
+    `jupyter-notebook --ip=0.0.0.0 --no-browser --port=<port>`
+
+    then create another ssh connection to the machine
+
+    `ssh -L <port>:localhost:<port> <my_host_machine>`
+
+    once the connection is established, you can access the notebook from your local browser via `localhost:<port>/tree?`
+
+    In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
+
+    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments.
+
+    On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
 
 ## Code Directories and Components <a name='code_structure'></a>
 
-* **requirements.txt** list the required Python libraries. We mainly use `numpy` for basic data structure and numerics, but note that your system might need the BLAS/LAPACK packages for `numpy` to achieve higher performance.
+* **config/** contains a `Config` class to handle configuration files, and some sample yaml configuration files are provided.
 
-* **fft_lib.py** provides `fft2`,`ifft2` functions through the `pyFFTW` package, alternatively you can use `numpy.fft` if you don't have `FFTW` installed.
-
-* **netcdf_lib.py** is a simple wrapper for `netCDF4` to read/write netcdf files, there is no parallel io support yet.
-
-* **parallel.py** handles communication among MPI processes using `mpi4py`, and **log.py** provides functions to show runtime messages and progresses.
-
-* **conversion.py** contains some utility functions for unit and format conversion.
+* **scripts/** contains top-level control scripts `run_exp.py`, and the two main steps `ensemble_forecast.py` and `assimilate.py`. Users can take these as an example and create their own workflow in their experiments.
 
 * **assim\_tools/** contains the functions handling model state variables in `state.py`, functions handling observations in `obs.py`, core DA algorithms in `analysis.py`, and post-processing functions in `update.py`.
 
@@ -68,11 +101,9 @@ The runtime parameters for NEDAS are handled by the `config` module, it reads sy
 
 * **diag/** contains functions for computing misc. diagnostics for model forecast verification and filter performance evaluation.
 
-* **config/** contains bash environment source files and configuration files, in Python program `import config as c` will load the configuration in `c` which will then be passed into functions.
+* **utils/** contains some utility functions: `fft_lib.py` provides an interface to FFTW (faster implementation); `netcdf_lib.py` is a simple wrapper for `netCDF4`; `parallel.py` provides MPI support via `mpi4py`; and `progress.py` provides functions to show runtime progress.
 
-* **scripts/** contains top-level bash control scripts such as `run_cycle.sh` for a cycling DA experiment. Some model-specific scripts are located in their own `models/<model>/` directories, including initialisation scripts, `run_forecast.sh`, and post-processing scripts.
-
-* **tutorials/** contains some Jupyter notebooks to illustrate how key functions work. Remember to enter your Python environment and `set -a; source $config_file`, before you start the notebook server. Note that all notebooks run in single processor mode.
+* **tutorials/** contains some Jupyter notebooks to illustrate how key functions work. Note that all notebooks run in single processor mode.
 
 
 ## The DA Problem and Basic Design <a name='basic_design'></a>
@@ -87,21 +118,23 @@ The first challenge on dimensionality demands a careful design of memory layout 
 
 In NEDAS, for each member the model state is further divided into "fields" with dimensions (`y`,`x`) and "records" with dimensions (`variable`, `time`, `z`). Because, as the model dimension grows, even the entire state for one member maybe too big for one processor to hold in its memory. The smallest unit is now the 2D field, and each processor holds only a subset along the record dimension. Accordingly, the processors (`pid`) are divided into "member groups" (with same `pid_rec`) and "record groups" (with same `pid_mem`), see Fig. 1 for example. "State-complete" now becomes "field-complete". The record dimension allows parallel processing of different fields by the `read_var` functions in model modules. And during assimilation, each `pid_rec` only solves the analysis for its own list of `rec_id`.
 
-| ![](https://github.com/nansencenter/NEDAS/blob/main/doc/fig_transpose.png "Parallel memory layout for the state") |
-|:---|
-| **Figure 1**: Memory layout for 6 processors (`pid` = 0, ..., 5), divided into 2 member groups (`pid_rec` = 0, 1) and 3 record groups (`pid_mem` = 0, 1, 2). The state has dimensions: 100 members (`mem_id`), 16 partitions (`par_id`), and 50 records (`rec_id`). The field-complete **fields** hold all the partitions but only subset of the ensemble, after transpose (gray arrows), the ensemble-complete **state** holds all the members but only subset of partitions. |
-|showing the memory layout for observations. There are 5 observation records distributed over `pid_rec`. An additional transpose along the record dimension (yellow arrows) is necessary to allow observation records stored in other `pid_rec` to update the field records stored in each `pid_rec`. |
+|![transpose](/docs/imgs/transpose.png)|
+|--|
+|**Figure 1**: Transpose from field-complete to ensemble-complete, illustrated by a 18-processor memory layout (`pid` = 1, ..., 18), divided into 2 groups (`pid_rec` = 0, 1), each with 9 processors (`pid_mem` = 0, 1, 2). The data has dimensions `mem_id` = 1:100 members, `par_id` = 1:9 partitions, and `rec_id` = 1:4 records. The gray arrows show sending/receiving of data to perform the transpose. The yellow arrows is an additional collection step (only needed by observation data)|
 
 For observations, it is easier to process the entire observing network at once, instead of going through the measurements one by one. Therefore, each observing network (record) is assigned a unique `obs_rec_id` to be handled by one processor.
-
-Each `pid_rec` only need to process its own list of `obs_rec_id`. Processors with `pid_mem` = 0 is responsible for reading and processing the actual observations using `read_obs` functions from dataset modules, while all `pid_mem` separately process their own members for the observation priors.
-
-As shown in Fig. 2, a transpose among different `pid_mem` brings the observations **obs** from field-complete to ensemble-complete, an additional transpose among different `pid_rec` gathers all `obs_rec_id` for each `rec_id` to form the final local observation **lobs**.
-
+Each `pid_rec` only needs to process its own list of `obs_rec_id`. Processors with `pid_mem` = 0 is responsible for reading and processing the actual observations using `read_obs` functions from dataset modules, while all `pid_mem` separately process their own members for the observation priors.
+When transposing from field-complete to ensemble-complete is done, an additional collection step among different `pid_rec` is required, which gathers all `obs_rec_id` for each `rec_id` to form the final local observation.
 
 When the transpose is complete, on each `pid`, the local ensemble **state\_prior**[`mem_id`, `rec_id`][`par_id`] is updated to the posterior **state\_post**, using local observations **lobs**[`obs_rec_id`][`par_id`] and observation priors **lobs\_prior**[`mem_id`, `obs_rec_id`][`par_id`].
 
-NEDAS provides two assimilation modes:ain is divided into small local partitions (indexed by `par_id`) and each `pid_mem` solves the analysis for its own list of `par_id`. The local observations are those falling inside the localization radius for each [`par_id`,`rec_id`]. The "local analysis" for each state variable is computed using the matrix-version ensemble filtering equations (such as [LETKF](https://doi.org/10.1016/j.physd.2006.11.008), [DEnKF](https://doi.org/10.1111/j.1600-0870.2007.00299.x)). The batch mode is favorable when the local observation volume is small and the matrix solution allows more flexible error covariance modeling (e.g., to include correlations in observation errors).
+|![parallel memory layout](/docs/imgs/memory_layout.png)|
+|--|
+|**Figure 2**: Memory layout for state variables (square pixels) and observations (circles) using (a) batch and (b) serial assimilation strategies. The colors represent the processor id `pid_mem` that stores the data.
+
+NEDAS provides two assimilation modes:
+
+In batch mode, the analysis domain is divided into small local partitions (indexed by `par_id`) and each `pid_mem` solves the analysis for its own list of `par_id`. The local observations are those falling inside the localization radius for each [`par_id`,`rec_id`]. The "local analysis" for each state variable is computed using the matrix-version ensemble filtering equations (such as [LETKF](https://doi.org/10.1016/j.physd.2006.11.008), [DEnKF](https://doi.org/10.1111/j.1600-0870.2007.00299.x)). The batch mode is favorable when the local observation volume is small and the matrix solution allows more flexible error covariance modeling (e.g., to include correlations in observation errors).
 
 In serial mode, we go through the observation sequence and assimilation one observation at a time. Each `pid` stores a subset of state variables and observations with `par_id`, here locality doesn't matter in storage, the `pid` owning the observation being assimilated will first compute observation-space increments, then broadcast them to all the `pid` with state\_prior and/or lobs\_prior within the observation's localization radius and they will be updated. For the next observation, the updated observation priors will be used for computing increments. The whole process iteratively updates the state variables on each `pid`. The serial mode is more scalable especially for inhomogeneous network where load balancing is difficult, or when local observation volume is large. The scalar update equations allow more flexible use of nonlinear filtering approaches (such as particle filter, rank regression).
 
@@ -114,7 +147,7 @@ Miscellaneous transform functions can be added for state and/or observations, fo
 
 ## Description of Key Variables and Functions <a name='descriptions'></a>
 
-| ![](https://github.com/nansencenter/NEDAS/blob/main/doc/fig_flowchart.png "Workflow for one assimilation cycle") |
+| ![nedas workflow chart](/docs/imgs/workflow.png) |
 |:--|
 | **Figure 3**. Workflow for one assimilation cycle/iteration. For the sake of clarity, only the key variables and functions are shown. Black arrows show the flow of information through functions.|
 
