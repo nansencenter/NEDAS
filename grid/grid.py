@@ -142,6 +142,7 @@ class Grid(object):
             ##(1: equilateral triangle, ~0: very elongated)
             self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
 
+        self._dst_grid = None
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
 
@@ -295,33 +296,37 @@ class Grid(object):
     @dst_grid.setter
     def dst_grid(self, grid):
         assert isinstance(grid, Grid), "dst_grid should be a Grid instance"
+        if grid == self:  ##grid is itself, do nothing
+            return
+        if grid == self.dst_grid:  ##the same grid is set before
+            return
+
         self._dst_grid = grid
 
-        if grid != self:
-            ##rotation of vector field from self.proj to dst_grid.proj
-            self._set_rotation_matrix()
+        ##rotation of vector field from self.proj to dst_grid.proj
+        self._set_rotation_matrix()
 
-            ##prepare indices and weights for interpolation
-            ##when dst_grid is set, these info are prepared and stored to avoid recalculating
-            ##too many times, when applying the same interp to a lot of flds
-            x, y = self._proj_from(grid.x, grid.y)
-            inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
-            self.interp_inside = inside
-            self.interp_indices = indices
-            self.interp_vertices = vertices
-            self.interp_nearest = nearest
-            self.interp_weights = self._interp_weights(inside, vertices, in_coords)
+        ##prepare indices and weights for interpolation
+        ##when dst_grid is set, these info are prepared and stored to avoid recalculating
+        ##too many times, when applying the same interp to a lot of flds
+        x, y = self._proj_from(grid.x, grid.y)
+        inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
+        self.interp_inside = inside
+        self.interp_indices = indices
+        self.interp_vertices = vertices
+        self.interp_nearest = nearest
+        self.interp_weights = self._interp_weights(inside, vertices, in_coords)
 
-            ##prepare indices for coarse-graining
-            x, y = self._proj_to(self.x, self.y)
+        ##prepare indices for coarse-graining
+        x, y = self._proj_to(self.x, self.y)
+        inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+        self.coarsen_inside = inside
+        self.coarsen_nearest = nearest
+        if not self.regular: ## for irregular mesh, find indices for elements too
+            x, y = self._proj_to(self.x_elem, self.y_elem)
             inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
-            self.coarsen_inside = inside
-            self.coarsen_nearest = nearest
-            if not self.regular: ## for irregular mesh, find indices for elements too
-                x, y = self._proj_to(self.x_elem, self.y_elem)
-                inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
-                self.coarsen_inside_elem = inside
-                self.coarsen_nearest_elem = nearest
+            self.coarsen_inside_elem = inside
+            self.coarsen_nearest_elem = nearest
 
 
     def set_destination_grid(self, grid):

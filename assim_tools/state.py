@@ -421,8 +421,6 @@ def prepare_state(c):
         print('prepare state by reading fields from model restart\n')
     fields = {}
     z_coords = {}
-    grid_bank = {}
-    z_bank = {}
 
     ##process the fields, each proc gets its own workload as a subset of
     ##mem_id,rec_id; all pid goes through their own task list simultaneously
@@ -440,58 +438,28 @@ def prepare_state(c):
             path = os.path.join(c.work_dir, 'cycle', t2s(rec['time']), rec['model_src'])
 
             ##the model object for handling this variable
-            # src = importlib.import_module('models.'+rec['model_src'])
-            src = c.model_config[rec['model_src']]
+            model = c.model_config[rec['model_src']]
 
-            ##only need to generate the uniq grid objs, store them in memory bank
-            member = mem_id if 'member' in src.uniq_grid_key else None
-            var_name = rec['name'] if 'variable' in src.uniq_grid_key else None
-            time = rec['time'] if 'time' in src.uniq_grid_key else None
-            k = rec['k'] if 'k' in src.uniq_grid_key else None
-
-            grid_key = (member, rec['model_src'], var_name, time, k)
-            if grid_key in grid_bank:
-                grid = grid_bank[grid_key]
-
-            else:
-                grid = src.read_grid(path=path, member=mem_id, **rec)
-                grid.set_destination_grid(c.grid)
-                grid_bank[grid_key] = grid
+            model.read_grid(path=path, member=mem_id, **rec)
+            model.grid.set_destination_grid(c.grid)
 
             ##read field and save to dict
-            var = src.read_var(path=path, member=mem_id, **rec)
-            fld = grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
+            var = model.read_var(path=path, member=mem_id, **rec)
+            fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
             fields[mem_id, rec_id] = fld
 
             ##misc. transform
 
-            ##read z_coords and save to dict
+            ##read z_coords for the field
             ##only need to generate the uniq z coords, store in bank
-            member = mem_id if 'member' in src.uniq_z_key else None
-            var_name = rec['name'] if 'variable' in src.uniq_z_key else None
-            time = rec['time'] if 'time' in src.uniq_z_key else None
-            k = rec['k'] if 'k' in src.uniq_z_key else None
-            z_key = (member, rec['model_src'], var_name, time, k)
-            if z_key in z_bank:
-                z = z_bank[z_key]
-
-            else:
-                zvar = src.z_coords(path=path, member=mem_id, time=rec['time'], k=rec['k'])
-                z = grid.convert(zvar, is_vector=False, method='linear', coarse_grain=True)
-
-                ##misc.transform
-
-                z_bank[z_key] = z
-
+            zvar = model.z_coords(path=path, member=mem_id, **rec)
+            z = model.grid.convert(zvar, is_vector=False, method='linear', coarse_grain=True)
             if rec['is_vector']:
                 z_coords[mem_id, rec_id] = np.array([z, z])
             else:
                 z_coords[mem_id, rec_id] = z
     if c.debug:
         print(' done.\n')
-
-    ##clean up
-    # del grid_bank, z_bank, var, zvar
     c.comm.Barrier()
 
     return fields, z_coords
