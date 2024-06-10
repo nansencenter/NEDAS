@@ -1,0 +1,25 @@
+ulimit -s 2000000
+
+module --force purge
+ml load StdEnv
+ml load UDUNITS/2.2.26-GCCcore-9.3.0
+ml load CMake/3.16.4-GCCcore-9.3.0
+ml load Python/3.8.2-GCCcore-9.3.0
+ml load FFTW/3.3.8-iomkl-2020a
+ml load ESMF/8.0.1-iomkl-2020a
+ml load GSL/2.6-iccifort-2020.1.217
+ml load impi/2019.7.217-iccifort-2020.1.217
+
+
+export NETCDF_DIR=/cluster/software/netCDF-C++4/4.3.1-iimpi-2019b
+export FFTW_DIR=${EBROOTFFTW}
+
+export CC=mpicc
+export CXX=mpiicpc
+export CFLAGS+=" -O3 -fPIC"
+export CXXFLAGS+=" -O3 -pthread -fPIC -fopenmp"
+export CCFLAGS+=" $CFLAGS"
+
+export CLUSTER_ROOT_DIR=/cluster/projects/nn2993k/sim
+
+export LD_LIBRARY_PATH=$FFTW_DIR/lib:$LD_LIBRARY_PATH
