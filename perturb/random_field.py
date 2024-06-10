@@ -61,10 +61,10 @@ def random_field_powerlaw(nx, ny, amp, pwrlaw):
 
     ##assemble random field given amplitude from power spectrum, and random phase ph
     norm = 2 * np.pi * k2d
-    amp = np.sqrt(k2d**(pwrlaw+1) / norm)
-    amp[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
+    amp_ = amp * np.sqrt(k2d**(pwrlaw+1) / norm)
+    amp_[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
 
-    return np.real(ifft2(amp * ph))
+    return np.real(ifft2(amp_ * ph))
 
 
 
