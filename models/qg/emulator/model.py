@@ -7,6 +7,7 @@ from pyproj import Proj
 
 from config import parse_config
 from grid import Grid
+from perturb import random_field_gaussian
 from utils.conversion import t2s, dt1h
 from utils.netcdf_lib import nc_write_var
 
@@ -186,7 +187,7 @@ class Model(object):
         return z
 
 
-    def run(self, nens=1, task_id=0, task_nproc=1, **kwargs):
+    def run(self, nens=1, task_id=0, task_nproc=1, pert=False, **kwargs):
         assert task_nproc==1, f'qg emulator only support serial runs (got task_nproc={task_nproc})'
 
         self.run_status = 'running'
@@ -224,7 +225,13 @@ class Model(object):
                 with open(fname, 'wb'):
                     pass
             for k in range(self.nz):
-                self.write_var(state_out[m,...,k], name='streamfunc', k=k, **kwargs_out)
+                fld = state_out[m,...,k]
+                ##perturb the result to give more small-scale signal
+                if pert and k == 0:
+                    fld += random_field_gaussian(self.nx, self.ny, 1, 10)
+                ##output to restart file
+                self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
+
                 # psik = grid2spec(predict_state[0,...,k].T)
                 # write_data_bin(output_file, psik, self.kmax, self.nz, k)
 

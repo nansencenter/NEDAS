@@ -44,14 +44,12 @@ class Model(object):
         self.restart_dt = restart_dt
 
         self.variables = {
-            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
-            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
-            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
-            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'restart_dt':restart_dt, 'levels':levels, 'units':'*'},
+            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'*'},
+            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
+            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
+            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
             }
 
-        self.uniq_grid_key = ()
-        self.uniq_z_key = ('k')
         self.z_units = '*'
 
         ##
