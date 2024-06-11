@@ -24,7 +24,7 @@ while t < c.time_end:
     h_ts.append(h)
     rmse_ts.append(np.load(path+"/rmse_post"+sc+".npy"))
     sprd_ts.append(np.load(path+"/sprd_post"+sc+".npy"))
-    
+
     prev_t = t
     t = next_t
 
