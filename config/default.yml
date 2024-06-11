@@ -80,11 +80,7 @@ model_def:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     nproc_per_mem: 1    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
-    kmax: 127
-    nz: 2
-    psi_init_type: 'read'
-    icbc_path: '/cluster/work/users/yingyue/qg_ens_runs'
-    total_counts: 200
+    ens_run_type: scheduler
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
