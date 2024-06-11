@@ -8,7 +8,7 @@ def value_str(value):
         else:
             vstr = 'false'
     elif isinstance(value, str):
-        vstr = "'"+value+"'"
+        vstr = value
     else:
         vstr = f'{value}'
     return vstr
@@ -35,7 +35,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "dynamics-type="+value_str(m.dynamics_type)+"\n"
     nmlstr += "\n"
     nmlstr += "[simul]\n"
-    nmlstr += "timestep="+value_str(m.timestep)+"\n"
+    nmlstr += "timestep="+value_str(int(m.timestep))+"\n"
     nmlstr += "time_init="+time.strftime('%Y-%m-%d %H:%M:%S')+"\n"
     nmlstr += "duration="+f"{forecast_period / 24}"+"\n"
     nmlstr += "\n"
@@ -68,21 +68,24 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "type="+value_str(m.restart_type)+"\n"
     nmlstr += "write_initial_restart="+value_str(m.write_initial_restart)+"\n"
     nmlstr += "write_interval_restart="+value_str(m.write_interval_restart)+"\n"
-    nmlstr += "output_interval="+value_str(m.output_interval)+"\n"
+    nmlstr += "output_interval="+f"{m.restart_dt / 24}"+"\n"
     nmlstr += "check_restart="+value_str(m.check_restart)+"\n"
     nmlstr += "\n"
     nmlstr += "[output]\n"
-    nmlstr += "output_per_day="+value_str(m.output_per_day)+"\n"
+    nmlstr += "output_per_day="+f"{int(24 / m.restart_dt)}"+"\n"
     nmlstr += "datetime_in_filename="+value_str(m.datetime_in_filename)+"\n"
     nmlstr += "exporter_path="+value_str(m.exporter_path)+"\n"
     nmlstr += "export_before_regrid="+value_str(m.export_before_regrid)+"\n"
     nmlstr += "export_after_regrid="+value_str(m.export_after_regrid)+"\n"
     nmlstr += "\n"
+    nmlstr += "[statevector]\n"
+    nmlstr += "output_timestep="+f"{m.restart_dt / 24}"+"\n"
+    nmlstr += "\n"
     nmlstr += "[moorings]\n"
     nmlstr += "use_moorings="+value_str(m.use_moorings)+"\n"
     nmlstr += "grid_type="+value_str(m.mooring_grid_type)+"\n"
     nmlstr += "spacing="+value_str(m.mooring_spacing)+"\n"
-    nmlstr += "output_timestep="+value_str(m.mooring_output_timestep)+"\n"
+    nmlstr += "output_timestep="+f"{m.restart_dt / 24}"+"\n"
     for varname in m.mooring_variables:
         nmlstr += "variables="+varname+"\n"
     nmlstr += "\n"

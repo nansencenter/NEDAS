@@ -22,19 +22,18 @@ def ensemble_forecast_scheduler(c, model_name):
     for mem_id in range(c.nens):
 
         job_name = model_name+f'_mem{mem_id+1}'
-        job = model
-
         path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
 
         job_opt = {'host': c.host,
-                    'nedas_dir': c.nedas_dir,
-                    'path': path,
-                    'member': mem_id,
-                    'time': c.time,
-                    }
-        # print(job_opt)
-
-        scheduler.submit_job(job_name, job, **job_opt)  ##add job to the queue
+                   'nedas_dir': c.nedas_dir,
+                   'code_dir': c.code_dir,
+                   'data_dir': c.data_dir,
+                   'path': path,
+                   'member': mem_id,
+                   'time': c.time,
+                   'forecast_period': c.cycle_period
+                   }
+        scheduler.submit_job(job_name, model, **job_opt)  ##add job to the queue
 
     scheduler.start_queue() ##start the job queue
 
@@ -57,7 +56,16 @@ def ensemble_forecast_batch(c, model_name):
     if not os.path.exists(path):
         os.makedirs(path)
 
-    model.run(nens=c.nens, path=path, time=c.time)
+    job_opt = {'host': c.host,
+               'nedas_dir': c.nedas_dir,
+               'code_dir': c.code_dir,
+               'data_dir': c.data_dir,
+               'pert': False,
+               'path': path,
+               'time': c.time,
+               }
+
+    model.run(nens=c.nens, **job_opt)
 
     print('done.', flush=True)
 

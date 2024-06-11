@@ -51,13 +51,15 @@ class Model(object):
 
 
     def filename(self, **kwargs):
-        name = kwargs['name'] if 'name' in kwargs else list(self.variables.keys())[0]
-
         if 'path' in kwargs:
             path = kwargs['path']
         else:
             path = '.'
-
+        if 'member' in kwargs and kwargs['member'] is not None:
+            mstr = '{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        name = kwargs['name'] if 'name' in kwargs else list(self.variables.keys())[0]
         if 'time' in kwargs and kwargs['time'] is not None:
             assert isinstance(kwargs['time'], datetime), 'Error: time is not a datetime object'
             tstr = kwargs['time'].strftime('%Y%m%dT%H%M%SZ')
@@ -67,16 +69,11 @@ class Model(object):
             dt = kwargs['dt'] * timedelta(hours=1)
         else:
             dt = 0
-
-        if 'member' in kwargs and kwargs['member'] is not None:
-            mstr = '{:03d}'.format(kwargs['member']+1)
-        else:
-            mstr = ''
-
-        search = os.path.join(path, mstr, 'restart', 'field_'+tstr+'.bin')
-        flist = glob.glob(search)
-        assert len(flist)>0, 'no matching files found: '+search
-        return flist[0]
+        # search = os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+        # flist = glob.glob(search)
+        # assert len(flist)>0, 'no matching files found: '+search
+        # return flist[0]
+        return os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
 
 
     def read_grid(self, **kwargs):
@@ -218,22 +215,39 @@ class Model(object):
         code_dir = kwargs['code_dir']
         data_dir = kwargs['data_dir']
 
-        fname = self.filename(**kwargs)
-        run_dir = os.path.dirname(fname)
+        restart_file = self.filename(**kwargs)
+        run_dir = os.path.dirname(os.path.dirname(restart_file))
 
         # print('running nextsim v1 model in '+run_dir, flush=True)
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
 
         time = kwargs['time']
-        next_time = time + self.restart_dt * dt1h
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
+
         input_file = self.filename(**kwargs)
         kwargs_out = {**kwargs, 'time':next_time}
         output_file = self.filename(**kwargs_out)
 
-        ##check status, skip if already run
+        ##check restart input files
+        field_bin = input_file
+        field_dat = field_bin.replace('.bin', '.dat')
+        mesh_bin = input_file.replace('field', 'mesh')
+        mesh_dat = mesh_bin.replace('.bin', '.dat')
+        for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
+            if not os.path.exists(file):
+                raise RuntimeError("input file is missing: "+file)
 
-        prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
+        ##prepare the input files
+        ##restart files should be created by the cycling
+        ##other data:
+        shell_cmd = "cd "+run_dir+"; "
+        shell_cmd += "rm -rf data; mkdir data; cd data; "
+        shell_cmd += "ln -fs "+os.path.join(data_dir, 'BATHYMETRY', '*')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(data_dir, 'TOPAZ4', 'TP4DAILY_*')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(data_dir, 'GENERIC_PS_ATM')+" .; "
+        subprocess.run(shell_cmd, shell=True)
 
         env_dir = os.path.join(nedas_dir, 'config', 'env', host)
         model_src = os.path.join(env_dir, 'nextsim.v1.src')
@@ -243,33 +257,28 @@ class Model(object):
         submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
 
         ##build the shell command line
-        shell_cmd = "source "+model_src+"; "    ##enter the nextsim model env
-        shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
-        shell_cmd += "export NEXTSIM_DATA_DIR={}/data" ##prepare input file
-        shell_cmd += submit_cmd                 ##job_submitter
+        shell_cmd = "source "+model_src+"; "
+        shell_cmd += "cd "+run_dir+"; "
+        shell_cmd += "export NEXTSIM_DATA_DIR="+os.path.join(run_dir,'data')+"; "
+        shell_cmd += submit_cmd
         shell_cmd += model_exe+" --config-files=nextsim.cfg "
-        shell_cmd += ">& run.log"               ##output to log
+        shell_cmd += ">& run.log"
         # print(shell_cmd, flush=True)
-
         log_file = os.path.join(run_dir, 'run.log')
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.5]:
 
-            self.dt *= dt_ratio
-            self.total_counts /= dt_ratio
-            self.write_steps = self.total_counts
-            self.diag1_step = self.total_counts
-            self.diag2_step = self.total_counts
+            self.timestep *= dt_ratio
 
-            namelist(self, time, fcst_period, run_dir)
+            namelist(self, time, forecast_period, run_dir)
 
             self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
             self.run_process.wait()
 
             ##check output
             with open(log_file, 'rt') as f:
-                if 'Calculation done' in f.read():
+                if 'Simulation done' in f.read():
                     break
 
             if self.run_process.returncode < 0:
@@ -278,14 +287,10 @@ class Model(object):
 
         ##check output
         with open(log_file, 'rt') as f:
-            if 'Calculation done' not in f.read():
+            if 'Simulation done' not in f.read():
                 raise RuntimeError('errors in '+log_file)
-        if not os.path.exists(os.path.join(run_dir, 'output.bin')):
-            raise RuntimeError('output.bin file not found')
-
-        shell_cmd = "cd "+run_dir+"; "
-        shell_cmd += "mv output.bin "+output_file
-        subprocess.run(shell_cmd, shell=True)
+        if not os.path.exists(output_file):
+            raise RuntimeError(output_file+' not generated, run failed')
 
 
     def kill(self):

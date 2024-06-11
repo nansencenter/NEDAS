@@ -32,10 +32,8 @@ restart_input_path: restart
 restart_type: extend
 write_initial_restart: True
 write_interval_restart: True
-output_interval: 3
 check_restart: True
 
-output_per_day: 8
 datetime_in_filename: True
 exporter_path: .
 export_before_regrid: True
@@ -44,7 +42,6 @@ export_after_regrid: True
 use_moorings: False
 mooring_grid_type: regular
 mooring_spacing: 3
-mooring_output_timestep: 1
 mooring_variables: ['conc', 'thick', 'velocity', 'wind']
 
 check_fields_fast: False
