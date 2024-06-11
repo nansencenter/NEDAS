@@ -387,8 +387,7 @@ def state_to_obs(c, **kwargs):
     ##obs dataset source module
     obs_src = importlib.import_module('dataset.'+kwargs['dataset_src'])
     ##model source module
-    # model_src = importlib.import_module('models.'+kwargs['model_src'])
-    model_src = c.model_config[kwargs['model_src']]
+    model = c.model_config[kwargs['model_src']]
 
     ##option 1  TODO: update README
     ## if dataset module provides an obs_operator, use it to compute obs
@@ -407,9 +406,9 @@ def state_to_obs(c, **kwargs):
     ##option 2:
     ## if obs variable is one of the state variable, or can be computed by the model,
     ## then we just need to collect the 3D variable and interpolate in x,y,z
-    elif obs_name in model_src.variables:
+    elif obs_name in model.variables:
 
-        levels = model_src.variables[obs_name]['levels']
+        levels = model.variables[obs_name]['levels']
         for k in range(len(levels)):
             if obs_name in [r['name'] for r in c.state_def] and not synthetic:
                 ##the obs is one of the state variables
@@ -426,20 +425,20 @@ def state_to_obs(c, **kwargs):
                     z = read_field(os.path.join(path,'/z_coords.bin'), c.state_info, c.mask, 0, rec_id)
                     fld = read_field(os.path.join(path,'/prior_state.bin'), c.state_info, c.mask, mem_id, rec_id)
 
-            else:  ##option 1.3: get the field from model_src.read_var
+            else:  ##option 1.3: get the field from model.read_var
                 if synthetic:
                     path = os.path.join(c.work_dir,'truth',t2s(time),kwargs['model_src'])
                 else:
                     path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
 
                 if k == 0:  ##initialize grid obj for conversion
-                    grid = model_src.read_grid(path=path, **kwargs)
-                    grid.set_destination_grid(c.grid)
+                    model.read_grid(path=path, **kwargs)
+                    model.grid.set_destination_grid(c.grid)
 
-                z_ = grid.convert(model_src.z_coords(path=path, k=levels[k], **kwargs))
+                z_ = model.grid.convert(model.z_coords(path=path, k=levels[k], **kwargs))
                 z = np.array([z_, z_]) if is_vector else z_
 
-                fld = grid.convert(model_src.read_var(path=path, k=levels[k], **kwargs), is_vector=is_vector)
+                fld = model.grid.convert(model.read_var(path=path, k=levels[k], **kwargs), is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
