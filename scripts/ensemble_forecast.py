@@ -40,6 +40,8 @@ def ensemble_forecast_scheduler(c, model_name):
     if scheduler.error_jobs:
         raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
 
+    scheduler.shutdown()
+
     print(' done.', flush=True)
 
 
