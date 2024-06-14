@@ -232,13 +232,7 @@ class Model(object):
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
 
-            self.dt *= dt_ratio
-            self.total_counts /= dt_ratio
-            self.write_steps = self.total_counts
-            self.diag1_step = self.total_counts
-            self.diag2_step = self.total_counts
-
-            namelist(self, run_dir)
+            namelist(self, dt_ratio, run_dir)
 
             self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
             self.run_process.wait()
