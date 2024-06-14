@@ -193,7 +193,7 @@ class Scheduler(object):
         self.njob += 1
 
 
-    def monitor_job_queue(self):
+    def  monitor_job_queue(self):
         """
         Monitor the available_workers and pending_jobs, assign a job to a worker if possible
         Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
@@ -248,4 +248,8 @@ class Scheduler(object):
         monitor_thread = threading.Thread(target=self.monitor_job_queue)
         monitor_thread.start()
         monitor_thread.join()
+
+
+    def shutdown(self):
+        self.executor.shutdown(wait=True)
 
