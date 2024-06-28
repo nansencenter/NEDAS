@@ -4,6 +4,10 @@ import numpy as np
 from models.qg.util import spec2grid, grid2spec
 
 ##scale decomposition
+
+##use gcm_filter to perform band pass filtering on spatial data
+
+
 # def lowpass_resp(k2d, k1, k2):
 #     r = np.zeros(k2d.shape)
 #     r[np.where(k2d<k1)] = 1
@@ -86,12 +90,14 @@ def get_coords(psik):
     kx_, ky_ = np.mgrid[-kmax:kmax+1, 0:kmax+1]
     return kx_, ky_
 
+
 def spec_bandpass(xk, krange, s):
     kx_, ky_ = get_coords(xk)
     Kh = np.sqrt(kx_**2 + ky_**2)
     xkout = xk.copy()
     r = scale_response(Kh, krange, s)
     return xkout * r
+
 
 def scale_response(Kh, krange, s):
     ns = len(krange)
@@ -116,3 +122,4 @@ def get_scale(fld, krange, s):
     fldk = grid2spec(fld)
     fldk = spec_bandpass(fldk, krange, s)
     return spec2grid(fldk)
+
