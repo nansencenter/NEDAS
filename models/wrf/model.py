@@ -3,13 +3,14 @@ import os
 import inspect
 import signal
 import subprocess
+from pyproj import Proj
 
 from config import parse_config
 from grid import Grid
 from utils.conversion import t2s, s2t, dt1h
 
-from .namelist import namelist
-
+# from .namelist import namelist
+# from .bin_io import read_
 
 class Model(object):
 
@@ -21,17 +22,25 @@ class Model(object):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
+        ##derived default values
+        self.ref_x = self.e_we[0] / 2
+        self.ref_y = self.e_sn[0] / 2
+
+        levels = np.arange(1, self.e_vert[0]+1, 1)  ##use domain 1 setting for z levels
+        level_sfc = np.array([0])
         self.variables = {
-                'atmos_velocity'
-                'atmos_temp'
-                'atmos_pres'
-                'atmos_q_vapor'
+                'atmos_velocity': {'name':('u_1', 'v_1'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
+                'atmos_surf_velocity': {'name':('U10', 'V10'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
+                'atmos_temp': {'name':'T', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
+                'atmos_pres': {'name':'P', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
+                'atmos_q_vapor': {'name':'QVAPOR', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'kg/kg'},
                 }
 
         self.run_process = None
         self.run_status = 'pending'
 
-    def filename(self, **kwargs)
+
+    def filename(self, **kwargs):
         if 'path' in kwargs:
             path = kwargs['path']
         else:
@@ -40,20 +49,48 @@ class Model(object):
         tstr = kwargs['time'].strftime('%Y-%m-%d_%H:%M:%S')
         return os.path.join(path, 'wrfout_'+tstr+'.nc')
 
+
     def read_grid(self, **kwargs):
-        pass
+
+        if self.map_proj == 'polar':
+            proj = Proj(f'+proj=stere +lat_0={self.ref_lat} +lon_0={self.ref_lon} +lat_ts={self.truelat1}')
+
+        elif self.map_proj == 'lambert':
+            proj = Proj(f'+proj=lcc +lat_0={self.ref_lat} +lon_0={self.ref_lon} +lat_1={self.truelat1} +lat_2={self.truelat2}')
+
+        elif self.map_proj == 'mercator':
+            proj = Proj(f'+proj=merc +lat_0={self.ref_lat} +lon_0={self.ref_lon}')
+
+        elif self.map_proj == 'lat-lon':
+            proj = Proj(f'+proj=longlat')
+
+        else:
+            raise ValueError(f'unknown map_proj type {self.map_proj}')
+
+        ##staggering here?
+        ##again, use domain 1 settings for grid
+        x_coords = (np.arange(self.e_we[0]) - self.ref_x) * self.dx
+        y_coords = (np.arange(self.e_sn[0]) - self.ref_y) * self.dy
+        x, y = np.meshgrid(x_coords, y_coords)
+
+        self.grid = Grid(proj, x, y)
+
 
     def write_grid(self, grid, **kwargs):
         pass
 
+
     def read_var(self, **kwargs):
         pass
+
 
     def write_var(self, **kwargs):
         pass
 
+
     def z_coords(self, **kwargs):
         pass
+
 
     def run(self, task_id=0, task_nproc=1, **kwargs):
 
@@ -70,9 +107,15 @@ class Model(object):
         env_dir = os.path.join(nedas_dir, 'config', 'env', host)
         wrf_src = os.path.join(env_dir, 'wrf.src')
         wrf_exe = os.path.join(code_dir, 'wrf', 'WRF', 'main', 'wrf.exe')
+        job_submitter = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {task_id*task_nproc} "
+
+        log_file = 'rsl.error.0000'
+
+        ##collect restart variables from bin and write to wrfrst
 
         ##build the run command
         shell_cmd = "source "+wrf_src+"; "   ##enter wrf env
+        shell_cmd += job_submitter+" ./wrf.exe"
 
         self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
         self.run_process.wait()
@@ -81,6 +124,12 @@ class Model(object):
         if returncode is not None and returncode < 0:
             ##kill signal received, exit the run
             return
+
+
+        # "SUCCESS COMPLETE" in log_file
+
+        ##wrfrst at nexttime collect to bin file
+
 
     def kill(self):
         os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
