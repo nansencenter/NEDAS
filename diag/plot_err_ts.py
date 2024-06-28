@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import sys
 import matplotlib.pyplot as plt
 from config import Config
@@ -7,7 +8,7 @@ from utils.conversion import s2t, t2s, dt1h
 model_name = sys.argv[1] ##'qg'
 c = Config(config_file="../config/samples/"+model_name+".yml")
 c.nens = int(sys.argv[2])  ##5
-c.work_dir = "/cluster/work/users/yingyue/nopert/"+model_name+f".n{c.nens}"
+c.work_dir = "/cluster/work/users/yingyue/"+model_name+f".n{c.nens}"
 
 sc=''
 
@@ -23,13 +24,18 @@ sprd_ts = []
 while t < c.time_end:
     next_t = t + dt1h * c.cycle_period
     h = (t - t0) / dt1h
-    h_ts.append(h)
     path = c.work_dir+'/cycle/'+t2s(t)+'/'+model_name
-    rmse_ts.append(np.load(path+"/rmse_prior"+sc+".npy"))
-    sprd_ts.append(np.load(path+"/sprd_prior"+sc+".npy"))
-    h_ts.append(h)
-    rmse_ts.append(np.load(path+"/rmse_post"+sc+".npy"))
-    sprd_ts.append(np.load(path+"/sprd_post"+sc+".npy"))
+    if os.path.exists(path+"/rmse_prior"+sc+".npy"):
+        h_ts.append(h)
+        rmse_ts.append(np.load(path+"/rmse_prior"+sc+".npy"))
+        sprd_ts.append(np.load(path+"/sprd_prior"+sc+".npy"))
+        h_ts.append(h)
+        rmse_ts.append(np.load(path+"/rmse_post"+sc+".npy"))
+        sprd_ts.append(np.load(path+"/sprd_post"+sc+".npy"))
+    else:
+        h_ts.append(h)
+        rmse_ts.append(np.nan)
+        sprd_ts.append(np.nan)
 
     prev_t = t
     t = next_t
@@ -46,5 +52,5 @@ ax.set_ylim(0, 1)
 #ax.set_xlim(0, 120)
 ax.set_title(model_name+r" $N_e$="+f"{c.nens} {sc}")
 
-plt.savefig(f'sawtooth.{model_name}.n{c.nens}{sc}.png', dpi=100)
+plt.savefig(f'/cluster/work/users/yingyue/sawtooth.{model_name}.n{c.nens}{sc}.png', dpi=100)
 

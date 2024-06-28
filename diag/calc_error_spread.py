@@ -76,7 +76,7 @@ t0 = c.time_start
 t = t0
 prev_t = t
 
-with ProcessPoolExecutor(max_workers=4) as exe:
+with ProcessPoolExecutor(max_workers=100) as exe:
     futures = []
     while t < c.time_end:
         next_t = t + dt1h * c.cycle_period
