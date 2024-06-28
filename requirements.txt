@@ -6,6 +6,7 @@ pyshp==2.3.1
 numba==0.57.0
 mpi4py==3.1.4
 pyFFTW==0.13.1
+Cython==3.0.10
 netCDF4==1.6.4
 PyYAML==6.0.1
 jupyter==1.0.0
