@@ -13,7 +13,7 @@ def convert_scientific_notation(data):
         return [convert_scientific_notation(element) for element in data]
     elif isinstance(data, str):
         # Match scientific notation pattern and convert to float
-        if re.match(r'^-?\d+(\.\d+)?[eE]-?\d+$', data):
+        if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
         else:
             return data
