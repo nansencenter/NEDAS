@@ -218,11 +218,11 @@ def adaptive_relaxation(c,  obs_seq, obs_prior_seq, obs_post_seq):
         omb2 = stats['omb2'] / stats['total_nobs']
         omaamb = stats['omaamb'] / stats['total_nobs']
         amb2 = stats['amb2'] / stats['total_nobs']
+        beta = np.sqrt(varb/vara)
+        lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
         if c.debug:
             print(f"varb = {varb}, vara = {vara}, varo={varo}\n")
             print(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-            beta = np.sqrt(varb/vara)
-            lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
             print(f"beta = {beta}, lambda = {lamb}\n")
         if beta <= 1:
             relax_coef = 0
