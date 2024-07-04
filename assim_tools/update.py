@@ -34,12 +34,6 @@ def update_restart(c, fields_prior, fields_post):
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
         rec = c.state_info['fields'][rec_id]
 
-        ##read the prior and post mean field with rec_id
-        prior_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','prior_mean_state.bin')
-        fld_prior_mean = read_field(prior_mean_file, c.state_info, c.mask, 0, rec_id)
-        post_mean_file = os.path.join(c.work_dir,'cycle',t2s(rec['time']),'analysis','post_mean_state.bin')
-        fld_post_mean = read_field(post_mean_file, c.state_info, c.mask, 0, rec_id)
-
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
                 print(progress_bar(m*nr+r, nm*nr))
@@ -55,9 +49,7 @@ def update_restart(c, fields_prior, fields_post):
             fld_prior = fields_prior[mem_id, rec_id]
             fld_post = fields_post[mem_id, rec_id]
 
-            ##inflation by relaxing to prior perturbation
-            fld_post = fld_post_mean + c.relax_coef*(fld_prior-fld_prior_mean) + (1.-c.relax_coef)*(fld_post-fld_post_mean)
-
+            ##deal with analysis increment
             ##misc. inverse transform
 
             ##convert the posterior variable back to native model grid
