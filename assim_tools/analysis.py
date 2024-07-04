@@ -3,8 +3,15 @@ from numba import njit
 from utils.parallel import by_rank, bcast_by_root
 from utils.progress import print_with_cache, progress_bar
 from utils.conversion import t2h, h2t
+import time
 from .localization import local_factor
-# from .inflation import relax_factor
+
+def analysis(c, state_prior, z_state, lobs, lobs_prior):
+    if c.assim_mode == 'batch':
+        return batch_assim(c, state_prior, z_state, lobs, lobs_prior)
+    elif c.assim_mode == 'serial':
+        return serial_assim(c, state_prior, z_state, lobs, lobs_prior)
+
 
 ###pack/unpack local state and obs data for jitted functions:
 def pack_local_state_data(c, par_id, state_prior, z_state):
@@ -134,13 +141,13 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
         for l in range(np.sum((~msk).astype(int))):
             ntask += 1
 
+    t0 = time.time()
     ##now the actual work starts, loop through partitions stored on pid_mem
     print('assimilate in batch mode:\n')
     task = 0
     for par_id in c.par_list[c.pid_mem]:
 
         state_data = pack_local_state_data(c, par_id, state_prior, z_state)
-
         nens, nfld, nloc = state_data['state_prior'].shape
 
         ##skip forward if the partition is empty
@@ -158,15 +165,12 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
         ###TODO: obs_err_corr factored into obs_err
         obs_err = obs_data['err_std']
-
         impact_on_state = 1
 
         ##loop through the unmasked grid points in the partition
         for l in range(nloc):
-
             print(progress_bar(task, ntask))
             task += 1
-
             local_analysis(state_data['state_prior'][:, :, l],
                            state_data['x'][l], state_data['y'][l],
                            state_data['z'][:, l], state_data['t'][:],
@@ -177,13 +181,12 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                            obs_data['hroi'], obs_data['vroi'],
                            obs_data['troi'], impact_on_state,
                            c.localize_type, c.filter_type)
-
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print(' done.\n')
-
     return state_prior
 
 
+@njit(cache=True)
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,
@@ -255,7 +258,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
         weights_old = weights
 
 
-@njit
+@njit(cache=True)
 def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_factor):
     """
     Compute the transform weights for the local ensemble
@@ -346,7 +349,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
     return weights
 
 
-@njit
+@njit(cache=True)
 def apply_ensemble_transform(ens_prior, weights):
     """Apply the weights to transform local ensemble"""
 
@@ -378,16 +381,12 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
 
     state_data = pack_local_state_data(c, par_id, state_prior, z_state)
     nens, nfld, nloc = state_data['state_prior'].shape
-
     obs_data = pack_local_obs_data(c, par_id, lobs, lobs_prior)
-
     obs_list = bcast_by_root(c.comm)(global_obs_list)(c)
 
     print('assimilate in serial mode:\n')
-
     ##go through the entire obs list, indexed by p, one scalar obs at a time
     for p in range(len(obs_list)):
-
         print(progress_bar(p, len(obs_list)))
 
         obs_rec_id, obs_id, v = obs_list[p]
@@ -434,13 +433,9 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
                          obs_h_dist, obs_v_dist, obs_t_dist,
                          obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
-
     print(' done.\n')
-
     unpack_local_state_data(c, par_id, state_prior, state_data)
-    unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
-
-    return state_prior, lobs_prior
+    return state_prior
 
 
 def global_obs_list(c):
@@ -463,7 +458,7 @@ def global_obs_list(c):
     return obs_list
 
 
-@njit
+@njit(cache=True)
 def obs_increment(obs_prior, obs, obs_err, filter_type):
     """
     Compute analysis increment in observation space
@@ -519,7 +514,7 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
     return obs_incr
 
 
-@njit
+@njit(cache=True)
 def update_local_state(state_data, obs_prior, obs_incr,
                        h_dist, v_dist, t_dist,
                        hroi, vroi, troi, localize_type, regress_type):
@@ -541,7 +536,7 @@ def update_local_state(state_data, obs_prior, obs_incr,
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub], regress_type)
 
 
-@njit
+@njit(cache=True)
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      h_dist, v_dist, t_dist,
                      hroi, vroi, troi, localize_type, regress_type):
@@ -561,7 +556,7 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind], regress_type)
 
 
-@njit
+@njit(cache=True)
 def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     """
     Update the ensemble variable using the obs increments
