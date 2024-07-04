@@ -56,6 +56,7 @@ def parse_obs_info(c):
         for time in c.time + np.array(c.obs_time_steps)*dt1h:
             obs_rec = {'name': vname,
                        'dataset_src': vrec['dataset_src'],
+                       'dataset_path': vrec['dataset_path'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
                        'obs_window_min': vrec['obs_window_min'],
@@ -519,6 +520,7 @@ def prepare_obs(c):
         'x', 'y', 'z', 't' the coordinates for each measurement
         'err_std' the uncertainties for each measurement
         there can be other optional keys provided by read_obs() but we don't use them
+    - c.obs_info with updated nobs
     """
     if c.debug:
         by_rank(c.comm,0)(print_with_cache)('read obs sequence from datasets\n')
@@ -533,7 +535,7 @@ def prepare_obs(c):
         assert obs_rec['name'] in src.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
         ##directory storing the dataset files for this variable
-        path = os.path.join(c.data_dir, obs_rec['dataset_src'])
+        path = obs_rec['dataset_path']
 
         ##read ens-mean z coords from z_file for this obs network
         z = read_mean_z_coords(c, obs_rec['time'])
@@ -561,7 +563,7 @@ def prepare_obs(c):
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
-    return obs_seq
+    return c.obs_info, obs_seq
 
 
 def prepare_obs_from_state(c, obs_seq, fields, z_fields):
