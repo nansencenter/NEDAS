@@ -16,7 +16,7 @@ def timer(c):
             result = func(*args, **kwargs)
             t1 = time.time()
             if c.comm.Get_rank() == c.pid_show:
-                print(f"timer: {func.__name__} took {t1 - t0} seconds\n")
+                print(f"timer: {func.__name__} took {t1 - t0} seconds\n", flush=True)
             return result
         return wrapper
     return decorator
