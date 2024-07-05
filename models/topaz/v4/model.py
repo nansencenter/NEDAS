@@ -1,17 +1,16 @@
 import numpy as np
 import os
+import subprocess
 import inspect
 import signal
+from datetime import datetime
 from functools import lru_cache
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
 from config import parse_config
-
+from .namelist import namelist
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
-
-##some constants
-ONEM = 9806.  ##pressure (Pa) in 1 meter water
 
 class Model(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
@@ -21,8 +20,6 @@ class Model(object):
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
             setattr(self, key, value)
-
-        self.restart_dt = 168
 
         levels = np.arange(1, 51, 1)
         level_sfc = np.array([0])
@@ -39,8 +36,8 @@ class Model(object):
                 'seaice_conc': {'name':'ficem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'%'},
                 'seaice_thick': {'name':'hicem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'m'},
                 }
-
         self.z_units = 'm'
+        self.read_grid()
 
         self.run_process = None
         self.run_status = 'pending'
@@ -59,14 +56,15 @@ class Model(object):
         if 'member' in kwargs and kwargs['member'] is not None:
             assert kwargs['member'] >= 0, 'member index shall be >= 0'
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
+            mdir = '{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        return path+'/'+'TP4restart'+tstr+mstr+'.a'
+            mdir = ''
+        return os.path.join(path, mdir, 'TP4restart'+tstr+mstr+'.a')
 
 
     def read_grid(self, **kwargs):
-        rundir = os.path.dirname(self.filename(**kwargs))
-        grid_info_file = os.path.join(rundir, 'topo', 'grid.info')
+        grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
 
 
@@ -182,42 +180,101 @@ class Model(object):
             return z
 
 
+    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+        ens_init_dir = kwargs['ens_init_dir']
+        kwargs_init = {**kwargs, 'path':ens_init_dir}
+        init_file = self.filename(**kwargs_init)
+        input_file = self.filename(**kwargs)
+        os.system("mkdir -p "+os.path.dirname(input_file))
+        os.system("cp "+init_file+" "+input_file)
+        os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
+
+
     def run(self, task_id=0, task_nproc=256, **kwargs):
         self.run_status = 'running'
 
         host = kwargs['host']
         nedas_dir = kwargs['nedas_dir']
 
-        fname = self.filename(**kwargs)
-        run_dir = os.path.dirname(fname)
-
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
-
-        time_start = kwargs['time']
-        forecast_period = kwargs['forecast_period']
-        next_time = time_start + forecast_period * dt1h
+        path = kwargs['path']
         input_file = self.filename(**kwargs)
+        run_dir = os.path.dirname(input_file)
+        os.system("mkdir -p "+run_dir)
+        os.chdir(run_dir)
+
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
+
         kwargs_out = {**kwargs, 'time':next_time}
         output_file = self.filename(**kwargs_out)
 
+        ##create namelist config files
+        namelist(self, time, forecast_period, run_dir)
+
+        ##link files
+        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{task_nproc:04d}')
+        os.system("cp "+partit_file+" patch.input")
+
+        for ext in ['.a', '.b']:
+            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'regional.grid'+ext)+" regional.grid"+ext)
+            os.system("ln -fs "+os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}'+ext)+" regional.depth"+ext)
+            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'tbaric'+ext)+" tbaric"+ext)
+        os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
+
+        ##TODO: switches for other forcing options
+        if self.forcing_frc == 'era5':
+            forcing_path = self.era5_path
+        os.system("ln -fs "+forcing_path+" .")
+        os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
+        for ext in ['.a', '.b']:
+            if self.priver == 1:
+                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)+" forcing.rivers"+ext)
+            if self.jerlv0 == 0:
+                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)+" forcing.kpar"+ext)
+            if self.relax == 1:
+                for comp in ['saln', 'temp', 'intf', 'rmu']:
+                    os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'relax_'+comp[:3]+ext)+" relax."+comp+ext)
+            os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'thkdf4'+ext)+" thkdf4"+ext)
+        os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'clim_tran.txt')+" .")
+        # if self.gpflag: TODO
+        # if self.nestoflag:
+        # if self.nestiflag:
+        # if self.tideflag:
+
+        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
+        model_src = os.path.join(env_dir, 'topaz.v4.src')
+        model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
+
+        offset = task_id*task_nproc
+        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
+
         ##build the shell command line
-        shell_cmd =  "source "+topaz4_src+"; "   ##enter topaz v4 env
+        shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
         shell_cmd += "cd "+run_dir+"; "          ##enter run directory
-        shell_cmd += ""
+        shell_cmd += submit_cmd
+        shell_cmd += model_exe+f" {kwargs['member']+1} "
+        shell_cmd += ">& run.log"
 
         log_file = os.path.join(run_dir, "run.log")
-
-        namelist(self, time_start, forecast_period, run_dir)
 
         self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
         self.run_process.wait()
 
         with open(log_file, 'rt') as f:
-            if '' not in f.read():
+            if '(normal)' not in f.read():
                 raise RuntimeError('errors in '+log_file)
         if not os.path.exists(output_file):
             raise RuntimeError('output file not found: '+output_file)
+
+        if 'output_dir' in kwargs:
+            output_dir = kwargs['output_dir']
+            if output_dir != path:
+                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
+                output_file_cp = self.filename(**kwargs_out_cp)
+                os.system("mkdir -p "+os.path.dirname(output_file_cp))
+                os.system("cp "+output_file+" "+output_file_cp)
+                os.system("cp "+output_file.replace('.a', '.b')+" "+output_file_cp.replace('.a', '.b'))
 
 
     def kill(self):

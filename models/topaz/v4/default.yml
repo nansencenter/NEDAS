@@ -1,6 +1,14 @@
 ##directories
 nhc_root: /cluster/home/yingyue/code/NERSC-HYCOM-CICE
-model_dir: /cluster/home/yingyue/
+V: '2.2.37'
+X: '01.1'
+E: '011'
+T: '01'
+R: 'TP4b0.12'
+basedir: /cluster/work/users/yingyue/TP4b0.12
+nproc: 256
+
+era5_path: /cluster/projects/nn2993k/ERA5
 
 ###model specific settings (blkdat)
 iversn: 22   ## hycom version number x10
