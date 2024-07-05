@@ -394,7 +394,7 @@ def state_to_obs(c, **kwargs):
     ## if dataset module provides an obs_operator, use it to compute obs
     if hasattr(obs_src, 'obs_operator') and kwargs['model_src'] in obs_src.obs_operator and kwargs['name'] in obs_src.obs_operator[kwargs['model_src']]:
         if synthetic:
-            path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'],t2s(time),kwargs['model_src'])
+            path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
         else:
             path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
 
@@ -428,7 +428,7 @@ def state_to_obs(c, **kwargs):
 
             else:  ##option 1.3: get the field from model.read_var
                 if synthetic:
-                    path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'],t2s(time),kwargs['model_src'])
+                    path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
                 else:
                     path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
 
@@ -542,7 +542,7 @@ def prepare_obs(c):
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            truth_path = os.path.join(c.model_def[obs_rec['model_src']]['truth_dir'], t2s(obs_rec['time']), obs_rec['model_src'])
+            truth_path = os.path.join(c.model_def[obs_rec['model_src']]['truth_dir'])
 
             seq = src.random_network(path, c.grid, c.mask, z, truth_path, **obs_rec)
 

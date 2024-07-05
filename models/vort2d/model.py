@@ -2,7 +2,7 @@ import numpy as np
 import os
 import inspect
 import time
-import multiprocessing
+import subprocess
 
 from pyproj import Proj
 from grid import Grid
@@ -81,6 +81,8 @@ class Model(object):
 
 
     def write_var(self, var, **kwargs):
+        ##TODO: nc_write_var doesn't support parallel=True
+        ##      can only work with nproc=1 now
         ##check kwargs
         name = kwargs.get('name', 'velocity')
         assert name in self.variables, 'variable name '+name+' not listed in variables'
@@ -109,14 +111,25 @@ class Model(object):
         assert task_nproc==1, f"vort2d model only support serial runs (got task_nproc={task_nproc})"
         self.run_status = 'running'
         state = self.read_var(**kwargs)
-        forecast_period = kwargs['forecast_period']
+
+        path = kwargs['path']
         time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
 
         next_state = advance_time(state, self.dx, forecast_period, self.dt, self.gen, self.diss)
 
         kwargs_out = {**kwargs, 'time':next_time}
+        output_file = self.filename(**kwargs_out)
         self.write_var(next_state, **kwargs_out)
+
+        ##make a copy of output forecast file to the output_dir
+        if 'output_dir' in kwargs:
+            output_dir = kwargs['output_dir']
+            if output_dir != path:
+                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
+                output_file_cp = self.filename(**kwargs_out_cp)
+                subprocess.run("mkdir -p "+output_dir+"; cp "+output_file+" "+output_file_cp, shell=True)
 
 
     def kill(self):
