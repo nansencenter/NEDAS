@@ -82,8 +82,6 @@ class Config(object):
             kwargs = self.model_def[model_name]
             module = importlib.import_module('models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
-            model_dir = os.path.join(self.data_dir, model_name)
-            model.read_grid(path=model_dir)
             self.grid = model.grid
 
         self.ny, self.nx = self.grid.x.shape

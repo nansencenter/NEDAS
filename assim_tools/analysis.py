@@ -25,6 +25,7 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
     data['mask'] = msk
     data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
     data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
+    ##TODO: build KDTree to allow faster subset finding
 
     data['fields'] = []
     for rec_id in c.rec_list[c.pid_rec]:
@@ -74,6 +75,7 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
     data['x'] = np.full(nlobs, np.nan)
     data['y'] = np.full(nlobs, np.nan)
     data['z'] = np.full(nlobs, np.nan)
+    ##TODO: build KDTree to allow faster subset finding
     data['t'] = np.full(nlobs, np.nan)
     data['err_std'] = np.full(nlobs, np.nan)
     data['hroi'] = np.ones(nlobs)
@@ -180,7 +182,8 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                            obs_data['obs_prior'],
                            obs_data['hroi'], obs_data['vroi'],
                            obs_data['troi'], impact_on_state,
-                           c.localize_type, c.filter_type)
+                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'],
+                           c.filter_type)
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print(' done.\n')
     return state_prior
@@ -190,7 +193,8 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,
-                   hroi, vroi, troi, impact_on_state, localize_type,
+                   hroi, vroi, troi, impact_on_state,
+                   localize_htype, localize_vtype, localize_ttype,
                    filter_type):
     """perform local analysis for one location"""
 
@@ -198,7 +202,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
     ##horizontal localization
     h_dist = np.hypot(obs_x - state_x, obs_y - state_y)
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
     if (h_lfactor==0).all():
         return  ##if the state is outside of hroi of all local obs, skip
 
@@ -210,13 +214,13 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
         ##vertical localization
         v_dist = np.abs(obs_z - state_z[n])
-        v_lfactor = local_factor(v_dist, vroi, localize_type)
+        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
         if (v_lfactor==0).all():
             continue  ##the state is outside of vroi of all obs, skip
 
         ##temporal localization
         t_dist = np.abs(obs_t - state_t[n])
-        t_lfactor = local_factor(t_dist, troi, localize_type)
+        t_lfactor = local_factor(t_dist, troi, localize_ttype)
         if (t_lfactor==0).all():
             continue  ##the state is outside of troi of all obs, skip
 
@@ -424,7 +428,8 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         state_t_dist = np.abs(obs['t'] - state_data['t'])
         update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
-                           obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
+                           obs['hroi'], obs['vroi'], obs['troi'],
+                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
 
         ##3. all pid update their own locally stored obs:
         obs_h_dist = c.grid.distance(obs['x'], obs['y'], obs_data['x'], obs_data['y'])
@@ -432,7 +437,8 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         obs_t_dist = np.abs(obs['t'] - obs_data['t'])
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
                          obs_h_dist, obs_v_dist, obs_t_dist,
-                         obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
+                         obs['hroi'], obs['vroi'], obs['troi'],
+                         c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
     print(' done.\n')
     unpack_local_state_data(c, par_id, state_prior, state_data)
     return state_prior
@@ -517,14 +523,16 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
 @njit(cache=True)
 def update_local_state(state_data, obs_prior, obs_incr,
                        h_dist, v_dist, t_dist,
-                       hroi, vroi, troi, localize_type, regress_type):
+                       hroi, vroi, troi,
+                       localize_htype, localize_vtype, localize_ttype,
+                       regress_type):
 
     nens, nfld, nloc = state_data.shape
 
     ##localization factor
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
-    v_lfactor = local_factor(v_dist, vroi, localize_type)
-    t_lfactor = local_factor(t_dist, troi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor(t_dist, troi, localize_ttype)
 
     nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
@@ -539,14 +547,16 @@ def update_local_state(state_data, obs_prior, obs_incr,
 @njit(cache=True)
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      h_dist, v_dist, t_dist,
-                     hroi, vroi, troi, localize_type, regress_type):
+                     hroi, vroi, troi,
+                     localize_htype, localize_vtype, localize_ttype,
+                     regress_type):
 
     nens, nlobs = obs_data.shape
 
     ##distance between local obs_data and the obs being assimilated
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
-    v_lfactor = local_factor(v_dist, vroi, localize_type)
-    t_lfactor = local_factor(t_dist, troi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor(t_dist, troi, localize_ttype)
 
     lfactor = h_lfactor * v_lfactor * t_lfactor
 

@@ -38,7 +38,6 @@ def transpose_field_to_state(c, fields):
 
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
-
         for m in range(nm_max):
             if c.debug:
                 print(progress_bar(r*nm_max+m, nr*nm_max))
@@ -92,7 +91,6 @@ def transpose_field_to_state(c, fields):
                     state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
     if c.debug:
         print(' done.\n')
-
     return state
 
 
@@ -173,7 +171,6 @@ def transpose_state_to_field(c, state):
                     del state[dst_mem_id, rec_id]   ##free up memory
     if c.debug:
         print(' done.\n')
-
     return fields
 
 
@@ -225,7 +222,6 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-
             if c.debug:
                 print(progress_bar(r*nm_max+m, nr*nm_max))
 
@@ -297,7 +293,6 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
                     else:
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-
     if c.debug:
         print(' done.\n')
 
@@ -307,7 +302,6 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     for entry in c.comm_rec.allgather(tmp_obs):
         for key, data in entry.items():
             output_obs[key] = data
-
     return output_obs
 
 
@@ -334,14 +328,12 @@ def transpose_lobs_to_obs(c, lobs):
         print('transpose local obs to obs\n')
 
     obs_seq = {}
-
     nr = len(c.obs_rec_list[c.pid_rec])
     for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
 
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-
             if c.debug:
                 print(progress_bar(r*nm_max+m, nr*nm_max))
 
@@ -388,10 +380,8 @@ def transpose_lobs_to_obs(c, lobs):
                 if m < len(c.mem_list[dst_pid]):
                     dst_mem_id = c.mem_list[dst_pid][m]
                     c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
-
     if c.debug:
         print(' done.\n')
-
     return obs_seq
 
 
@@ -412,22 +402,16 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     z_state = transpose_field_to_state(c, z_fields)
 
     lobs = transpose_obs_to_lobs(c, obs_seq)
-
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
-
     return state_prior, z_state, lobs, lobs_prior
 
 
-def transpose_backward(c, state_post, lobs_post):
-
+def transpose_backward(c, state_post):
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
     if c.debug:
         print('transpose back:\n')
 
     fields_post = transpose_state_to_field(c, state_post)
-
-    obs_post_seq = transpose_lobs_to_obs(c, lobs_post)
-
-    return fields_post, obs_post_seq
+    return fields_post
 
 
