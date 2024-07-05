@@ -167,7 +167,7 @@ class Scheduler(object):
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker, walltime):
+    def __init__(self, nworker, walltime=None):
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
@@ -180,7 +180,7 @@ class Scheduler(object):
         self.njob = 0
 
 
-    def submit_job(self, name, job, *args, **kwargs):
+    def submit_job(self, name, job_run, job_kill, *args, **kwargs):
         """
         Submit a job to the scheduler, hold info in jobs dict
         Input:
@@ -188,12 +188,13 @@ class Scheduler(object):
         - job is an object with run, is_running and kill methods
         - args,kwargs are to be passed into job.run()
         """
-        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job':job, 'args': args, 'kwargs': kwargs, 'future':None }
+        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job_run':job_run, 'job_kill':job_kill,
+                           'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
 
 
-    def  monitor_job_queue(self):
+    def monitor_job_queue(self):
         """
         Monitor the available_workers and pending_jobs, assign a job to a worker if possible
         Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
@@ -209,14 +210,14 @@ class Scheduler(object):
                 info = self.jobs[name]
                 info['worker_id'] = worker_id
                 info['start_time'] = time.time()
-                info['future'] = self.executor.submit(info['job'].run, worker_id, *info['args'], **info['kwargs'])
+                info['future'] = self.executor.submit(info['job_run'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
                 # print('job '+name+f' submitted to {worker_id}')
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
             for name in names:
-                ##catch errors from job.run
+                ##catch errors from job
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
@@ -228,13 +229,14 @@ class Scheduler(object):
                 self.available_workers.append(self.jobs[name]['worker_id'])
 
             ##kill jobs that exceed walltime
-            for name in self.running_jobs:
-                elapsed_time = time.time() - self.jobs[name]['start_time']
-                if elapsed_time > self.walltime:
-                    self.jobs[name]['job'].kill()
-                    print(f'job {name} exceeds walltime ({self.walltime}s), killed')
-                    self.error_jobs.append(name)
-                    return
+            if self.walltime is not None:
+                for name in self.running_jobs:
+                    elapsed_time = time.time() - self.jobs[name]['start_time']
+                    if elapsed_time > self.walltime:
+                        self.jobs[name]['job_kill']()
+                        print(f'job {name} exceeds walltime ({self.walltime}s), killed')
+                        self.error_jobs.append(name)
+                        return
 
             print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 

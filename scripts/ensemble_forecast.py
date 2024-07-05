@@ -12,13 +12,12 @@ def ensemble_forecast_scheduler(c, model_name):
         print(f"start {model_name} ensemble forecast", flush=True)
 
         nproc_per_job = c.model_def[model_name].get('nproc_per_mem', 1)
-        walltime = c.model_def[model_name].get('walltime', 10000)
+        walltime = c.model_def[model_name].get('walltime', None)
         nworker = c.nproc // nproc_per_job
         scheduler = Scheduler(nworker, walltime)
 
         path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
-        if not os.path.exists(path):
-            os.makedirs(path)
+        os.system("mkdir -p "+path)
 
         for mem_id in range(c.nens):
 
@@ -34,7 +33,7 @@ def ensemble_forecast_scheduler(c, model_name):
                        'forecast_period': c.cycle_period,
                        'output_dir': output_dir,
                       }
-            scheduler.submit_job(job_name, model, **job_opt)  ##add job to the queue
+            scheduler.submit_job(job_name, model.run, model.kill, **job_opt)  ##add job to the queue
 
         scheduler.start_queue() ##start the job queue
 
@@ -56,8 +55,7 @@ def ensemble_forecast_batch(c, model_name):
         print(f"start {model_name} ensemble forecast ...", flush=True)
 
         path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
-        if not os.path.exists(path):
-            os.makedirs(path)
+        os.system("mkdir -p "+path)
 
         job_opt = {'host': c.host,
                 'nedas_dir': c.nedas_dir,
@@ -69,18 +67,12 @@ def ensemble_forecast_batch(c, model_name):
         print('done.', flush=True)
 
 
-def ensemble_forecast_online(c, model_name):
-    model = c.model_config[model_name]
-
-
 def ensemble_forecast(c, model_name):
     ens_run_type = c.model_def[model_name]['ens_run_type']
     if ens_run_type == 'batch':
         ensemble_forecast_batch(c, model_name)
     elif ens_run_type == 'scheduler':
         ensemble_forecast_scheduler(c, model_name)
-    elif ens_run_type == 'online':
-        ensemble_forecast_online(c, model_name)
     else:
         raise TypeError("unknown ensemble forecast type: '"+ens_run_type+"' for "+model_name)
 
