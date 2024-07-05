@@ -5,6 +5,7 @@ import subprocess
 from config import Config
 from utils.progress import timer
 from utils.conversion import t2s, s2t, dt1h
+from scripts.generate_init_ensemble import generate_init_ensemble
 from scripts.ensemble_forecast import ensemble_forecast
 
 c = Config(parse_args=True)
@@ -24,7 +25,13 @@ while c.time < c.time_end:
     cycle_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time))
     os.system("mkdir -p "+cycle_dir)
 
-    ###assimilation is run by a parallel call to python assimilate.py
+    ##at first cycle, generate the initial ensemble
+    if c.time == c.time_start:
+        for model_name, model in c.model_config.items():
+            timer(c)(generate_init_ensemble)(c, model_name)
+
+    ###assimilation step
+    ##this is run by a parallel call to python assimilate.py
     if c.time > c.time_start and c.run_assim:
         print('start assimilation...', flush=True)
         job_submitter = os.path.join(c.nedas_dir, 'config', 'env', c.host, 'job_submit.sh')

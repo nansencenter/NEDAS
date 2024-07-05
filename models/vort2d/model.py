@@ -100,7 +100,7 @@ class Model(object):
         return np.zeros(self.grid.x.shape)
 
 
-    def generate_initial_condition(self, **kwargs):
+    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
         state = initial_condition(self.grid, self.Vmax, self.Rmw, self.Vbg, self.Vslope, self.loc_sprd)
         path = kwargs.get('path', '.')
         os.system("mkdir -p "+path)
