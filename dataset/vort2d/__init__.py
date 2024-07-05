@@ -24,13 +24,13 @@ def random_network(path, grid, mask, z, truth_path, **kwargs):
     if kwargs['name'] == 'velocity':
 
         if network_type == 'global':
-            nobs = 1000  ##number of obs
+            nobs = kwargs.get('nobs', 1000)  ##number of obs
             y = np.random.uniform(grid.ymin, grid.ymax, nobs)
             x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
         elif network_type == 'targeted':
-            nobs = 800  ##note: number of obs in entire domain
-                        ##later only obs within range will be kept
+            nobs = kwargs.get('nobs', 800)  ##note: number of obs in entire domain
+                                            ##later only obs within range will be kept
             obs_range = 180000  ##observed range from vortex center, m
             y = np.random.uniform(grid.ymin, grid.ymax, nobs)
             x = np.random.uniform(grid.xmin, grid.xmax, nobs)
@@ -134,8 +134,9 @@ def vortex_size(u, v, center_i, center_j):
 obs_operator = {}
 
 def get_velocity(path, grid, **kwargs):
-    model = importlib.import_module('models.vort2d')
     ##get the velocity field from model
+    module = importlib.import_module('models.vort2d')
+    model = getattr(module, 'Model')(**kwargs)
     kwargs['name'] = 'velocity'
     return model.read_var(path=path, **kwargs)
 
