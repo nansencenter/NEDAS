@@ -65,11 +65,10 @@ class QGModelEmulator(QGModel):
                 fld = state_out[m,...,k]
                 self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
 
-        ##make a copy of output file to the output_dir
-        if 'output_dir' in kwargs:
-            output_dir = kwargs['output_dir']
-            if output_dir != path:
-                for m in range(nens):
+            ##make a copy of output file to the output_dir
+            if 'output_dir' in kwargs:
+                output_dir = kwargs['output_dir']
+                if output_dir != path:
                     kwargs_out_cp = {**kwargs, 'path':output_dir, 'member':members[m], 'time':next_time}
                     output_file_cp = self.filename(**kwargs_out_cp)
                     subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
