@@ -1,1 +1,1 @@
-from .model import Model
+from .model import QGModelEmulator as Model

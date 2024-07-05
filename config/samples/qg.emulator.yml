@@ -26,7 +26,7 @@ state_time_steps: [0]
 state_time_scale: 0
 
 grid_def:
-  type: 'qg'
+  type: 'qg.emulator'
 
 state_def:
 - name: 'streamfunc'
@@ -56,9 +56,7 @@ use_synthetic_obs: True
 model_def:
   qg.emulator:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/emulator/default.yml'
-    model_exe: '/cluster/home/yingyue/code/NEDAS/models/qg/src/qg.exe'
     nproc_per_mem: 1    ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
     ens_run_type: batch
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'

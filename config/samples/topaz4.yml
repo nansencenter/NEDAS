@@ -63,7 +63,7 @@ use_synthetic_obs: False
 model_def:
   topaz.v4:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v4/default.yml'
-    model_exe: '/cluster/work/users/yingyue/TP4b0.12/Build_V2.2.37_X02.1/hycom'
+    model_code_dir: '/cluster/work/users/yingyue/TP4b0.12/Build_V2.2.37_X02.1'
     nproc_per_mem: 256   ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler

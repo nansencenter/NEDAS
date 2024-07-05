@@ -12,7 +12,7 @@ def generate_init_ensemble(c, model_name):
         print(f"generate {model_name} initial ensemble", flush=True)
 
         nproc_per_job = c.model_def[model_name].get('nproc_per_mem', 1)
-        walltime = c.model_def[model_name].get('walltime', None)
+        walltime = c.model_def[model_name].get('walltime')
         nworker = c.nproc // nproc_per_job
         scheduler = Scheduler(nworker, walltime)
 
@@ -25,6 +25,8 @@ def generate_init_ensemble(c, model_name):
 
             job_opt = {'host': c.host,
                        'nedas_dir': c.nedas_dir,
+                       'model_code_dir': c.model_def[model_name].get('model_code_dir'),
+                       'ens_init_dir': c.model_def[model_name].get('ens_init_dir'),
                        'path': path,
                        'member': mem_id,
                        'time': c.time_start,

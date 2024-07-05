@@ -69,7 +69,7 @@ use_synthetic_obs: False
 model_def:
   nextsim.v1:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/nextsim/v1/default.yml'
-    model_exe: '/cluster/home/yingyue/code/nextsim/model/bin/nextsim.exec'
+    model_code_dir: '/cluster/home/yingyue/code/nextsim/model'
     nproc_per_mem: 64    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
