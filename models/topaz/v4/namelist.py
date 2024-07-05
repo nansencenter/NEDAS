@@ -8,12 +8,12 @@ def bool_str(value):
         vstr = 'F'
     return vstr
 
-def namelist(m, time_start, forecast_period, run_dir='.'):
+def namelist(m, time, forecast_period, run_dir='.'):
     """
     Generate namelists for TP4 runs,
     Inputs:
     - m: Model object with configs
-    - time_start: datetime obj for the starting time of the run
+    - time: datetime obj for the starting time of the run
     - forecast_period: forecast period in hours for the run
     - run_dir: path to the run directory
     """
@@ -176,9 +176,9 @@ def namelist(m, time_start, forecast_period, run_dir='.'):
     with open(os.path.join(run_dir, 'blkdat.input'), 'wt') as f:
         f.write(nmlstr)
 
-    refyear = time_start.year
-    day1 = int(time_start.strftime('%j'))
-    hour1 = int(time_start.strftime('%H'))
+    refyear = time.year
+    day1 = int(time.strftime('%j'))
+    hour1 = int(time.strftime('%H'))
     day2 = day1 + int(forecast_period / 24)
     hour2 = (hour1 + forecast_period) % 24
 

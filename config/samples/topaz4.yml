@@ -5,7 +5,7 @@ work_dir: '/cluster/work/users/yingyue/topaz4_reanalysis'   ##working directory 
 nproc: 512        ##total number of processors
 nproc_mem: 512    ##number of processor groups
 
-nens: 100         ##ensemble size
+nens: 10         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
 
 debug: False      ##if true, output debug data/message
@@ -63,7 +63,6 @@ use_synthetic_obs: False
 model_def:
   topaz.v4:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v4/default.yml'
-    model_code_dir: '/cluster/work/users/yingyue/TP4b0.12/Build_V2.2.37_X02.1'
     nproc_per_mem: 256   ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
