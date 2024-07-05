@@ -12,7 +12,7 @@ def ensemble_forecast_scheduler(c, model_name):
         print(f"start {model_name} ensemble forecast", flush=True)
 
         nproc_per_job = c.model_def[model_name].get('nproc_per_mem', 1)
-        walltime = c.model_def[model_name].get('walltime', None)
+        walltime = c.model_def[model_name].get('walltime')
         nworker = c.nproc // nproc_per_job
         scheduler = Scheduler(nworker, walltime)
 
@@ -27,6 +27,7 @@ def ensemble_forecast_scheduler(c, model_name):
 
             job_opt = {'host': c.host,
                        'nedas_dir': c.nedas_dir,
+                       'model_code_dir': c.model_def[model_name].get('model_code_dir'),
                        'path': path,
                        'member': mem_id,
                        'time': c.time,
@@ -55,14 +56,17 @@ def ensemble_forecast_batch(c, model_name):
         print(f"start {model_name} ensemble forecast ...", flush=True)
 
         path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
+        output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
         os.system("mkdir -p "+path)
 
         job_opt = {'host': c.host,
-                'nedas_dir': c.nedas_dir,
-                'path': path,
-                'time': c.time,
-                'forecast_period': c.cycle_period
-                }
+                   'nedas_dir': c.nedas_dir,
+                   'model_code_dir': c.model_def[model_name].get('model_code_dir'),
+                   'path': path,
+                   'time': c.time,
+                   'forecast_period': c.cycle_period,
+                   'output_dir': output_dir,
+                  }
         model.run(nens=c.nens, **job_opt)
         print('done.', flush=True)
 

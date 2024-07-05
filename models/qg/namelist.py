@@ -13,12 +13,17 @@ def value_str(value):
         vstr = f'{value}'
     return vstr
 
-
-def namelist(m, dt_ratio=1, run_dir='.'):
+def namelist(m, forecast_period, dt_ratio=1, run_dir='.'):
     """Generate namelist for qg model
     Input:
     - m: Model class object with model configurations
+    - time_start: start time (datetime obj) of the model run
+    - forecast_period: hours to run the model
+    - dt_ratio: factor to multiply dt with
     """
+    dt = m.dt * dt_ratio
+    total_counts = forecast_period / dt / 240.
+
     ##start building the namelist content
     nmlstr = " &run_params\n"
     nmlstr += " kmax = "+value_str(m.kmax)+"\n"
@@ -26,7 +31,7 @@ def namelist(m, dt_ratio=1, run_dir='.'):
     nmlstr += " F = "+value_str(m.F)+"\n"
     nmlstr += " beta = "+value_str(m.beta)+"\n"
     nmlstr += " adapt_dt = "+value_str(m.adapt_dt)+"\n"
-    nmlstr += " dt = "+value_str(m.dt * dt_ratio)+"\n"
+    nmlstr += " dt = "+value_str(dt)+"\n"
     nmlstr += " psi_init_file = "+value_str(m.psi_init_file)+"\n"
     nmlstr += " psi_init_type = "+value_str(m.psi_init_type)+"\n"
     nmlstr += " initialize_energy = "+value_str(m.initialize_energy)+"\n"
@@ -58,10 +63,10 @@ def namelist(m, dt_ratio=1, run_dir='.'):
     nmlstr += " bot_drag = "+value_str(m.bot_drag)+"\n"
     nmlstr += " therm_drag = "+value_str(m.therm_drag)+"\n"
     nmlstr += " idum = "+value_str(m.idum)+"\n"
-    nmlstr += " total_counts = "+value_str(m.total_counts / dt_ratio)+"\n"
-    nmlstr += " write_step = "+value_str(m.write_step / dt_ratio)+"\n"
-    nmlstr += " diag1_step = "+value_str(m.diag1_step / dt_ratio)+"\n"
-    nmlstr += " diag2_step = "+value_str(m.diag2_step / dt_ratio)+"\n"
+    nmlstr += " total_counts = "+value_str(total_counts)+"\n"
+    nmlstr += " write_step = "+value_str(total_counts)+"\n"
+    nmlstr += " diag1_step = "+value_str(total_counts)+"\n"
+    nmlstr += " diag2_step = "+value_str(total_counts)+"\n"
     nmlstr += " /"
 
     ##write the namelist to input.nml file

@@ -16,9 +16,9 @@ time_assim_start: '200101010300' ##start time of the first analysis cycle
 time_assim_end: '200101022100'   ##end time of the last analysis cycle
 cycle_period: 3                 ##cycle period, in hours
 
-time: '200101010300'
+time: '200101010000'
 prev_time: '200101010000'
-next_time: '200101010600'
+next_time: '200101010300'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -56,11 +56,8 @@ use_synthetic_obs: True
 model_def:
   vort2d:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/vort2d/default.yml'
-    model_exe: ''
     nproc_per_mem: 1    ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
-    ens_init_dir: ''
     truth_dir: '/cluster/work/users/yingyue/vort2d_testcase/truth'
 
 assim_mode: 'batch'
