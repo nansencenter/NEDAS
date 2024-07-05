@@ -186,7 +186,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                            c.filter_type)
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print(' done.\n')
-    return state_prior
+    return state_prior, lobs_prior
 
 
 @njit(cache=True)
@@ -441,7 +441,8 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
                          c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
     print(' done.\n')
     unpack_local_state_data(c, par_id, state_prior, state_data)
-    return state_prior
+    unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
+    return state_prior, lobs_prior
 
 
 def global_obs_list(c):
