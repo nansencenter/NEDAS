@@ -113,6 +113,8 @@ class Model(object):
         state = self.read_var(**kwargs)
 
         path = kwargs['path']
+        subprocess.run("mkdir -p "+path, shell=True)
+
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
