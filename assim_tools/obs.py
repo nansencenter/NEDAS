@@ -56,7 +56,7 @@ def parse_obs_info(c):
         for time in c.time + np.array(c.obs_time_steps)*dt1h:
             obs_rec = {'name': vname,
                        'dataset_src': vrec['dataset_src'],
-                       'dataset_path': vrec['dataset_path'],
+                       'dataset_dir': vrec['dataset_dir'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
                        'obs_window_min': vrec['obs_window_min'],
@@ -535,7 +535,7 @@ def prepare_obs(c):
         assert obs_rec['name'] in src.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
         ##directory storing the dataset files for this variable
-        path = obs_rec['dataset_path']
+        path = obs_rec['dataset_dir']
 
         ##read ens-mean z coords from z_file for this obs network
         z = read_mean_z_coords(c, obs_rec['time'])
