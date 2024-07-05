@@ -8,7 +8,7 @@ adapt_dt: False  ## if true, use adaptive time steps
 dt: 0.00025  ## time step
 
 psi_init_file: 'input'
-psi_init_type: 'spectral_m'  ## initial condition input source: read/spectral_m/spectral_z/elliptical_vortex
+psi_init_type: 'read'  ## initial condition input source: read/spectral_m/spectral_z/elliptical_vortex
 
 initialize_energy: False ## if true, the input field will be normalized
 e_o: 10  ## initial energy

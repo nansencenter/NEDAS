@@ -406,12 +406,14 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     return state_prior, z_state, lobs, lobs_prior
 
 
-def transpose_backward(c, state_post):
+def transpose_backward(c, state_post, lobs_post):
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
     if c.debug:
         print('transpose back:\n')
 
     fields_post = transpose_state_to_field(c, state_post)
-    return fields_post
+    obs_post_seq = transpose_lobs_to_obs(c, lobs_post)
+
+    return fields_post, obs_post_seq
 
 
