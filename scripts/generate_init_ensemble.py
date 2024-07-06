@@ -31,13 +31,11 @@ def generate_init_ensemble(c, model_name):
                        'member': mem_id,
                        'time': c.time_start,
                       }
-            scheduler.submit_job(job_name, model.generate_initial_condition, model.kill, **job_opt)  ##add job to the queue
-        scheduler.start_queue() ##start the job queue
+            scheduler.submit_job(job_name, model.generate_initial_condition, **job_opt)  ##add job to the queue
 
+        scheduler.start_queue() ##start the job queue
         if scheduler.error_jobs:
             raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
-
-        scheduler.shutdown()
         print(' done.', flush=True)
 
 
