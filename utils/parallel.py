@@ -173,6 +173,7 @@ class Scheduler(object):
         self.walltime = walltime
         self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=nworker)
+        self.queue_open = True
         self.running_jobs = []
         self.pending_jobs = []
         self.completed_jobs = []
@@ -202,7 +203,7 @@ class Scheduler(object):
         while len(self.completed_jobs) < self.njob:
 
             ##assign pending job to available workers
-            while self.available_workers and self.pending_jobs:
+            while self.available_workers and self.pending_jobs and self.queue_open:
                 worker_id = self.available_workers.pop(0)
                 name = self.pending_jobs.pop(0)
                 info = self.jobs[name]
@@ -244,9 +245,14 @@ class Scheduler(object):
         """
         Start the job queue, and wait for jobs to complete
         """
-        monitor_thread = threading.Thread(target=self.monitor_job_queue)
-        monitor_thread.start()
-        monitor_thread.join()
+        try:
+            monitor_thread = threading.Thread(target=self.monitor_job_queue)
+            monitor_thread.start()
+            monitor_thread.join()
+        except KeyboardInterrupt:
+            self.queue_open = False
+            ##kill running jobs
+            self.shutdown()
 
     def shutdown(self):
         self.executor.shutdown(wait=True)
