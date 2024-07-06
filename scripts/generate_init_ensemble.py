@@ -36,6 +36,7 @@ def generate_init_ensemble(c, model_name):
         scheduler.start_queue() ##start the job queue
         if scheduler.error_jobs:
             raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
+        scheduler.shutdown()
         print(' done.', flush=True)
 
 
