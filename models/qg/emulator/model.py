@@ -73,6 +73,3 @@ class QGModelEmulator(QGModel):
                     output_file_cp = self.filename(**kwargs_out_cp)
                     subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
 
-    def kill(self):
-        pass
-
