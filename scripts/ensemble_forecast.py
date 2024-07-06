@@ -20,12 +20,12 @@ def ensemble_forecast_scheduler(c, model_name):
         os.system("mkdir -p "+path)
 
         for mem_id in range(c.nens):
-
             job_name = model_name+f'_mem{mem_id+1}'
             path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
             output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
 
-            job_opt = {'host': c.host,
+            job_opt = {'task_nproc': nproc_per_job,
+                       'host': c.host,
                        'nedas_dir': c.nedas_dir,
                        'model_code_dir': c.model_def[model_name].get('model_code_dir'),
                        'path': path,
@@ -34,14 +34,11 @@ def ensemble_forecast_scheduler(c, model_name):
                        'forecast_period': c.cycle_period,
                        'output_dir': output_dir,
                       }
-            scheduler.submit_job(job_name, model.run, model.kill, **job_opt)  ##add job to the queue
+            scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
 
         scheduler.start_queue() ##start the job queue
-
         if scheduler.error_jobs:
             raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
-
-        scheduler.shutdown()
         print(' done.', flush=True)
 
 

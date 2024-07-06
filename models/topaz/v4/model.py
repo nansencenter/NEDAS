@@ -201,6 +201,8 @@ class Model(object):
         run_dir = os.path.dirname(input_file)
         os.system("mkdir -p "+run_dir)
         os.chdir(run_dir)
+        log_file = os.path.join(run_dir, "run.log")
+        os.system('touch '+log_file)
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -256,10 +258,12 @@ class Model(object):
         shell_cmd += model_exe+f" {kwargs['member']+1} "
         shell_cmd += ">& run.log"
 
-        log_file = os.path.join(run_dir, "run.log")
-
-        self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
-        self.run_process.wait()
+        for tr in range(2):  ##number of tries
+            with open(log_file, 'rt') as f:
+                if '(normal)' in f.read():
+                    break
+            self.run_process = subprocess.Popen(shell_cmd, shell=True)
+            self.run_process.wait()
 
         with open(log_file, 'rt') as f:
             if '(normal)' not in f.read():
@@ -275,8 +279,4 @@ class Model(object):
                 os.system("mkdir -p "+os.path.dirname(output_file_cp))
                 os.system("cp "+output_file+" "+output_file_cp)
                 os.system("cp "+output_file.replace('.a', '.b')+" "+output_file_cp.replace('.a', '.b'))
-
-
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 

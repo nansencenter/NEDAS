@@ -179,8 +179,7 @@ class Scheduler(object):
         self.error_jobs = []
         self.njob = 0
 
-
-    def submit_job(self, name, job_run, job_kill, *args, **kwargs):
+    def submit_job(self, name, job_run, *args, **kwargs):
         """
         Submit a job to the scheduler, hold info in jobs dict
         Input:
@@ -188,11 +187,10 @@ class Scheduler(object):
         - job is an object with run, is_running and kill methods
         - args,kwargs are to be passed into job.run()
         """
-        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job_run':job_run, 'job_kill':job_kill,
+        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job_run':job_run,
                            'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
-
 
     def monitor_job_queue(self):
         """
@@ -233,7 +231,7 @@ class Scheduler(object):
                 for name in self.running_jobs:
                     elapsed_time = time.time() - self.jobs[name]['start_time']
                     if elapsed_time > self.walltime:
-                        self.jobs[name]['job_kill']()
+                        # self.jobs[name]['job_kill']()
                         print(f'job {name} exceeds walltime ({self.walltime}s), killed')
                         self.error_jobs.append(name)
                         return
@@ -242,7 +240,6 @@ class Scheduler(object):
 
             time.sleep(0.1)  ##don't check too frequently, will increase overhead
 
-
     def start_queue(self):
         """
         Start the job queue, and wait for jobs to complete
@@ -250,8 +247,4 @@ class Scheduler(object):
         monitor_thread = threading.Thread(target=self.monitor_job_queue)
         monitor_thread.start()
         monitor_thread.join()
-
-
-    def shutdown(self):
-        self.executor.shutdown(wait=True)
 

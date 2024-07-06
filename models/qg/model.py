@@ -242,7 +242,7 @@ class QGModel(object):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(self, forecast_period, dt_ratio, run_dir)
 
-            self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+            self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
 
             ##check output
@@ -273,7 +273,4 @@ class QGModel(object):
                 output_file_cp = self.filename(**kwargs_out_cp)
                 subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
 
-
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 
