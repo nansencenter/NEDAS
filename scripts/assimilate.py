@@ -71,14 +71,12 @@ def assimilate(c):
     #     np.save(analysis_dir+'/lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
     #     np.save(analysis_dir+'/lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
 
-    state_post = timer(c)(analysis)(c, state_prior, z_state, lobs, lobs_prior)
+    state_post, lobs_post = timer(c)(analysis)(c, state_prior, z_state, lobs, lobs_prior)
 
     c.comm.Barrier()
-    fields_post = transpose_backward(c, state_post)
+    fields_post, obs_post_seq = transpose_backward(c, state_post, lobs_post)
 
     timer(c)(output_ens_mean)(c, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'))
-
-    obs_post_seq = timer(c)(prepare_obs_from_state)(c, obs_seq, fields_post, z_fields)
 
     inflation(c, 'posterior', fields_prior, os.path.join(analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(analysis_dir,'post_mean_state.bin'), obs_post_seq)
 
