@@ -179,7 +179,7 @@ class Scheduler(object):
         self.error_jobs = []
         self.njob = 0
 
-    def submit_job(self, name, job_run, *args, **kwargs):
+    def submit_job(self, name, job, *args, **kwargs):
         """
         Submit a job to the scheduler, hold info in jobs dict
         Input:
@@ -187,7 +187,7 @@ class Scheduler(object):
         - job is an object with run, is_running and kill methods
         - args,kwargs are to be passed into job.run()
         """
-        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job_run':job_run,
+        self.jobs[name] = {'worker_id':None, 'start_time':None, 'job':job,
                            'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
@@ -208,7 +208,7 @@ class Scheduler(object):
                 info = self.jobs[name]
                 info['worker_id'] = worker_id
                 info['start_time'] = time.time()
-                info['future'] = self.executor.submit(info['job_run'], worker_id, *info['args'], **info['kwargs'])
+                info['future'] = self.executor.submit(info['job'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
                 # print('job '+name+f' submitted to {worker_id}')
 
@@ -227,14 +227,14 @@ class Scheduler(object):
                 self.available_workers.append(self.jobs[name]['worker_id'])
 
             ##kill jobs that exceed walltime
-            if self.walltime is not None:
-                for name in self.running_jobs:
-                    elapsed_time = time.time() - self.jobs[name]['start_time']
-                    if elapsed_time > self.walltime:
-                        # self.jobs[name]['job_kill']()
-                        print(f'job {name} exceeds walltime ({self.walltime}s), killed')
-                        self.error_jobs.append(name)
-                        return
+            ##TODO: the kill signal isn't handled
+            # if self.walltime is not None:
+            #     for name in self.running_jobs:
+            #         elapsed_time = time.time() - self.jobs[name]['start_time']
+            #         if elapsed_time > self.walltime:
+            #             print(f'job {name} exceeds walltime ({self.walltime}s), killed')
+            #             self.error_jobs.append(name)
+            #             return
 
             print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 
@@ -247,4 +247,7 @@ class Scheduler(object):
         monitor_thread = threading.Thread(target=self.monitor_job_queue)
         monitor_thread.start()
         monitor_thread.join()
+
+    def shutdown(self):
+        self.executor.shutdown(wait=True)
 
