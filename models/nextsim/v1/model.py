@@ -273,7 +273,7 @@ class Model(object):
 
             namelist(self, time, forecast_period, run_dir)
 
-            self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+            self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
 
             ##check output
@@ -291,8 +291,4 @@ class Model(object):
                 raise RuntimeError('errors in '+log_file)
         if not os.path.exists(output_file):
             raise RuntimeError(output_file+' not generated, run failed')
-
-
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 

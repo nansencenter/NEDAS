@@ -133,7 +133,3 @@ class Model(object):
                 output_file_cp = self.filename(**kwargs_out_cp)
                 subprocess.run("mkdir -p "+output_dir+"; cp "+output_file+" "+output_file_cp, shell=True)
 
-
-    def kill(self):
-        pass
-
