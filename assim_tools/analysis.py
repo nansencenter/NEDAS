@@ -393,11 +393,8 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     for p in range(len(obs_list)):
         print(progress_bar(p, len(obs_list)))
 
-        obs_rec_id, obs_id, v = obs_list[p]
+        obs_rec_id, obs_id, v, pid_owner_obs = obs_list[p]
         obs_rec = c.obs_info['records'][obs_rec_id]
-
-        ##figure out with pid owns the obs_id
-        pid_owner_obs = [p for p,lst in c.obs_inds[obs_rec_id].items() if obs_id in lst][0]
 
         ##1. if the pid owns this obs, broadcast it to all pid
         if c.pid_mem == pid_owner_obs:
@@ -446,22 +443,19 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
 
 
 def global_obs_list(c):
-    ##count number of obs for each obs_rec_id
-    nobs = np.array([np.sum([len(ind) for ind in c.obs_inds[r].values()])
-                     for r in c.obs_info['records'].keys()])
-
     ##form the full list of obs_ids
     obs_list = []
     for obs_rec_id in c.obs_info['records'].keys():
-        for obs_id in range(nobs[obs_rec_id]):
-            obs_rec = c.obs_info['records'][obs_rec_id]
-            v_list = [0, 1] if obs_rec['is_vector'] else [None]
-            for v in v_list:
-                obs_list.append((obs_rec_id, obs_id, v))
+        obs_rec = c.obs_info['records'][obs_rec_id]
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+
+        for pid_owner_obs, obs_ids in c.obs_inds[obs_rec_id].items():
+            for obs_id in obs_ids:
+                for v in v_list:
+                    obs_list.append((obs_rec_id, obs_id, v, pid_owner_obs))
 
     ##randomize the order of obs (this is optional)
     np.random.shuffle(obs_list)
-
     return obs_list
 
 
