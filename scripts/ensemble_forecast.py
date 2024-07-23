@@ -25,9 +25,10 @@ def ensemble_forecast_scheduler(c, model_name):
             output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
 
             job_opt = {'task_nproc': nproc_per_job,
-                       'host': c.host,
                        'nedas_dir': c.nedas_dir,
+                       'job_submit_cmd': c.job_submit_cmd,
                        'model_code_dir': c.model_def[model_name].get('model_code_dir'),
+                       'model_data_dir': c.model_def[model_name].get('model_data_dir'),
                        'path': path,
                        'member': mem_id,
                        'time': c.time,
@@ -57,9 +58,10 @@ def ensemble_forecast_batch(c, model_name):
         output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
         os.system("mkdir -p "+path)
 
-        job_opt = {'host': c.host,
-                   'nedas_dir': c.nedas_dir,
+        job_opt = {'nedas_dir': c.nedas_dir,
+                   'job_submit_cmd': c.job_submit_cmd,
                    'model_code_dir': c.model_def[model_name].get('model_code_dir'),
+                   'model_data_dir': c.model_def[model_name].get('model_data_dir'),
                    'path': path,
                    'time': c.time,
                    'forecast_period': c.cycle_period,

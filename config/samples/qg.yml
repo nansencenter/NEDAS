@@ -1,7 +1,7 @@
-host: 'betzy'   ##name of the host computer
 nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
 
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 nproc: 1        ##total number of processors
 nproc_mem: 1    ##number of processor groups
 
@@ -57,6 +57,7 @@ model_def:
   qg:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
+    model_data_dir: ''
     nproc_per_mem: 1    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler

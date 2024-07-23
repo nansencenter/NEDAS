@@ -23,9 +23,10 @@ def generate_init_ensemble(c, model_name):
             job_name = model_name+f'_mem{mem_id+1}'
             path = os.path.join(c.work_dir, 'cycle', t2s(c.time_start), model_name)
 
-            job_opt = {'host': c.host,
-                       'nedas_dir': c.nedas_dir,
+            job_opt = {'nedas_dir': c.nedas_dir,
+                       'job_submit_cmd': c.job_submit_cmd,
                        'model_code_dir': c.model_def[model_name].get('model_code_dir'),
+                       'model_data_dir': c.model_def[model_name].get('model_data_dir'),
                        'ens_init_dir': c.model_def[model_name].get('ens_init_dir'),
                        'path': path,
                        'member': mem_id,

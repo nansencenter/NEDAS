@@ -1,7 +1,7 @@
-host: 'betzy'   ##name of the host computer
 nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/topaz4_reanalysis'   ##working directory for the experiment
 
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 nproc: 512        ##total number of processors
 nproc_mem: 512    ##number of processor groups
 
@@ -29,6 +29,10 @@ grid_def:
   type: 'topaz.v4'
 
 state_def:
+- name: 'ocean_velocity'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
 - name: 'ocean_temp'
   model_src: 'topaz.v4'
   var_type: 'field'
@@ -37,7 +41,35 @@ state_def:
   model_src: 'topaz.v4'
   var_type: 'field'
   err_type: 'normal'
-- name: 'ocean_velocity'
+- name: 'ocean_layer_thick'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_mixl_depth'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_velocity'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_press'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_conc'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_thick'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_surf_temp'
+  model_src: 'topaz.v4'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_surf_height'
   model_src: 'topaz.v4'
   var_type: 'field'
   err_type: 'normal'

@@ -54,15 +54,15 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In `<my_config_file>`:
 
-    set `host` to `<my_host_machine>`
-
     set `nedas_dir` to the directory where NEDAS code is placed
 
     set `work_dir` to the working directory for the experiment
 
-    set other directories `home_dir`, `code_dir`, etc. accordingly
+    set `job_submit_cmd` to the parallel job submit comman/script on the host machine, see example `config/samples/job_submit_betzy.sh` for more details
 
-    In `config/env/<my_host_machine>`, you can create source files for running model on `<my_host_machine>`. For example, `config/env/betzy/qg.src` is sourced when running the 'qg' model on the 'betzy' machine.
+- Setup models and datasets
+
+    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d_testcast.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
 
 - Start the experiment
 
@@ -80,7 +80,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
 
-    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments.
+    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_exp.py --config_file=<my_config_file>`
 
     On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
 

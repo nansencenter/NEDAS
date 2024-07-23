@@ -195,8 +195,8 @@ class QGModel(object):
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
-        host = kwargs['host']
         nedas_dir = kwargs['nedas_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
         model_code_dir = kwargs['model_code_dir']
 
         input_file = self.filename(**kwargs)
@@ -220,12 +220,11 @@ class QGModel(object):
         else:
             prep_input_cmd = ''
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        qg_src = os.path.join(env_dir, 'qg.src')
+        qg_src = os.path.join(model_code_dir, 'setup.src')
         qg_exe = os.path.join(model_code_dir, 'src', 'qg.exe')
 
         offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
+        submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
 
         ##build the shell command line
         shell_cmd = "source "+qg_src+"; "   ##enter the qg model env

@@ -207,13 +207,26 @@ class Model(object):
         pass
 
 
+    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+        ##put sequence of operation here to generate the initial condition files for nextsim
+        ##just link prepared restart files for now,
+        ens_init_dir = kwargs['ens_init_dir']
+
+        kwargs_init = {**kwargs, 'path':ens_init_dir}
+        init_file = self.filename(**kwargs_init)
+
+        input_file = self.filename(**kwargs)
+        input_dir = os.path.dirname(input_file)
+        subprocess.run("mkdir -p "+input_dir+"; cp "+init_file+" "+input_file, shell=True)
+
+
     def run(self, task_id=0, task_nproc=16, **kwargs):
         self.run_status = 'running'
 
-        host = kwargs['host']
         nedas_dir = kwargs['nedas_dir']
-        code_dir = kwargs['code_dir']
-        data_dir = kwargs['data_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
+        model_code_dir = kwargs['model_code_dir']
+        model_data_dir = kwargs['model_data_dir']
 
         restart_file = self.filename(**kwargs)
         run_dir = os.path.dirname(os.path.dirname(restart_file))
@@ -244,17 +257,16 @@ class Model(object):
         ##other data:
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "rm -rf data; mkdir data; cd data; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'BATHYMETRY', '*')+" .; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'TOPAZ4', 'TP4DAILY_*')+" .; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'GENERIC_PS_ATM')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(model_data_dir, 'BATHYMETRY', '*')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(model_data_dir, 'TOPAZ4', 'TP4DAILY_*')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(model_data_dir, 'GENERIC_PS_ATM')+" .; "
         subprocess.run(shell_cmd, shell=True)
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        model_src = os.path.join(env_dir, 'nextsim.v1.src')
-        model_exe = os.path.join(code_dir, 'nextsim', 'model', 'bin', 'nextsim.exec')
+        model_src = os.path.join(model_code_dir, 'setup.src')
+        model_exe = os.path.join(model_code_dir, 'model', 'bin', 'nextsim.exec')
 
         offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
+        submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
 
         ##build the shell command line
         shell_cmd = "source "+model_src+"; "
@@ -291,4 +303,5 @@ class Model(object):
                 raise RuntimeError('errors in '+log_file)
         if not os.path.exists(output_file):
             raise RuntimeError(output_file+' not generated, run failed')
+
 

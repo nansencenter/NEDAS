@@ -11,11 +11,12 @@ model_param = {'kmax': 127,
 model = Model(**model_param)
 
 run_opt = {'nedas_dir': '/cluster/home/yingyue/code/NEDAS',
-           'host': 'betzy',
+           'job_submit_cmd': '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh',
+           'model_code_dir': '/cluster/home/yingyue/code/NEDAS/models/qg',
+           'model_data_dir': '',
            'path': '/cluster/work/users/yingyue/qg/run',
            'time': datetime(2023,1,1),
-           'input_file': '/cluster/work/users/yingyue/qg_ens_runs/0001/output.bin',
-           'output_file': '/cluster/work/users/yingyue/qg/run/output.bin',
+           'forecast_period': 12,
            }
 model.run(**run_opt)
 
