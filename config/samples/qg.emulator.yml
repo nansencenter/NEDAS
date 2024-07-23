@@ -1,7 +1,7 @@
-host: 'betzy'   ##name of the host computer
 nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/qg.emulator'   ##working directory for the experiment
 
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 nproc: 1        ##total number of processors
 nproc_mem: 1    ##number of processor groups
 
@@ -56,6 +56,8 @@ use_synthetic_obs: True
 model_def:
   qg.emulator:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/emulator/default.yml'
+    model_code_dir: ''
+    model_data_dir: ''
     nproc_per_mem: 1    ##number of processors to run a forecast
     ens_run_type: batch
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'

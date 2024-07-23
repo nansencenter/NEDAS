@@ -28,7 +28,8 @@ class Model(object):
                 'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
                 'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
                 'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
-                'ocean_surf_height': {'name':'ssh', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
+                'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
+                'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
                 'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
                 'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
                 'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
@@ -193,8 +194,8 @@ class Model(object):
     def run(self, task_id=0, task_nproc=256, **kwargs):
         self.run_status = 'running'
 
-        host = kwargs['host']
         nedas_dir = kwargs['nedas_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
 
         path = kwargs['path']
         input_file = self.filename(**kwargs)
@@ -244,17 +245,14 @@ class Model(object):
         # if self.nestiflag:
         # if self.tideflag:
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        model_src = os.path.join(env_dir, 'topaz.v4.src')
+        model_src = os.path.join(self.basedir, 'setup.src')
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
-
         offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
 
         ##build the shell command line
         shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
         shell_cmd += "cd "+run_dir+"; "          ##enter run directory
-        shell_cmd += submit_cmd
+        shell_cmd += job_submit_cmd+f" {task_nproc} {offset} "
         shell_cmd += model_exe+f" {kwargs['member']+1} "
         shell_cmd += ">& run.log"
 
