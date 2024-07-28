@@ -506,8 +506,14 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
         ##assemble the increments
         obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
+    ##rank histogram filter (Anderson 2010)
     elif filter_type == 'RHF':
-        pass
+        ##compute likelihood
+
+        ##index sort
+        sort_ind = np.argsort(obs_prior)
+
+        ##
 
     else:
         print('Error: unknown filter type: '+filter_type)

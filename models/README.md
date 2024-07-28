@@ -78,3 +78,4 @@ List of necessary functions/parameters:
 
 * `z_coords(path, grid, **kwargs)` returns a 2D field, similar to the field `fld` returned by `read_var()` but replaced by the z coordinates at each grid point of that field. If 'z\_units' is provided in kwargs, the function should convert z to the desired z units (useful when observation is defined with different z units from `z_units`), otherwise the default `z_units` will be used.
 
+* `run(self, **kwargs)`

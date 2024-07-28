@@ -195,7 +195,6 @@ class QGModel(object):
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
-        nedas_dir = kwargs['nedas_dir']
         job_submit_cmd = kwargs['job_submit_cmd']
         model_code_dir = kwargs['model_code_dir']
 
