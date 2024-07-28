@@ -1,32 +1,107 @@
 import os
+import numpy as np
+from utils.conversion import dt1h
 
+def bool_str(value):
+    if value:
+        return '.true.'
+    else:
+        return '.false.'
 
-def namelist_wrf(m, run_dir='.'):
+def namelist(m, time, forecast_period, run_dir='.'):
 
-    nmlstr = "&time_control\n"
-    nmlstr += "run_days = {}\n"
-    nmlstr += "run_hours                           = 36,
-    nmlstr += "run_minutes                         = 0,
-    nmlstr += "run_seconds                         = 0,
-    nmlstr += "start_year                          = 2019, 2019,
-    nmlstr += "start_month                         = 09,   09, 
-    nmlstr += "start_day                           = 04,   04,
-    nmlstr += "start_hour                          = 12,   12,
-    nmlstr += "end_year                            = 2019, 2019,
-    nmlstr += "end_month                           = 09,   09,
-    nmlstr += "end_day                             = 06,   06,
-    nmlstr += "end_hour                            = 00,   00,
-    nmlstr += "interval_seconds                    = 10800
-    nmlstr += "input_from_file                     = .true.,.true.,
-    nmlstr += "history_interval                    = 60,  60,
-    nmlstr += "frames_per_outfile                  = 1, 1,
-    nmlstr += "restart                             = .false.,
-    nmlstr += "restart_interval                    = 7200,
-    nmlstr += "io_form_history                     = 2
-    nmlstr += "io_form_restart                     = 2
-    nmlstr += "io_form_input                       = 2
-    nmlstr += "io_form_boundary                    = 2
+    next_time = time + forecast_period * dt1h
+
+    ###wps namelist.wps
+    nmlstr = "&share\n"
+    nmlstr += "wrf_core = 'ARW',"
+    nmlstr += "max_dom = 2,
+    nmlstr += "start_date = '2000-01-24_12:00:00','2000-01-24_12:00:00',
+    nmlstr += "end_date   = '2000-01-25_12:00:00','2000-01-24_12:00:00',
+    nmlstr += "interval_seconds = 21600
+    nmlstr += "active_grid = .true., .true.,
+    nmlstr += "subgrid_ratio_x = 1
+    nmlstr += "subgrid_ratio_y = 1
+    nmlstr += "io_form_geogrid = 2,
+    nmlstr += "opt_output_from_geogrid_path = './',
+    nmlstr += "debug_level = 0
+    nmlstr += "/\n\n"
+
+    nmlstr += "&geogrid\n"
+    nmlstr += "parent_id         =   1,   1,
+    nmlstr += "parent_grid_ratio =   1,   3,
+    nmlstr += "i_parent_start    =   1,  31,
+    nmlstr += "j_parent_start    =   1,  17,
+    nmlstr += "s_we              =   1,   1,
+    nmlstr += "e_we              =  74, 112,
+    nmlstr += "s_sn              =   1,   1,
+    nmlstr += "e_sn              =  61,  97,
+    nmlstr += "geog_data_res = 'default','default',
+    nmlstr += "dx        = 30000,
+    nmlstr += "dy        = 30000,
+    nmlstr += "map_proj  = 'lambert',
+    nmlstr += "ref_lat   =  34.83,
+    nmlstr += "ref_lon   = -81.03,
+    nmlstr += "ref_x     =  37.0,
+    nmlstr += "ref_y     =  30.5,
+    nmlstr += "truelat1  =  30.0,
+    nmlstr += "truelat2  =  60.0,
+    nmlstr += "stand_lon = -98.0,
+    nmlstr += "geog_data_path = '/glade/work/wrfhelp/WPS_GEOG/'
+    nmlstr += "opt_geogrid_tbl_path = 'geogrid/'
     nmlstr += "/
+    nmlstr += "geog_data_res     = 'modis_lakes+10m','modis_lakes+2m',
+    nmlstr += "geog_data_res     = 'usgs_lakes+10m','usgs_lakes+2m',
+
+    nmlstr += "&ungrib
+    nmlstr += "out_format = 'WPS',
+    nmlstr += "prefix     = 'FILE',
+    nmlstr += "ec_rec_len = 26214508,
+    nmlstr += "pmin = 100.
+    nmlstr += "/
+
+    nmlstr += "&metgrid
+    nmlstr += "fg_name         = 'FILE'
+    nmlstr += "constants_name  = './TAVGSFC'
+    nmlstr += "io_form_metgrid = 2, 
+    nmlstr += "opt_output_from_metgrid_path = './',
+    nmlstr += "opt_metgrid_tbl_path         = 'metgrid/',
+    nmlstr += "process_only_bdy = 5,
+    nmlstr += "/
+
+    nmlstr += "&mod_levs
+    nmlstr += "press_pa = 201300 , 200100 , 100000 , 
+    nmlstr += "/\n\n"
+
+    with open(os.path.join(run_dir, 'namelist.wps'), 'wt') as f:
+        f.write(nmlstr)
+
+
+    ##wrf namelist.input
+    nmlstr = f"&time_control\n"
+    nmlstr += f"run_days         = {int(forecast_period/24)},\n"
+    nmlstr += f"run_hours        = {int(forecast_period%24)},\n"
+    nmlstr += f"run_minutes      = {int(np.round(forecast_period - int(forecast_period)))},\n"
+    nmlstr += f"run_seconds      = 0,\n"
+    nmlstr += f"start_year       = 2019, 2019,
+    nmlstr += f"start_month      = 09,   09, 
+    nmlstr += f"start_day        = 04,   04,
+    nmlstr += f"start_hour       = 12,   12,
+    nmlstr += f"end_year         = 2019, 2019,
+    nmlstr += f"end_month        = 09,   09,
+    nmlstr += f"end_day          = 06,   06,
+    nmlstr += f"end_hour         = 00,   00,
+    nmlstr += f"interval_seconds = 10800
+    nmlstr += f"input_from_file  = .true.,.true.,\n"
+    nmlstr += f"history_interval = 60,  60,\n"
+    nmlstr += f"frames_per_outfile = 1, 1,\n"
+    nmlstr += f"restart            = .false.,\n"
+    nmlstr += f"restart_interval   = 7200,\n"
+    nmlstr += f"io_form_history    = 2,\n"
+    nmlstr += f"io_form_restart    = 2,\n"
+    nmlstr += f"io_form_input      = 2,\n"
+    nmlstr += f"io_form_boundary   = 2,\n"
+    nmlstr += f"/\n"
 
     nmlstr += "&domains
     nmlstr += "time_step                           = 90,
@@ -106,71 +181,5 @@ def namelist_wrf(m, run_dir='.'):
     nmlstr += "/
 
     with open(os.path.join(run_dir, 'namelist.input'), 'wt') as f:
-        f.write(nmlstr)
-
-
-def namelist_wps(m, run_dir="."):
-
-    nmlstr = "&share\n"
-    nmlstr += "wrf_core = 'ARW',"
-    nmlstr += "max_dom = 2,
-    nmlstr += "start_date = '2000-01-24_12:00:00','2000-01-24_12:00:00',
-    nmlstr += "end_date   = '2000-01-25_12:00:00','2000-01-24_12:00:00',
-    nmlstr += "interval_seconds = 21600
-    nmlstr += "active_grid = .true., .true.,
-    nmlstr += "subgrid_ratio_x = 1
-    nmlstr += "subgrid_ratio_y = 1
-    nmlstr += "io_form_geogrid = 2,
-    nmlstr += "opt_output_from_geogrid_path = './',
-    nmlstr += "debug_level = 0
-    nmlstr += "/\n\n"
-
-    nmlstr += "&geogrid\n"
-    nmlstr += "parent_id         =   1,   1,
-    nmlstr += "parent_grid_ratio =   1,   3,
-    nmlstr += "i_parent_start    =   1,  31,
-    nmlstr += "j_parent_start    =   1,  17,
-    nmlstr += "s_we              =   1,   1,
-    nmlstr += "e_we              =  74, 112,
-    nmlstr += "s_sn              =   1,   1,
-    nmlstr += "e_sn              =  61,  97,
-    nmlstr += "geog_data_res = 'default','default',
-    nmlstr += "dx        = 30000,
-    nmlstr += "dy        = 30000,
-    nmlstr += "map_proj  = 'lambert',
-    nmlstr += "ref_lat   =  34.83,
-    nmlstr += "ref_lon   = -81.03,
-    nmlstr += "ref_x     =  37.0,
-    nmlstr += "ref_y     =  30.5,
-    nmlstr += "truelat1  =  30.0,
-    nmlstr += "truelat2  =  60.0,
-    nmlstr += "stand_lon = -98.0,
-    nmlstr += "geog_data_path = '/glade/work/wrfhelp/WPS_GEOG/'
-    nmlstr += "opt_geogrid_tbl_path = 'geogrid/'
-    nmlstr += "/
-    nmlstr += "geog_data_res     = 'modis_lakes+10m','modis_lakes+2m',
-    nmlstr += "geog_data_res     = 'usgs_lakes+10m','usgs_lakes+2m',
-
-    nmlstr += "&ungrib
-    nmlstr += "out_format = 'WPS',
-    nmlstr += "prefix     = 'FILE',
-    nmlstr += "ec_rec_len = 26214508,
-    nmlstr += "pmin = 100.
-    nmlstr += "/
-
-    nmlstr += "&metgrid
-    nmlstr += "fg_name         = 'FILE'
-    nmlstr += "constants_name  = './TAVGSFC'
-    nmlstr += "io_form_metgrid = 2, 
-    nmlstr += "opt_output_from_metgrid_path = './',
-    nmlstr += "opt_metgrid_tbl_path         = 'metgrid/',
-    nmlstr += "process_only_bdy = 5,
-    nmlstr += "/
-
-    nmlstr += "&mod_levs
-    nmlstr += "press_pa = 201300 , 200100 , 100000 , 
-    nmlstr += "/\n\n"
-
-    with open(os.path.join(run_dir, 'namelist.wps'), 'wt') as f:
         f.write(nmlstr)
 
