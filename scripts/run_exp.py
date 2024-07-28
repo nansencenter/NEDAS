@@ -34,7 +34,8 @@ while c.time < c.time_end:
     ##this is run by a parallel call to python assimilate.py
     if c.time > c.time_start and c.run_assim:
         print('start assimilation...', flush=True)
-        assimilate_code = os.path.join(c.nedas_dir, 'scripts', 'assimilate.py')
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        assimilate_code = os.path.join(script_dir, 'assimilate.py')
         shell_cmd = c.job_submit_cmd+f" {c.nproc} {0}"
         shell_cmd += " python -m mpi4py "+assimilate_code
         shell_cmd += " --config_file "+config_file

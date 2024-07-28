@@ -1,7 +1,6 @@
-nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/topaz4_reanalysis'   ##working directory for the experiment
-
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
 nproc: 512        ##total number of processors
 nproc_mem: 512    ##number of processor groups
 

@@ -23,14 +23,14 @@ def generate_init_ensemble(c, model_name):
             job_name = model_name+f'_mem{mem_id+1}'
             path = os.path.join(c.work_dir, 'cycle', t2s(c.time_start), model_name)
 
-            job_opt = {'nedas_dir': c.nedas_dir,
+            job_opt = {'task_nproc': nproc_per_job,
                        'job_submit_cmd': c.job_submit_cmd,
-                       'model_code_dir': c.model_def[model_name].get('model_code_dir'),
-                       'model_data_dir': c.model_def[model_name].get('model_data_dir'),
-                       'ens_init_dir': c.model_def[model_name].get('ens_init_dir'),
                        'path': path,
                        'member': mem_id,
-                       'time': c.time_start,
+                       'time_start': c.time_start,
+                       'time_end': c.time_end,
+                       'cycle_period': c.cycle_period,
+                       **c.model_def[model_name],
                       }
             scheduler.submit_job(job_name, model.generate_initial_condition, **job_opt)  ##add job to the queue
 

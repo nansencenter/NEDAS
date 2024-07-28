@@ -1,7 +1,6 @@
-nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/vort2d_testcase'   ##working directory for the experiment
-
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
 nproc: 1        ##total number of processors
 nproc_mem: 1    ##number of processor groups
 

@@ -25,15 +25,13 @@ def ensemble_forecast_scheduler(c, model_name):
             output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
 
             job_opt = {'task_nproc': nproc_per_job,
-                       'nedas_dir': c.nedas_dir,
                        'job_submit_cmd': c.job_submit_cmd,
-                       'model_code_dir': c.model_def[model_name].get('model_code_dir'),
-                       'model_data_dir': c.model_def[model_name].get('model_data_dir'),
                        'path': path,
                        'member': mem_id,
                        'time': c.time,
                        'forecast_period': c.cycle_period,
                        'output_dir': output_dir,
+                       **c.model_def[model_name],
                       }
             scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
 
@@ -58,14 +56,12 @@ def ensemble_forecast_batch(c, model_name):
         output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
         os.system("mkdir -p "+path)
 
-        job_opt = {'nedas_dir': c.nedas_dir,
-                   'job_submit_cmd': c.job_submit_cmd,
-                   'model_code_dir': c.model_def[model_name].get('model_code_dir'),
-                   'model_data_dir': c.model_def[model_name].get('model_data_dir'),
+        job_opt = {'job_submit_cmd': c.job_submit_cmd,
                    'path': path,
                    'time': c.time,
                    'forecast_period': c.cycle_period,
                    'output_dir': output_dir,
+                   **c.model_def[model_name],
                   }
         model.run(nens=c.nens, **job_opt)
         print('done.', flush=True)
