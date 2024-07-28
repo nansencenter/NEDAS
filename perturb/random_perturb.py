@@ -1,7 +1,55 @@
 import numpy as np
 from scipy.optimize import fsolve
-
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+from utils.space_op import gradx, grady, warp
 from utils.fft_lib import fft2, ifft2, get_wn
+
+##top-level function
+def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3, prev_perturb=None):
+    """
+    Add random perturbation to the given 2D field
+    Input:
+        - field: np.array
+        - grid: Grid object for the 2d field
+        - perturb_type: 'gaussian', 'powerlaw', 'empirical', or 'displace'
+        - amp: float
+        - hcorr: float
+        - tcorr: float (optional)
+        - perturb_prev; dict(str, np.array), previous perturbation data
+    """
+    ##generate perturbation according to prescribed parameters
+    if perturb_type == 'gaussian':
+        perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
+
+    elif perturb_type == 'powerlaw':
+        perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
+
+    elif perturb_type == 'empirical':
+        ##TODO: allow user to specify empirical spectrum for the perturbation
+        raise NotImplementedError
+
+    elif perturb_type == 'displace':
+        mask = np.full(grid.x.shape, False)
+        du, dv = random_displacement(grid, mask, amp, hcorr)
+        perturb = np.array([du, dv])
+
+    else:
+        raise TypeError('unknown perturbation type: '+perturb_type)
+
+    ##create perturbations that are correlated in time
+    autocorr = np.exp(-1.0)
+    alpha = autocorr**(1.0/tcorr)
+    if prev_perturb is not None:
+        perturb = np.sqrt(1-alpha**2) * perturb + alpha * prev_perturb
+
+    ##apply the perturbation
+    if perturb_type == 'displace':
+        field = warp(field, perturb[0,...], perturb[1,...])
+    else:
+        field += perturb
+
+    return field, perturb
+
 
 ##draw a 2D random field given its power spectrum
 ##two types of power spectra available: gaussian, or fixed power law (slope)
@@ -67,16 +115,46 @@ def random_field_powerlaw(nx, ny, amp, pwrlaw):
     return np.real(ifft2(amp_ * ph))
 
 
+def random_displacement(grid, mask, amp, hcorr):
+    ##prototype: generate a random wavenumber-1 displacement for the whole domain
 
-###generate a random perturbation for wind u,v and pressure
-def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D domain; dt: time interval (hours)
-                             prev_pres, prev_u, prev_v, ##pres, u, v, perturbation from previous t
-                             ampl_pres, ampl_wind,      ##pres amplitude (Pa); wind amplitude (m/s)
-                             hscale,                    ##horizontal decorrelation length scale (meters)
-                             tscale,                    ##time decorrelation scale (hours)
-                             pres_wind_relate=True,     ##if true: calc wind from pres according to pres-wind relation
-                             wlat=15.,                  ##latitude bound for pure geostroph wind
-                             ):
+    ##set the boundaries to be masked if they are not cyclic
+    ##i.e. we don't want displacement across non-cyclic boundary
+    if grid.cyclic_dim is not None:
+        cyclic_dim = grid.cyclic_dim
+    else:
+        cyclic_dim = ''
+    if 'x' not in cyclic_dim:
+        mask[:, 0] = True
+        mask[:, -1] = True
+    if 'y' not in cyclic_dim:
+        mask[0, :] = True
+        mask[-1, :] = True
+
+    ##distance to masked area
+    dist = distance_transform_edt(1-mask.astype(float))
+    dist /= np.max(dist)
+    dist = gaussian_filter(dist, sigma=10)
+    dist[mask] = 0
+
+    ##the displacement vector field from a random streamfunction
+    psi = random_field_gaussian(grid.nx, grid.ny, 1, hcorr)
+
+    du, dv = -grady(psi, 1), gradx(psi, 1)
+    norm = np.hypot(du, dv).max()
+    du *= amp / norm
+    dv *= amp / norm
+
+    du *= dist  ##taper near mask
+    dv *= dist
+
+    return du, dv
+
+
+def random_pres_wind_perturb(grid, dt, prev_pres, prev_u, prev_v,
+                             ampl_pres, ampl_wind, hscale, tscale,
+                             pres_wind_relate=True, wlat=15.):
+    ###generate a random perturbation for wind u,v and pressure
 
     ##some constants
     plon, plat = grid.proj(grid.x, grid.y, inverse=True)
@@ -123,7 +201,4 @@ def random_pres_wind_perturb(grid, dt,                  ##grid obj for the 2D do
         v = wt * prev_v + np.sqrt(1 - wt**2) * v
 
     return pres, u, v
-
-
-
 

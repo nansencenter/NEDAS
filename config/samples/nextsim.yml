@@ -1,7 +1,6 @@
-nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/nextsim_test'   ##working directory for the experiment
-
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
 nproc: 512        ##total number of processors
 nproc_mem: 512    ##number of processor groups
 
@@ -10,15 +9,15 @@ run_assim: True   ##if true, run the assimilation steps
 
 debug: False      ##if true, output debug data/message
 
-time_start: '200701020000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '200702200000'         ##end time of the experiment
-time_assim_start: '200701020000' ##start time of the first analysis cycle
-time_assim_end: '200702190000'   ##end time of the last analysis cycle
-cycle_period: 12                 ##cycle period, in hours
+time_start: '200702010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '200702150000'         ##end time of the experiment
+time_assim_start: '200702020000' ##start time of the first analysis cycle
+time_assim_end: '200702140000'   ##end time of the last analysis cycle
+cycle_period: 6                  ##cycle period, in hours
 
-time: '200701020000'
-prev_time: '200701020000'
-next_time: '200701021200'
+time: '200702010000'
+prev_time: '200702010000'
+next_time: '200702010600'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -70,12 +69,19 @@ model_def:
   nextsim.v1:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/nextsim/v1/default.yml'
     model_code_dir: '/cluster/home/yingyue/code/nextsim'
-    model_data_dir: ''
+    model_data_dir: '/cluster/work/users/yingyue/data'
     nproc_per_mem: 32    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/nextsim_ens_runs/control'
     truth_dir: '/cluster/work/users/yingyue/nextsim_test/truth'
+    perturb:
+      variables: ['atmos_surf_wind', 'atmos_surf_press']
+      type: ['gaussian', 'gaussian']
+      amp: [1., 500.]
+      hcorr: [2.5e5, 2.5e5]
+      tcorr: [48, 48]
+      press_wind_relate: False
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
