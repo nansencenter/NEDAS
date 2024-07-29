@@ -110,7 +110,7 @@ def perturb_var(**kwargs):
             ##previous perturbation (if not exist then this is the first time step)
             prev_perturb_file = os.path.join(kwargs['path'], 'perturb_'+name+'_'+t2s(prev_time)+'.npy')
             if os.path.exists(prev_perturb_file):
-                prev_perturb = np.load(prev_perturb_file, allow_pickle=True).item()[v, ...]
+                prev_perturb = np.load(prev_perturb_file, allow_pickle=True)[v, ...]
             else:
                 prev_perturb = None
             data[v, ...], perturb[v, ...] = random_perturb(data[v, ...], grid, perturb_type, amp, hcorr, tcorr, prev_perturb=prev_perturb)
