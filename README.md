@@ -54,15 +54,19 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In `<my_config_file>`:
 
-    set `nedas_dir` to the directory where NEDAS code is placed
+    Set `work_dir` to the working directory for the experiment.
 
-    set `work_dir` to the working directory for the experiment
+    Set `job_submit_cmd` to the parallel job submit command/script on the host machine, see example `config/samples/job_submit_betzy.sh` for more details.
 
-    set `job_submit_cmd` to the parallel job submit comman/script on the host machine, see example `config/samples/job_submit_betzy.sh` for more details
+    Set `nproc` to the number of processors to be used for the experiment.
 
 - Setup models and datasets
 
+    In `models/<model_name>`, edit `setup.src` to provide environment for running the model. `model_code_dir` is where the model code is; `model_data_dir` is where the static input files are that the model requires during runtime; `ens_init_dir` is where the initial restart files are for the first cycle of the experiment.
+
     When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d_testcast.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
+
+    For the datasets that provide observations to be assimilated, setup their directories in config file, and make sure you implemented the `dataset.<dataset_name>` module.
 
 - Start the experiment
 
