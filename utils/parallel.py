@@ -221,6 +221,7 @@ class Scheduler(object):
                     self.jobs[name]['future'].result()
                 except Exception as e:
                     print(f'job {name} raised exception: {e}')
+                    raise e
                     self.error_jobs.append(name)
                     return
                 self.running_jobs.remove(name)

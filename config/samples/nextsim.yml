@@ -5,7 +5,7 @@ nproc: 512        ##total number of processors
 nproc_mem: 512    ##number of processor groups
 
 nens: 20         ##ensemble size
-run_assim: True   ##if true, run the assimilation steps
+run_assim: False ##if true, run the assimilation steps
 
 debug: False      ##if true, output debug data/message
 
@@ -74,11 +74,11 @@ model_def:
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/nextsim_ens_runs/control'
-    truth_dir: '/cluster/work/users/yingyue/nextsim_test/truth'
+    truth_dir: ''
     perturb:
       variables: ['atmos_surf_wind', 'atmos_surf_press']
       type: ['gaussian', 'gaussian']
-      amp: [1., 500.]
+      amp: [10., 1000.]
       hcorr: [2.5e5, 2.5e5]
       tcorr: [48, 48]
       press_wind_relate: False

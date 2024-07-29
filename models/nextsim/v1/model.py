@@ -341,4 +341,16 @@ class Model(object):
         if not os.path.exists(output_file):
             raise RuntimeError(output_file+' not generated, run failed')
 
+        ##make a copy of output file to the output_dir
+        if 'output_dir' in kwargs:
+            output_dir = kwargs['output_dir']
+            if output_dir != kwargs['path']:
+                output_file_cp = self.filename(**{**kwargs, 'path':output_dir, 'time':next_time})
+                os.system("mkdir -p "+os.path.dirname(output_file_cp))
+                field_bin = output_file
+                field_dat = field_bin.replace('.bin', '.dat')
+                mesh_bin = output_file.replace('field', 'mesh')
+                mesh_dat = mesh_bin.replace('.bin', '.dat')
+                for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
+                    os.system("cp "+file+" "+os.path.dirname(output_file_cp)+"/.")
 
