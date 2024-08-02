@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import fsolve
 from scipy.ndimage import distance_transform_edt, gaussian_filter
-from utils.space_op import gradx, grady, warp
+from utils.spatial_operation import gradx, grady, warp
 from utils.fft_lib import fft2, ifft2, get_wn
 
 ##top-level function
@@ -71,6 +71,7 @@ def random_field_gaussian(nx, ny, amp, hcorr):
     """
 
     fld = np.zeros((ny, nx))
+    nup = np.max(nx, ny)
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
 
@@ -78,7 +79,7 @@ def random_field_gaussian(nx, ny, amp, hcorr):
         return np.exp(- k**2 / sig**2)
 
     def func2d(sig):
-        sum1 = np.sum(gaussian(k2d, sig)**2 * np.cos(2*np.pi * kx/nx * hcorr))
+        sum1 = np.sum(gaussian(k2d, sig)**2 * np.cos(2*np.pi * kx/nup * hcorr))
         sum2 = np.sum(gaussian(k2d, sig)**2)
         return sum1/sum2 - np.exp(-1)
 
