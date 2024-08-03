@@ -84,7 +84,13 @@ def random_field_gaussian(nx, ny, amp, hcorr):
         return sum1/sum2 - np.exp(-1)
 
     ##solve for sig given hcorr so that func2d=0
-    sig_out = np.abs(fsolve(func2d, 1)[0])
+    ##first deal with some edge cases
+    if hcorr <= 2:  ##shorter than resolved scale, sig_out should be largest
+        sig_out = nup
+    elif hcorr >= nup/2:  ##longer than domain scale, sig_out should be smallest
+        sig_out = 1.
+    else:
+        sig_out = np.abs(fsolve(func2d, 1)[0])
     # print(sig_out, func2d(sig_out))
 
     ##draw random phase from a white noise field
