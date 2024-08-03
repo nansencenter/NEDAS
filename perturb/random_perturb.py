@@ -71,7 +71,7 @@ def random_field_gaussian(nx, ny, amp, hcorr):
     """
 
     fld = np.zeros((ny, nx))
-    nup = np.max(nx, ny)
+    nup = int(max(nx, ny))
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
 
