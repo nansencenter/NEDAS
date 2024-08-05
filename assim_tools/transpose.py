@@ -302,6 +302,7 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     for entry in c.comm_rec.allgather(tmp_obs):
         for key, data in entry.items():
             output_obs[key] = data
+
     return output_obs
 
 
@@ -403,6 +404,14 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
 
     lobs = transpose_obs_to_lobs(c, obs_seq)
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
+
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        np.save(analysis_dir+'/state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
+        np.save(analysis_dir+'/z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
+        np.save(analysis_dir+'/lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
+        np.save(analysis_dir+'/lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+
     return state_prior, z_state, lobs, lobs_prior
 
 
