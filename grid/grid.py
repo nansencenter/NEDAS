@@ -30,8 +30,9 @@ class Grid(object):
     See NEDAS/tutorials/grid_convert.ipynb for some examples.
     """
 
-    def __init__(self, proj, x, y, regular=True, cyclic_dim=None, pole_dim=None,
-                 pole_index=None, triangles=None, neighbors=None, dst_grid=None):
+    def __init__(self, proj, x, y, bounds=None, regular=True,
+                 cyclic_dim=None, pole_dim=None, pole_index=None,
+                 triangles=None, neighbors=None, dst_grid=None):
         """
         Initialize a Grid object.
 
@@ -41,6 +42,9 @@ class Grid(object):
 
         - x, y: np.array(field.shape)
           x, y coordinates for each element in the field.
+
+        - bounds: list[float], optional
+          [xmin, xmax, ymin, ymax] boundary limits
 
         - regular: bool, optional
           Whether grid is regular or unstructured. Default is True (regular).
@@ -67,8 +71,12 @@ class Grid(object):
 
         assert x.shape == y.shape, "x, y shape does not match"
 
+        if proj is None:
+            self.proj = Proj('+proj=stere') ##default projection
+        else:
+            self.proj = proj
+
         ##name of the projection
-        self.proj = proj
         if hasattr(proj, 'name'):
             self.proj_name = proj.name
         else:
@@ -106,10 +114,13 @@ class Grid(object):
             self.x = np.mod(self.x + 180., 360.) - 180.
 
         ##boundary corners of the grid
-        self.xmin = np.min(self.x)
-        self.xmax = np.max(self.x)
-        self.ymin = np.min(self.y)
-        self.ymax = np.max(self.y)
+        if bounds is not None:
+            self.xmin, self.xmax, self.ymin, self.ymax = bounds
+        else:
+            self.xmin = np.min(self.x)
+            self.xmax = np.max(self.x)
+            self.ymin = np.min(self.y)
+            self.ymax = np.max(self.y)
 
         if regular:
             self.nx = self.x.shape[1]
@@ -125,11 +136,14 @@ class Grid(object):
             self.x = self.x.flatten()
             self.y = self.y.flatten()
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
+            ##TODO: if cyclic_dim is not None need to pad around boundary additional wrap-around points to make triangulation cover the entire domain
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
             self.x_elem = np.mean(self.x[self.tri.triangles], axis=1)
             self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
+            self.Lx = self.xmax - self.xmin
+            self.Ly = self.ymax - self.ymin
 
             ##some triangle properties
             t = self.tri.triangles
@@ -223,7 +237,9 @@ class Grid(object):
                 points.append((xp, yp))
         x = np.array([p[0] for p in points])
         y = np.array([p[1] for p in points])
-        self.__init__(proj, x, y, regular=False, **kwargs)
+        bounds = [xstart, xend, ystart, yend]
+        self.__init__(proj, x, y, bounds=bounds, regular=False, **kwargs)
+
         return self
 
 
