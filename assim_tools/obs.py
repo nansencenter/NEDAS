@@ -563,6 +563,16 @@ def prepare_obs(c):
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
+    ##additional output for debugging
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        if c.pid == 0:
+            np.save(analysis_dir+'/obs_inds.npy', c.obs_inds)
+            np.save(analysis_dir+'/partitions.npy', c.partitions)
+            np.save(analysis_dir+'/par_list.npy', c.par_list)
+        if c.pid_mem == 0:
+            np.save(analysis_dir+'/obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
+
     return c.obs_info, obs_seq
 
 
@@ -608,6 +618,11 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
             obs_prior_seq[mem_id, obs_rec_id] = seq
     if c.debug:
         print(' done.\n')
+
+    ##additional output for debugging
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        np.save(analysis_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
 
     return obs_prior_seq
 
