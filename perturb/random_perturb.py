@@ -1,21 +1,37 @@
 import numpy as np
-from scipy.optimize import fsolve, root_scalar
-from scipy.ndimage import distance_transform_edt, gaussian_filter
+import typing
+from scipy.optimize import fsolve, root_scalar # type: ignore
+from scipy.ndimage import distance_transform_edt, gaussian_filter # type: ignore
 from utils.spatial_operation import gradx, grady, warp
-from utils.fft_lib import fft2, ifft2, get_wn
+from utils.fft_lib import fft2, ifft2, get_wn, fftwn
+from grid.grid import Grid
 
 ##top-level function
-def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3, prev_perturb=None):
+def random_perturb(grid: Grid,
+                   perturb_type: typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen'],
+                   amp: float,
+                   hcorr : float,
+                   powerlaw:float=-3.) -> np.ndarray:
     """
-    Add random perturbation to the given 2D field
-    Input:
-        - field: np.array
-        - grid: Grid object for the 2d field
-        - perturb_type: 'gaussian', 'powerlaw', 'empirical', or 'displace'
-        - amp: float
-        - hcorr: float
-        - tcorr: float (optional)
-        - perturb_prev; dict(str, np.array), previous perturbation data
+    get random perturbation fields
+
+    Parameters
+    ----------
+    grid : Grid
+        grid object for the 2D domain
+    perturb_type : typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']
+        type of perturbation method
+    amp : float
+        amplitude of the perturbation
+    hcorr : float
+        horizontal decorrelation length scale
+    powerlaw : float, optional
+        power law exponent, by default -3.
+
+    Returns
+    -------
+    np.ndarray
+        random perturbation field
     """
     ##generate perturbation according to prescribed parameters
     if perturb_type == 'gaussian':
@@ -37,19 +53,55 @@ def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3
     else:
         raise TypeError('unknown perturbation type: '+perturb_type)
 
+    return perturb
+
+
+def apply_AR1_perturb(perturb: np.ndarray, tcorr:float=1.0, prev_perturb:typing.Union[None, np.ndarray]=None) -> np.ndarray:
+    """apply AR1 perturbation to the field
+
+    Parameters
+    ----------
+    perturb : np.ndarray
+        perturbation field
+    tcorr : float, optional
+        time correlation length, by default 1.0
+    prev_perturb : typing.Union[None, np.ndarray], optional
+        previous perturbation field, by default None
+    """
     ##create perturbations that are correlated in time
     autocorr = np.exp(-1.0)
     alpha = autocorr**(1.0/tcorr)
     if prev_perturb is not None:
         perturb = np.sqrt(1-alpha**2) * perturb + alpha * prev_perturb
+    return perturb
 
+
+def apply_perturb(grid: Grid, field:np.ndarray, perturb:np.ndarray, perturb_type:typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']) -> np.ndarray:
+    """apply perturbation to the field
+
+    Parameters
+    ----------
+    grid : Grid
+        grid object for the 2D domain
+    field : np.ndarray
+        field to be perturbed
+    perturb : np.ndarray
+        perturbation field
+    perturb_type : typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']
+        type of perturbation method
+
+    Returns
+    -------
+    np.ndarray
+        perturbed field
+    """
     ##apply the perturbation
+    # todo: adding logorithmic perturbation
     if perturb_type == 'displace':
-        field = warp(field, perturb[0,...], perturb[1,...])
+        field = warp(grid, field, perturb[0], perturb[1])
     else:
         field += perturb
-
-    return field, perturb
+    return field
 
 
 def random_field_gaussian_evensen(nx:int, ny:int, amplitude:float, hcorr:int) -> np.ndarray:
@@ -273,9 +325,9 @@ def random_pres_wind_perturb(grid, dt, prev_pres, prev_u, prev_v,
 
     return pres, u, v
 
+
 def pres_adjusted_wind_perturb(grid: Grid, ampl_pres:float, ampl_wind:float,
                                scorr:float, pres:np.ndarray,
-                               u:np.ndarray, v:np.ndarray,
                                with_wind_speed_limit:bool=True, wlat:float=15.) -> tuple[np.ndarray, np.ndarray]:
     """generate a random perturbation for wind u,v adjusted by pressure.
 
@@ -290,11 +342,7 @@ def pres_adjusted_wind_perturb(grid: Grid, ampl_pres:float, ampl_wind:float,
     scorr : float
         horizontal decorrelation length scale by number of grid points
     pres : np.ndarray, optional
-        previous pressure field perturbations, by default None
-    u : np.ndarray, optional
-        previous u wind field perturbations, by default None
-    v : np.ndarray, optional
-        previous v wind field perturbations, by default None
+        pressure field perturbations, by default None
     with_wind_speed_limit : bool, optional
         if true: limit pressure perturbation by wind speed to account for horizontal scale of perturbation, by default True.
         This option will force `pres_wind_relate` to be True.
