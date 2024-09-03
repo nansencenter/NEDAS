@@ -3,13 +3,19 @@ import os
 import warnings
 import typing
 
-import numpy as np
-import netCDF4 # type: ignore
 import cftime # type: ignore
+import netCDF4 # type: ignore
+import numpy as np
+import pyproj
 
 from utils.conversion import t2s
-from perturb import random_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
+from grid import Grid
+from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
 
+# both the topaz and ERA5 data are projected onto the same grid
+# todo: do we need to investigate a way to implement grid for arbitrary forcing data?
+_proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
+_grid:Grid = Grid.regular_grid(_proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
 
 def get_time_index_from_nc(f: netCDF4.Dataset, time_varname:str, time_units:str, time: datetime) -> int:
     """Get the time index from the netcdf file"""
@@ -80,13 +86,13 @@ def geostrophic_perturb(fname:str, options:dict, itime:int, pert:np.ndarray, var
     -------
     None
     """
-    if options['do_adjust'] != True: return
+    if not options['do_adjust']: return
 
     pres_name: str = options['pres_name']
     if pres_name != varname: return
 
     # doing wind perturbations by considering the geostrophic balance
-    pert_u, pert_v = pres_adjusted_wind_perturb(grid,
+    pert_u, pert_v = pres_adjusted_wind_perturb(_grid,
                                                 options['pres_pert_amp'],
                                                 options['wind_pert_amp'],
                                                 options['hcorr'], pert)
@@ -95,9 +101,9 @@ def geostrophic_perturb(fname:str, options:dict, itime:int, pert:np.ndarray, var
     vname:str = options['v_name']
     u: np.ndarray = read_var(fname, [uname,], itime)
     v: np.ndarray = read_var(fname, [vname,], itime)
-    u = apply_perturb(grid, u, pert_u, options['type'])
-    v = apply_perturb(grid, v, pert_v, options['type'])
-    if options['wind_amp_name'] != None:
+    u = apply_perturb(_grid, u, pert_u, options['type'])
+    v = apply_perturb(_grid, v, pert_v, options['type'])
+    if options['wind_amp_name'] != 'None':
         wind_amp_name:str = options['wind_amp_name']
         wind_amp = np.sqrt(u**2 + v**2)
         write_var(fname, [wind_amp_name,], wind_amp, itime)
@@ -133,29 +139,36 @@ def perturb_forcing(perturb_options:dict, time: datetime, prev_time: datetime) -
         for i, varname in enumerate(options['names']):
             if typing.TYPE_CHECKING:
                 assert type(varname) == str, 'variable name must be a string'
+
+            # convert the horizontal correlation length scale to grid points
+            hcorr = options['hcorr'][i]/_grid.dx
             # get the perturbations
             prev_perturb_file = os.path.join(pert_path, f'perturb_{varname.replace("/", "_")}_{t2s(prev_time)}.npy')
             if os.path.exists(prev_perturb_file):
                 pert = np.load(prev_perturb_file)
             else:
-                pert = random_perturb(grid, options['type'][i], options['amp'][i], options['hcorr'][i])
+                pert = gen_perturb(_grid, options['type'][i], options['amp'][i], hcorr)
+
             # apply perturbations to the variable data
             # in the case of vector fields, we need to split the variable name
             varname_list: list[str] = varname.split(';')
             # read the variable data from forcing file
             data: np.ndarray = read_var(fname, varname_list, itime)
             # apply perturbations to the variable data
-            data = apply_perturb(grid, data, pert, options['type'][i])
+            data = apply_perturb(_grid, data, pert, options['type'][i])
             # apply lower and upper bounds
-            lb = options['lower_bounds'][i] if options['lower_bounds'][i] != None else -np.inf
-            ub = options['upper_bounds'][i] if options['upper_bounds'][i] != None else np.inf
+            lb = options['lower_bounds'][i] if options['lower_bounds'][i] != 'None' else -np.inf
+            ub = options['upper_bounds'][i] if options['upper_bounds'][i] != 'None' else np.inf
             data = np.minimum(np.maximum(data, lb), ub)
             # write the perturbed variable back to the forcing file
             write_var(fname, varname_list, data, itime)
+
             # generate wind perturbations and apply them to the atmosphere forcing files based on pressure perturbations
-            if forcing_name == 'atmosphere': geostrophic_perturb(fname, perturb_forcing_options['geostrophic_wind_adjust'], itime, pert, varname)
+            if forcing_name == 'atmosphere': geostrophic_perturb(fname, perturb_forcing_options['geostrophic_wind_adjust'],
+                                                                 itime, pert, varname)
+
             # generate random perturbations for next time step with AR1 correlation
-            pert_new = random_perturb(grid, options['type'][i], options['amp'][i], options['hcorr'][i])
+            pert_new = gen_perturb(_grid, options['type'][i], options['amp'][i], options['hcorr'][i])
             pert = apply_AR1_perturb(pert_new, options['tcorr'][i], pert)
             # save the perturbations for the next time step
             perturb_file:str = os.path.join(pert_path, f'perturb_{varname.replace("/", "_")}_{t2s(time)}.npy')
