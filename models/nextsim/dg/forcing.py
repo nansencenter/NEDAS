@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import os
 import warnings
 import typing
@@ -6,7 +7,7 @@ import typing
 import cftime # type: ignore
 import netCDF4 # type: ignore
 import numpy as np
-import pyproj
+import pyproj # type: ignore
 
 from utils.conversion import t2s
 from grid import Grid
@@ -15,14 +16,52 @@ from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, appl
 # both the topaz and ERA5 data are projected onto the same grid
 # todo: do we need to investigate a way to implement grid for arbitrary forcing data?
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
-_grid:Grid = Grid.regular_grid(_proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
 
-def get_time_index_from_nc(f: netCDF4.Dataset, time_varname:str, time_units:str, time: datetime) -> int:
+def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str, forcing_file_date_format:str) -> tuple[str, str]:
+    """Get the forcing file time based on the current time, the forcing start date and the forcing interval
+
+    Parameters
+    ----------
+    current_date : datetime
+        current date
+    initial_date : str
+        forcing start date
+    interval : str
+        forcing interval
+
+    Returns
+    -------
+    tuple[str, str]
+        start date and end date of the forcing file for current time
+    """
+    # Parse the dates
+    initial_date_dt:datetime = datetime.strptime(initial_date, forcing_file_date_format)
+    keywords:dict[str, str] = {'y': 'years', 'm': 'months', 'd': 'days'}
+    # Initialize start and end dates
+    start_date = initial_date_dt
+    end_date = initial_date_dt + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])})
+
+    assert current_date >= start_date, \
+        f'Current time {current_date} is earlier than the initial forcing date {initial_date}'
+    # Calculate the intervals until the current date is within the range
+    while end_date <= current_date:
+        start_date = end_date
+        end_date = start_date + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])})
+
+    # Format the dates back to strings
+    start_date_str = start_date.strftime(forcing_file_date_format)
+    end_date_str = end_date.strftime(forcing_file_date_format)
+
+    return start_date_str, end_date_str
+
+
+def get_time_index_from_nc(fname:str, time_varname:str, time_units:str, time: datetime) -> int:
     """Get the time index from the netcdf file"""
-    # get the start time of the current file
-    start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
-    # get the time step
-    time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
+    with netCDF4.Dataset(fname, 'r') as f:
+        # get the start time of the current file
+        start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
+        # get the time step
+        time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
     return np.rint((time - start_time) / time_step)
 
 
@@ -65,7 +104,7 @@ def write_var(fname:str, varnames: list[str], data: np.ndarray, itime: int) -> N
             f[vname][itime] = data[i]
 
 
-def geostrophic_perturb(fname:str, options:dict, itime:int, pert:np.ndarray, varname:str) -> None:
+def geostrophic_perturb(fname:str, grid:Grid, options:dict, itime:int, pert:np.ndarray, varname:str) -> None:
     """Perturb the atmosphere wind by the geostrophic balance.
     This applies to horizontal 2D wind fields.
 
@@ -92,17 +131,17 @@ def geostrophic_perturb(fname:str, options:dict, itime:int, pert:np.ndarray, var
     if pres_name != varname: return
 
     # doing wind perturbations by considering the geostrophic balance
-    pert_u, pert_v = pres_adjusted_wind_perturb(_grid,
-                                                options['pres_pert_amp'],
-                                                options['wind_pert_amp'],
-                                                options['hcorr'], pert)
+    pert_u, pert_v = pres_adjusted_wind_perturb(grid,
+                                                float(options['pres_pert_amp']),
+                                                float(options['wind_pert_amp']),
+                                                float(options['hcorr']), pert)
 
     uname:str = options['u_name']
     vname:str = options['v_name']
     u: np.ndarray = read_var(fname, [uname,], itime)
     v: np.ndarray = read_var(fname, [vname,], itime)
-    u = apply_perturb(_grid, u, pert_u, options['type'])
-    v = apply_perturb(_grid, v, pert_v, options['type'])
+    u = apply_perturb(grid, u, pert_u, options['type'])
+    v = apply_perturb(grid, v, pert_v, options['type'])
     if options['wind_amp_name'] != 'None':
         wind_amp_name:str = options['wind_amp_name']
         wind_amp = np.sqrt(u**2 + v**2)
@@ -111,8 +150,20 @@ def geostrophic_perturb(fname:str, options:dict, itime:int, pert:np.ndarray, var
     write_var(fname, [vname, ], v, itime)
 
 
-def perturb_forcing(perturb_options:dict, time: datetime, prev_time: datetime) -> None:
-    """perturb the forcing variables"""
+def perturb_forcing(perturb_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
+    """perturb the forcing variables
+
+    Parameters
+    ----------
+    perturb_options : dict
+        perturbation options from the yaml file
+    i_ens : int
+        ensemble index
+    time : datetime
+        current time
+    prev_time : datetime
+        previous time
+    """
 
     # perturbation arrays
     pert: np.ndarray[typing.Any, np.dtype[np.float64]]
@@ -132,22 +183,41 @@ def perturb_forcing(perturb_options:dict, time: datetime, prev_time: datetime) -
                       f' if you\'d like to perturb the {forcing_name} forcing')
             break
 
-        fname = perturb_forcing_options['filename']
-        options = perturb_forcing_options['all']
+        # derive the forcing file name
+        # the format of the forcing file name
+        file_format:str = perturb_forcing_options['file_format']
+        # the date of the first forcing file
+        forcing_file_initial_date:str = perturb_forcing_options['forcing_file_initial_date']
+        # the length of the each forcing file
+        forcing_file_interval:str = perturb_forcing_options['forcing_file_interval']
+        # the length of the each forcing file
+        forcing_file_date_format:str = perturb_forcing_options['forcing_file_datetime_format']
+        # get the forcing file time
+        forcing_start_date:str
+        forcing_end_state:str
+        forcing_start_date, forcing_end_state = \
+            get_forcing_file_time(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
+        fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
+        # get grid object
+        # todo: clean up and further checks required
+        with netCDF4.Dataset(fname, 'r') as f:
+            grid = Grid(_proj, *_proj(f['data/longitude'], f['data/latitude']))
         # get current time index in the forcing file
         itime:int = get_time_index_from_nc(fname, perturb_forcing_options['time_name'], perturb_forcing_options['time_units'], time)
+        # get options for perturbing the forcing variables
+        options = perturb_forcing_options['all']
         for i, varname in enumerate(options['names']):
             if typing.TYPE_CHECKING:
                 assert type(varname) == str, 'variable name must be a string'
 
             # convert the horizontal correlation length scale to grid points
-            hcorr = options['hcorr'][i]/_grid.dx
+            hcorr = float(options['hcorr'][i])/grid.dx
             # get the perturbations
-            prev_perturb_file = os.path.join(pert_path, f'perturb_{varname.replace("/", "_")}_{t2s(prev_time)}.npy')
+            prev_perturb_file = os.path.join(pert_path, f'ensemble_{i_ens}', f'perturb_{varname.replace("/", "_")}_{t2s(prev_time)}.npy')
             if os.path.exists(prev_perturb_file):
                 pert = np.load(prev_perturb_file)
             else:
-                pert = gen_perturb(_grid, options['type'][i], options['amp'][i], hcorr)
+                pert = gen_perturb(grid, options['type'][i], float(options['amp'][i]), hcorr)
 
             # apply perturbations to the variable data
             # in the case of vector fields, we need to split the variable name
@@ -155,21 +225,21 @@ def perturb_forcing(perturb_options:dict, time: datetime, prev_time: datetime) -
             # read the variable data from forcing file
             data: np.ndarray = read_var(fname, varname_list, itime)
             # apply perturbations to the variable data
-            data = apply_perturb(_grid, data, pert, options['type'][i])
+            data = apply_perturb(grid, data, pert, options['type'][i])
             # apply lower and upper bounds
-            lb = options['lower_bounds'][i] if options['lower_bounds'][i] != 'None' else -np.inf
-            ub = options['upper_bounds'][i] if options['upper_bounds'][i] != 'None' else np.inf
+            lb = float(options['lower_bounds'][i]) if options['lower_bounds'][i] != 'None' else -np.inf
+            ub = float(options['upper_bounds'][i]) if options['upper_bounds'][i] != 'None' else np.inf
             data = np.minimum(np.maximum(data, lb), ub)
             # write the perturbed variable back to the forcing file
             write_var(fname, varname_list, data, itime)
 
             # generate wind perturbations and apply them to the atmosphere forcing files based on pressure perturbations
-            if forcing_name == 'atmosphere': geostrophic_perturb(fname, perturb_forcing_options['geostrophic_wind_adjust'],
+            if forcing_name == 'atmosphere': geostrophic_perturb(fname, grid, perturb_forcing_options['geostrophic_wind_adjust'],
                                                                  itime, pert, varname)
 
             # generate random perturbations for next time step with AR1 correlation
-            pert_new = gen_perturb(_grid, options['type'][i], options['amp'][i], options['hcorr'][i])
-            pert = apply_AR1_perturb(pert_new, options['tcorr'][i], pert)
+            pert_new = gen_perturb(grid, options['type'][i], float(options['amp'][i]), hcorr)
+            pert = apply_AR1_perturb(pert_new, float(options['tcorr'][i]), pert)
             # save the perturbations for the next time step
-            perturb_file:str = os.path.join(pert_path, f'perturb_{varname.replace("/", "_")}_{t2s(time)}.npy')
+            perturb_file:str = os.path.join(pert_path, f'ensemble_{i_ens}', f'perturb_{varname.replace("/", "_")}_{t2s(time)}.npy')
             np.save(perturb_file, pert)

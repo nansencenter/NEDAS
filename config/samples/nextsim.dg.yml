@@ -76,20 +76,27 @@ use_synthetic_obs: False
 ###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 
 model_def:
-  nextsim.v1:
-    config_file: '/home/aydogdu/GIT/NEDAS/models/nextsim/v1/default.yml'
+  nextsim.dg:
+    config_file: '/home/aydogdu/GIT/NEDAS/models/nextsim/dg/default.yml'
     nproc_per_mem: 16    ##number of processors to run a forecast
     walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
+    restart_file_format: '/bettik/yumengch-ext/run_nextsimdg/'
     perturb:
       # this is used to save the perturbation files (.npy format)
-      path: '/home/foo'
+      path: '/bettik/yumengch-ext/test_forcing_perturb'
       # atmosphere perturbation settings
       atmosphere:
-        # at the moment we are dealing with only one file
-        # specify the full path to the file
-        # todo: add support for multiple forcing files
-        filename: '/home/foo/25km_NH.ERA5_2010-01-01_2011-01-01.nc'
+        # specify the full path to the file with i being ensemble member index
+        # start and end are the start and end date of the forcing file
+        file_format: '/bettik/yumengch-ext/test_forcing_perturb/ensemble_{i}/25km_NH.ERA5_{start}_{end}.nc'
+        # datetime format to fill start and end date of the forcing file format
+        forcing_file_datetime_format: '%Y-%m-%d'
+        # initial start date of all the forcing file
+        # this will help us identify the current forcing file
+        forcing_file_initial_date: '2010-01-01'
+        # length of the forcing file given with units (year ['y'], month ['m'], day ['d'])
+        forcing_file_interval: '1y'
         # This is the time variable in the file used to locate the current forcing time
         # data is the group name in the file
         time_name: 'data/time'
@@ -108,7 +115,7 @@ model_def:
           # varname of v-component wind in forcing file
           v_name: 'v'
           # varname of pressure in forcing file
-          press_name: 'pair'
+          pres_name: 'pair'
           # varname of ||u|| wind in forcing file
           # if not such variable, set to None
           wind_amp_name: 'wind_speed'
@@ -146,7 +153,16 @@ model_def:
           # upper bounds of the data
           upper_bounds: [None, None, None, None, None]
       ocean:
-        filename: '/home/foo/25km_NH.TOPAZ4_2010-01-01_2011-01-01.nc'
+        # specify the full path to the file with i being ensemble member index
+        # start and end are the start and end date of the forcing file
+        file_format: '/bettik/yumengch-ext/test_forcing_perturb/ensemble_{i}/TOPAZ4_{start}_{end}.nc'
+        # datetime format to fill start and end date of the forcing file format
+        forcing_file_datetime_format: '%Y-%m-%d'
+        # initial start date of all the forcing file
+        # this will help us identify the current forcing file
+        forcing_file_initial_date: '2010-01-01'
+        # length of the forcing file given with units (year ['y'], month ['m'], day ['d'])
+        forcing_file_interval: '1y'
         # This is the time variable in the file used to locate the current forcing time
         time_name: 'data/time'
         # time metadata in the file used to locate the current forcing time
@@ -154,7 +170,7 @@ model_def:
         time_units: 'seconds since 1970-01-01T00:00:00Z'
         all:
           # the lists have 1-1 correspondence with other lists in this section
-          variables: ['mld', 'sss', 'sst', 'u;v']
+          names: ['data/mld', 'data/sss', 'data/sst', 'data/u;data/v']
           # type of perturbation:
           # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
           # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
