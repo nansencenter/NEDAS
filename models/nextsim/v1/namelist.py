@@ -13,7 +13,6 @@ def value_str(value):
         vstr = f'{value}'
     return vstr
 
-
 def namelist(m, time, forecast_period, run_dir='.'):
     """Generate namelist for nextsim v1 model
     Input:
@@ -24,7 +23,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     """
     ##start building the namelist content
     nmlstr = "[mesh]\n"
-    nmlstr += "filename="+value_str(m.mesh_file)+"\n"
+    nmlstr += "filename="+value_str(m.msh_filename)+"\n"
     nmlstr += "\n"
     nmlstr += "[setup]\n"
     nmlstr += "ice-type="+value_str(m.ice_type)+"\n"

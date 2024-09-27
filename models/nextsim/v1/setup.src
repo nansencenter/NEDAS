@@ -4,11 +4,11 @@ ulimit -s 2000000
 module --force purge
 ml load StdEnv
 ml load CMake/3.12.1
-ml load Boost/1.71.0-iimpi-2019b
-ml load netCDF/4.7.1-iimpi-2019b
-ml load FFTW/3.3.8-intel-2019b    # enkf/perturbation
-ml load imkl/2019.5.281-iimpi-2019b
-ml load iimpi/2019b
+ml -q load Boost/1.71.0-iimpi-2019b
+ml -q load netCDF/4.7.1-iimpi-2019b
+ml -q load FFTW/3.3.8-intel-2019b    # enkf/perturbation
+ml -q load imkl/2019.5.281-iimpi-2019b
+ml -q load iimpi/2019b
 
 # Linking module and neXtSIM envinronment variables
 export PETSC_DIR=/cluster/software/PETSc/3.12.4-intel-2019b
