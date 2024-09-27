@@ -1,4 +1,4 @@
-mesh_file: small_arctic_10km.msh  ##mesh filename
+msh_filename: small_arctic_10km.msh  ##mesh filename
 
 ice_type: topaz
 ocean_type: topaz
