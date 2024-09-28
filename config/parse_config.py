@@ -33,7 +33,7 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
       if true, parse runtime arguments with argparse
       NB: only enable this once in a program to avoid namespace confusion
     - **kwargs
-      config_dict entries can also be set here
+      config_dict entries can also be added/updated through kwargs
 
     Return:
     - config_dict: dict[key, value]
@@ -50,6 +50,9 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
 
     if parse_args:
         input_args = sys.argv[1:]
+        if len(input_args) == 0:
+            print(f"Usage: {sys.argv[0]} -c YAML_config_file")
+            exit()
     else:
         input_args = {}
 
@@ -72,21 +75,17 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     ##update config_dict if new config_file is provided
     if config_file is not None:
         with open(config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f)}
+            config_dict = {**config_dict, **yaml.safe_load(f), **kwargs}
 
     if args.config_file is not None:
         with open(args.config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f)}
+            config_dict = {**config_dict, **yaml.safe_load(f), **kwargs}
 
     ##continue building the parser with additional arguments to update
     ##individual config variables in config_dict
     parser = argparse.ArgumentParser()
 
     for key, value in config_dict.items():
-
-        ##update value if they are specified in kwargs
-        if key in kwargs:
-            value = kwargs[key]
 
         value = convert_scientific_notation(value)
 
@@ -104,14 +103,12 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
 
     ##show help message
     if args.help:
-        print(f"""Parsing configuration:
+        print(f"""
+Default configuration variables are defined in 'default.yml' in the code directory.
 
-Default values can be defined in default.yml in the code directory
+You can specify a YAML config file by [-c YAML_FILE] or [--config_file YAML_FILE] to overwrite the default configuration.
 
-You can specify a yaml config file to overwrite (part of) the default configuration
-usage: code.py [-c YAML_FILE] [--config_file YAML_FILE]
-
-The following arguments also allow you to update a configuration variable at runtime:
+Furthermore, you can also overwrite some configuration variables by specifying them at runtime:
 """)
         parser.print_help()
         exit()
