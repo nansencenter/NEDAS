@@ -75,11 +75,14 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     ##update config_dict if new config_file is provided
     if config_file is not None:
         with open(config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f), **kwargs}
+            config_dict = {**config_dict, **yaml.safe_load(f)}
 
     if args.config_file is not None:
         with open(args.config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f), **kwargs}
+            config_dict = {**config_dict, **yaml.safe_load(f)}
+
+    ##append new config variables defined in kwargs
+    config_dict = {**config_dict, **kwargs}
 
     ##continue building the parser with additional arguments to update
     ##individual config variables in config_dict
