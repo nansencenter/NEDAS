@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta # type: ignore
 import os
 import warnings
 import typing
@@ -13,8 +13,7 @@ from utils.conversion import t2s
 from grid import Grid
 from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
 
-# both the topaz and ERA5 data are projected onto the same grid
-# todo: do we need to investigate a way to implement grid for arbitrary forcing data?
+# both the topaz and ERA5 data are projected onto the same grid at the moment
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
 def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str, forcing_file_date_format:str) -> tuple[str, str]:
@@ -55,9 +54,10 @@ def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str
     return start_date_str, end_date_str
 
 
-def get_time_index_from_nc(fname:str, time_varname:str, time_units:str, time: datetime) -> int:
+def get_time_index_from_nc(fname:str, time_varname:str, time_units_name:str, time: datetime) -> int:
     """Get the time index from the netcdf file"""
     with netCDF4.Dataset(fname, 'r') as f:
+        time_units = f[time_units_name].units
         # get the start time of the current file
         start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
         # get the time step
@@ -150,12 +150,46 @@ def geostrophic_perturb(fname:str, grid:Grid, options:dict, itime:int, pert:np.n
     write_var(fname, [vname, ], v, itime)
 
 
-def perturb_forcing(perturb_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
+def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) -> str:
+    """Get the forcing file name based on the current time and the forcing file format
+
+    Parameters
+    ----------
+    forcing_file_options : dict
+        forcing file options in the `file` section of the subsections of `perturb` section from the yaml file
+    i_ens : int
+        ensemble index
+    time : datetime
+        current time
+
+    Returns
+    -------
+    str
+        forcing file name
+    """
+    # derive the forcing file name
+    # the format of the forcing file name
+    file_format:str = forcing_file_options['format']
+    # the date of the first forcing file
+    forcing_file_initial_date:str = forcing_file_options['initial_date']
+    # the length of the each forcing file
+    forcing_file_interval:str = forcing_file_options['interval']
+    # the length of the each forcing file
+    forcing_file_date_format:str = forcing_file_options['datetime_format']
+    # get the forcing file time
+    forcing_start_date:str
+    forcing_end_state:str
+    forcing_start_date, forcing_end_state = \
+        get_forcing_file_time(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
+    return file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
+
+
+def perturb_forcing(forcing_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
     """perturb the forcing variables
 
     Parameters
     ----------
-    perturb_options : dict
+    forcing_options : dict
         perturbation options from the yaml file
     i_ens : int
         ensemble index
@@ -170,48 +204,34 @@ def perturb_forcing(perturb_options:dict, i_ens: int, time: datetime, prev_time:
     # path to the saved perturbation file for current time step
     prev_perturb_file: str
     # path to the directory of the perturbation files
-    pert_path: str = perturb_options['path']
-    # filename of the forcing file
-    fname: str
+    pert_path: str = forcing_options['path']
 
-    for forcing_name in ['atmosphere', 'ocean']:
-        try:
-            perturb_forcing_options:dict = perturb_options[forcing_name]
-        except KeyError:
-            warnings.warn(f'No {forcing_name} perturbation options found in the yaml file. '
-                      f'Please specify the perturbation options in "{forcing_name}" section of nextsim.dg'
-                      f' if you\'d like to perturb the {forcing_name} forcing')
-            break
+    for forcing_name in forcing_options.keys():
+        # forcing options for each component, e.g., atmosphere or ocean
+        forcing_options_comp:dict = forcing_options[forcing_name]
 
-        # derive the forcing file name
-        # the format of the forcing file name
-        file_format:str = perturb_forcing_options['file_format']
-        # the date of the first forcing file
-        forcing_file_initial_date:str = perturb_forcing_options['forcing_file_initial_date']
-        # the length of the each forcing file
-        forcing_file_interval:str = perturb_forcing_options['forcing_file_interval']
-        # the length of the each forcing file
-        forcing_file_date_format:str = perturb_forcing_options['forcing_file_datetime_format']
-        # get the forcing file time
-        forcing_start_date:str
-        forcing_end_state:str
-        forcing_start_date, forcing_end_state = \
-            get_forcing_file_time(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
-        fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
-        # get grid object
-        # todo: clean up and further checks required
-        with netCDF4.Dataset(fname, 'r') as f:
-            grid = Grid(_proj, *_proj(f['data/longitude'], f['data/latitude']))
+        # get the forcing file name
+        fname:str = get_forcing_filename(forcing_options_comp['file'], i_ens, time)
         # get current time index in the forcing file
-        itime:int = get_time_index_from_nc(fname, perturb_forcing_options['time_name'], perturb_forcing_options['time_units'], time)
+        itime:int = get_time_index_from_nc(fname, forcing_options_comp['file']['time_name'],
+                                           forcing_options_comp['file']['time_units_name'], time
+                                           )
+
+        # get grid object
+        with netCDF4.Dataset(fname, 'r') as f:
+            grid = Grid(_proj, *_proj(f[forcing_options_comp['file']['lon_name']],
+                                      f[forcing_options_comp['file']['lat_name']]
+                                      )
+                        )
+
         # get options for perturbing the forcing variables
-        options = perturb_forcing_options['all']
+        options = forcing_options_comp['variables']
         for i, varname in enumerate(options['names']):
             if typing.TYPE_CHECKING:
                 assert type(varname) == str, 'variable name must be a string'
 
             # convert the horizontal correlation length scale to grid points
-            hcorr = float(options['hcorr'][i])/grid.dx
+            hcorr:int = np.rint(float(options['hcorr'][i])/grid.dx)
             # get the perturbations
             prev_perturb_file = os.path.join(pert_path, f'ensemble_{i_ens}', f'perturb_{varname.replace("/", "_")}_{t2s(prev_time)}.npy')
             if os.path.exists(prev_perturb_file):
@@ -234,7 +254,7 @@ def perturb_forcing(perturb_options:dict, i_ens: int, time: datetime, prev_time:
             write_var(fname, varname_list, data, itime)
 
             # generate wind perturbations and apply them to the atmosphere forcing files based on pressure perturbations
-            if forcing_name == 'atmosphere': geostrophic_perturb(fname, grid, perturb_forcing_options['geostrophic_wind_adjust'],
+            if forcing_name == 'atmosphere': geostrophic_perturb(fname, grid, forcing_options_comp['geostrophic_wind_adjust'],
                                                                  itime, pert, varname)
 
             # generate random perturbations for next time step with AR1 correlation
