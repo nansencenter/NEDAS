@@ -84,7 +84,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
 
-    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_exp.py --config_file=<my_config_file>`
+    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_expt.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_expt.py --config_file=<my_config_file>`
 
     On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
 
@@ -92,7 +92,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
 * **config/** contains a `Config` class to handle configuration files, and some sample yaml configuration files are provided.
 
-* **scripts/** contains top-level control scripts `run_exp.py`, and the two main steps `ensemble_forecast.py` and `assimilate.py`. Users can take these as an example and create their own workflow in their experiments.
+* **scripts/** contains top-level control scripts `run_expt.py`, and the two main steps `ensemble_forecast.py` and `assimilate.py`. Users can take these as an example and create their own workflow in their experiments.
 
 * **assim\_tools/** contains the functions handling model state variables in `state.py`, functions handling observations in `obs.py`, core DA algorithms in `analysis.py`, and post-processing functions in `update.py`.
 
