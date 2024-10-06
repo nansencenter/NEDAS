@@ -1,12 +1,12 @@
 import numpy as np
 import os
 import struct
-import importlib
 
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.multiscale import get_scale_component
+from utils.dir_def import forecast_dir
 
 """
 Note: The analysis is performed on a regular grid.
@@ -35,20 +35,18 @@ def parse_state_info(c):
     - info: dict
       A dictionary with some dimensions and list of unique field records
     """
-    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}, 'scalars':[]}
+    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
     variables = set()
 
     ##loop through variables in state_def
-    for vrec in c.state_def:
-        vname = vrec['name']
+    for vname, vrec in c.state_def.items():
         variables.add(vname)
 
         if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
             ##some properties of the variable is defined in its source module
-            # src = importlib.import_module('models.'+vrec['model_src'])
             src = c.model_config[vrec['model_src']]
             assert vname in src.variables, 'variable '+vname+' not defined in '+vrec['model_src']+' Model.variables'
 
@@ -73,17 +71,9 @@ def parse_state_info(c):
                     pos += nv * fld_size * type_size[rec['dtype']]
                     rec_id += 1
 
-        if vrec['var_type'] == 'scalar':
-            ##this is a scalar (model parameter, etc.) to be updated
-            ##since there is no difficulty storing the scalars on 1 proc
-            ##we don't bother with parallelization (no rec_id needed)
-            for time in c.time + np.array(c.state_time_steps)*dt1h:
-                rec = {'name': vname,
-                       'model_src': vrec['model_src'],
-                       'err_type': vrec['err_type'],
-                       'time': time,
-                      }
-                info['scalars'].append(rec)
+        else:
+            raise NotImplementedError(f"{vrec['var_type']} is not supported in the state vector.")
+
 
     if c.debug:
         print(f"number of ensemble members, nens={c.nens}", flush=True)
@@ -359,10 +349,10 @@ def output_ens_mean(c, fields, mean_file):
     - mean_file: str
       path to the output binary file for the ensemble mean
     """
-
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
     if c.debug:
         print('compute ensemble mean, save to '+mean_file+'\n')
+
     if c.pid == 0:
         open(mean_file, 'wb')
         write_state_info(mean_file, c.state_info)
@@ -436,7 +426,7 @@ def prepare_state(c):
             rec = c.state_info['fields'][rec_id]
 
             ##directory storing model output
-            path = os.path.join(c.work_dir, 'cycle', t2s(rec['time']), rec['model_src'])
+            path = forecast_dir(c, rec['time'], rec['model_src'])
 
             ##the model object for handling this variable
             model = c.model_config[rec['model_src']]
@@ -444,15 +434,18 @@ def prepare_state(c):
             model.read_grid(path=path, member=mem_id, **rec)
             model.grid.set_destination_grid(c.grid)
 
-            ##read field and save to dict
+            ##read field from restart file
             var = model.read_var(path=path, member=mem_id, **rec)
             fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
-            fields[mem_id, rec_id] = fld
 
-            ##misc. transform
-            if len(c.character_length) > 1:
+            ##misc. transform can be added here
+            ##e.g., multiscale approach
+            if c.nscale > 1:
                 ##get scale component for multiscale approach
                 fld = get_scale_component(c.grid, fld, c.character_length, c.s)
+
+            ##save field to dict
+            fields[mem_id, rec_id] = fld
 
             ##read z_coords for the field
             ##only need to generate the uniq z coords, store in bank
@@ -468,13 +461,7 @@ def prepare_state(c):
 
     ##additonal output of debugging
     if c.debug:
-        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
-        if c.pid_rec == 0:
-            print('mem', c.pid_mem, c.mem_list[c.pid_mem])
-        if c.pid_mem == 0:
-            print('rec', c.pid_rec, c.rec_list[c.pid_rec])
-        np.save(analysis_dir+'/fields_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), fields)
+        np.save(os.path.join(c.analysis_dir, f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
 
     return fields, z_coords
-
 

@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import by_rank
 
@@ -406,11 +407,10 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
 
     if c.debug:
-        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
-        np.save(analysis_dir+'/state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
-        np.save(analysis_dir+'/z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
-        np.save(analysis_dir+'/lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
-        np.save(analysis_dir+'/lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+        np.save(os.path.join(c.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state_prior)
+        np.save(os.path.join(c.analysis_dir, f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), z_state)
+        np.save(os.path.join(c.analysis_dir, f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), lobs)
+        np.save(os.path.join(c.analysis_dir, f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), lobs_prior)
 
     return state_prior, z_state, lobs, lobs_prior
 

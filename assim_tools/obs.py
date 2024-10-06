@@ -2,11 +2,12 @@ import numpy as np
 import os
 import struct
 import importlib
-
+from grid import Grid
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import by_rank, bcast_by_root, distribute_tasks
-
+from utils.multiscale import get_scale_component, get_error_scale_factor
+from utils.dir_def import forecast_dir
 from .state import read_field
 
 """
@@ -45,8 +46,7 @@ def parse_obs_info(c):
     pos = 0         ##seek position for rec
 
     ##loop through obs variables defined in obs_def
-    for vrec in c.obs_def:
-        vname = vrec['name']
+    for vname, vrec in c.obs_def.items():
 
         ##some properties of the variable is defined in its source module
         src = importlib.import_module('dataset.'+vrec['dataset_src'])
@@ -119,7 +119,7 @@ def read_mean_z_coords(c, time):
       z coordinate fields for all unique level k defined in state_info
     """
     ##first, get a list of indices k
-    z_file = os.path.join(c.work_dir, 'cycle', t2s(time), 'analysis', c.s_dir, 'z_coords.bin')
+    z_file = os.path.join(c.analysis_dir, 'z_coords.bin')
     k_list = list(set([r['k'] for i,r in c.state_info['fields'].items() if r['time']==time]))
 
     ##get z coords for each level
@@ -394,9 +394,9 @@ def state_to_obs(c, **kwargs):
     ## if dataset module provides an obs_operator, use it to compute obs
     if hasattr(obs_src, 'obs_operator') and kwargs['model_src'] in obs_src.obs_operator and kwargs['name'] in obs_src.obs_operator[kwargs['model_src']]:
         if synthetic:
-            path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
+            path = model.truth_dir
         else:
-            path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
+            path = forecast_dir(c, time, kwargs['model_src'])
 
         operator = obs_src.obs_operator[kwargs['model']]
         # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['dataset_src']+'.obs_operator for '+kwargs['model_src']
@@ -411,7 +411,7 @@ def state_to_obs(c, **kwargs):
 
         levels = model.variables[obs_name]['levels']
         for k in range(len(levels)):
-            if obs_name in [r['name'] for r in c.state_def] and not synthetic:
+            if obs_name in c.state_def.keys() and not synthetic:
                 ##the obs is one of the state variables
                 ##find its corresponding rec_id
                 rec_id = [i for i,r in c.state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
@@ -422,15 +422,14 @@ def state_to_obs(c, **kwargs):
                     fld = kwargs['model_fld'][mem_id, rec_id]
 
                 else:  ##option 1.2: read field from state binfile
-                    path = os.path.join(c.work_dir,'cycle',t2s(time),'analysis',c.s_dir)
-                    z = read_field(os.path.join(path,'/z_coords.bin'), c.state_info, c.mask, 0, rec_id)
-                    fld = read_field(os.path.join(path,'/prior_state.bin'), c.state_info, c.mask, mem_id, rec_id)
+                    z = read_field(os.path.join(c.analysis_dir,'z_coords.bin'), c.state_info, c.mask, 0, rec_id)
+                    fld = read_field(os.path.join(c.analysis_dir,'prior_state.bin'), c.state_info, c.mask, mem_id, rec_id)
 
             else:  ##option 1.3: get the field from model.read_var
                 if synthetic:
-                    path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
+                    path = model.truth_dir
                 else:
-                    path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
+                    path = forecast_dir(c, time, kwargs['model_src'])
 
                 if k == 0:  ##initialize grid obj for conversion
                     model.read_grid(path=path, **kwargs)
@@ -542,9 +541,7 @@ def prepare_obs(c):
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            truth_path = os.path.join(c.model_def[obs_rec['model_src']]['truth_dir'])
-
-            seq = src.random_network(path, c.grid, c.mask, z, truth_path, **obs_rec)
+            seq = src.random_network(path, c.grid, c.mask, z, model.truth_dir, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -560,18 +557,24 @@ def prepare_obs(c):
         if c.debug:
             by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 
+        ##misc. transform here
+        ##e.g., multiscale approach:
+        if c.nscale > 1 and c.decompose_obs:
+            obs_grid = Grid(c.grid.proj, seq['x'], seq['y'], regular=False)
+            seq['obs'] = get_scale_component(obs_grid, seq['obs'], c.character_length, c.s)
+            seq['err_std'] *= get_error_scale_factor(obs_grid, c.character_length, c.s)
+
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
     ##additional output for debugging
     if c.debug:
-        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
         if c.pid == 0:
-            np.save(analysis_dir+'/obs_inds.npy', c.obs_inds)
-            np.save(analysis_dir+'/partitions.npy', c.partitions)
-            np.save(analysis_dir+'/par_list.npy', c.par_list)
+            np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
+            np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
+            np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
         if c.pid_mem == 0:
-            np.save(analysis_dir+'/obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
+            np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
 
     return c.obs_info, obs_seq
 
@@ -615,14 +618,20 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
                                model_fld=fields, model_z=z_fields,
                                **obs_rec, **obs_seq[obs_rec_id])
 
+            ##misc. transform here
+            ##e.g., multiscale approach:
+            if c.nscale > 1 and c.decompose_obs:
+                obs_grid = Grid(c.grid.proj, obs_seq[obs_rec_id]['x'], obs_seq[obs_rec_id]['y'], regular=False)
+                seq = get_scale_component(obs_grid, seq, c.character_length, c.s)
+
             obs_prior_seq[mem_id, obs_rec_id] = seq
+
     if c.debug:
         print(' done.\n')
 
     ##additional output for debugging
     if c.debug:
-        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
-        np.save(analysis_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
+        np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
 
     return obs_prior_seq
 
