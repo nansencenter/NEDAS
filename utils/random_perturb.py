@@ -4,29 +4,26 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 from utils.spatial_operation import gradx, grady, warp
 from utils.fft_lib import fft2, ifft2, get_wn
 
-##top-level function
-def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3, prev_perturb=None):
+def random_perturb(grid, fld, prev_perturb=None, **kwargs):
     """
     Add random perturbation to the given 2D field
     Input:
-        - field: np.array
         - grid: Grid object for the 2d field
-        - perturb_type: 'gaussian', 'powerlaw', 'empirical', or 'displace'
-        - amp: float
-        - hcorr: float
-        - tcorr: float (optional)
-        - perturb_prev; dict(str, np.array), previous perturbation data
+        - fld: np.array
+        - options: dict of config variables:
+            type: str: 'gaussian', 'powerlaw', or 'displace'
+            amplitude: float, (or list of floats, in multiscale approach)
+            hcorr: float
+            tcorr: float
+            powerlaw: float
+        - prev_perturb; None, or np.array from previous perturbation data
     """
-    ##generate perturbation according to prescribed parameters
+    perturb_type = kwargs['type']
     if perturb_type == 'gaussian':
         perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
 
     elif perturb_type == 'powerlaw':
         perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
-
-    elif perturb_type == 'empirical':
-        ##TODO: allow user to specify empirical spectrum for the perturbation
-        raise NotImplementedError
 
     elif perturb_type == 'displace':
         mask = np.full(grid.x.shape, False)
@@ -34,7 +31,7 @@ def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3
         perturb = np.array([du, dv])
 
     else:
-        raise TypeError('unknown perturbation type: '+perturb_type)
+        raise NotImplementedError('unknown perturbation type: '+perturb_type)
 
     ##create perturbations that are correlated in time
     autocorr = np.exp(-1.0)
@@ -48,11 +45,9 @@ def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3
     else:
         field += perturb
 
-    return field, perturb
+    return fld
 
 
-##draw a 2D random field given its power spectrum
-##two types of power spectra available: gaussian, or fixed power law (slope)
 def random_field_gaussian(nx, ny, amp, hcorr):
     """
     Random field with a Gaussian spectrum
