@@ -8,8 +8,8 @@ def random_perturb(grid, fld, prev_perturb=None, **kwargs):
     """
     Add random perturbation to the given 2D field
     Input:
-        - grid: Grid object for the 2d field
-        - fld: np.array
+        - grid: Grid object for the 2d field [ny, nx]
+        - fld: np.array, [...,ny,nx]
         - options: dict of config variables:
             type: str: 'gaussian', 'powerlaw', or 'displace'
             amplitude: float, (or list of floats, in multiscale approach)
@@ -20,32 +20,47 @@ def random_perturb(grid, fld, prev_perturb=None, **kwargs):
     """
     perturb_type = kwargs['type']
     if perturb_type == 'gaussian':
-        perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
+        amp = kwargs['amp']
+        hcorr = kwargs['hcorr']
+        tcorr = kwargs['tcorr']
+        dx = grid.dx
+        dt = kwargs['dt']
+        if isinstance(amp, list):   ##allow a list of perturb to be generated (multiscale)
+            nscale = len(amp)
+        else:
+            nscale = 1
+            amp, hcorr, tcorr = [amp], [hcorr], [tcorr]
+        perturb = np.zeros((nscale,)+fld.shape)
+        ##loop over scale s
+        for s in range(nscale):
+            ##draw a random field for each component [ny,nx] in fld
+            for ind in np.ndindex(fld.shape[:-2]):
+                perturb[(s,)+ind] = random_field_gaussian(grid.nx, grid.ny, amp[s], hcorr[s]/dx)
+
+            ##create perturbations that are correlated in time
+            autocorr = np.exp(-1.0)
+            alpha = autocorr**(1.0 / (tcorr[s]/dt))
+            if prev_perturb is not None:
+                perturb[s] = np.sqrt(1-alpha**2) * perturb[s] + alpha * prev_perturb[s]
+
+        fld += np.sum(perturb, axis=0)
+
+    ##TODO: gaussian with exp error
 
     elif perturb_type == 'powerlaw':
         perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
+        fld += perturb
 
     elif perturb_type == 'displace':
         mask = np.full(grid.x.shape, False)
         du, dv = random_displacement(grid, mask, amp, hcorr)
         perturb = np.array([du, dv])
+        fld = warp(fld, perturb[0,...], perturb[1,...])
 
     else:
         raise NotImplementedError('unknown perturbation type: '+perturb_type)
 
-    ##create perturbations that are correlated in time
-    autocorr = np.exp(-1.0)
-    alpha = autocorr**(1.0/tcorr)
-    if prev_perturb is not None:
-        perturb = np.sqrt(1-alpha**2) * perturb + alpha * prev_perturb
-
-    ##apply the perturbation
-    if perturb_type == 'displace':
-        field = warp(field, perturb[0,...], perturb[1,...])
-    else:
-        field += perturb
-
-    return fld
+    return fld, perturb
 
 
 def random_field_gaussian(nx, ny, amp, hcorr):
@@ -153,9 +168,9 @@ def random_displacement(grid, mask, amp, hcorr):
     return du, dv
 
 
-def random_pres_wind_perturb(grid, dt, prev_pres, prev_u, prev_v,
-                             ampl_pres, ampl_wind, hscale, tscale,
-                             pres_wind_relate=True, wlat=15.):
+def random_press_wind_perturb(grid, dt, prev_pres, prev_u, prev_v,
+                              ampl_pres, ampl_wind, hscale, tscale,
+                              pres_wind_relate=True, wlat=15.):
     ###generate a random perturbation for wind u,v and pressure
 
     ##some constants
