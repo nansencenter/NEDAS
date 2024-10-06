@@ -72,7 +72,8 @@ def get_scale_component_convolve(grid, fld, character_length, s):
 
     nscale = len(character_k)
     if nscale == 1:
-        return fld ##nothing to be done, return the original field
+        ##nothing to be done, return the original field
+        return fld
 
     ##make a regular grid for the kernel function
     rgrid = Grid.regular_grid(grid.proj, grid.xmin, grid.xmax, grid.ymin, grid.ymax, grid.dx)
@@ -85,7 +86,7 @@ def get_scale_component_convolve(grid, fld, character_length, s):
         r = lowpass_response(k2d, character_k[s], character_k[s+1])
         return convolve(grid, fld, rgrid, r)
     if s == nscale-1:
-        r= lowpass_response(k2d, character_k[s-1], character_k[s])
+        r = lowpass_response(k2d, character_k[s-1], character_k[s])
         return fld - convolve(grid, fld, rgrid, r)
     if s > 0 and s < nscale-1:
         r1 = lowpass_response(k2d, character_k[s-1], character_k[s])
@@ -98,14 +99,50 @@ def get_scale_component(grid, fld, character_length, s):
     Get scale component using a bandpass filter in spectral space
     Input:
     - grid: Grid object
-    - fld: array, ny*nx, the input field
+    - fld: array, [..., ny, nx], the input field
     - character_length: list of characteristic length for each scale
     - s: int, scale index
     Return:
-    - fld: array, ny*nx, the scale component s of input fld
+    - fld: array, the scale component s of input fld
     """
+    flds = fld.copy()
     if grid.regular:
-        return get_scale_component_spec_bandpass(grid, fld, character_length, s)
+        for i in np.ndindex(fld.shape[:-2]):
+            flds[i] = get_scale_component_spec_bandpass(grid, fld[i], character_length, s)
     else:
-        return get_scale_component_convolve(grid, fld, character_length, s)
+        for i in np.ndindex(fld.shape[:-1]):
+            flds[i] = get_scale_component_convolve(grid, fld[i], character_length, s)
+    return flds
+
+
+def get_error_scale_factor(grid, character_length, s):
+    err_scale_fac = np.ones(grid.x.shape)
+    L = max(grid.Lx, grid.Ly)
+    character_k = L / np.array(character_length)
+    nscale = len(character_k)
+    if nscale == 1:
+        return err_scale_fac
+
+    rgrid = Grid.regular_grid(grid.proj, grid.xmin, grid.xmax, grid.ymin, grid.ymax, grid.dx)
+    rgrid.set_destination_grid(grid)
+    kx, ky = get_wn(rgrid.x)
+    ny, nx = rgrid.x.shape
+    k2d = np.hypot(kx, ky)
+    if s == 0:
+        response = lowpass_response(k2d, character_k[s], character_k[s+1])
+    if s == nscale-1:
+        response = 1 - lowpass_response(k2d, character_k[s-1], character_k[s])
+    if s > 0 and s < nscale-1:
+        r1 = lowpass_response(k2d, character_k[s-1], character_k[s])
+        r2 = lowpass_response(k2d, character_k[s], character_k[s+1])
+        response = r2 - r1
+
+    for i in np.ndindex(grid.x.shape):
+        ##shift to the grid point i position
+        r = response * np.exp(-2 * np.pi * complex(0,1) * (kx*grid.x[i] + ky*grid.y[i]) / L)
+        ##convert to physical space
+        kernel = ifft2(r) * nx * ny / grid.x.size
+        w = rgrid.convert(kernel)
+        err_scale_fac[i] = w[i]
+    return err_scale_fac
 
