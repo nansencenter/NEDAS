@@ -101,17 +101,17 @@ perturb:
   model_src: 'topaz.v5'     ##which model src this variable comes from
   type: 'gaussian'          ##what type of perturbation
   amp: [2.5, 10]            ##perturbation amplitude (list if multiscale approach)
-  hcorr: [2.e6, 2.e5]       ##horizontal correlation length (meters)
+  hcorr: [2.e6, 2.5e5]       ##horizontal correlation length (meters)
   tcorr: [168, 48]          ##temporal correlation length (hours)
 - variable: 'atmos_surf_press'
   model_src: 'topaz.v5'
   type: 'gaussian'
-  amp: 10
-  hcorr: 2.e5
+  amp: 1.e5
+  hcorr: 2.5e5
   tcorr: 48
 - variable: 'atmos_precip'
   model_src: 'topaz.v5'
-  type: 'gaussian_exp'
+  type: 'gaussian'
   amp: 0.1
   hcorr: 2.5e5
   tcorr: 48
@@ -119,6 +119,12 @@ perturb:
   model_src: 'topaz.v5'
   type: 'gaussian'
   amp: 9
+  hcorr: 2.5e5
+  tcorr: 48
+- variable: 'atmos_down_shortwave'
+  model_src: 'topaz.v5'
+  type: 'gaussian'
+  amp: 0.002
   hcorr: 2.5e5
   tcorr: 48
 

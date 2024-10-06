@@ -14,46 +14,50 @@ def distribute_perturb_tasks(c):
     task_list = distribute_tasks(c.comm, task_list_full)
     return task_list
 
-def get_prev_perturb(c, rec):
-#     pass
-
-def perturb_field():
-    pass
+def perturb_save_file(c, model_name, vname, time, mem_id):
+    path = forecast_dir(c, time, model_name)
+    mstr = f'_mem{mem_id+1:03d}'
+    return os.path.join(path, 'perturb', vname+mstr+'.npy')
 
 def main(c):
     task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
 
     for rec in task_list[c.pid]:
         model_name = rec['model_src']
-        model = c.model_config[model_name]
+        model = c.model_config[model_name]  ##model class object
         vname = rec['variable']
         mem_id = rec['member']
         path = forecast_dir(c, c.time, model_name)
 
-        t0 = t2h(c.time)
-        dt = model.variables[vname]['dt']
-        nstep = c.cycle_period / dt
-        for d in np.arange(c.cycle_period/dt):
-            # print(f"perturbing {model_name} {rec['variable']}", flush=True)
+        ##check if previous perturb is available from past cycles
+        psfile = perturb_save_file(c, model_name, vname, c.prev_time, mem_id)
+        if os.path.exists(psfile):
+            perturb = np.load(psfile)
+        else:
+            perturb = None
 
-            ##read variable from model state
-            fld = model.read_var(path=path, name=vname, time=h2t(t), member=mem_id)
+        dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
+        nstep = c.cycle_period // dt        ##number of time steps to be perturbed
+        for n in np.arange(nstep):
+            t = c.time + n * dt * dt1h
 
-            prev_pert_file = os.path.join(path, 'perturb.'+vname+'.npy')
-            if os.path.exists(prev_pert_file):
-                prev_perturb = np.load(prev_pert_file)
-            else:
-                prev_perturb = None
+            for k in model.variables[vname]['levels']:
+                ##TODO: only works for surface layer variables now (forcing)
+                ##      but can be extended to 3D variables with additional vertical corr
 
-            ##generate perturbation
-            fld_new, pert = random_perturb(model.grid, fld, prev_perturb, **rec)
+                ##read variable from model state
+                fld = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
 
-            ##save a copy of perturbation for later cycle use
-            np.save(prev_pert_file, pert)
+                ##generate perturbation
+                fld_pert, perturb = random_perturb(model.grid, fld, prev_perturb=perturb, dt=dt, **rec)
 
-            ##write variable back to model state
-            model.write_var(fld_new, path=path, name=vname, time=h2t(t), member=mem_id)
+                ##write variable back to model state
+                model.write_var(fld_pert, path=path, name=vname, time=t, member=mem_id, k=k)
 
+        ##save a copy of perturbation for later cycles
+        psfile = perturb_save_file(c, model_name, vname, c.time, mem_id)
+        os.system(f"mkdir -p {os.path.dirname(psfile)}")
+        np.save(psfile, perturb)
 
 def perturb(c):
     """run this perturb.py script in a subprocess with mpi, using all nproc cores"""

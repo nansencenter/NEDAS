@@ -300,11 +300,12 @@ class Model(object):
 
     def preprocess(self, task_id=0, task_nproc=1, **kwargs):
         job_submit_cmd = kwargs['job_submit_cmd']
+        time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         restart_dir = kwargs['restart_dir']
 
         ##make sure model run directory exists
-        if 'path' in kwargs:V
+        if 'path' in kwargs:
             path = kwargs['path']
         else:
             path = '.'
@@ -368,13 +369,13 @@ class Model(object):
             tstr = time.strftime('%Y_%j_%H_0000')
             copy_file_src.append(os.path.join(restart_dir, 'restart.'+tstr+mstr+ext))
             copy_file_dst.append(os.path.join(path, 'restart.'+tstr+mstr+ext))
-            os.system(f"ln -fs {os.path.join(path, 'restart.'+tstr+mstr+ext)} {os.path.join(run_dir, 'restart.'+tstr+ext}")
+            os.system(f"ln -fs {os.path.join(path, 'restart.'+tstr+mstr+ext)} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
 
         os.system(f"mkdir -p {os.path.join(run_dir, 'cice')}")
         tstr = time.strftime('%Y-%m-%d-00000')
         copy_file_src.append(os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc'))
         copy_file_dst.append(os.path.join(path, 'iced.'+tstr+mstr+'.nc'))
-        os.system(f"ln -fs {os.path.join(path, 'iced.'+tstr+mstr+'.nc')} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'}")
+        os.system(f"ln -fs {os.path.join(path, 'iced.'+tstr+mstr+'.nc')} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
 
         ##parallel process the copying
         shell_cmd = ""
