@@ -1,9 +1,10 @@
 import numpy as np
 from numba import njit
+import time
 from utils.parallel import by_rank, bcast_by_root
 from utils.progress import print_with_cache, progress_bar
 from utils.conversion import t2h, h2t
-import time
+from utils.distribution import normal_cdf, inv_weighted_normal_cdf
 from .localization import local_factor
 
 def analysis(c, state_prior, z_state, lobs, lobs_prior):
@@ -11,7 +12,6 @@ def analysis(c, state_prior, z_state, lobs, lobs_prior):
         return batch_assim(c, state_prior, z_state, lobs, lobs_prior)
     elif c.assim_mode == 'serial':
         return serial_assim(c, state_prior, z_state, lobs, lobs_prior)
-
 
 ###pack/unpack local state and obs data for jitted functions:
 def pack_local_state_data(c, par_id, state_prior, z_state):
@@ -123,7 +123,6 @@ def unpack_local_obs_data(c, par_id, lobs, lobs_prior, data):
                 lobs_prior[m, r][par_id][v, :] = data['obs_prior'][m, i:i+d]
             i += d
 
-
 ###functions for the batch assimilation mode:
 def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     """batch assimilation solves the matrix version EnKF analysis for each local state, the local states in each partition are processed in parallel"""
@@ -187,7 +186,6 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print(' done.\n')
     return state_prior, lobs_prior
-
 
 @njit(cache=True)
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
@@ -260,7 +258,6 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
         lfactor_old = lfactor[ind]
         weights_old = weights
-
 
 @njit(cache=True)
 def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_factor):
@@ -352,7 +349,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
 
     return weights
 
-
 @njit(cache=True)
 def apply_ensemble_transform(ens_prior, weights):
     """Apply the weights to transform local ensemble"""
@@ -371,7 +367,6 @@ def apply_ensemble_transform(ens_prior, weights):
         ens_post[m] = np.sum(ens_prior * weights[:, m])
 
     return ens_post
-
 
 ###functions for the serial assimilation mode:
 def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
@@ -458,7 +453,6 @@ def global_obs_list(c):
     np.random.shuffle(obs_list)
     return obs_list
 
-
 @njit(cache=True)
 def obs_increment(obs_prior, obs, obs_err, filter_type):
     """
@@ -493,33 +487,82 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
     ##compute prior error variance
     obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
 
-    ##ensemble adjustment Kalman filter (Anderson 2003)
     if filter_type == 'EAKF':
-        var_ratio = obs_var / (obs_prior_var + obs_var)
+        obs_incr = obs_increment_EAKF(nens, obs_prior, obs_prior_mean, obs_prior_pert, obs_prior_var, obs, obs_var)
 
-        ##new mean is weighted average between obs_prior_mean and obs
-        obs_post_mean = var_ratio * obs_prior_mean + (1 - var_ratio) * obs
-
-        ##new pert is adjusted by sqrt(var_ratio), a deterministic square-root filter
-        obs_post_pert = np.sqrt(var_ratio) * obs_prior_pert
-
-        ##assemble the increments
-        obs_incr = obs_post_mean + obs_post_pert - obs_prior
-
-    ##rank histogram filter (Anderson 2010)
     elif filter_type == 'RHF':
-        ##compute likelihood
-
-        ##index sort
-        sort_ind = np.argsort(obs_prior)
-
-        ##
+        obs_incr = obs_increment_RHF(nens, obs_prior, obs_prior_var, obs, obs_var)
 
     else:
-        print('Error: unknown filter type: '+filter_type)
+        raise NotImplementedError('Error: unknown filter type: '+filter_type)
 
     return obs_incr
 
+@njit(cache=True)
+def obs_increment_EAKF(nens, obs_prior, obs_prior_mean, obs_prior_pert, obs_prior_var, obs, obs_var):
+    """ensemble adjustment Kalman filter (Anderson 2003)"""
+    var_ratio = obs_var / (obs_prior_var + obs_var)
+
+    ##new mean is weighted average between obs_prior_mean and obs
+    obs_post_mean = var_ratio * obs_prior_mean + (1 - var_ratio) * obs
+
+    ##new pert is adjusted by sqrt(var_ratio), a deterministic square-root filter
+    obs_post_pert = np.sqrt(var_ratio) * obs_prior_pert
+
+    ##assemble the increments
+    obs_incr = obs_post_mean + obs_post_pert - obs_prior
+    return obs_incr
+
+@njit(cache=True)
+def obs_increment_RHF(nens, obs_prior, obs_prior_var, obs, obs_var):
+    """rank histogram filter (Anderson 2010)"""
+    ##index sort of the ensemble members
+    ens_ind = np.argsort(obs_prior)
+    x = obs_prior[ens_ind]
+
+    ##initialize arrays
+    like = np.zeros(nens)
+    like_dense = np.zeros(nens)
+    height = np.zeros(nens)
+    mass = np.zeros(nens+1)
+    obs_incr = np.zeros(nens)
+
+    ##compute likelihood
+    norm_const = 1.0 / np.sqrt(2 * np.pi * obs_var)
+    for m in range(nens):
+        like[m] = norm_const * np.exp( -1. * (x[m] - obs)**2 / (2. * obs_var))
+    for m in range(1, nens):
+        like_dense[m] = (like[m-1] + like[m]) / 2.
+
+    ##product of likelihood gaussian with prior gaussian tails
+    # var_ratio = obs_var / (obs_prior_var + obs_var)
+    # new_var = var_ratio * obs_prior_var
+    # dist_for_unit_sd = inv_weighted_normal_cdf(1., 0., 1., 1./(nens+1))
+
+    # left_mean = x[0] - dist_for_unit_sd * np.sqrt(obs_prior_var)
+    # new_mean_left = var_ratio * (left_mean + obs_prior_var * obs / obs_var)
+    # prod_weight_left = np.exp(-0.5 * (left_mean**2 / obs_prior_var + obs**2 / obs_var - new_mean_left**2 / new_var)) / np.sqrt(obs_prior_var + obs_var) / np.sqrt(2.*np.pi)
+    # mass[0] = normal_cdf(x[0], new_mean_left, np.sqrt(new_var)) * prod_weight_left
+
+    # right_mean = x[-1] + dist_for_unit_sd * np.sqrt(obs_prior_var)
+    # new_mean_right = var_ratio * (right_mean + obs_prior_var * obs / obs_var)
+    # prod_weight_right = np.exp(-0.5 * (right_mean**2 / obs_prior_var + obs**2 / obs_var - new_mean_right**2 / new_var)) / np.sqrt(obs_prior_var + obs_var) / np.sqrt(2.*np.pi)
+    # mass[-1] = (1. - normal_cdf(x[-1], new_mean_right, np.sqrt(new_var))) * prod_weight_right
+
+    ##The mass in each interior box m is the height times bin width
+    ##The height of likelihood function is like_dense[m]
+    ##For the prior, mass is 1/(nens+1), multiply by mean like_dense to get posterior
+    # for m in range(1, nens):
+    #     mass[m] = like_dense[m] / (nens + 1)
+    #     if x[m] == x[m-1]:
+    #         height[m] = -1.
+    #     else:
+    #         height[m] = 1. / ((nens + 1) * (x[m] - x[m-1]))
+
+    ##normalize the mass to get pdf
+    # cum_mass = 
+
+    return obs_incr
 
 @njit(cache=True)
 def update_local_state(state_data, obs_prior, obs_incr,
@@ -544,7 +587,6 @@ def update_local_state(state_data, obs_prior, obs_incr,
 
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub], regress_type)
 
-
 @njit(cache=True)
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      h_dist, v_dist, t_dist,
@@ -565,7 +607,6 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     ind = np.where(np.logical_and(~used, lfactor>0))[0]
 
     obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind], regress_type)
-
 
 @njit(cache=True)
 def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
@@ -619,9 +660,18 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
         return ens_post
 
     # elif regress_type == 'probit':
-    #     pass
+        # pass
 
     else:
-        print('Error: unknown regression type: '+regress_type)
+        raise NotImplementedError('Error: unknown regression type: '+regress_type)
         raise ValueError
+
+@njit(cache=True)
+def transform_to_probit():
+    pass
+
+@njit(cache=True)
+def transform_from_probit():
+    pass
+
 

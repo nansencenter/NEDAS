@@ -260,11 +260,11 @@ class Grid(object):
         else:
             new_grid = copy.deepcopy(self)
             fac = 2**nlevel
-            new_grid.nx = int(self.nx / fac)
-            new_grid.ny = int(self.ny / fac)
-            assert new_grid.nx > 2 and new_grid.ny > 2, "grid.change_resolution_level: new resolution too low, resulting number of grid points less than 2"
-            new_grid.dx = self.Lx / new_grid.nx
-            new_grid.dy = self.Ly / new_grid.ny
+            new_grid.dx = self.dx * fac
+            new_grid.dy = self.dy * fac
+            new_grid.nx = int(np.round(self.Lx / new_grid.dx))
+            new_grid.ny = int(np.round(self.Ly / new_grid.dy))
+            assert min(new_grid.nx, new_grid.ny) > 1, "Grid.change_resolution_level: new resolution too low, try smaller nlevel"
             new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
             return new_grid
 
