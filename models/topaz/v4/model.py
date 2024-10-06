@@ -11,6 +11,7 @@ from config import parse_config
 from .namelist import namelist
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
+from . import forcing
 
 class Model(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
@@ -23,28 +24,28 @@ class Model(object):
 
         levels = np.arange(1, 51, 1)
         level_sfc = np.array([0])
-        self.variables = {
-                'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-                'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-                'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-                'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
-                'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
-                'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
-                'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-                'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-                'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-                'seaice_velocity': {'name':('uice', 'vice'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-                'seaice_conc': {'name':'ficem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'%'},
-                'seaice_thick': {'name':'hicem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'m'},
-                }
+        self.native_variables = {
+            'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
+            'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
+            'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
+            'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
+            'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
+            'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
+            'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
+            'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
+            'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
+            }
+        self.forcing_variables = forcing.variables
+        self.variables = {**self.native_variables, **self.atmos_forcing_variables}
+
         self.z_units = 'm'
         self.read_grid()
 
         self.run_process = None
-        self.run_status = 'pending'
-
+         self.run_status = 'pending'
 
     def filename(self, **kwargs):
+
         if 'path' in kwargs:
             path = kwargs['path']
         else:
@@ -63,23 +64,16 @@ class Model(object):
             mdir = ''
         return os.path.join(path, mdir, 'TP4restart'+tstr+mstr+'.a')
 
-
     def read_grid(self, **kwargs):
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
-
-
-    def write_grid(self, **kwargs):
-        pass
-
 
     def read_mask(self):
         depthfile = path+'/topo/depth.a'
         f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
         mask = f.read_field('depth').mask
         f.close()
-        return mask
-
+        self.mask = mask
 
     def read_var(self, **kwargs):
         ##check name in kwargs and read the variables from file
@@ -121,7 +115,6 @@ class Model(object):
         var = units_convert(units, variables[name]['units'], var)
         return var
 
-
     def write_var(path, grid, var, **kwargs):
         ##check name in kwargs
         assert 'name' in kwargs, 'please specify which variable to write, name=?'
@@ -153,7 +146,6 @@ class Model(object):
             f.overwrite_field(var, mask, variables[name]['name'], level=k, tlevel=1)
         f.close()
 
-
     @lru_cache(maxsize=3)
     def z_coords(self, **kwargs):
         """calculate vertical coordinates given the 3D model state
@@ -180,7 +172,6 @@ class Model(object):
                     raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
             return z
 
-
     def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
         ens_init_dir = kwargs['ens_init_dir']
         kwargs_init = {**kwargs, 'path':ens_init_dir}
@@ -190,11 +181,9 @@ class Model(object):
         os.system("cp "+init_file+" "+input_file)
         os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
 
-
-    def run(self, task_id=0, task_nproc=256, **kwargs):
+    def run(self, worker_id=0, **kwargs):
         self.run_status = 'running'
 
-        nedas_dir = kwargs['nedas_dir']
         job_submit_cmd = kwargs['job_submit_cmd']
 
         path = kwargs['path']
@@ -228,6 +217,8 @@ class Model(object):
         ##TODO: switches for other forcing options
         if self.forcing_frc == 'era5':
             forcing_path = self.era5_path
+        if self.forcing_frc == 'era40':
+            pass
         os.system("ln -fs "+forcing_path+" .")
         os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
         for ext in ['.a', '.b']:
@@ -247,7 +238,7 @@ class Model(object):
 
         model_src = os.path.join(self.basedir, 'setup.src')
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
-        offset = task_id*task_nproc
+        offset = worker_id*task_nproc
 
         ##build the shell command line
         shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env

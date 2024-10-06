@@ -1,0 +1,138 @@
+work_dir: '/cluster/work/users/yingyue/TP5_test'   ##working directory for the experiment
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
+nproc: 512        ##total number of processors
+
+nens: 100         ##ensemble size
+run_assim: True   ##if true, run the assimilation steps
+
+debug: False      ##if true, output debug data/message
+
+time_start: '202109060000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '202203210000'         ##end time of the experiment
+time_assim_start: '202109130000' ##start time of the first analysis cycle
+time_assim_end: '202203140000'   ##end time of the last analysis cycle
+cycle_period: 168                ##cycle period, in hours
+
+time: '202109060000'
+prev_time: '202109060000'
+next_time: '202109130000'
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'topaz.v5'
+
+state_def:
+- name: 'ocean_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_temp'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_saln'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_layer_thick'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_mixl_depth'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_press'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_conc'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_thick'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+
+obs_def:
+- name: 'seaice_conc'
+  dataset_src: 'osisaf'
+  dataset_dir: '/cluster/work/users/yingyue/data/OSISAF'
+  model_src: 'topaz.v5'
+  obs_window_min: -6
+  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 100
+  vroi: 2
+  troi: 24
+  impact_on_state:
+  - ocean_temp: 1.0
+
+use_synthetic_obs: False
+
+model_def:
+  topaz.v5:
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v5/default.yml'
+    basedir: '/cluster/work/users/yingyue/TP5a0.06'
+    model_env: '/cluster/home/yingyue/topaz5.src'
+    nproc_per_run: 512  ##nproc for model.run
+    nproc_per_util: 32  ##nproc for other utility funcs, model.preprocess etc.
+    walltime: 10000     ##walltime in seconds
+    restart_dt: 168
+    forcing_dt: 6
+    ens_run_type: scheduler
+    ens_init_dir: '/cluster/work/users/yingyue/26181/FORECAST'
+    truth_dir: ''
+
+perturb:
+- variable: 'atmos_surf_velocity' ##variable to be perturbed
+  model_src: 'topaz.v5'     ##which model src this variable comes from
+  type: 'gaussian'          ##what type of perturbation
+  amp: [2.5, 10]            ##perturbation amplitude (list if multiscale approach)
+  hcorr: [2.e6, 2.e5]       ##horizontal correlation length (meters)
+  tcorr: [168, 48]          ##temporal correlation length (hours)
+- variable: 'atmos_surf_press'
+  model_src: 'topaz.v5'
+  type: 'gaussian'
+  amp: 10
+  hcorr: 2.e5
+  tcorr: 48
+- variable: 'atmos_precip'
+  model_src: 'topaz.v5'
+  type: 'gaussian_exp'
+  amp: 0.1
+  hcorr: 2.5e5
+  tcorr: 48
+- variable: 'atmos_surf_temp'
+  model_src: 'topaz.v5'
+  type: 'gaussian'
+  amp: 9
+  hcorr: 2.5e5
+  tcorr: 48
+
+assim_mode: 'batch'
+filter_type: 'ETKF'
+regress_type: 'linear'
+
+inflation:
+  type: ''
+  adaptive: False
+  coef: 1.0
+
+localization:
+  htype: 'GC'
+  vtype: 'GC'
+  ttype: 'GC'
+

@@ -659,12 +659,30 @@ class ABFileForcing(ABFile) :
         super(ABFileForcing,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
         self._cline1=cline1
         self._cline2=cline2
-        if action == "w" :
-            pass
-        else :
+        if self._action[0] == "r" :
             self.read_header()
             self.read_field_info()
             self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+        elif self._action == "w":
+            pass
+
+    def find_record(self, fieldname, dtime1):
+        record = None
+        for i,d in self._fields.items() :
+            if d["field"] == fieldname and d["dtime1"] == dtime1:
+                record=i
+        return record
+
+    def write_bfile_info(self) :
+        self._fileb.seek(0)
+        self.write_header()
+        for i in range(len(self._fields)):
+            fieldname = self._fields[i]["field"]
+            dtime1 = self._fields[i]["dtime1"]
+            rdtime = self._fields[i]["range"]
+            hmin = self._fields[i]["min"]
+            hmax = self._fields[i]["max"]
+            self._fileb.write("%s:dtime1,range = %12.4f%12.4f,%14.6e%14.6e\n"%(fieldname,dtime1,rdtime,hmin,hmax))
 
     def read_header(self) :
         self._header=[]
@@ -699,6 +717,17 @@ class ABFileForcing(ABFile) :
         self.check_dimensions(field)
         hmin,hmax = self._filea.writerecord(field,mask)
         self._fileb.write("%s:dtime1,range = %12.4f%12.4f,%14.6e%14.6e\n"%(fieldname,dtime1,rdtime,hmin,hmax))
+
+    def overwrite_field(self, field, mask, fieldname, dtime1) :
+        assert self._action == "r+"
+        record = self.find_record(fieldname, dtime1)
+        assert record is not None, f"Do not find dtime1={dtime1} in current file, existing"
+        self._open_filea_if_necessary(field)
+        self.check_dimensions(field)
+        hmin,hmax = self._filea.writerecord(field, mask, record=record)
+        self._fields[record]["min"] = hmin
+        self._fields[record]["max"] = hmax
+        self.write_bfile_info()
 
     def read_field_info(self) :
         # Get list of fields from .b file
