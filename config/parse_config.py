@@ -1,3 +1,4 @@
+import numpy as np
 import sys
 import os
 import re
@@ -15,6 +16,11 @@ def convert_scientific_notation(data):
         # Match scientific notation pattern and convert to float
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
+        # handle the special cases for "inf"
+        elif data == "inf":
+            return np.inf
+        elif data == "-inf":
+            return -np.inf
         else:
             return data
     else:
