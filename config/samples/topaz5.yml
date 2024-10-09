@@ -97,34 +97,60 @@ model_def:
     truth_dir: ''
 
 perturb:
-- variable: 'atmos_surf_velocity' ##variable to be perturbed
-  model_src: 'topaz.v5'     ##which model src this variable comes from
-  type: 'gaussian'          ##what type of perturbation
-  amp: [2.5, 10]            ##perturbation amplitude (list if multiscale approach)
-  hcorr: [2.e6, 2.5e5]       ##horizontal correlation length (meters)
-  tcorr: [168, 48]          ##temporal correlation length (hours)
-- variable: 'atmos_surf_press'
+#- variable: 'atmos_surf_velocity' ##variable to be perturbed
+#  model_src: 'topaz.v5'     ##which model src this variable comes from
+#  type: 'gaussian'          ##what type of perturbation
+#  amp: [2.5, 10]            ##perturbation amplitude (list if multiscale approach)
+#  hcorr: [2.e6, 2.5e5]       ##horizontal correlation length (meters)
+#  tcorr: [168, 48]          ##temporal correlation length (hours)
+#- variable: 'atmos_surf_velocity'                          ##prsflag=0
+#  model_src: 'topaz.v5'
+#  type: 'gaussian'
+#  amp: 2.5
+#  hcorr: 2.5e5
+#  tcorr: 48
+#- variable: 'atmos_surf_press'
+#  model_src: 'topaz.v5'
+#  type: 'gaussian'
+#  amp: 1.e5
+#  hcorr: 2.5e5
+#  tcorr: 48
+#- variable: ['atmos_surf_press', 'atmos_surf_velocity']    ##prsflag=1
+#  model_src: 'topaz.v5'
+#  type: 'gaussian,press_wind_relate'
+#  amp: [1.e5, 2.5]
+#  hcorr: [2.5e5, 2.5e5]
+#  tcorr: [48, 48]
+#  wlat: 40
+- variable: ['atmos_surf_press', 'atmos_surf_velocity']
+  model_src: 'topaz.v5'
+  type: 'gaussian,press_wind_relate,scale_wind'
+  amp: [316., 1.58]
+  hcorr: [2.5e5, 2.5e5]
+  tcorr: [48, 48]
+- variable: 'atmos_surf_temp'
   model_src: 'topaz.v5'
   type: 'gaussian'
-  amp: 1.e5
+  amp: 2
   hcorr: 2.5e5
   tcorr: 48
 - variable: 'atmos_precip'
   model_src: 'topaz.v5'
-  type: 'gaussian'
-  amp: 0.1
+  type: 'gaussian,exp'
+  amp: 0.5
   hcorr: 2.5e5
   tcorr: 48
-- variable: 'atmos_surf_temp'
+  bounds: [0, inf]
+- variable: 'atmos_down_longwave'
   model_src: 'topaz.v5'
-  type: 'gaussian'
-  amp: 9
+  type: 'gaussian,exp'
+  amp: 0.045
   hcorr: 2.5e5
   tcorr: 48
 - variable: 'atmos_down_shortwave'
   model_src: 'topaz.v5'
-  type: 'gaussian'
-  amp: 0.002
+  type: 'gaussian,exp'
+  amp: 0.045
   hcorr: 2.5e5
   tcorr: 48
 

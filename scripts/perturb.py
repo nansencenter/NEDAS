@@ -1,8 +1,8 @@
 import numpy as np
 import os
-from utils.conversion import dt1h
-from utils.parallel import distribute_tasks, bcast_by_root
-from utils.progress import timer
+from utils.conversion import dt1h, ensure_list
+from utils.parallel import distribute_tasks, bcast_by_root, by_rank
+from utils.progress import timer, print_with_cache, progress_bar
 from utils.dir_def import forecast_dir
 from utils.random_perturb import random_perturb
 
@@ -20,25 +20,35 @@ def perturb_save_file(c, model_name, vname, time, mem_id):
     return os.path.join(path, 'perturb', vname+mstr+'.npy')
 
 def main(c):
-    task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
+    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    if c.debug:
+        print('perturbing \n')
 
-    for rec in task_list[c.pid]:
+    task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
+    nr = len(task_list[c.pid])
+    for r in range(nr):
+        rec = task_list[c.pid][r]
         model_name = rec['model_src']
         model = c.model_config[model_name]  ##model class object
-        vname = rec['variable']
         mem_id = rec['member']
         path = forecast_dir(c, c.time, model_name)
+        variable_list = ensure_list(rec['variable'])
 
         ##check if previous perturb is available from past cycles
-        psfile = perturb_save_file(c, model_name, vname, c.prev_time, mem_id)
-        if os.path.exists(psfile):
-            perturb = np.load(psfile)
-        else:
-            perturb = None
+        perturb = {}
+        for vname in variable_list:
+            psfile = perturb_save_file(c, model_name, vname, c.prev_time, mem_id)
+            if os.path.exists(psfile):
+                perturb[vname] = np.load(psfile)
+            else:
+                perturb[vname] = None
 
         dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
         nstep = c.cycle_period // dt        ##number of time steps to be perturbed
         for n in np.arange(nstep):
+            if c.debug:
+                print(progress_bar(r*nstep+n, nr*nstep))
+
             t = c.time + n * dt * dt1h
 
             for k in model.variables[vname]['levels']:
@@ -46,18 +56,25 @@ def main(c):
                 ##      but can be extended to 3D variables with additional vertical corr
 
                 ##read variable from model state
-                fld = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
+                fields = {}
+                for vname in variable_list:
+                    fields[vname] = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
 
                 ##generate perturbation
-                fld_pert, perturb = random_perturb(model.grid, fld, prev_perturb=perturb, dt=dt, **rec)
+                fields_pert, perturb = random_perturb(model.grid, fields, prev_perturb=perturb, dt=dt, **rec)
 
                 ##write variable back to model state
-                model.write_var(fld_pert, path=path, name=vname, time=t, member=mem_id, k=k)
+                for vname in variable_list:
+                    model.write_var(fields_pert[vname], path=path, name=vname, time=t, member=mem_id, k=k)
 
         ##save a copy of perturbation for later cycles
-        psfile = perturb_save_file(c, model_name, vname, c.time, mem_id)
-        os.system(f"mkdir -p {os.path.dirname(psfile)}")
-        np.save(psfile, perturb)
+        for vname in variable_list:
+            psfile = perturb_save_file(c, model_name, vname, c.time, mem_id)
+            os.system(f"mkdir -p {os.path.dirname(psfile)}")
+            np.save(psfile, perturb[vname])
+
+    if c.debug:
+        print('. done\n')
 
 def perturb(c):
     """run this perturb.py script in a subprocess with mpi, using all nproc cores"""
