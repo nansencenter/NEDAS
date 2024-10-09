@@ -1,67 +1,170 @@
 import numpy as np
+from functools import lru_cache
 from scipy.optimize import fsolve
 from scipy.ndimage import distance_transform_edt, gaussian_filter
+from utils.conversion import ensure_list
 from utils.spatial_operation import gradx, grady, warp
 from utils.fft_lib import fft2, ifft2, get_wn
 
-def random_perturb(grid, fld, prev_perturb=None, **kwargs):
+def random_perturb(grid, fields, prev_perturb, **kwargs):
     """
     Add random perturbation to the given 2D field
     Input:
-        - grid: Grid object for the 2d field [ny, nx]
-        - fld: np.array, [...,ny,nx]
-        - options: dict of config variables:
+        - grid: Grid object describing the 2d domain
+        - fields: list of np.array shape[...,ny,nx]
+        - prev_perturb; list of np.array from previous perturbation data, None if unavailable
+        - kwargs:
+            dt: time step (hours)
+            variable: str, or list of str
             type: str: 'gaussian', 'powerlaw', or 'displace'
             amplitude: float, (or list of floats, in multiscale approach)
-            hcorr: float
-            tcorr: float
-            powerlaw: float
-        - prev_perturb; None, or np.array from previous perturbation data
+            hcorr: float, or list of float, horizontal corr length (meters)
+            tcorr: float, or list of float, time corr length (hours)
     """
-    perturb_type = kwargs['type']
-    if perturb_type == 'gaussian':
-        amp = kwargs['amp']
-        hcorr = kwargs['hcorr']
-        tcorr = kwargs['tcorr']
-        dx = grid.dx
-        dt = kwargs['dt']
-        if isinstance(amp, list):   ##allow a list of perturb to be generated (multiscale)
-            nscale = len(amp)
+    perturb = {}
+    perturb_type, other_opts, params = parse_perturb_opts(**kwargs)
+
+    for vname,rec in params.items():
+        fld = fields[vname]
+        assert grid.x.shape == fld.shape[-2:], f"input fields[{vname}] dimension mismatch with grid"
+
+        ns = rec['nscale']
+        if perturb_type == 'displace':
+            perturb[vname] = np.zeros((ns,2)+fld.shape[-2:])
         else:
-            nscale = 1
-            amp, hcorr, tcorr = [amp], [hcorr], [tcorr]
-        perturb = np.zeros((nscale,)+fld.shape)
-        ##loop over scale s
-        for s in range(nscale):
-            ##draw a random field for each component [ny,nx] in fld
+            perturb[vname] = np.zeros((ns,)+fld.shape)
+
+        ##loop over scale s and generate perturbation
+        for s in range(ns):
+            ##draw a random field for each 2d field component in fields
             for ind in np.ndindex(fld.shape[:-2]):
-                perturb[(s,)+ind] = random_field_gaussian(grid.nx, grid.ny, amp[s], hcorr[s]/dx)
+                if perturb_type == 'gaussian':
+                    perturb[vname][(s,)+ind] = random_field_gaussian(grid.nx, grid.ny, rec['amp'][s], rec['hcorr'][s]/grid.dx)
+
+                elif perturb_type == 'powerlaw':
+                    perturb[vname][(s,)+ind] = random_field_powerlaw(grid.nx, grid.ny, rec['amp'][s], rec['powerlaw'][s])
+
+                elif perturb_type == 'displace':
+                    mask = np.full(grid.x.shape, False)
+                    du, dv = random_displacement(grid, mask, rec['amp'][s], rec['hcorr'][s]/grid.dx)
+                    perturb[vname][s] = np.array([du, dv])
+
+                else:
+                    raise NotImplementedError('unknown perturbation type: '+perturb_type)
 
             ##create perturbations that are correlated in time
-            autocorr = np.exp(-1.0)
-            alpha = autocorr**(1.0 / (tcorr[s]/dt))
-            if prev_perturb is not None:
-                perturb[s] = np.sqrt(1-alpha**2) * perturb[s] + alpha * prev_perturb[s]
+            autocorr = 0.75
+            ncorr = rec['tcorr'][s] / kwargs['dt']  ##time steps at decorrelation
+            alpha = autocorr**(1.0 / ncorr)
+            if prev_perturb[vname] is not None:
+                perturb[vname][s] = np.sqrt(1-alpha**2) * perturb[vname][s] + alpha * prev_perturb[vname][s]
 
-        fld += np.sum(perturb, axis=0)
+    ###legacy prsflg==1,2 options in force_perturb program, reproduced here
+    if 'press_wind_relate' in other_opts:
+        for vname in ['atmos_surf_velocity', 'atmos_surf_press']:
+            assert vname in params.keys(), f'{vname} not in variable list, cannot run press_wind_relate option'
 
-    ##TODO: gaussian with exp error
+        for s in range(ns):
+            wprsfac = 1.
+            if 'scale_wind' in other_opts:
+                r2d = 180/np.pi
+                fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
+                wprsfac = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor
+                wprsfac = params['atmos_surf_velocity']['amp'][s] / wprsfac
 
-    elif perturb_type == 'powerlaw':
-        perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
-        fld += perturb
+            perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], wprsfac)
 
-    elif perturb_type == 'displace':
-        mask = np.full(grid.x.shape, False)
-        du, dv = random_displacement(grid, mask, amp, hcorr)
-        perturb = np.array([du, dv])
-        fld = warp(fld, perturb[0,...], perturb[1,...])
+    ##now add perturbations to each field
+    for vname,rec in params.items():
+        for s in range(rec['nscale']):
+            if perturb_type == 'displace':
+                fields[vname] = warp(fields[vname], perturb[vname][0,...], perturb[vname][1,...])
 
-    else:
-        raise NotImplementedError('unknown perturbation type: '+perturb_type)
+            else:
+                if len(other_opts)==0:
+                    ##no additional options, just add the gaussian perturbations
+                    fields[vname] += perturb[vname][s,...]
 
-    return fld, perturb
+                elif 'exp' in other_opts:
+                    ##add lognormal perturbations
+                    fields[vname] *= np.exp(perturb[vname][s,...] - 0.5*rec['amp'][s]**4)
 
+        ##respect value bounds after perturbing
+        if 'bounds' in kwargs:
+            vmin, vmax = kwargs['bounds']
+            fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
+
+    return fields, perturb
+
+def parse_perturb_opts(**kwargs):
+    ##perturb['type'] string format:
+    #main option (gaussian/powerlaw/displace) followed by , then additional options separated by ,
+    opts = kwargs['type'].split(',')
+    perturb_type = opts[0]
+    other_opts = []
+    for opt in opts[1:]:
+        other_opts.append(opt)
+
+    key_list = []
+    for key in ['amp', 'hcorr', 'tcorr', 'powerlaw']:
+        if key in kwargs:
+            key_list.append(key)
+
+    ##a list of variables can be specified if running a multivariate perturbation scheme
+    ##form a variable list for further processing
+    variable_list = ensure_list(kwargs['variable'])
+    nv = len(variable_list)
+    for key in key_list:
+        kwargs[key] = ensure_list(kwargs[key])
+
+    ##get perturbation parameters for each variable from kwargs
+    params = {}
+    for v in range(nv):
+        vname = variable_list[v]
+        params[vname] = {}
+        ##in multiscale approach, a list of parameters can be specified for a variable;
+        ##one separate perturbation will be generated for each, then they will be added together
+        if isinstance(kwargs[key_list[0]][v], list):
+            nscale = len(kwargs[key_list[0]][v])
+        else:
+            nscale = 1
+            for key in key_list:  ##make a list even if only one value for the key
+                kwargs[key][v] = [kwargs[key][v]]
+        params[vname]['nscale'] = nscale
+        ##check if all keys are lists with same len
+        for key in key_list[1:]:
+            assert len(kwargs[key][v]) == nscale, f"perturb option: {key} has different number of entries from {key_list[0]}, check config"
+        ##assign the parameters
+        for key in key_list:
+            params[vname][key] = kwargs[key][v]
+
+    return perturb_type, other_opts, params
+
+def get_velocity_from_press(grid, pres, wprsfac):
+    """derive wind velocity from pressure field """
+    rhoa = 1.2
+    r2d = 180/np.pi
+    wlat = 15.
+    plon, plat = grid.proj(grid.x, grid.y, inverse=True)
+    fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
+
+    ##pres gradients
+    dpresx = gradx(pres, grid.dx) * wprsfac
+    dpresy = grady(pres, grid.dx) * wprsfac
+
+    ##geostrophic wind near poles
+    vcor =  dpresx / fcor / rhoa * np.sign(plat)
+    ucor = -dpresy / fcor / rhoa * np.sign(plat)
+
+    ##gradient wind near equator
+    ueq = -dpresx / fcor / rhoa
+    veq = -dpresy / fcor / rhoa
+
+    wcor = np.sin(np.minimum(wlat, plat) / wlat * np.pi * 0.5)
+    u = wcor*ucor + (1-wcor)*ueq
+    v = wcor*vcor + (1-wcor)*veq
+
+    return np.array([u, v])
 
 def random_field_gaussian(nx, ny, amp, hcorr):
     """
@@ -79,14 +182,33 @@ def random_field_gaussian(nx, ny, amp, hcorr):
     - fld: np.array, [ny,nx]
       The random 2D field
     """
+    fld = np.zeros((ny, nx))
+    kx, ky = get_wn(fld)
+    k2d = np.hypot(kx, ky)
+    sig_out = get_sig_in_gaussian(nx, ny, hcorr)
 
+    ##draw random phase from a white noise field
+    ph = fft2(np.random.normal(0, 1, fld.shape))
+
+    ##scaling factor to get the right amplitude
+    norm2 = np.sum(gaussian(k2d, sig_out)**2) / (nx*ny)
+    sf = amp / np.sqrt(norm2)
+    return np.real(ifft2(sf * gaussian(k2d, sig_out) * ph))
+
+def gaussian(k, sig):
+    """gaussian spectrum"""
+    return np.exp(- k**2 / sig**2)
+
+@lru_cache
+def get_sig_in_gaussian(nx, ny, hcorr):
+    """
+    Derive the sig parameter in gaussian spectrum.
+    Called by random_field_gaussian, cached the result since in external for loop there will be fixed input
+    """
     fld = np.zeros((ny, nx))
     nup = int(max(nx, ny))
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
-
-    def gaussian(k, sig):
-        return np.exp(- k**2 / sig**2)
 
     def func2d(sig):
         sum1 = np.sum(gaussian(k2d, sig)**2 * np.cos(2*np.pi * kx/nup * hcorr))
@@ -102,19 +224,9 @@ def random_field_gaussian(nx, ny, amp, hcorr):
     else:
         sig_out = np.abs(fsolve(func2d, 1)[0])
     # print(sig_out, func2d(sig_out))
-
-    ##draw random phase from a white noise field
-    ph = fft2(np.random.normal(0, 1, fld.shape))
-
-    ##scaling factor to get the right amplitude
-    norm2 = np.sum(gaussian(k2d, sig_out)**2) / (nx*ny)
-    sf = amp / np.sqrt(norm2)
-
-    return np.real(ifft2(sf * gaussian(k2d, sig_out) * ph))
-
+    return sig_out
 
 def random_field_powerlaw(nx, ny, amp, pwrlaw):
-
     fld = np.zeros((ny, nx))
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
@@ -128,9 +240,7 @@ def random_field_powerlaw(nx, ny, amp, pwrlaw):
     norm = 2 * np.pi * k2d
     amp_ = amp * np.sqrt(k2d**(pwrlaw+1) / norm)
     amp_[np.where(k2d==1e-10)] = 0.0 ##zero amp for wn-0
-
     return np.real(ifft2(amp_ * ph))
-
 
 def random_displacement(grid, mask, amp, hcorr):
     ##prototype: generate a random wavenumber-1 displacement for the whole domain
@@ -164,58 +274,5 @@ def random_displacement(grid, mask, amp, hcorr):
 
     du *= dist  ##taper near mask
     dv *= dist
-
     return du, dv
-
-
-def random_press_wind_perturb(grid, dt, prev_pres, prev_u, prev_v,
-                              ampl_pres, ampl_wind, hscale, tscale,
-                              pres_wind_relate=True, wlat=15.):
-    ###generate a random perturbation for wind u,v and pressure
-
-    ##some constants
-    plon, plat = grid.proj(grid.x, grid.y, inverse=True)
-    r2d = 180/np.pi
-    rhoa = 1.2
-    fcor = 2*np.sin(plat/r2d)*2*np.pi/86400  ##coriolis
-
-    rt = tscale / dt  ##time correlation length
-    wt = np.exp(-1)**(1/rt)  ##weight on prev pert
-
-    pres = random_field_gaussian(grid.nx, grid.ny, ampl_pres, hscale/grid.dx)
-
-    if pres_wind_relate:  ##calc u,v from pres according to pres-wind relation
-
-        ##pres gradients
-        dpresx = gradx(pres, grid.dx)
-        dpresy = grady(pres, grid.dx)
-
-        ##geostrophic wind near poles
-        vcor =  dpresx / fcor / rhoa
-        ucor = -dpresy / fcor / rhoa
-
-        ##gradient wind near equator
-        ueq = -dpresx / fcor / rhoa
-        veq = -dpresy / fcor / rhoa
-
-        wcor = np.sin(np.minimum(wlat, plat) / wlat * np.pi * 0.5)
-        u = wcor*ucor + (1-wcor)*ueq
-        v = wcor*vcor + (1-wcor)*veq
-
-    else:  ##perturb u, v independently from pres
-        ##wind power spectrum given by hscale and ampl_wind
-        u = random_field_gaussian(grid.nx, grid.ny, ampl_wind, hscale/grid.dx)
-        v = random_field_gaussian(grid.nx, grid.ny, ampl_wind, hscale/grid.dx)
-
-    ampl_wind_norm = np.hypot(np.std(u), np.std(v))
-    u *= ampl_wind / ampl_wind_norm
-    v *= ampl_wind / ampl_wind_norm
-
-    ##apply temporal correlation
-    if prev_pres is not None and prev_u is not None and prev_v is not None:
-        pres = wt * prev_pres + np.sqrt(1 - wt**2) * pres
-        u = wt * prev_u + np.sqrt(1 - wt**2) * u
-        v = wt * prev_v + np.sqrt(1 - wt**2) * v
-
-    return pres, u, v
 
