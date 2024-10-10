@@ -9,6 +9,7 @@ from utils.dir_def import cycle_dir
 from scripts.prepare_ensemble import prepare_ensemble
 from scripts.assimilate import assimilate
 from scripts.ensemble_forecast import ensemble_forecast
+from scripts.diag import diag
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -29,14 +30,19 @@ while c.time < c.time_end:
     perturb(c)
 
     ##assimilation step
-    ##multiscale approach: loop over scale components scale_id=0,...,nscale
-    for c.scale_id in range(c.nscale):
-        assimilate(c)
+    if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
+        ##multiscale approach: loop over scale components and perform assimilation on each scale
+        for c.scale_id in range(c.nscale):
+            assimilate(c)
 
     postprocess(c)
 
     ##forecast step
     ensemble_forecast(c)
+
+    ##compute diagnostics
+    if c.run_diag:
+        diag(c)
 
     ##advance to next cycle
     c.prev_time = c.time
