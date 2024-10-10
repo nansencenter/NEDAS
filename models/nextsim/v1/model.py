@@ -57,7 +57,7 @@ class Model(object):
 
     def filename(self, **kwargs):
         if 'name' not in kwargs:
-            name = list(self.native_variables.keys())[0]   ##if not specified, return the first variable name
+            name = list(self.variables.keys())[0]   ##if not specified, return the first variable name
         else:
             name = kwargs['name']
 
@@ -76,13 +76,14 @@ class Model(object):
             if 'time' in kwargs and kwargs['time'] is not None:
                 assert isinstance(kwargs['time'], datetime), 'Error: time is not a datetime object'
                 tstr = kwargs['time'].strftime('%Y%m%dT%H%M%SZ')
+                return os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+
             else:
                 tstr = '*'
-            # search = os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
-            # flist = glob.glob(search)
-            # assert len(flist)>0, 'no matching files found: '+search
-            # return flist[0]
-            return os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+                search = os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+                flist = glob.glob(search)
+                assert len(flist)>0, 'no matching files found: '+search
+                return flist[0]
 
         elif name in self.atmos_forcing_variables:
             return atmos_forcing.filename(**kwargs)
@@ -214,7 +215,7 @@ class Model(object):
     def write_param(self, param, **kwargs):
         setattr(self, kwargs['name'], param)
 
-    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+    def preprocess(self, task_id=0, **kwargs):
         ##put sequence of operation here to generate the initial condition files for nextsim
         ens_init_dir = kwargs['ens_init_dir']
         time_start = kwargs['time_start']
@@ -262,13 +263,16 @@ class Model(object):
         # shell_cmd += "wait; "  ##wait for remaining commands
         # os.system(shell_cmd)
 
-    def run(self, task_id=0, task_nproc=16, **kwargs):
+    def postprocess(self, task_id=0, **kwargs):
+        pass
+
+    def run(self, task_id=0, **kwargs):
         self.run_status = 'running'
 
         job_submit_cmd = kwargs['job_submit_cmd']
         model_src = os.path.join(self.model_code_dir, 'setup.src')
         model_exe = os.path.join(self.model_code_dir, 'model', 'bin', 'nextsim.exec')
-        offset = task_id*task_nproc
+        offset = task_id*self.nproc_per_run
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
