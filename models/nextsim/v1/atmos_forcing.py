@@ -27,7 +27,7 @@ def filename(**kwargs):
     return os.path.join(path, mstr, "data", "GENERIC_PS_ATM", "generic_ps_atm_"+time.strftime('%Y%m%d')+".nc")
 
 ##translation of varname in generic_ps_atm to ERA5
-variables = {'atmos_surf_wind': {'name':('x_wind_10m', 'y_wind_10m'), 'is_vector':True, 'long_name':('10 metre wind speed in x direction (U10M)', '10 metre wind speed in y direction (V10M)'), 'units':'m/s'},
+variables = {'atmos_surf_velocity': {'name':('x_wind_10m', 'y_wind_10m'), 'is_vector':True, 'long_name':('10 metre wind speed in x direction (U10M)', '10 metre wind speed in y direction (V10M)'), 'units':'m/s'},
              'atmos_surf_temp': {'name':'air_temperature_2m', 'is_vector':False, 'long_name':'Screen level temperature (T2M)', 'units':'K'},
              'atmos_surf_dew_temp': {'name':'dew_point_temperature_2m', 'is_vector':False, 'long_name':'Screen level dew point temperature (D2M)', 'units':'K'},
              'atmos_surf_press': {'name':'atm_pressure', 'is_vector':False, 'long_name':'Mean Sea Level Pressure (MSLP)', 'units':'Pa'},

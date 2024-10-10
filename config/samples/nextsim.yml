@@ -2,7 +2,6 @@ work_dir: '/cluster/work/users/yingyue/nextsim_test'   ##working directory for t
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
 nproc: 512        ##total number of processors
-nproc_mem: 512    ##number of processor groups
 
 nens: 20         ##ensemble size
 run_assim: False ##if true, run the assimilation steps
@@ -27,11 +26,11 @@ state_time_scale: 0
 grid_def:
   type: 'custom'
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60'
-  xmin: -2500000
-  xmax: 2500000
-  ymin: -2000000
-  ymax: 2500000
-  dx: 3000
+  xmin: -2.5e6
+  xmax: 2.5e6
+  ymin: -2e6
+  ymax: 2.5e6
+  dx: 3e3
 
 state_def:
 - name: 'seaice_conc'
@@ -61,27 +60,36 @@ obs_def:
   vroi: 1e10
   troi: 24
   impact_on_state:
-    - seaice_velocity: 0.5
+  - seaice_velocity: 0.5
 
 use_synthetic_obs: False
 
 model_def:
   nextsim.v1:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/nextsim/v1/default.yml'
+    model_env: '/cluster/home/yingyue/nextsim.src'
     model_code_dir: '/cluster/home/yingyue/code/nextsim'
     model_data_dir: '/cluster/work/users/yingyue/data'
-    nproc_per_mem: 32    ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
+    nproc_per_run: 32    ##number of processors to run a forecast
+    nproc_per_util: 1
+    walltime: 10000      ##walltime in seconds
+    restart_dt: 6
+    forcing_dt: 6
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/nextsim_ens_runs/control'
     truth_dir: ''
-    perturb:
-      variables: ['atmos_surf_wind', 'atmos_surf_press']
-      type: ['gaussian', 'gaussian']
-      amp: [10., 1000.]
-      hcorr: [2.5e5, 2.5e5]
-      tcorr: [48, 48]
-      press_wind_relate: False
+
+perturb:
+- variable: ['atmos_surf_press', 'atmos_surf_velocity']
+  type: 'gaussian,press_wind_relate,scale_wind'
+  amp: [300, 5]
+  hcorr: [2e5, 2e5]
+  tcorr: [72, 72]
+- variable: 'seaice_conc'
+  type: 'displace'
+  amp: 3e4
+  hcorr: 2e5
+  tcorr: 72
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
