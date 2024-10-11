@@ -181,16 +181,33 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
     forcing_end_state:str
     forcing_start_date, forcing_end_state = \
         get_forcing_file_time(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
-    return file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
+    fname: str
+    try:
+        fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
+    except KeyError:
+        try:
+            fname = file_format.format(start=forcing_start_date, end=forcing_end_state)
+        except KeyError:
+            print ('Currently, we only supports keyword of 1. "start"+"end",'
+                   '2. "start"+"end"+"i".'
+                   'See the example yaml file for more information. '
+                   'Modified the code if you have other requirements.')
+    return fname
 
 
-def perturb_forcing(forcing_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
+def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
     """perturb the forcing variables
 
     Parameters
     ----------
     forcing_options : dict
         perturbation options from the yaml file
+    file_options : dict
+        forcing file options in the corresponding subsection of the `file` section from the yaml file
+        e.g., info in the file/forcing/atmosphere is used in the perturb/forcing/atmosphere section
+        Before calling this function, one must add the following keys to the file_options dictionary:
+        - fname: the exact filename of the perturbed forcing file under absbolute path
+
     i_ens : int
         ensemble index
     time : datetime
@@ -209,18 +226,18 @@ def perturb_forcing(forcing_options:dict, i_ens: int, time: datetime, prev_time:
     for forcing_name in forcing_options.keys():
         # forcing options for each component, e.g., atmosphere or ocean
         forcing_options_comp:dict = forcing_options[forcing_name]
-
+        file_options_comp:dict = file_options[forcing_name]
         # get the forcing file name
-        fname:str = get_forcing_filename(forcing_options_comp['file'], i_ens, time)
+        fname:str = file_options_comp['fname']
         # get current time index in the forcing file
-        itime:int = get_time_index_from_nc(fname, forcing_options_comp['file']['time_name'],
-                                           forcing_options_comp['file']['time_units_name'], time
+        itime:int = get_time_index_from_nc(fname, file_options_comp['time_name'],
+                                           file_options_comp['time_units_name'], time
                                            )
 
         # get grid object
         with netCDF4.Dataset(fname, 'r') as f:
-            grid = Grid(_proj, *_proj(f[forcing_options_comp['file']['lon_name']],
-                                      f[forcing_options_comp['file']['lat_name']]
+            grid = Grid(_proj, *_proj(f[file_options_comp['lon_name']],
+                                      f[file_options_comp['lat_name']]
                                       )
                         )
 

@@ -55,13 +55,43 @@ def write_var(fname:str, varnames: list[str], data: np.ndarray) -> None:
             f[vname][:] = data[i]
 
 
-def perturb_restart(restart_options:dict, i_ens: int, time: datetime) -> None:
+def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
+    # get the restart file name
+    fname: str
+    try:
+        fname = file_options['format'].format(i=i_ens, time=time.strftime(file_options['time_format']))
+    except KeyError:
+        try:
+            fname = file_options['format'].format(i=i_ens, time=time.strftime(file_options['time_format']))
+        except KeyError:
+            print ('Currently, we only supports keyword of 1. "time_format",'
+                   '2. "time_format"+"i".'
+                   'See the example yaml file for more information. '
+                   'Modified the code if you have other requirements.')
+    return fname
+
+
+def perturb_restart(restart_options:dict, file_options:dict, i_ens: int, time: datetime) -> None:
     """perturb the initial conditions in restart files
 
     Parameters
     ----------
     restart_options : dict
         perturbation options under the section of `perturb` from the yaml file
+    file_options : dict
+        This dictionary is constructed before the function is called.
+        It contains the following keys
+        - fname : str
+            forcing file name.
+            This has to be the file that will be perturbed, e.g. in the ensemble directory.
+            This is usually derived before it is called.
+        - lon_name: str
+            name of the longitude variable in the forcing file.
+            This is obtained from the files/restart section of the model configuration file.
+        - lat_name: str
+            name of the latitude variable in the forcing file
+            This is obtained from the files/restart section of the model configuration file.
+
     i_ens : int
         ensemble index
     time : datetime
@@ -73,8 +103,7 @@ def perturb_restart(restart_options:dict, i_ens: int, time: datetime) -> None:
     # perturbation arrays
     pert: np.ndarray[typing.Any, np.dtype[np.float64]]
     # get the restart file name
-    file_options = restart_options['file']
-    fname:str = file_options['format'].format(i=i_ens, time=time.strftime(file_options['time_format']))
+    fname:str = file_options['fname']
     # get grid object
     with netCDF4.Dataset(fname, 'r') as f:
         grid = Grid(_proj, *_proj(f[file_options['lon_name']], f[file_options['lat_name']]
