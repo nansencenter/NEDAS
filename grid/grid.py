@@ -161,6 +161,13 @@ class Grid(object):
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
 
+    def __eq__(self, other):
+        if isinstance(other, Grid):
+            if self.x.shape == other.x.shape and np.allclose(self.x, other.x) and np.allclose(self.y, other.y):
+                ###if two grids have the same x,y coordinates, they are considered the same
+                return True
+        return False
+
     @classmethod
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
         """
@@ -334,8 +341,6 @@ class Grid(object):
     @dst_grid.setter
     def dst_grid(self, grid):
         assert isinstance(grid, Grid), "dst_grid should be a Grid instance"
-        if grid == self:  ##grid is itself, do nothing
-            return
         if grid == self.dst_grid:  ##the same grid is set before
             return
 
