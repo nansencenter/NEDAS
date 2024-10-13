@@ -10,7 +10,7 @@ def preprocess(c):
     This function prepares the necessary files for an ensemble forecast
     """
     for model_name, model in c.model_config.items():
-        print(f"preprocess {model_name} ensemble members", flush=True)
+        print(f"preprocessing {model_name} ensemble members", flush=True)
         if c.time==c.time_start:
             restart_dir = model.ens_init_dir
         else:

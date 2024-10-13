@@ -5,7 +5,7 @@ import subprocess
 from utils.conversion import t2s, s2t, dt1h
 from utils.parallel import bcast_by_root
 from utils.progress import timer
-from scripts.dir_def import analysis_dir
+from utils.dir_def import analysis_dir
 from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
 from assim_tools.transpose import transpose_forward, transpose_backward

@@ -11,7 +11,7 @@ def postprocess(c):
     """
     ##copy the necessary files for each model
     for model_name, model in c.model_config.items():
-        print(f"prepare files for {model_name} ensemble", flush=True)
+        print(f"postprocessing files for {model_name} ensemble", flush=True)
 
         scheduler = Scheduler(c.nproc)
 

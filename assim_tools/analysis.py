@@ -4,7 +4,7 @@ import time
 from utils.parallel import by_rank, bcast_by_root
 from utils.progress import print_with_cache, progress_bar
 from utils.conversion import t2h, h2t
-from utils.distribution import normal_cdf, inv_weighted_normal_cdf
+# from utils.distribution import normal_cdf, inv_weighted_normal_cdf
 from .localization import local_factor
 
 def analysis(c, state_prior, z_state, lobs, lobs_prior):

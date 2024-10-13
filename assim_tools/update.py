@@ -44,7 +44,7 @@ def update_restart(c, fields_prior, fields_post):
                 print(progress_bar(m*nr+r, nm*nr))
 
             ##directory storing model output
-            path = forecast_dir(c, rec['time']), rec['model_src'])
+            path = forecast_dir(c, rec['time'], rec['model_src'])
 
             ##load the module for handling source model
             model = c.model_config[rec['model_src']]
