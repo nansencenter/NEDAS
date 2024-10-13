@@ -19,7 +19,7 @@ def perturb_save_file(c, model_name, vname, time, mem_id):
     mstr = f'_mem{mem_id+1:03d}'
     return os.path.join(path, 'perturb', vname+mstr+'.npy')
 
-def main(c):
+def main_perturb_program(c):
     task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
 
     for rec in task_list[c.pid]:
@@ -42,7 +42,6 @@ def main(c):
                 perturb[vname] = None
 
         ##perturb all sub time steps for variables within this cycle
-        vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
         dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
         nstep = c.cycle_period // dt        ##number of time steps to be perturbed
         for n in np.arange(nstep):
@@ -54,7 +53,8 @@ def main(c):
                 if c.debug:
                     print(f"PID {c.pid}: perturbing mem{mem_id+1} {variable_list} at {t} level {k}", flush=True)
 
-                model.read_grid(path=path, time=t, member=mem_id, k=k)
+                vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
+                model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
                 model.grid.set_destination_grid(c.grid)
                 c.grid.set_destination_grid(model.grid)
 
@@ -66,9 +66,10 @@ def main(c):
                     fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname]['is_vector'])
 
                 ##generate perturbation on analysis grid
+                ##inside random_perturb: figure out grid convertion
                 fields_pert, perturb = random_perturb(c.grid, fields, prev_perturb=perturb, dt=dt, **rec)
 
-                if hasattr(model, 'displace'):
+                if rec['type']=='displace' and hasattr(model, 'displace'):
                     ##use model internal method to apply displacement perturbations directly
                     model.displace(perturb, path=path, time=t, member=mem_id, k=k)
                 else:
@@ -108,5 +109,12 @@ if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
-    timer(c)(main)(c)
+    ##clean perturb files in current cycle dir
+    for rec in c.perturb:
+        perturb_files = os.path.join(forecast_dir(c, c.time, rec['model_src']), 'perturb', '*')
+        if c.pid==0:
+            os.system(f"rm -f {perturb_files}")
+    c.comm.Barrier()
+
+    timer(c)(main_perturb_program)(c)
 

@@ -69,8 +69,8 @@ def random_perturb(grid, fields, prev_perturb, **kwargs):
             if 'scale_wind' in other_opts:
                 r2d = 180/np.pi
                 fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
-                wprsfac = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor
-                wprsfac = params['atmos_surf_velocity']['amp'][s] / wprsfac
+                wind_scale = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor
+                wprsfac = params['atmos_surf_velocity']['amp'][s] / wind_scale
 
             perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], wprsfac)
 
@@ -78,16 +78,16 @@ def random_perturb(grid, fields, prev_perturb, **kwargs):
     for vname,rec in params.items():
         for s in range(rec['nscale']):
             if perturb_type == 'displace':
-                fields[vname] = warp(fields[vname], perturb[vname][0,...], perturb[vname][1,...])
+                fields[vname] = warp(fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
 
             else:
-                if len(other_opts)==0:
-                    ##no additional options, just add the gaussian perturbations
-                    fields[vname] += perturb[vname][s,...]
-
-                elif 'exp' in other_opts:
+                if 'exp' in other_opts:
                     ##add lognormal perturbations
                     fields[vname] *= np.exp(perturb[vname][s,...] - 0.5*rec['amp'][s]**4)
+
+                else:
+                    ##just add the gaussian perturbations
+                    fields[vname] += perturb[vname][s,...]
 
         ##respect value bounds after perturbing
         if 'bounds' in kwargs:
