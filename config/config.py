@@ -74,7 +74,7 @@ class Config(object):
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx)
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
 
         else:
             ##get analysis grid from model module
