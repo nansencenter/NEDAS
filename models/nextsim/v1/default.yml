@@ -1,7 +1,7 @@
 msh_filename: small_arctic_10km.msh  ##mesh filename
 
-ice_type: topaz
-ocean_type: topaz
+ice_type: topaz4_rean
+ocean_type: topaz4_rean
 atmosphere_type: generic_ps
 bathymetry_type: etopo
 dynamics_type: bbm
@@ -10,27 +10,34 @@ timestep: 900
 
 diffusivity_sss: 0
 diffusivity_sst: 0
-ocean_nudge_timeS: 1296000
-ocean_nudge_timeT: 1296000
+ocean_nudge_timeS: 10
+ocean_nudge_timeT: 10
+freezingpoint_type: linear
 h_young_max: 0.23
-alb_ice: 0.69
-alb_sn: 0.88
+alb_ice: 0.82
+alb_sn: 0.9
 albedoW: 0.07
+melt_type: 2
+PhiM: 0.2
+snow_cond: 0.2
 
-time_relaxation_damage: 15.
-compression_factor: 10000.0
-cohesion: -1350000.0
+time_relaxation_damage: 15
+compression_factor: 7e3
+cohesion: 1.35e6
 substeps: 120
 use_temperature_dependent_healing: True
-ERA5_quad_drag_coef_air: 0.0017
+ECMWF_quad_drag_coef_air: 0.0020
 quad_drag_coef_water: 0.0061625
-Lemieux_basal_k1: 7.0
-compaction_param: -25.0
+Lemieux_basal_k1: 7
+compaction_param: -30
+oceanic_turning_angle: 20
+
+include_young_ice: False
 
 start_from_restart: True
 restart_input_path: restart
 restart_type: extend
-write_initial_restart: True
+write_initial_restart: False
 write_interval_restart: True
 check_restart: True
 
@@ -42,7 +49,12 @@ export_after_regrid: True
 use_moorings: False
 mooring_grid_type: regular
 mooring_spacing: 3
-mooring_variables: ['conc', 'thick', 'velocity', 'wind']
+mooring_variables: ['conc', 'thick', 'snow', 'velocity', 'sialb', 'albedo', 'conc_myi', 'conc_young', 'age', 'age_det', 'ridge_ratio']
+
+use_osisaf_drifters: False
+use_sidfex_drifters: False
+sidfex_output_dt: 3
+sidfex_ignore_restart: True
 
 check_fields_fast: False
 
