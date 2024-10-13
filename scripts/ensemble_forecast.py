@@ -3,7 +3,7 @@ import os
 from utils.progress import timer
 from utils.conversion import t2s
 from utils.parallel import Scheduler
-from scripts.dir_def import forecast_dir
+from utils.dir_def import forecast_dir
 
 def ensemble_forecast_scheduler(c, model_name):
     """
@@ -12,7 +12,7 @@ def ensemble_forecast_scheduler(c, model_name):
     model = c.model_config[model_name]
     print(f"start {model_name} ensemble forecast", flush=True)
 
-    nworker = c.nproc // model.nproc_per_job
+    nworker = c.nproc // model.nproc_per_run
     scheduler = Scheduler(nworker, model.walltime)
 
     path = forecast_dir(c, c.time, model_name)
@@ -21,14 +21,13 @@ def ensemble_forecast_scheduler(c, model_name):
     for mem_id in range(c.nens):
         job_name = model_name+f'_mem{mem_id+1}'
 
-        job_opt = {'task_nproc': model.nproc_per_job,
-                   'job_submit_cmd': c.job_submit_cmd,
-                   'path': path,
-                   'member': mem_id,
-                   'time': c.time,
-                   'forecast_period': c.cycle_period,
-                   'output_dir': forecast_dir(c, c.next_time, model_name),
-                  }
+        job_opt = {
+            'job_submit_cmd': c.job_submit_cmd,
+            'path': path,
+            'member': mem_id,
+            'time': c.time,
+            'forecast_period': c.cycle_period,
+            }
         scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
 
     scheduler.start_queue() ##start the job queue
@@ -49,12 +48,13 @@ def ensemble_forecast_batch(c, model_name):
     path = forecast_dir(c, c.time, model_name)
     os.system("mkdir -p "+path)
 
-    job_opt = {'job_submit_cmd': c.job_submit_cmd,
-                'path': path,
-                'time': c.time,
-                'forecast_period': c.cycle_period,
-                'output_dir': forecast_dir(c, c.next_time, model_name),
-                }
+    job_opt = {
+        'job_submit_cmd': c.job_submit_cmd,
+        'path': path,
+        'time': c.time,
+        'forecast_period': c.cycle_period,
+        'output_dir': forecast_dir(c, c.next_time, model_name),
+        }
     model.run(nens=c.nens, **job_opt)
     print('done.', flush=True)
 
