@@ -9,6 +9,7 @@ from datetime import datetime
 from config import parse_config
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.conversion import t2s, s2t, dt1h, units_convert
+from utils.progress import watch_files
 from grid import Grid
 
 from .gmshlib import read_mshfile, proj
@@ -300,7 +301,7 @@ class Model(object):
         ##atmos forcing (make a copy, later they will be perturbed)
         shell_cmd += f"mkdir -p {self.atmos_forcing_path}; cd {self.atmos_forcing_path}; "
         t = time
-        while t < next_time:
+        while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
             t += 24 * dt1h  ##forcing files are stored daily
         os.system(shell_cmd)
@@ -344,23 +345,33 @@ class Model(object):
         offset = task_id*self.nproc_per_run
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
+        os.system("touch "+log_file)
 
         shell_cmd = f"source {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += f"export NEXTSIM_DATA_DIR={os.path.join(run_dir,'data')}; "
-        shell_cmd += f"{job_submit_cmd} {self.nproc_per_run} {offset} {model_exe} --config-files=nextsim.cfg.in >& run.log"
+        shell_cmd += f"{job_submit_cmd} {self.nproc_per_run} {offset} {model_exe} --config-files=config/nextsim.cfg >& run.log"
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.5]:
+            ##check output, if success skip further tries
+            with open(log_file, 'rt') as f:
+                if 'Simulation done' in f.read():
+                    break
+
             self.timestep *= dt_ratio
-            namelist(self, time, forecast_period, run_dir)  ##this creates nextsim.cfg.in in run_dir
+
+            ##this creates nextsim.cfg.in in run_dir/config
+            ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
+            config_dir = os.path.join(run_dir, 'config')
+            os.system("mkdir -p "+config_dir)
+            namelist(self, time, forecast_period, config_dir)
 
             ##run the model and wait for results
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
 
-            ##check output
-            with open(log_file, 'rt') as f:
-                if 'Simulation done' in f.read():
-                    break
+
+        ##checkout output files
+        watch_files([output_file])
 
