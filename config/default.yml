@@ -1,11 +1,11 @@
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
-nproc: 1        ##total number of processors
-nproc_mem: 1    ##number of processor groups
+nproc: 16         ##total number of processors
 
-nens: 100         ##ensemble size
+nens: 20          ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
+run_diag: False
 
 debug: False      ##if true, output debug data/message
 
@@ -14,10 +14,6 @@ time_end: '202302180000'         ##end time of the experiment
 time_assim_start: '202301010000' ##start time of the first analysis cycle
 time_assim_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
-
-time: '202301010000'
-prev_time: '202301010000'
-next_time: '202301011200'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -54,7 +50,7 @@ obs_def:
   vroi: 5
   troi: 24
   impact_on_state:
-    -streamfunc: 1.0
+  - streamfunc: 1.0
 
 use_synthetic_obs: True
 
@@ -62,16 +58,37 @@ model_def:
   qg:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
-    model_data_dir: ''
-    nproc_per_mem: 1    ##number of processors to run a forecast
-    walltime: 1000     ##walltime in seconds
+    nproc_per_run: 1    ##nproc for model.run
+    nproc_per_util: 1   ##nproc for other utility funcs, model.preprocess, etc.
+    walltime: 1000      ##walltime in seconds
+    restart_dt: 12
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'
 
+perturb:
+- variable: 'streamfunc'
+  model_src: 'qg'
+  type: 'gaussian'
+  amp: 1
+  hcorr: 10
+  tcorr: 12
+
 assim_mode: 'batch'
 filter_type: 'ETKF'
 regress_type: 'linear'
+
+nscale: 1                    ## number of scale components
+decompose_obs: False         ## if true, decompose observations as well
+character_length: [16]       ## characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]      ## scale factor for localization distances
+obs_err_scale_fac: [1]       ## scale factor for observation error variances
+
+run_alignment: True          ## if true, run alignment technique
+alignment:
+  variable: 'streamfunc'     ## which variable the alignment is based on
+  nlevel: 5
+  smoothness_weight: 1
 
 inflation:
   type: 'posterior,relax'
