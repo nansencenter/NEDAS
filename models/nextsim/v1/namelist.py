@@ -31,8 +31,8 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "bathymetry-type="+value_str(m.bathymetry_type)+"\n"
     nmlstr += "use_assimilation=false\n"
     nmlstr += "dynamics-type="+value_str(m.dynamics_type)+"\n"
-    nmlstr += "atmospheric_forcing_input_path="+m.atmos_forcing_path+"\n"
-    nmlstr += "oceanic_forcing_input_path="+m.ocean_forcing_path+"\n"
+    nmlstr += "atmospheric_forcing_input_path="+os.path.join('data',m.atmos_forcing_path)+"\n"
+    nmlstr += "oceanic_forcing_input_path="+os.path.join('data',m.ocean_forcing_path)+"\n"
     nmlstr += "[simul]\n"
     nmlstr += "spinup_duration=0\n"
     nmlstr += "timestep="+value_str(int(m.timestep))+"\n"
@@ -97,6 +97,6 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "check_fields_fast="+value_str(m.check_fields_fast)+"\n"
 
     ##write the namelist to nextsim.cfg file
-    with open(os.path.join(run_dir, 'nextsim.cfg.in'), 'wt') as f:
+    with open(os.path.join(run_dir, 'nextsim.cfg'), 'wt') as f:
         f.write(nmlstr)
 
