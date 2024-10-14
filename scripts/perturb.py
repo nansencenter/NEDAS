@@ -9,10 +9,11 @@ from utils.dir_def import forecast_dir
 from utils.random_perturb import random_perturb
 
 def main_perturb_program(c):
+    task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
+
+    c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
     print_1p("\nPerturbing the ensemble model state and forcing\n")
-
-    task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
 
     ##first go through the fields to count how many (for showing progress)
     nfld = 0
