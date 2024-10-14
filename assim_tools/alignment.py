@@ -66,7 +66,6 @@ def get_HS80_optical_flow(fld1, fld2, mask, dx, dy, cyclic_dim, niter_max, w):
         niter += 1
     return u, v
 
-
 def alignment(c, fields_prior, fields_post, **kwargs):
     """
     Alignment technique, find displacement increment from prior to posterior
@@ -117,5 +116,4 @@ def alignment(c, fields_prior, fields_post, **kwargs):
     #         else:
     #             ##change all the model variables to reflect the displace increment
     #             sop.warp(grid, fld, u, v)
-
 

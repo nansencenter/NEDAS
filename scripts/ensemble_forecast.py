@@ -10,13 +10,12 @@ def ensemble_forecast_scheduler(c, model_name):
     This function runs ensemble forecasts to advance to the next cycle
     """
     model = c.model_config[model_name]
-    print(f"start {model_name} ensemble forecast", flush=True)
+    path = forecast_dir(c, c.time, model_name)
+    os.system("mkdir -p "+path)
+    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
     nworker = c.nproc // model.nproc_per_run
     scheduler = Scheduler(nworker, model.walltime)
-
-    path = forecast_dir(c, c.time, model_name)
-    os.system("mkdir -p "+path)
 
     for mem_id in range(c.nens):
         job_name = model_name+f'_mem{mem_id+1}'
@@ -43,10 +42,9 @@ def ensemble_forecast_batch(c, model_name):
     in a simultaneous manner
     """
     model = c.model_config[model_name]
-    print(f"start {model_name} ensemble forecast ...", flush=True)
-
     path = forecast_dir(c, c.time, model_name)
     os.system("mkdir -p "+path)
+    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
     job_opt = {
         'job_submit_cmd': c.job_submit_cmd,
@@ -66,7 +64,6 @@ def ensemble_forecast(c):
             timer(c)(ensemble_forecast_scheduler)(c, model_name)
         else:
             raise TypeError("unknown ensemble forecast type: '"+model.ens_run_type+"' for "+model_name)
-
 
 if __name__ == "__main__":
     from config import Config

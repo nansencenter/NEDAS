@@ -3,7 +3,7 @@ import os
 import struct
 import importlib
 from grid import Grid
-from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import by_rank, bcast_by_root, distribute_tasks
 from utils.multiscale import get_scale_component, get_error_scale_factor
@@ -46,7 +46,8 @@ def parse_obs_info(c):
     pos = 0         ##seek position for rec
 
     ##loop through obs variables defined in obs_def
-    for vname, vrec in c.obs_def.items():
+    for vrec in ensure_list(c.obs_def):
+        vname = vrec['name']
 
         ##some properties of the variable is defined in its source module
         src = importlib.import_module('dataset.'+vrec['dataset_src'])
@@ -411,7 +412,7 @@ def state_to_obs(c, **kwargs):
 
         levels = model.variables[obs_name]['levels']
         for k in range(len(levels)):
-            if obs_name in c.state_def.keys() and not synthetic:
+            if obs_name in [r['name'] for r in ensure_list(c.state_def)] and not synthetic:
                 ##the obs is one of the state variables
                 ##find its corresponding rec_id
                 rec_id = [i for i,r in c.state_info['fields'].items() if r['name']==obs_name and r['k']==levels[k]][0]
@@ -521,8 +522,7 @@ def prepare_obs(c):
         there can be other optional keys provided by read_obs() but we don't use them
     - c.obs_info with updated nobs
     """
-    if c.debug:
-        by_rank(c.comm,0)(print_with_cache)('read obs sequence from datasets\n')
+    by_rank(c.comm,0)(print_with_cache)('>>> read observation sequence from datasets\n')
 
     ##get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
     obs_seq = {}
@@ -541,6 +541,7 @@ def prepare_obs(c):
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
+            model = c.model_config[obs_rec['model_src']]
             seq = src.random_network(path, c.grid, c.mask, z, model.truth_dir, **obs_rec)
 
             ##compute obs values
@@ -554,8 +555,7 @@ def prepare_obs(c):
             seq = src.read_obs(path, c.grid, c.mask, z, **obs_rec)
         del z
 
-        if c.debug:
-            by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
+        by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 
         ##misc. transform here
         ##e.g., multiscale approach:
@@ -597,9 +597,8 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
 
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('compute obs priors\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('>>> compute observation priors\n')
     obs_prior_seq = {}
 
     ##process the obs, each proc gets its own workload as a subset of
@@ -609,7 +608,9 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
             if c.debug:
-                print(progress_bar(m*nr+r, nr*nm))
+                print(f"PID {c.pid}: obs_prior mem{mem_id+1:03d} {c.obs_info['records'][rec_id]}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nr*nm))
 
             ##this is the obs record to process
             obs_rec = c.obs_info['records'][obs_rec_id]
@@ -625,9 +626,8 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
                 seq = get_scale_component(obs_grid, seq, c.character_length, c.s)
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
-
-    if c.debug:
-        print(' done.\n')
+    c.comm.Barrier()
+    print_1p(' done.\n')
 
     ##additional output for debugging
     if c.debug:

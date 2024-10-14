@@ -1,13 +1,13 @@
 work_dir: '/cluster/work/users/yingyue/nextsim_test'   ##working directory for the experiment
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'  ##job submit command wrapper
 
-nproc: 32        ##total number of processors
+nproc: 128        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: False ##if true, run the assimilation steps
+run_assim: True  ##if true, run the assimilation steps
 run_diag: False
 
-debug: True ##if true, output debug data/message
+debug: False     ##if true, output debug data/message
 
 time_start: '200612220000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '200702150000'         ##end time of the experiment
@@ -28,6 +28,7 @@ grid_def:
   ymin: -2e6
   ymax: 2.5e6
   dx: 3e3
+  centered: True
 
 state_def:
 - name: 'seaice_conc'
@@ -71,7 +72,6 @@ model_def:
     atmos_forcing_path: 'GENERIC_PS_ATM'
     ocean_forcing_path: 'TOPAZ4_reanalysis-merged'
     nproc_per_run: 32    ##number of processors to run a forecast
-    nproc_per_util: 1
     walltime: 10000      ##walltime in seconds
     restart_dt: 6
     forcing_dt: 6

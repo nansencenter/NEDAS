@@ -25,7 +25,6 @@ class Comm(object):
     def __getattr__(self, attr):
         return getattr(self._comm, attr)
 
-
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
     def __init__(self):
@@ -66,7 +65,6 @@ class DummyComm(object):
     def reduce(self, obj, root=0):
         return obj
 
-
 def by_rank(comm, rank):
     """
     Decorator for func() to be run only by rank 0 in comm
@@ -81,7 +79,6 @@ def by_rank(comm, rank):
             return result
         return wrapper
     return decorator
-
 
 def bcast_by_root(comm):
     """
@@ -99,7 +96,6 @@ def bcast_by_root(comm):
             return result
         return wrapper
     return decorator
-
 
 def distribute_tasks(comm, tasks, load=None):
     """
@@ -160,17 +156,17 @@ def distribute_tasks(comm, tasks, load=None):
 
     return task_list
 
-
 class Scheduler(object):
     """
     A scheduler class for queuing and running multiple jobs on available workers (group of processors).
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker, walltime=None):
+    def __init__(self, nworker, walltime=None, debug=False):
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
+        self.debug = debug
         self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=nworker)
         self.queue_open = True
@@ -192,6 +188,8 @@ class Scheduler(object):
                            'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
+        if self.debug:
+            print(f"Scheduler: Job {name} added: '{job.__name__, args, kwargs}'")
 
     def monitor_job_queue(self):
         """
@@ -211,7 +209,8 @@ class Scheduler(object):
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
-                # print('job '+name+f' submitted to {worker_id}')
+                if self.debug:
+                    print(f"Scheduler: job {name} started by worker {worker_id}")
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -227,6 +226,8 @@ class Scheduler(object):
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
+                if self.debug:
+                    print(f"Scheduler: job {name} completed")
 
             ##kill jobs that exceed walltime
             ##TODO: the kill signal isn't handled
@@ -238,7 +239,9 @@ class Scheduler(object):
             #             self.error_jobs.append(name)
             #             return
 
-            print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
+            ##just show a progress bar if not output debug messages
+            if not self.debug:
+                print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 
             time.sleep(0.1)  ##don't check too frequently, will increase overhead
 

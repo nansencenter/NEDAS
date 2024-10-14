@@ -42,10 +42,10 @@ class QGModel(object):
         ##dt = 0.00025 ~ 216 seconds
 
         self.variables = {
-            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'*'},
-            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
-            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
-            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'*'},
+            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':12, 'levels':levels, 'units':'*'},
+            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
+            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
+            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
             }
 
         self.z_units = '*'
@@ -53,7 +53,6 @@ class QGModel(object):
         ##
         self.run_process = None
         self.run_status = 'pending'
-
 
     def filename(self, **kwargs):
         if 'path' in kwargs:
@@ -71,18 +70,11 @@ class QGModel(object):
 
         return os.path.join(path, mstr, 'output_'+tstr+'.bin')
 
-
     def read_grid(self, **kwargs):
         pass
 
-
-    def write_grid(self, grid, **kwargs):
-        pass
-
-
     def read_mask(self, **kwargs):
         return self.mask
-
 
     def read_var(self, **kwargs):
         assert 'name' in kwargs, 'missing variable name in kwargs'
@@ -139,7 +131,6 @@ class QGModel(object):
         else:
             return var1
 
-
     def write_var(self, var, **kwargs):
         ##check kwargs
         assert 'name' in kwargs, 'missing variable name in kwargs'
@@ -172,31 +163,33 @@ class QGModel(object):
 
             write_data_bin(fname, psik, self.kmax, self.nz, int(k))
 
-
     def z_coords(self, **kwargs):
         assert 'k' in kwargs, 'qg.z_coords: missing k in kwargs'
         z = np.ones(self.grid.x.shape) * kwargs['k']
         return z
 
+    def preprocess(self, task_id=0, task_nproc=1, **kwargs):
+        time = kwargs['time']
+        restart_dir = kwargs['restart_dir']
 
-    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
-        ##just link prepared files to save time
-        ens_init_dir = kwargs['ens_init_dir']
+        ##restart files for each member in ens_init_dir, this is prepared beforehand
+        restart_file = self.filename(**{**kwargs, 'path':restart_dir, 'time':time})
 
-        kwargs_init = {**kwargs, 'path':ens_init_dir}
-        init_file = self.filename(**kwargs_init)
-
+        ##restart file to be used in this experiment, in work_dir/cycle/...
         input_file = self.filename(**kwargs)
         input_dir = os.path.dirname(input_file)
-        subprocess.run("mkdir -p "+input_dir+"; cp "+init_file+" "+input_file, shell=True)
 
+        ##just cp the prepared files to the work_dir location
+        subprocess.run("mkdir -p "+input_dir+"; cp "+restart_file+" "+input_file, shell=True)
+
+    def postprocess(self, task_id=0, **kwargs):
+        pass
 
     def run(self, task_id=0, task_nproc=1, **kwargs):
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
         job_submit_cmd = kwargs['job_submit_cmd']
-        model_code_dir = kwargs['model_code_dir']
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
@@ -219,14 +212,13 @@ class QGModel(object):
         else:
             prep_input_cmd = ''
 
-        qg_src = os.path.join(model_code_dir, 'setup.src')
-        qg_exe = os.path.join(model_code_dir, 'src', 'qg.exe')
+        qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
 
         offset = task_id*task_nproc
         submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
 
         ##build the shell command line
-        shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
+        shell_cmd = "source "+self.model_env+"; "   ##enter the qg model env
         shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
         shell_cmd += "rm -f restart.nml; "      ##clean up before run
         shell_cmd += prep_input_cmd             ##prepare input file
@@ -262,13 +254,5 @@ class QGModel(object):
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
         subprocess.run(shell_cmd, shell=True)
-
-        ##make a copy of output file to the output_dir
-        if 'output_dir' in kwargs:
-            output_dir = kwargs['output_dir']
-            if output_dir != path:
-                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
-                output_file_cp = self.filename(**kwargs_out_cp)
-                subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
 
 

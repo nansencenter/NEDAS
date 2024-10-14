@@ -20,6 +20,12 @@ shift 2
 exe_command=$@
 
 if [ -z $SLURM_TASKS_PER_NODE ]; then
+    ##running job from login node
+    ##this is not suitable for large amount of processors
+    if [ "$nproc" -gt 16 ] || [ "$offset" -gt 16 ]; then
+        echo "You are on login node, don't run large parallel programs, try reducing nproc below 16"
+        exit
+    fi
     mpiexec -n $nproc $exe_command
 else
     ppn=$(echo $SLURM_TASKS_PER_NODE |awk -F'(' '{print $1}')

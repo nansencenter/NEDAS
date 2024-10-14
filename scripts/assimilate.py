@@ -13,13 +13,13 @@ from assim_tools.analysis import analysis
 from assim_tools.inflation import inflation
 from assim_tools.update import update_restart
 
-def main(c):
+def main_assim_program(c):
     assert c.nproc==c.comm.Get_size(), f"Error: nproc {c.nproc} not equal to mpi size {c.comm.Get_size()}"
 
     c.analysis_dir = analysis_dir(c, c.time)
     if c.pid == 0:
         os.system("mkdir -p "+c.analysis_dir)
-        print("running assimilate.py in "+c.analysis_dir, flush=True)
+        print(f"\nRunning assimilation step in {c.analysis_dir}\n", flush=True)
 
     c.state_info = bcast_by_root(c.comm)(parse_state_info)(c)
     c.mem_list, c.rec_list = bcast_by_root(c.comm)(distribute_state_tasks)(c)
@@ -49,7 +49,7 @@ def main(c):
 
     timer(c)(output_ens_mean)(c, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'))
 
-    inflation(c, 'posterior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'), obs_post_seq)
+    timer(c)(inflation)(c, 'posterior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'), obs_post_seq)
 
     timer(c)(output_state)(c, fields_post, os.path.join(c.analysis_dir,'post_state.bin'))
 
@@ -80,5 +80,5 @@ if __name__ == '__main__':
     from utils.progress import timer
     c = Config(parse_args=True)
 
-    timer(c)(main)(c)
+    main_assim_program(c)
 
