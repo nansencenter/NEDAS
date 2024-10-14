@@ -255,4 +255,3 @@ class QGModel(object):
         shell_cmd += "mv output.bin "+output_file
         subprocess.run(shell_cmd, shell=True)
 
-

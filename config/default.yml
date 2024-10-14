@@ -72,11 +72,13 @@ use_synthetic_obs: True  ## if true, use synthetic observations generated from t
 model_def:
   qg:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'  ##configuration file
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'  ##source file to enter environment
     model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'           ##where to find model executable
     nproc_per_run: 1    ## number of processors for one model.run
     nproc_per_util: 1   ## number of processors for other utility funcs, model.preprocess, etc.
     walltime: 1000      ## walltime in seconds
     restart_dt: 12      ## restart file interval in hours
+    forcing_dt: 12      ## boundary forcing interval
     ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'   ##path to the initial ensemble restart files
     truth_dir: '/cluster/work/users/yingyue/qg/truth'         ##path to the truth files (for synthetic obs)
@@ -97,13 +99,14 @@ regress_type: 'linear'       ##regression type (linear or probit)
 
 ##multiscale approach in assimilation
 nscale: 1                    ## number of scale components
+scale_id: 0                  ## current scale component index
 decompose_obs: False         ## if true, decompose observations as well
 character_length: [16]       ## characteristic length (in grid coord unit) for each scale (large to small)
 localize_scale_fac: [1]      ## scale factor for localization distances
 obs_err_scale_fac: [1]       ## scale factor for observation error variances
 
 ##alignment technique in assimilation
-run_alignment: True          ## if true, run alignment technique
+run_alignment: False         ## if true, run alignment technique
 alignment:
   variable: 'streamfunc'     ## which variable the alignment is based on
   nlevel: 5                  ## number of resolution levels in multi-grid approach
