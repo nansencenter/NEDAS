@@ -14,7 +14,7 @@ def postprocess_model_state(c, model_name):
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
 
-    scheduler = Scheduler(c.nproc)
+    scheduler = Scheduler(c.nproc // model.nproc_per_util, debug=c.debug)
     os.system("mkdir -p "+path)
 
     for mem_id in range(c.nens):
