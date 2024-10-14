@@ -2,7 +2,7 @@ import numpy as np
 import os
 import struct
 
-from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
+from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.multiscale import get_scale_component
@@ -23,7 +23,6 @@ par_id indexes the spatial partitions, which are subset of the 2D grid
          given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
          the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
 """
-
 def parse_state_info(c):
     """
     Parses info for the nrec fields in the state.
@@ -41,7 +40,8 @@ def parse_state_info(c):
     variables = set()
 
     ##loop through variables in state_def
-    for vname, vrec in c.state_def.items():
+    for vrec in ensure_list(c.state_def):
+        vname = vrec['name']
         variables.add(vname)
 
         if vrec['var_type'] == 'field':
@@ -74,7 +74,6 @@ def parse_state_info(c):
         else:
             raise NotImplementedError(f"{vrec['var_type']} is not supported in the state vector.")
 
-
     if c.debug:
         print(f"number of ensemble members, nens={c.nens}", flush=True)
         print(f"number of unique field records, nrec={len(info['fields'])}", flush=True)
@@ -83,7 +82,6 @@ def parse_state_info(c):
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
 
     return info
-
 
 def write_state_info(binfile, info):
     """
@@ -112,7 +110,6 @@ def write_state_info(binfile, info):
             k = rec['k']
             pos = rec['pos']
             f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, model_src, dtype, is_vector, units, err_type, time, dt, k, pos))
-
 
 def read_state_info(binfile):
     """
@@ -149,7 +146,6 @@ def read_state_info(binfile):
             rec_id += 1
 
     return info
-
 
 def write_field(binfile, info, mask, mem_id, rec_id, fld):
     """
@@ -189,7 +185,6 @@ def write_field(binfile, info, mask, mem_id, rec_id, fld):
     with open(binfile, 'r+b') as f:
         f.seek(mem_id*info['size'] + rec['pos'])
         f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
-
 
 def read_field(binfile, info, mask, mem_id, rec_id):
     """
@@ -234,7 +229,6 @@ def read_field(binfile, info, mask, mem_id, rec_id):
             fld[~mask] = fld_
         return fld
 
-
 def distribute_state_tasks(c):
     """
     Distribute mem_id and rec_id across processors
@@ -255,7 +249,6 @@ def distribute_state_tasks(c):
     rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
 
     return mem_list, rec_list
-
 
 def partition_grid(c):
     """
@@ -296,7 +289,6 @@ def partition_grid(c):
                       for i in np.arange(nx_intv) ]
     return partitions
 
-
 def output_state(c, fields, state_file):
     """
     Parallel output the fields to the binary state_file
@@ -308,9 +300,8 @@ def output_state(c, fields, state_file):
     - state_file: str
       path to the output binary file
     """
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('save state to '+state_file+'\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('>>> save state to '+state_file+'\n')
 
     if c.pid == 0:
         ##if file doesn't exist, create the file
@@ -321,21 +312,20 @@ def output_state(c, fields, state_file):
 
     nm = len(c.mem_list[c.pid_mem])
     nr = len(c.rec_list[c.pid_rec])
-
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
             if c.debug:
-                print(progress_bar(m*nr+r, nm*nr))
+                print(f"PID {c.pid}: saving field: mem{mem_id+1:03d} {c.state_info['fields'][rec_id]}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nm*nr))
 
             ##get the field record for output
             fld = fields[mem_id, rec_id]
 
             ##write the data to binary file
             write_field(state_file, c.state_info, c.mask, mem_id, rec_id, fld)
-
-    if c.debug:
-        print(' done.\n')
-
+    c.comm.Barrier()
+    print_1p(' done.\n')
 
 def output_ens_mean(c, fields, mean_file):
     """
@@ -349,18 +339,20 @@ def output_ens_mean(c, fields, mean_file):
     - mean_file: str
       path to the output binary file for the ensemble mean
     """
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('compute ensemble mean, save to '+mean_file+'\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('>>> compute ensemble mean, save to '+mean_file+'\n')
 
     if c.pid == 0:
+        ##if file doesn't exist, create the file, write state_info
         open(mean_file, 'wb')
         write_state_info(mean_file, c.state_info)
     c.comm.Barrier()
 
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
         if c.debug:
-            print(progress_bar(r, len(c.rec_list[c.pid_rec])))
+            print(f"PID {c.pid}: saving mean field {c.state_info['fields'][rec_id]}", flush=True)
+        else:
+            print_1p(progress_bar(r, len(c.rec_list[c.pid_rec])))
 
         ##initialize a zero field with right dimensions for rec_id
         if c.state_info['fields'][rec_id]['is_vector']:
@@ -379,13 +371,8 @@ def output_ens_mean(c, fields, mean_file):
         if c.pid_mem == 0:
             mean_fld = sum_fld / c.nens
             write_field(mean_file, c.state_info, c.mask, 0, rec_id, mean_fld)
-
-    if c.debug:
-        print(' done.\n')
-
-    ##clean up
-    # del sum_fld_pid, sum_fld
-
+    c.comm.Barrier()
+    print_1p(' done.\n')
 
 def prepare_state(c):
     """
@@ -407,9 +394,8 @@ def prepare_state(c):
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
 
     ##pid_show has some workload, it will print progress message
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('prepare state by reading fields from model restart\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('>>> prepare state by reading fields from model restart\n')
     fields = {}
     z_coords = {}
 
@@ -420,10 +406,12 @@ def prepare_state(c):
 
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
-            if c.debug:
-                print(progress_bar(m*nr+r, nm*nr))
-
             rec = c.state_info['fields'][rec_id]
+
+            if c.debug:
+                print(f"PID {c.pid}: prepare_state mem{mem_id+1:03d} {rec}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nm*nr))
 
             ##directory storing model output
             path = forecast_dir(c, rec['time'], rec['model_src'])
@@ -442,7 +430,7 @@ def prepare_state(c):
             ##e.g., multiscale approach
             if c.nscale > 1:
                 ##get scale component for multiscale approach
-                fld = get_scale_component(c.grid, fld, c.character_length, c.s)
+                fld = get_scale_component(c.grid, fld, c.character_length, c.scale_id)
 
             ##save field to dict
             fields[mem_id, rec_id] = fld
@@ -455,9 +443,8 @@ def prepare_state(c):
                 z_coords[mem_id, rec_id] = np.array([z, z])
             else:
                 z_coords[mem_id, rec_id] = z
-    if c.debug:
-        print(' done.\n')
     c.comm.Barrier()
+    print_1p(' done.\n')
 
     ##additonal output of debugging
     if c.debug:

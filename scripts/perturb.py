@@ -3,31 +3,32 @@ import os
 import sys
 import subprocess
 from utils.conversion import dt1h, ensure_list
-from utils.parallel import distribute_tasks, bcast_by_root
-from utils.progress import timer
+from utils.parallel import distribute_tasks, bcast_by_root, by_rank
+from utils.progress import timer, print_with_cache, progress_bar
 from utils.dir_def import forecast_dir
 from utils.random_perturb import random_perturb
 
-def distribute_perturb_tasks(c):
-    task_list_full = []
-    for perturb_rec in c.perturb:
-        for mem_id in range(c.nens):
-            task_list_full.append({**perturb_rec, 'member':mem_id})
-    task_list = distribute_tasks(c.comm, task_list_full)
-    return task_list
-
-def perturb_save_file(c, model_name, vname, time, mem_id):
-    path = forecast_dir(c, time, model_name)
-    mstr = f'_mem{mem_id+1:03d}'
-    return os.path.join(path, 'perturb', vname+mstr+'.npy')
-
 def main_perturb_program(c):
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p("\nPerturbing the ensemble model state and forcing\n")
+
     task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
 
+    ##first go through the fields to count how many (for showing progress)
+    nfld = 0
     for rec in task_list[c.pid]:
         model_name = rec['model_src']
         model = c.model_config[model_name]
+        vname = ensure_list(rec['variable'])[0]
+        dt = model.variables[vname]['dt']
+        nstep = c.cycle_period // dt
+        for n in np.arange(nstep):
+            for k in model.variables[vname]['levels']:
+                nfld += 1
 
+    ##actually go through the fields to perturb now
+    fld_id = 0
+    for rec in task_list[c.pid]:
         model_name = rec['model_src']
         model = c.model_config[model_name]  ##model class object
         mem_id = rec['member']
@@ -49,11 +50,14 @@ def main_perturb_program(c):
         for n in np.arange(nstep):
             t = c.time + n * dt * dt1h
 
+            #TODO: only works for surface layer variables now with k=0 (forcing variables)
+            ##      but can be extended to 3D variables with additional vertical corr parameter
             for k in model.variables[vname]['levels']:
-                #TODO: only works for surface layer variables now with k=0 (forcing variables)
-                ##      but can be extended to 3D variables with additional vertical corr parameter
+                fld_id += 1
                 if c.debug:
                     print(f"PID {c.pid}: perturbing mem{mem_id+1} {variable_list} at {t} level {k}", flush=True)
+                else:
+                    print_1p(progress_bar(fld_id, nfld+1))
 
                 vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
                 model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
@@ -86,6 +90,21 @@ def main_perturb_program(c):
             psfile = perturb_save_file(c, model_name, vname, c.time, mem_id)
             os.system(f"mkdir -p {os.path.dirname(psfile)}")
             np.save(psfile, perturb[vname])
+    c.comm.Barrier()
+    print_1p(' done.\n')
+
+def distribute_perturb_tasks(c):
+    task_list_full = []
+    for perturb_rec in ensure_list(c.perturb):
+        for mem_id in range(c.nens):
+            task_list_full.append({**perturb_rec, 'member':mem_id})
+    task_list = distribute_tasks(c.comm, task_list_full)
+    return task_list
+
+def perturb_save_file(c, model_name, vname, time, mem_id):
+    path = forecast_dir(c, time, model_name)
+    mstr = f'_mem{mem_id+1:03d}'
+    return os.path.join(path, 'perturb', vname+mstr+'.npy')
 
 def perturb(c):
     """run this perturb.py script in a subprocess with mpi, using all nproc cores"""
@@ -110,6 +129,9 @@ def perturb(c):
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
+
+    if not hasattr(c, 'perturb') or c.perturb is None:
+        exit()
 
     ##clean perturb files in current cycle dir
     for rec in c.perturb:

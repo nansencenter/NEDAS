@@ -1,3 +1,8 @@
+nproc_per_run: 1
+nproc_per_util: 1
+model_code_dir: ''
+model_data_dir: ''
+
 kmax: 127  ## max resolved wavenumber; spectral resolution
 nz: 2  ## number of vertical layers
 

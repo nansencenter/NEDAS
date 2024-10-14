@@ -1,7 +1,6 @@
 import numpy as np
 import os
 import subprocess
-import shutil
 import time
 from functools import wraps
 
@@ -23,7 +22,7 @@ def timer(c):
         return wrapper
     return decorator
 
-def progress_bar(task_id, ntask, width=None):
+def progress_bar(task_id, ntask, width=50):
     """
     Generate a progress bar based on task_id and ntask
 
@@ -45,10 +44,6 @@ def progress_bar(task_id, ntask, width=None):
         progress = 1
     else:
         progress = (task_id+1) / ntask
-
-    if width is None:
-        console_width = shutil.get_terminal_size().columns
-        width = int(0.5 * console_width)
 
     ##the progress bar looks like this: .....  | ??%
     pstr = '\r{:{}}| '.format('.'*int(np.ceil(progress * width)), width)

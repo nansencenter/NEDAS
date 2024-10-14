@@ -94,7 +94,6 @@ def transpose_field_to_state(c, fields):
         print(' done.\n')
     return state
 
-
 def transpose_state_to_field(c, state):
     """
     transpose_state_to_field transposes back the state to field-complete fields
@@ -173,7 +172,6 @@ def transpose_state_to_field(c, state):
     if c.debug:
         print(' done.\n')
     return fields
-
 
 def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     """
@@ -306,7 +304,6 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
 
     return output_obs
 
-
 def transpose_lobs_to_obs(c, lobs):
     """
     Transpose obs from ensemble-complete to field-complete
@@ -386,7 +383,6 @@ def transpose_lobs_to_obs(c, lobs):
         print(' done.\n')
     return obs_seq
 
-
 def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     """
     transpose funcs called by assimilate.py
@@ -414,7 +410,6 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
 
     return state_prior, z_state, lobs, lobs_prior
 
-
 def transpose_backward(c, state_post, lobs_post):
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
     if c.debug:
@@ -424,5 +419,4 @@ def transpose_backward(c, state_post, lobs_post):
     obs_post_seq = transpose_lobs_to_obs(c, lobs_post)
 
     return fields_post, obs_post_seq
-
 

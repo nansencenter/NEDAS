@@ -8,7 +8,6 @@ from utils.dir_def import forecast_dir
 from .state import read_field
 from .alignment import alignment
 
-
 def update_restart(c, fields_prior, fields_post):
     """
     Top-level routine to apply the analysis increments to the original model
@@ -23,12 +22,11 @@ def update_restart(c, fields_prior, fields_post):
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.rec_list.items() if len(lst)>0][0]
     c.pid_show = pid_rec_show * c.nproc_mem + pid_mem_show
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
-    if c.debug:
-        print('update model restart files with analysis increments\n')
+    print_1p(f'>>> update model restart files with analysis increments\n')
 
-    if c.run_alignment and c.s < c.nscale:
+    if c.run_alignment and c.scale_id < c.nscale:
         alignment(c, fields_prior, fields_post, **c.alignment)
 
     ##process the fields, each processor goes through its own subset of
@@ -41,7 +39,9 @@ def update_restart(c, fields_prior, fields_post):
 
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
-                print(progress_bar(m*nr+r, nm*nr))
+                print(f"PID {c.pid}: update_restart mem{mem_id+1:03d} {rec}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nm*nr))
 
             ##directory storing model output
             path = forecast_dir(c, rec['time'], rec['model_src'])
@@ -77,6 +77,6 @@ def update_restart(c, fields_prior, fields_post):
             ##write the posterior variable to restart file
             model.write_var(var_post, path=path, member=mem_id, **rec)
 
-    if c.debug:
-        print(' done.\n')
+    c.comm.Barrier()
+    print_1p(' done.\n')
 

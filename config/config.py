@@ -10,7 +10,6 @@ from utils.conversion import s2t, t2s
 from .parse_config import parse_config
 
 class Config(object):
-
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -31,7 +30,6 @@ class Config(object):
         for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
             setattr(self, key, None)
 
-
     def set_time(self):
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end']:
             assert key in self.keys, f"'{key}' is missing in config file"
@@ -45,7 +43,6 @@ class Config(object):
         ##convert string to datetime obj
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
             setattr(self, key, s2t(getattr(self, key)))
-
 
     def set_comm(self):
         ##initialize mpi communicator
@@ -66,7 +63,6 @@ class Config(object):
 
         self.pid_show = 0  ##which pid is showing progress messages, default to root=0
 
-
     def set_analysis_grid(self):
         ##initialize analysis grid
         if self.grid_def['type'] == 'custom':
@@ -74,7 +70,8 @@ class Config(object):
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=True)
+            centered = self.grid_def.get('centered', False)
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered)
 
         else:
             ##get analysis grid from model module
@@ -90,7 +87,6 @@ class Config(object):
         # if self.mask
         self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
 
-
     def set_model_config(self):
         ##initialize model config dict
         self.model_config = {}
@@ -98,7 +94,6 @@ class Config(object):
             ##load model class instance
             module = importlib.import_module('models.'+model_name)
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
-
 
     def show_summary(self):
         ##print a summary
@@ -111,10 +106,7 @@ class Config(object):
  current time: {self.time}
  """, flush=True)
 
-
     def dump_yaml(self, config_file):
-        print(f"saving configuration to {config_file}", flush=True)
-
         config_dict = {}
         with open(config_file, 'w') as f:
             for key in self.keys:

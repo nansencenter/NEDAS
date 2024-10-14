@@ -1,12 +1,13 @@
 work_dir: '/cluster/work/users/yingyue/TP5_test'   ##working directory for the experiment
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
-nproc: 512        ##total number of processors
+nproc: 256       ##total number of processors
 
-nens: 100         ##ensemble size
+nens: 10         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
+run_diag: False
 
-debug: False      ##if true, output debug data/message
+debug: True ##if true, output debug data/message
 
 time_start: '202109060000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202203210000'         ##end time of the experiment
@@ -86,9 +87,9 @@ model_def:
   topaz.v5:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v5/default.yml'
     basedir: '/cluster/work/users/yingyue/TP5a0.06'
-    model_env: '/cluster/home/yingyue/topaz5.src'
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/topaz/env/setup.src'
     nproc_per_run: 512  ##nproc for model.run
-    nproc_per_util: 32  ##nproc for other utility funcs, model.preprocess etc.
+    nproc_per_util: 1  ##nproc for other utility funcs, model.preprocess etc.
     walltime: 10000     ##walltime in seconds
     restart_dt: 168
     forcing_dt: 6
@@ -97,31 +98,6 @@ model_def:
     truth_dir: ''
 
 perturb:
-#- variable: 'atmos_surf_velocity' ##variable to be perturbed
-#  model_src: 'topaz.v5'     ##which model src this variable comes from
-#  type: 'gaussian'          ##what type of perturbation
-#  amp: [2.5, 10]            ##perturbation amplitude (list if multiscale approach)
-#  hcorr: [2.e6, 2.5e5]       ##horizontal correlation length (meters)
-#  tcorr: [168, 48]          ##temporal correlation length (hours)
-#- variable: 'atmos_surf_velocity'                          ##prsflag=0
-#  model_src: 'topaz.v5'
-#  type: 'gaussian'
-#  amp: 2.5
-#  hcorr: 2.5e5
-#  tcorr: 48
-#- variable: 'atmos_surf_press'
-#  model_src: 'topaz.v5'
-#  type: 'gaussian'
-#  amp: 1.e5
-#  hcorr: 2.5e5
-#  tcorr: 48
-#- variable: ['atmos_surf_press', 'atmos_surf_velocity']    ##prsflag=1
-#  model_src: 'topaz.v5'
-#  type: 'gaussian,press_wind_relate'
-#  amp: [1.e5, 2.5]
-#  hcorr: [2.5e5, 2.5e5]
-#  tcorr: [48, 48]
-#  wlat: 40
 - variable: ['atmos_surf_press', 'atmos_surf_velocity']
   model_src: 'topaz.v5'
   type: 'gaussian,press_wind_relate,scale_wind'

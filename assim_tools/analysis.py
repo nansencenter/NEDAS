@@ -132,7 +132,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                                   for p in lst])
                           for lst in c.par_list.values()])
     c.pid_show = np.argsort(obs_count)[-1]
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     ##count number of tasks
     ntask = 0
@@ -144,7 +144,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
     t0 = time.time()
     ##now the actual work starts, loop through partitions stored on pid_mem
-    print('assimilate in batch mode:\n')
+    print_1p('>>> assimilate in batch mode:\n')
     task = 0
     for par_id in c.par_list[c.pid_mem]:
 
@@ -161,7 +161,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
         ##if there is no obs to assimilate, update progress message and skip
         if nlobs == 0:
             task += nloc
-            print(progress_bar(task-1, ntask))
+            print_1p(progress_bar(task-1, ntask))
             continue
 
         ###TODO: obs_err_corr factored into obs_err
@@ -170,7 +170,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
         ##loop through the unmasked grid points in the partition
         for l in range(nloc):
-            print(progress_bar(task, ntask))
+            print_1p(progress_bar(task, ntask))
             task += 1
             local_analysis(state_data['state_prior'][:, :, l],
                            state_data['x'][l], state_data['y'][l],
@@ -184,7 +184,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                            c.localization['htype'], c.localization['vtype'], c.localization['ttype'],
                            c.filter_type)
         unpack_local_state_data(c, par_id, state_prior, state_data)
-    print(' done.\n')
+    print_1p(' done.\n')
     return state_prior, lobs_prior
 
 @njit(cache=True)
@@ -320,7 +320,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
         L, sv, Rh = np.linalg.svd(var_ratio_inv)
     except:
         ##if svd failed just return equal weights (no update)
-        print('failed to invert var_ratio_inv=', var_ratio_inv)
+        print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
         return np.eye(nens)
 
     ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
@@ -375,7 +375,7 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     for each obs the near by state variables are updated one by one.
     so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
     """
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
     par_id = c.pid_mem
 
     state_data = pack_local_state_data(c, par_id, state_prior, z_state)
@@ -383,10 +383,10 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     obs_data = pack_local_obs_data(c, par_id, lobs, lobs_prior)
     obs_list = bcast_by_root(c.comm)(global_obs_list)(c)
 
-    print('assimilate in serial mode:\n')
+    print_1p('>>> assimilate in serial mode:\n')
     ##go through the entire obs list, indexed by p, one scalar obs at a time
     for p in range(len(obs_list)):
-        print(progress_bar(p, len(obs_list)))
+        print_1p(progress_bar(p, len(obs_list)))
 
         obs_rec_id, obs_id, v, pid_owner_obs = obs_list[p]
         obs_rec = c.obs_info['records'][obs_rec_id]
@@ -431,9 +431,9 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
                          obs_h_dist, obs_v_dist, obs_t_dist,
                          obs['hroi'], obs['vroi'], obs['troi'],
                          c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
-    print(' done.\n')
     unpack_local_state_data(c, par_id, state_prior, state_data)
     unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
+    print_1p(' done.\n')
     return state_prior, lobs_prior
 
 
