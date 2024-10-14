@@ -15,7 +15,7 @@ def ensemble_forecast_scheduler(c, model_name):
     print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
     nworker = c.nproc // model.nproc_per_run
-    scheduler = Scheduler(nworker, model.walltime)
+    scheduler = Scheduler(nworker, model.walltime, debug=c.debug)
 
     for mem_id in range(c.nens):
         job_name = model_name+f'_mem{mem_id+1}'
