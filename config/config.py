@@ -54,7 +54,7 @@ class Config(object):
         ##divide processors into mem/rec groups
         if not hasattr(self, 'nproc_mem'):
             self.nproc_mem = self.nproc
-        assert self.nproc % self.nproc_mem == 0, "nproc {self.nproc} is not evenly divided by nproc_mem {self.nproc_mem}"
+        assert self.nproc % self.nproc_mem == 0, f"nproc {self.nproc} is not evenly divided by nproc_mem {self.nproc_mem}"
         self.nproc_rec = int(self.nproc/self.nproc_mem)
         self.pid_mem = self.pid % self.nproc_mem
         self.pid_rec = self.pid // self.nproc_mem
