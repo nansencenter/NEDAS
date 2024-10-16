@@ -12,7 +12,6 @@ ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
 It is easier to perform i/o and pre/post processing on field-complete state,
 while easier to run assimilation algorithms with ensemble-complete state.
 """
-
 def transpose_field_to_state(c, fields):
     """
     transpose_field_to_state send chunks of field owned by a pid to other pid

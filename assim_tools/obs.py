@@ -29,7 +29,6 @@ in batch mode the same obs may need to be stored in multiple pids
 To compare to the observation, obs_prior simulated by the model needs to be
 computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
 """
-
 def parse_obs_info(c):
     """
     Parse info for the observation records defined in config.
@@ -91,7 +90,6 @@ def parse_obs_info(c):
 
     return obs_info
 
-
 def distribute_obs_tasks(c):
     """
     Distribute obs_rec_id across processors
@@ -105,7 +103,6 @@ def distribute_obs_tasks(c):
     obs_rec_list = distribute_tasks(c.comm_rec, obs_rec_list_full, obs_rec_size)
 
     return obs_rec_list
-
 
 def read_mean_z_coords(c, time):
     """
@@ -142,7 +139,6 @@ def read_mean_z_coords(c, time):
             z[k, ...] = z_fld
 
     return z
-
 
 def assign_obs(c, obs_seq):
     """
@@ -219,7 +215,6 @@ def assign_obs(c, obs_seq):
 
     return obs_inds
 
-
 def distribute_partitions(c):
     """
     Distribute par_id across processors according to the work load on each partition
@@ -247,7 +242,6 @@ def distribute_partitions(c):
 
     return par_list
 
-
 ##TODO: some of these funcs are not ready
 ##write obs_info to a .dat file accompanying the obs_seq bin file
 def write_obs_info(binfile, info):
@@ -255,7 +249,6 @@ def write_obs_info(binfile, info):
         f.write('{} {}\n'.format(info['nobs'], info['nens']))
         for rec in info['obs_seq'].values():
             f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['dataset_src'], rec['model_src'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
-
 
 ##read obs_info from the dat file
 def read_obs_info(binfile):
@@ -287,7 +280,6 @@ def read_obs_info(binfile):
             obs_id += 1
         return info
 
-
 ##output an obs values to the binfile for a member (obs_prior), if member=None it is the actual obs
 def write_obs_seq(binfile, info, obs_seq, member=None):
     nens = info['nens']
@@ -303,7 +295,6 @@ def write_obs_seq(binfile, info, obs_seq, member=None):
 
             f.seek(rec['pos'] + nv*type_size[rec['dtype']]*m)
             f.write(struct.pack((nv*type_dic[rec['dtype']]), *np.atleast_1d(rec['value'])))
-
 
 def read_obs_seq(binfile, info, obs_seq, member=None):
     nens = info['nens']
@@ -321,10 +312,8 @@ def read_obs_seq(binfile, info, obs_seq, member=None):
             obs_seq_out.append(rec)
     return obs_seq_out
 
-
 def output_obs(obs_seq):
     pass
-
 
 def state_to_obs(c, **kwargs):
     """
@@ -502,7 +491,6 @@ def state_to_obs(c, **kwargs):
 
     return seq
 
-
 def prepare_obs(c):
     """
     Process the obs in parallel, read dataset files and convert to obs_seq
@@ -578,7 +566,6 @@ def prepare_obs(c):
 
     return c.obs_info, obs_seq
 
-
 def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     """
     Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
@@ -634,5 +621,4 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
         np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
 
     return obs_prior_seq
-
 

@@ -1,7 +1,7 @@
 import numpy as np
-from numba import njit
 import time
 from utils.parallel import by_rank, bcast_by_root
+from utils.njit import njit
 from utils.progress import print_with_cache, progress_bar
 from utils.conversion import t2h, h2t
 # from utils.distribution import normal_cdf, inv_weighted_normal_cdf
@@ -50,7 +50,6 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
             data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :])
     return data
 
-
 def unpack_local_state_data(c, par_id, state_prior, data):
     """unpack data and write back to the original state_prior dict"""
     nfld = len(data['fields'])
@@ -60,7 +59,6 @@ def unpack_local_state_data(c, par_id, state_prior, data):
         for n in range(nfld):
             rec_id, v = data['fields'][n]
             state_prior[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]
-
 
 def pack_local_obs_data(c, par_id, lobs, lobs_prior):
     """pack lobs and lobs_prior into arrays for the jitted functions"""
@@ -108,7 +106,6 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
             i += d
 
     return data
-
 
 def unpack_local_obs_data(c, par_id, lobs, lobs_prior, data):
     """unpack data and write back to the original lobs_prior dict"""
@@ -436,7 +433,6 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     print_1p(' done.\n')
     return state_prior, lobs_prior
 
-
 def global_obs_list(c):
     ##form the full list of obs_ids
     obs_list = []
@@ -673,5 +669,4 @@ def transform_to_probit():
 @njit(cache=True)
 def transform_from_probit():
     pass
-
 

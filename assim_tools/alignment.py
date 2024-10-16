@@ -1,7 +1,7 @@
 import numpy as np
-from numba import njit
 import os
 from utils.parallel import by_rank
+from utils.njit import njit
 from utils.conversion import t2s, s2t
 from utils.progress import print_with_cache, progress_bar
 import utils.spatial_operation as sop
