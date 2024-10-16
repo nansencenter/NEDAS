@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from .njit import njit
 
 @njit(cache=True)
 def gradx(fld, dx, cyclic_dim=None):

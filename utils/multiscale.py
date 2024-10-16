@@ -1,6 +1,6 @@
 import numpy as np
 from grid import Grid
-from utils.fft_lib import fft2, ifft2, get_wn
+from .fft_lib import fft2, ifft2, get_wn
 
 """functions to perform scale decomposition, through bandpass filtering
 on spatial data (fields), can also use gcm_filter to achieve this.

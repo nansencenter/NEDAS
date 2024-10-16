@@ -1,5 +1,5 @@
 import os
-from utils.conversion import t2s
+from .conversion import t2s
 
 def cycle_dir(c, time):
     """directory name for cycle at time

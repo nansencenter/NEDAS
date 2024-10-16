@@ -4,7 +4,7 @@ from functools import wraps
 import time
 from concurrent.futures import ThreadPoolExecutor
 import threading
-from utils.progress import print_with_cache, progress_bar
+from .progress import print_with_cache, progress_bar
 
 class Comm(object):
     """Communicator class with MPI support"""
