@@ -1,30 +1,42 @@
-import numpy as np
+import numpy
 import sys
 import os
 import re
 import inspect
 import argparse
 import yaml
-from distutils.util import strtobool
 
-def convert_scientific_notation(data):
+def convert_notation(data):
     if isinstance(data, dict):
-        return {key: convert_scientific_notation(value) for key, value in data.items()}
+        return {key: convert_notation(value) for key, value in data.items()}
     elif isinstance(data, list):
-        return [convert_scientific_notation(element) for element in data]
+        return [convert_notation(element) for element in data]
     elif isinstance(data, str):
-        # Match scientific notation pattern and convert to float
+        ## Match scientific notation pattern and convert to float
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
-        # handle the special cases for "inf"
+        ## convert "inf" to numpy.inf
         elif data == "inf":
-            return np.inf
+            return numpy.inf
         elif data == "-inf":
-            return -np.inf
+            return -numpy.inf
+        ## convert string to bool
+        # elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+        #     return True
+        # elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+        #     return False
         else:
             return data
     else:
         return data
+
+def str2bool(data):
+    if data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+        return 1
+    elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+        return 0
+    else:
+        raise ValueError(f"Invalid input value for str2bool: {data}")
 
 def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     """
@@ -96,11 +108,11 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
 
     for key, value in config_dict.items():
 
-        value = convert_scientific_notation(value)
+        value = convert_notation(value)
 
-        ##variable type for this argument
+        ##bool variable type needs special treatment for parsing runtime input string
         if isinstance(value, bool):
-            key_type = lambda x: bool(strtobool(x))
+            key_type = lambda x: bool(str2bool(x))
         else:
             key_type = type(value)
 

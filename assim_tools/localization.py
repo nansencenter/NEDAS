@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
-from numba import njit
+from utils.njit import njit
 
 ###localization:
 @njit

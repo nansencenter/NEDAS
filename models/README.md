@@ -62,8 +62,9 @@ List of necessary properties and methods in `Model` class:
 
 * `z_coords(self, **kwargs)` returns a 2D field, similar to the field `fld` returned by `read_var()` but replaced by the z coordinates at each grid point of that field. If 'z\_units' is provided in kwargs, the function should convert z from `self.z_units` to the desired z\_units (useful when observation is defined with different z units), otherwise the default `self.z_units` will be used.
 
-* `generate_initial_condition(self, task_id, task_nproc, **kwargs)` links and prepares the initial condition files at the first analysis cycle of an experiment. `task_id` is given at runtime to parallel execute the function; `task_nproc` is the number of processors used for each task. In addition to the `kwargs` given above, `time_start`, `time_end` and `cycle_period` will also be provided to define the experiment time period.
+* `preprocess(self, task_id, **kwargs)` links and prepares the initial condition files. `task_id` is given at runtime to parallel execute the function; `self.nproc_per_util` is the number of processors used for each task. In `kwargs`, `time` and `forecast_period` will be provided.
 
-* `run(self, task_id, task_nproc, **kwargs)` runs the model forecast for each cycle. `task_id` and `task_nproc` are also for parallel execution of the run code. In `kwargs`, `time` should be provided for the current cycle datetime object, `forecast_period` is the forecast duration in hours, `output_dir` (optional) is additional output directory to make a copy of the resulting restart files (for analysis at next cycle).
+* `postprocess(self, task_id, **kwargs)` similar to `preprocess`, this function post-process the model restart files, to fix any issue caused by assimilation step.
 
+* `run(self, task_id, **kwargs)` runs the model forecast for each cycle. `task_id` is given at runtime to parallel execute the run code; `self.nproc_per_run` is the number of processors for each run. In `kwargs`, `time` should be provided for the current cycle datetime object, `forecast_period` is the forecast duration in hours.
 
