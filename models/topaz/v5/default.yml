@@ -8,6 +8,11 @@ T: '05'
 R: 'TP5a0.06'
 nproc: 511
 
+nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
+nproc_per_util: 32
+restart_dt: 24
+forcing_dt: 6
+
 ###model specific settings (blkdat)
 idm: 800   ##longitudinal array size
 jdm: 760   ##latitudinal array size
@@ -19,7 +24,7 @@ nsigma: 0   ## number of sigma levels (nhybrd-nsigma z-levels)
 dp00: 1.2   ##deep z-level spacing minimum thickness (m)
 dp00x: 250.0   ##deep z-level spacing maximum thickness (m)
 dp00f: 1.1   ##deep z-level spacing stretching factor (1.0=const.space)
-ds00: 1.0   ##shallow z-level spacing minimum thickness (m)
+ds00: 1.2   ##shallow z-level spacing minimum thickness (m)
 ds00x: 75.0   ##shallow z-level spacing maximum thickness (m)
 ds00f: 1.1   ##shallow z-level spacing stretching factor (1.0=const.space)
 dp00i: 1.0   ##deep iso-pycnal spacing minimum thickness (m)

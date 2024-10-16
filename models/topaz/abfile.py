@@ -664,7 +664,8 @@ class ABFileForcing(ABFile) :
             self.read_field_info()
             self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
         elif self._action == "w":
-            pass
+            self._idm = idm
+            self._jdm = jdm
 
     def find_record(self, fieldname, dtime1):
         record = None
@@ -747,7 +748,7 @@ class ABFileForcing(ABFile) :
                 self._fields[i]["min"]  = float(m.group(4).strip())
                 self._fields[i]["max"]  = float(m.group(5).strip())
             else :
-                raise NameError("cant parse forcing field")
+                raise NameError("cant parse forcing field in "+self._basename)
             i+=1
             line=self.readline().strip()
 
@@ -1092,7 +1093,7 @@ class ABFileRelaxZ(ABFile) :
                 self._fields[i]["min"]  = float(m.group(3).strip())
                 self._fields[i]["max"]  = float(m.group(4).strip())
             else :
-                raise NameError("cant parse forcing field")
+                raise NameError("cant parse relax field in "+self._basename)
             i+=1
             line=self.readline().strip()
 
