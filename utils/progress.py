@@ -97,7 +97,7 @@ def watch_log(logfile, keyword, timeout=1000, check_dt=1):
             raise RuntimeError(f"watch_log: {logfile} remain stagnant for {timeout} seconds, while waiting for keyword '{keyword}'")
 
 def find_keyword_in_file(file, keyword):
-    p = subprocess.run(f"grep {keyword} {file}", shell=True, capture_output=True, text=True)
+    p = subprocess.run(f"grep '{keyword}' {file}", shell=True, capture_output=True, text=True)
     if p.stderr:
         raise RuntimeError(p.stderr)
     else:
