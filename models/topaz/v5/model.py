@@ -8,10 +8,12 @@ from functools import lru_cache
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
 from utils.netcdf_lib import nc_read_var, nc_write_var
+from utils.progress import watch_log, find_keyword_in_file, watch_files
 from utils.dir_def import forecast_dir
 from config import parse_config
 
 from .namelist import namelist
+from ..forday import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
 
@@ -40,13 +42,16 @@ class Model(object):
             'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
             'ocean_bot_montg_pot': {'name':'psik', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
             }
+
         self.cice_variables = {
             'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
             'seaice_conc_n':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'%'},
             'seaice_thick_n':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
             }
+
         self.diag_variables = {}
-        self.forcing_variables = {
+
+        self.atmos_forcing_variables = {
             'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'dtype':'float', 'is_vector':True, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
             'atmos_surf_temp':     {'name':'airtmp', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'C'},
             'atmos_surf_dewpoint': {'name':'dewpt', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'K'},
@@ -56,10 +61,22 @@ class Model(object):
             'atmos_down_shortwave': {'name':'shwflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
             'atmos_vapor_mix_ratio': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
             }
-        self.variables = {**self.hycom_variables, **self.cice_variables, **self.forcing_variables}
+        self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
+
+        self.variables = {**self.hycom_variables, **self.cice_variables, **self.atmos_forcing_variables}
 
         self.z_units = 'm'
-        self.read_grid()
+
+        ##model grid
+        grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
+        self.grid = get_topaz_grid(grid_info_file)
+
+        self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
+        f = ABFileBathy(self.depthfile, 'r', idm=self.grid.nx, jdm=self.grid.ny)
+        depth = f.read_field('depth')
+        f.close()
+        self.depth = -depth.data
+        self.mask = depth.mask
 
         self.run_process = None
         self.run_status = 'pending'
@@ -99,29 +116,17 @@ class Model(object):
             tstr = kwargs['time'].strftime('%Y-%m-%d-00000')
             return os.path.join(path, 'iced.'+tstr+mstr+'.nc')
 
-        elif name in self.forcing_variables:
+        elif name in self.atmos_forcing_variables:
             return os.path.join(path, mstr[1:], 'SCRATCH', 'forcing')
 
         else:
             raise ValueError(f"variable name '{name}' is not defined for topaz.v5 model!")
 
     def read_grid(self, **kwargs):
-        grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
-        self.grid = get_topaz_grid(grid_info_file)
+        pass
 
     def read_mask(self, **kwargs):
-        depthfile = path+'/topo/depth.a'
-        f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
-        mask = f.read_field('depth').mask
-        f.close()
-        self.mask = mask
-
-    def read_depth(self, **kwargs):
-        depthfile = path+'/topo/depth.a'
-        f = ABFileBathy(depthfile, 'r', idm=self.grid.nx, jdm=self.grid.ny)
-        depth = f.read_field('depth').data
-        f.close()
-        return -depth
+        pass
 
     def read_var(self, **kwargs):
         """
@@ -180,8 +185,8 @@ class Model(object):
             else:
                 var = nc_read_var(fname, rec['name'])
 
-        elif name in self.forcing_variables:
-            rec = self.forcing_variables[name]
+        elif name in self.atmos_forcing_variables:
+            rec = self.atmos_forcing_variables[name]
             dtime = (time - datetime(1900,12,31)) / timedelta(days=1)
             if is_vector:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
@@ -248,8 +253,8 @@ class Model(object):
             rec = self.cice_variables[name]
             ##TODO: multiprocessor write to the same file is still broken, convert to binary file then back to solve this?
 
-        elif name in self.forcing_variables:
-            rec = self.forcing_variables[name]
+        elif name in self.atmos_forcing_variables:
+            rec = self.atmos_forcing_variables[name]
             dtime = (time - datetime(1900,12,31)) / timedelta(days=1)
             if is_vector:
                 for i in range(2):
@@ -298,13 +303,15 @@ class Model(object):
             z_prev = z_coords(path, grid, **kwargs)
             return z_prev + dz
 
-    def preprocess(self, task_id=0, task_nproc=1, **kwargs):
+    def preprocess(self, task_id=0, **kwargs):
         job_submit_cmd = kwargs['job_submit_cmd']
+        offset = task_id * self.nproc_per_util
+
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
         restart_dir = kwargs['restart_dir']
 
-        ##make sure model run directory exists
         if 'path' in kwargs:
             path = kwargs['path']
         else:
@@ -315,83 +322,80 @@ class Model(object):
         else:
             mstr = ''
         run_dir = os.path.join(path, mstr[1:], 'SCRATCH')
+        ##make sure model run directory exists
         os.system(f"mkdir -p {run_dir}")
 
         ##generate namelists, blkdat, ice_in, etc.
         namelist(self, time, forecast_period, run_dir)
 
-        ##prepare partition file
-        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
-        os.system(f"ln -fs {partit_file} {os.path.join(run_dir, 'patch.input')}")
+        ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
+        for varname in self.force_synoptic_names:
+            forcing_file = os.path.join(self.basedir, 'force', 'synoptic', self.E, varname)
+            forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
+            f = ABFileForcing(forcing_file, 'r')
+            fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
+            t = time
+            dt = self.forcing_dt
+            rdtime = dt / 24
+            while t <= next_time:
+                dtime1 = dayfor(self.yrflag, t.year, int(t.strftime('%j')), t.hour)
+                fld = f.read_field(varname, dtime1)
+                fo.write_field(fld, None, varname, dtime1, rdtime)
+                t += dt * dt1h
+            f.close()
+            fo.close()
 
-        ##link topo files
+        ##link necessary files for model run
+        shell_cmd = f"cd {run_dir}; "
+        ##partition setting
+        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
+        shell_cmd += f"ln -fs {partit_file} patch.input; "
+        ##topo files
         for ext in ['.a', '.b']:
             file = os.path.join(self.basedir, 'topo', 'regional.grid'+ext)
-            os.system(f"ln -fs {file} {os.path.join(run_dir, 'regional.grid'+ext)}")
+            shell_cmd += f"ln -fs {file} .; "
             file = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}'+ext)
-            os.system(f"ln -fs {file} {os.path.join(run_dir, 'regional.depth'+ext)}")
+            shell_cmd += f"ln -fs {file} regional.depth{ext}; "
         file = os.path.join(self.basedir, 'topo', f'kmt_{self.R}_{self.T}.nc')
-        os.system(f"ln -fs {file} {os.path.join(run_dir, 'cice_kmt.nc')}")
+        shell_cmd += f"ln -fs {file} cice_kmt.nc; "
         file = os.path.join(self.basedir, 'topo', 'cice_grid.nc')
-        os.system(f"ln -fs {file} {os.path.join(run_dir, 'cice_grid.nc')}")
-
-        ##link nest files
+        shell_cmd += f"ln -fs {file} .; "
+        ##nest files
         nest_dir = os.path.join(self.basedir, 'nest', self.E)
-        os.system(f"ln -fs {nest_dir} {os.path.join(run_dir, 'nest')}")
-
+        shell_cmd += f"ln -fs {nest_dir} nest; "
         ##TODO: there is extra logic in nhc_root/bin/expt_preprocess.sh to be added here
-        ##link relax files
+        ##relax files
         for ext in ['.a', '.b']:
             for varname in ['intf', 'saln', 'temp']:
                 file = os.path.join(self.basedir, 'relax', self.E, 'relax_'+varname[:3]+ext)
-                os.system(f"ln -fs {file} {os.path.join(run_dir, 'relax.'+varname+ext)}")
+                shell_cmd += f"ln -fs {file} {'relax.'+varname+ext}; "
             for varname in ['thkdf4', 'veldf4']:
                 file = os.path.join(self.basedir, 'relax', self.E, varname+ext)
-                os.system(f"ln -fs {file} {os.path.join(run_dir, varname+ext)}")
-
-        ##copy forcing files, (not linking since each member will have a perturbed version)
-        copy_file_src = []  ##list of files to copy
-        copy_file_dst = []
+                shell_cmd += f"ln -fs {file} {varname+ext}; "
+        ##other forcing files
         for ext in ['.a', '.b']:
-            ##synoptic
-            for varname in ['airtmp', 'dewpt', 'mslprs', 'precip', 'radflx', 'shwflx', 'vapmix', 'wndewd', 'wndnwd']:
-                copy_file_src.append(os.path.join(self.basedir, 'force', 'synoptic', self.E, varname+ext))
-                copy_file_dst.append(os.path.join(run_dir, 'forcing.'+varname+ext))
             ##rivers
-            copy_file_src.append(os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext))
-            copy_file_dst.append(os.path.join(run_dir, 'forcing.rivers'+ext))
+            file = os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)
+            shell_cmd += f"ln -fs {file} {'forcing.rivers'+ext}; "
             ##seawifs
-            copy_file_src.append(os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext))
-            copy_file_dst.append(os.path.join(run_dir, 'forcing.kpar'+ext))
-
-        ##restart files
-        for ext in ['.a', '.b']:
-            tstr = time.strftime('%Y_%j_%H_0000')
-            copy_file_src.append(os.path.join(restart_dir, 'restart.'+tstr+mstr+ext))
-            copy_file_dst.append(os.path.join(path, 'restart.'+tstr+mstr+ext))
-            os.system(f"ln -fs {os.path.join(path, 'restart.'+tstr+mstr+ext)} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
-
-        os.system(f"mkdir -p {os.path.join(run_dir, 'cice')}")
-        tstr = time.strftime('%Y-%m-%d-00000')
-        copy_file_src.append(os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc'))
-        copy_file_dst.append(os.path.join(path, 'iced.'+tstr+mstr+'.nc'))
-        os.system(f"ln -fs {os.path.join(path, 'iced.'+tstr+mstr+'.nc')} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
-
-        ##parallel process the copying
-        shell_cmd = ""
-        n = 0 ##index in nproc commands
-        for file1, file2 in zip(copy_file_src, copy_file_dst):
-            offset = task_id * task_nproc + n
-            shell_cmd += f"{job_submit_cmd} 1 {offset} cp -fL {file1} {file2} & "
-            n += 1
-            if n == task_nproc:  ##wait for all nproc commands to finish, before next batch
-                n = 0
-                shell_cmd += "wait; "
-        shell_cmd += "wait; "  ##wait for remaining commands
+            file = os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)
+            shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
         os.system(shell_cmd)
 
-        log_file = os.path.join(run_dir, "run.log")
-        os.system("touch "+log_file)
+        ##copy restart files from restart_dir
+        tstr = time.strftime('%Y_%j_%H_0000')
+        for ext in ['.a', '.b']:
+            file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
+            file1 = os.path.join(path, 'restart.'+tstr+mstr+ext)
+            os.system(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
+            os.system(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
+        os.system(f"mkdir -p {os.path.join(run_dir, 'cice')}")
+        tstr = time.strftime('%Y-%m-%d-00000')
+        file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
+        file1 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
+        os.system(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
+        os.system(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
+        os.system(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
 
     def postprocess(self, task_id=0, **kwargs):
         ##TODO: run fixhycom_cice here
@@ -400,23 +404,62 @@ class Model(object):
     def run(self, task_id=0, **kwargs):
         self.run_status = 'running'
 
-        job_submit_cmd = kwargs['job_submit_cmd']
+        if 'path' in kwargs:
+            path = kwargs['path']
+        else:
+            path = '.'
+        if 'member' in kwargs and kwargs['member'] is not None:
+            assert kwargs['member'] >= 0, 'member index shall be >= 0'
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        run_dir = os.path.join(path, mstr[1:], 'SCRATCH')
+        os.system(f"mkdir -p {run_dir}")  ##make sure model run directory exists
+        log_file = os.path.join(run_dir, "run.log")
+        os.system("touch "+log_file)
+
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
 
-        input_file = self.filename(**kwargs)
-        run_dir = os.path.dirname(input_file)
-        os.system("mkdir -p "+run_dir)
-        os.chdir(run_dir)
+        ##check if input file exists
+        input_files = []
+        tstr = time.strftime('%Y_%j_%H_0000')
+        for ext in ['.a', '.b']:
+            input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
+        tstr = time.strftime('%Y-%m-%d-00000')
+        input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
+        for file in input_files:
+            if not os.path.exists(file):
+                raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
-        model_exe = os.path.join(self.model_code_dir, 'hycom_cice')
-        offset = task_id*task_nproc
+        ##early exit if the run is already finished
+        if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
+            return
+
+        job_submit_cmd = kwargs['job_submit_cmd']
+        offset = task_id*self.nproc_per_run
 
         ##build the shell command line
-        shell_cmd =  "source "+self.model_env_src+"; "  ##enter topaz5 env
-        shell_cmd += "cd "+run_dir+"; "                 ##enter run directory
+        model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
+        shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
+        shell_cmd += "cd "+run_dir+"; "             ##enter run directory
         shell_cmd += job_submit_cmd+f" {self.nproc} {offset} "+model_exe+" >& run.log"
 
         self.run_process = subprocess.Popen(shell_cmd, shell=True)
         self.run_process.wait()
+
+        ##check output
+        watch_log(log_file, 'Exiting hycom_cice')
+
+        ##move the output restart files to forecast_dir
+        tstr = next_time.strftime('%Y_%j_%H_0000')
+        for ext in ['.a', '.b']:
+            file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
+            file2 = os.path.join(path, 'restart.'+tstr+mstr+ext)
+            os.system(f"mv {file1} {file2}")
+        tstr = next_time.strftime('%Y-%m-%d-00000')
+        file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
+        file2 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
+        os.system(f"mv {file1} {file2}")
 

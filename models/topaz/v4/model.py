@@ -172,16 +172,18 @@ class Model(object):
                     raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
             return z
 
-    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
-        ens_init_dir = kwargs['ens_init_dir']
-        kwargs_init = {**kwargs, 'path':ens_init_dir}
+    def preprocess(self, task_id=0, **kwargs):
+        kwargs_init = {**kwargs, 'path':self.ens_init_dir}
         init_file = self.filename(**kwargs_init)
         input_file = self.filename(**kwargs)
         os.system("mkdir -p "+os.path.dirname(input_file))
         os.system("cp "+init_file+" "+input_file)
         os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
 
-    def run(self, worker_id=0, **kwargs):
+    def postprocess(self, task_id=0, **kwargs):
+        pass
+
+    def run(self, task_id=0, **kwargs):
         self.run_status = 'running'
 
         job_submit_cmd = kwargs['job_submit_cmd']

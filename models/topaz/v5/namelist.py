@@ -202,8 +202,8 @@ def limits(m, time, forecast_period):
     day2 = day1 + int(forecast_period / 24)
     hour2 = (hour1 + forecast_period) % 24
 
-    fdtime = dayfor(m.yrflag, refyear, day1+1, hour1)
-    ldtime = dayfor(m.yrflag, refyear, day2+1, hour2)
+    fdtime = dayfor(m.yrflag, refyear, day1, hour1)
+    ldtime = dayfor(m.yrflag, refyear, day2, hour2)
     nmlstr = "{:14.5f} {:14.5f}".format(fdtime, ldtime)
     return nmlstr
 
@@ -218,8 +218,8 @@ def ports(m):
     return nmlstr
 
 def ice_in(m, time, forecast_period):
-    year_init = time.year
-    time_init = datetime(time.year, 1, 1, 0, 0, 0)
+    year_init = 1958 ##time.year
+    time_init = datetime(year_init, 1, 1, 0, 0, 0)
     sec0 = (time - time_init) / timedelta(seconds=1)
     istep0 = int(np.floor(sec0 / m.cice_dt)) - 1
     npt = int(np.floor(forecast_period * 3600 / m.cice_dt)) + 1
@@ -377,7 +377,7 @@ def ice_in(m, time, forecast_period):
     nmlstr += f"&forcing_nml\n"
     nmlstr += f"    formdrag = .false.\n"
     nmlstr += f"    atmbndy = 'default'\n"
-    nmlstr += f"    fyear_init = 1958\n"
+    nmlstr += f"    fyear_init = {year_init}\n"
     nmlstr += f"    ycycle = 52\n"
     nmlstr += f"    atm_data_format = 'bin'\n"
     nmlstr += f"    atm_data_type = 'None'\n"

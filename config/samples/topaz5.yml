@@ -1,9 +1,9 @@
 work_dir: '/cluster/work/users/yingyue/TP5_test'   ##working directory for the experiment
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
-nproc: 256       ##total number of processors
+nproc: 512       ##total number of processors
 
-nens: 10         ##ensemble size
+nens: 100         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
 run_diag: False
 
@@ -14,10 +14,6 @@ time_end: '202203210000'         ##end time of the experiment
 time_assim_start: '202109130000' ##start time of the first analysis cycle
 time_assim_end: '202203140000'   ##end time of the last analysis cycle
 cycle_period: 168                ##cycle period, in hours
-
-time: '202109060000'
-prev_time: '202109060000'
-next_time: '202109130000'
 
 obs_time_steps: [0]
 obs_time_scale: 0
