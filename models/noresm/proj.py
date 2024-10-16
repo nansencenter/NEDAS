@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator
-from numba import njit
+from utils.njit import njit
 
 @njit
 def lonlat2sxy(lon, lat):

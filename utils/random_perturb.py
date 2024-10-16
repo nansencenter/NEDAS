@@ -2,9 +2,9 @@ import numpy as np
 from functools import lru_cache
 from scipy.optimize import fsolve
 from scipy.ndimage import distance_transform_edt, gaussian_filter
-from utils.conversion import ensure_list
-from utils.spatial_operation import gradx, grady, warp
-from utils.fft_lib import fft2, ifft2, get_wn
+from .conversion import ensure_list
+from .spatial_operation import gradx, grady, warp
+from .fft_lib import fft2, ifft2, get_wn
 
 def random_perturb(grid, fields, prev_perturb, **kwargs):
     """
