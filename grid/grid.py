@@ -29,7 +29,6 @@ class Grid(object):
 
     See NEDAS/tutorials/grid_convert.ipynb for some examples.
     """
-
     def __init__(self, proj, x, y, bounds=None, regular=True,
                  cyclic_dim=None, pole_dim=None, pole_index=None,
                  triangles=None, neighbors=None, dst_grid=None):
@@ -162,11 +161,17 @@ class Grid(object):
             self.set_destination_grid(dst_grid)
 
     def __eq__(self, other):
-        if isinstance(other, Grid):
-            if self.x.shape == other.x.shape and np.allclose(self.x, other.x) and np.allclose(self.y, other.y):
-                ###if two grids have the same x,y coordinates, they are considered the same
-                return True
-        return False
+        if not isinstance(other, Grid):
+            return False
+        if self.proj != other.proj:
+            return False
+        if self.x.shape != other.x.shape:
+            return False
+        if not np.allclose(self.x, other.x):
+            return False
+        if not np.allclose(self.y, other.y):
+            return False
+        return True
 
     @classmethod
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
@@ -249,7 +254,6 @@ class Grid(object):
 
         return self
 
-
     def change_resolution_level(self, nlevel):
         """
         Generate a new grid with changed resolution
@@ -274,7 +278,6 @@ class Grid(object):
             assert min(new_grid.nx, new_grid.ny) > 1, "Grid.change_resolution_level: new resolution too low, try smaller nlevel"
             new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
             return new_grid
-
 
     def _mesh_dx(self):
         """
@@ -371,13 +374,11 @@ class Grid(object):
             self.coarsen_inside_elem = inside
             self.coarsen_nearest_elem = nearest
 
-
     def set_destination_grid(self, grid):
         """
         Set method for self.dst_grid the destination Grid object to convert to.
         """
         self.dst_grid = grid
-
 
     def wrap_cyclic_xy(self, x_, y_):
         """
@@ -401,7 +402,6 @@ class Grid(object):
                 elif d=='y':
                     y_ = np.mod(y_ - yi.min(), self.Ly) + yi.min()
         return x_, y_
-
 
     def find_index(self, x_, y_):
         """
@@ -600,7 +600,6 @@ class Grid(object):
 
         return inside, indices, vertices, in_coords, nearest
 
-
     def _proj_to(self, x, y):
         """
         Transform coordinates from self.proj to dst_grid.proj
@@ -611,7 +610,6 @@ class Grid(object):
         x, y = self.dst_grid.wrap_cyclic_xy(x, y)
         return x, y
 
-
     def _proj_from(self, x, y):
         """
         transform coordinates from dst_grid.proj to self.proj
@@ -621,7 +619,6 @@ class Grid(object):
             x, y = self.proj(lon, lat)
         x, y = self.wrap_cyclic_xy(x, y)
         return x, y
-
 
     def _set_rotation_matrix(self):
         """
@@ -655,7 +652,6 @@ class Grid(object):
             self.rotate_matrix[2, :] = 0.
             self.rotate_matrix[3, :] = 1.
 
-
     def _fill_pole_void(self, fld):
         """
         if rotation of vectors (or other reasons) generates nan at the poles
@@ -674,7 +670,6 @@ class Grid(object):
                 if i==-1:
                     fld[-1, :] = np.mean(fld[-2, :])
         return fld
-
 
     def rotate_vectors(self, vec_fld):
         """
@@ -703,7 +698,6 @@ class Grid(object):
         vec_fld_rot[1, :] = v_rot
         return vec_fld_rot
 
-
     def get_corners(self, fld):
         """
         given fld defined on a regular grid, obtain its value on the 4 corners/vertices
@@ -725,7 +719,6 @@ class Grid(object):
         fld_corners[:, :, 2] = fld_[1:nx+1, 1:ny+1]
         fld_corners[:, :, 3] = fld_[1:nx+1, 0:ny]
         return fld_corners
-
 
     def _interp_weights(self, inside, vertices, in_coords):
         """
@@ -750,7 +743,6 @@ class Grid(object):
             ##use barycentric coordinates as interp weights
             interp_weights = in_coords
         return interp_weights
-
 
     def interp(self, fld, x=None, y=None, method='linear'):
         """
@@ -846,7 +838,6 @@ class Grid(object):
 
         return fld_coarse.reshape(self.dst_grid.x.shape)
 
-
     def convert(self, fld, is_vector=False, method='linear', coarse_grain=False):
         """
         Main method to convert from self.proj, x, y to dst_grid coordinate systems:
@@ -899,7 +890,6 @@ class Grid(object):
         else:
             fld_out = fld
         return fld_out
-
 
     def distance(self, ref_x, ref_y, x, y):
         """
@@ -1006,7 +996,6 @@ class Grid(object):
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
 
-
     def llgrid_xy(self, dlon, dlat):
         """
         Prepare a lon/lat grid to plot as reference lines
@@ -1048,7 +1037,6 @@ class Grid(object):
 
         return llgrid_xy
 
-
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis'):
         """
         Plot a scalar field using pcolor/tripcolor
@@ -1084,7 +1072,6 @@ class Grid(object):
         else:
             c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap)
         return c
-
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
@@ -1233,7 +1220,6 @@ class Grid(object):
             ##draw the reference vector
             ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
             ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
-
 
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showriver=False, rivercolor='c',
