@@ -1,14 +1,22 @@
 import numpy as np
 import os
-import sys
-import subprocess
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
 from utils.dir_def import forecast_dir
 from utils.random_perturb import random_perturb
 
-def main_perturb_program(c):
+perturb_script_path = os.path.abspath(__file__)
+
+def perturb(c):
+    ##clean perturb files in current cycle dir
+    for rec in c.perturb:
+        perturb_files = os.path.join(forecast_dir(c, c.time, rec['model_src']), 'perturb', '*')
+        if c.pid==0:
+            os.system(f"rm -f {perturb_files}")
+    c.comm.Barrier()
+
+    ##distribute perturbation items among MPI ranks
     task_list = bcast_by_root(c.comm)(distribute_perturb_tasks)(c)
 
     c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
@@ -107,26 +115,6 @@ def perturb_save_file(c, model_name, vname, time, mem_id):
     mstr = f'_mem{mem_id+1:03d}'
     return os.path.join(path, 'perturb', vname+mstr+'.npy')
 
-def perturb(c):
-    """run this perturb.py script in a subprocess with mpi, using all nproc cores"""
-
-    config_file = os.path.join(c.work_dir, 'config.yml')
-    c.dump_yaml(config_file)
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    perturb_code = os.path.join(script_dir, 'perturb.py')
-
-    shell_cmd = c.job_submit_cmd+f" {c.nproc} {0}"
-    shell_cmd += " python -m mpi4py "+perturb_code
-    shell_cmd += " --config_file "+config_file
-
-    p = subprocess.Popen(shell_cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
-
-    p.wait()
-    if p.returncode != 0:
-        print(f"{p.stderr}")
-        exit()
-
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
@@ -134,12 +122,5 @@ if __name__ == "__main__":
     if not hasattr(c, 'perturb') or c.perturb is None:
         exit()
 
-    ##clean perturb files in current cycle dir
-    for rec in c.perturb:
-        perturb_files = os.path.join(forecast_dir(c, c.time, rec['model_src']), 'perturb', '*')
-        if c.pid==0:
-            os.system(f"rm -f {perturb_files}")
-    c.comm.Barrier()
-
-    timer(c)(main_perturb_program)(c)
+    timer(c)(perturb)(c)
 
