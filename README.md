@@ -64,7 +64,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In `models/<model_name>`, edit `setup.src` to provide environment for running the model. `model_code_dir` is where the model code is; `model_data_dir` is where the static input files are that the model requires during runtime; `ens_init_dir` is where the initial restart files are for the first cycle of the experiment.
 
-    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d_testcast.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
+    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
 
     For the datasets that provide observations to be assimilated, setup their directories in config file, and make sure you implemented the `dataset.<dataset_name>` module.
 
