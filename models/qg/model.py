@@ -13,7 +13,7 @@ from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 
-class Model(object):
+class QGModel(object):
     """
     Class for configuring and running the qg model
     """
@@ -40,8 +40,6 @@ class Model(object):
         ##a scaling for time control in cycling experiments:
         ##0.05 time units ~ 12 hours
         ##dt = 0.00025 ~ 216 seconds
-        restart_dt = self.total_counts * self.dt * 240
-        self.restart_dt = restart_dt
 
         self.variables = {
             'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'*'},
@@ -181,23 +179,34 @@ class Model(object):
         return z
 
 
+    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+        ##just link prepared files to save time
+        ens_init_dir = kwargs['ens_init_dir']
+
+        kwargs_init = {**kwargs, 'path':ens_init_dir}
+        init_file = self.filename(**kwargs_init)
+
+        input_file = self.filename(**kwargs)
+        input_dir = os.path.dirname(input_file)
+        subprocess.run("mkdir -p "+input_dir+"; cp "+init_file+" "+input_file, shell=True)
+
+
     def run(self, task_id=0, task_nproc=1, **kwargs):
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
-        host = kwargs['host']
-        nedas_dir = kwargs['nedas_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
+        model_code_dir = kwargs['model_code_dir']
 
-        fname = self.filename(**kwargs)
-        run_dir = os.path.dirname(fname)
-
-        # print('running qg model in '+run_dir, flush=True)
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
-
-        time = kwargs['time']
-        next_time = time + self.restart_dt * dt1h
         input_file = self.filename(**kwargs)
+        run_dir = os.path.dirname(input_file)
+        subprocess.run("mkdir -p "+run_dir, shell=True)
+
+        path = kwargs['path']
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
+
         kwargs_out = {**kwargs, 'time':next_time}
         output_file = self.filename(**kwargs_out)
 
@@ -210,12 +219,11 @@ class Model(object):
         else:
             prep_input_cmd = ''
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        qg_src = os.path.join(env_dir, 'qg.src')
-        qg_exe = os.path.join(nedas_dir, 'models', 'qg', 'src', 'qg.exe')
+        qg_src = os.path.join(model_code_dir, 'setup.src')
+        qg_exe = os.path.join(model_code_dir, 'src', 'qg.exe')
 
         offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
+        submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
 
         ##build the shell command line
         shell_cmd = "source "+qg_src+"; "   ##enter the qg model env
@@ -226,22 +234,19 @@ class Model(object):
         shell_cmd += qg_exe+" . "               ##the qg model exe
         shell_cmd += ">& run.log"               ##output to log
         # print(shell_cmd, flush=True)
-
         log_file = os.path.join(run_dir, 'run.log')
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
+            namelist(self, forecast_period, dt_ratio, run_dir)
 
-            namelist(self, dt_ratio, run_dir)
-
-            self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+            self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
 
             ##check output
             with open(log_file, 'rt') as f:
                 if 'Calculation done' in f.read():
                     break
-
             returncode = self.run_process.returncode
             if returncode is not None and returncode < 0:
                 ##kill signal received, exit the run func
@@ -258,7 +263,12 @@ class Model(object):
         shell_cmd += "mv output.bin "+output_file
         subprocess.run(shell_cmd, shell=True)
 
+        ##make a copy of output file to the output_dir
+        if 'output_dir' in kwargs:
+            output_dir = kwargs['output_dir']
+            if output_dir != path:
+                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
+                output_file_cp = self.filename(**kwargs_out_cp)
+                subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
 
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 

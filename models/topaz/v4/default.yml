@@ -1,0 +1,222 @@
+##directories
+nhc_root: /cluster/home/yingyue/code/NERSC-HYCOM-CICE
+V: '2.2.37'
+X: '01.1'
+E: '011'
+T: '01'
+R: 'TP4b0.12'
+basedir: /cluster/work/users/yingyue/TP4b0.12
+nproc: 256
+
+era5_path: /cluster/projects/nn2993k/ERA5
+
+###model specific settings (blkdat)
+iversn: 22   ## hycom version number x10
+iexpt: 11   ##experiment number x10
+idm: 800   ##longitudinal array size
+jdm: 880   ##latitudinal array size
+itest: -1   ##grid point where detailed diagnostics are desired
+jtest: -1   ##grid point where detailed diagnostics are desired
+kdm: 50   ##number of layers
+nhybrd: 50   ## number of hybrid levels (0=all isopycnal)
+nsigma: 0   ## number of sigma levels (nhybrd-nsigma z-levels)
+dp00: 2.0   ##deep z-level spacing minimum thickness (m)
+dp00x: 200.0   ##deep z-level spacing maximum thickness (m)
+dp00f: 1.125   ##deep z-level spacing stretching factor (1.0=const.space)
+ds00: 1.0   ##shallow z-level spacing minimum thickness (m)
+ds00x: 100.0   ##shallow z-level spacing maximum thickness (m)
+ds00f: 1.105   ##shallow z-level spacing stretching factor (1.0=const.space)
+dp00i: 1.0   ##deep iso-pycnal spacing minimum thickness (m)
+isotop: 6.0   ## shallowest depth for isopycnal layers (m, <0 from file)
+saln0: 35.0   ##initial salinity value (psu), only used for iniflg<2
+locsig: 0   ## locally-referenced pot. density for stability (0=F,1=T)
+kapref: 0   ## thermobaric ref. state (-1=input,0=none,1,2,3=constant)
+thflag: 0   ## reference pressure flag (0=Sigma-0, 2=Sigma-2)
+thbase: 25.0   ## reference density (sigma units)
+vsigma: 0   ## spacially varying isopycnal target densities (0=F,1=T)
+sigma: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 24.05, 24.51, 24.96, 25.32, 25.68, 25.87, 26.05, 26.18, 26.30, 26.45, 26.60, 26.72, 26.83, 26.93, 27.03, 27.12, 27.20, 27.27, 27.33, 27.40, 27.46, 27.51, 27.56, 27.61, 27.66, 27.70, 27.74, 27.77, 27.80, 27.83, 27.86, 27.89, 27.92, 27.95, 27.97, 27.99, 28.01, 28.03, 28.05, 28.07, 28.09, 28.11, 28.13]  ##density (sigma units) for each layer 1-kdm
+iniflg: 2   ## initial state flag (0=levl, 1=zonl, 2=clim)
+jerlv0: 0   ## initial jerlov water type (1 to 5; 0 to use KPAR)
+yrflag: 3   ## days in year flag (0=360, 1=366, 2=366J1, 3=actual)
+sshflg: 0   ## diagnostic SSH flag (0=SSH,1=SSH&stericSSH)
+dsurfq: 99999.0   ## number of days between model diagnostics at the surface
+diagfq: 99999.0   ## number of days between model diagnostics
+proffq: 0.0   ## number of days between model diagnostics at selected locs
+tilefq: 0.0   ## number of days between model diagnostics on selected tiles
+meanfq: 0.0   ## number of days between model diagnostics (time averaged)
+rstrfq: 60.0   ## number of days between model restart output
+bnstfq: 0.000   ## number of days between baro nesting archive input
+nestfq: 0.000   ## number of days between 3-d nesting archive input
+cplifq: 0.125   ## number of days (or time steps) between sea ice coupling
+baclin: 800.0   ## baroclinic time step (seconds), int. divisor of 86400
+batrop: 25.0   ## barotropic time step (seconds), int. div. of baclin/2
+incflg: 0   ## incremental update flag (0=no, 1=yes, 2=full-velocity)
+incstp: 100   ## no. timesteps for full update (1=direct insertion)
+incupf: 1   ## number of days of incremental updating input
+wbaro: 0.125   ##barotropic time smoothing weight
+btrlfr: 1   ## leapfrog barotropic time step (0=F,1=T)
+btrmas: 0   ## barotropic is mass conserving (0=F,1=T)
+hybrlx: 8.0   ## HYBGEN: inverse relaxation coefficient (time steps)
+hybiso: 0.01   ## HYBGEN: Use PCM if layer is within hybiso of target density
+hybmap: 3   ## hybrid remapper flag (0=PCM, 1=PLM, 2=PPM)
+hybflg: 0   ## hybrid generator flag (0=T&S, 1=th&S, 2=th&T)
+advflg: 0   ## thermal advection flag (0=T&S, 1=th&S, 2=th&T)
+advtyp: 2   ## scalar advection type (0=PCM,1=MPDATA,2=FCT2,4=FCT4)
+momtyp: 2   ## momentum advection type (2=2nd order, 4=4th order)
+slip: -1.0   ##+1 for free-slip, -1 for non-slip boundary conditions
+visco2: 0.00   ## deformation-dependent Laplacian viscosity factor
+visco4: 0.20   ## deformation-dependent biharmonic viscosity factor
+facdf4: 0.0   ## speed-dependent biharmonic viscosity factor
+veldf2: 0.005   ## diffusion velocity (m/s) for Laplacian momentum dissip.
+veldf4: 0.06   ## diffusion velocity (m/s) for biharmonic momentum dissip.
+thkdf2: 0.00   ## diffusion velocity (m/s) for Laplacian thickness diffus.
+thkdf4: -0.045   ## diffusion velocity (m/s) for biharmonic thickness diffus.
+temdf2: 0.005   ## diffusion velocity (m/s) for Laplacian temp/saln diffus.
+temdfc: 1.0   ## temp diffusion conservation (0.0,1.0 all dens,temp resp.)
+vertmx: 2.e-5   ## diffusion velocity (m/s) for momentum at MICOM M.L.base
+cbar: 0.1   ##rms flow speed (m/s) for linear bottom friction
+cb: 2.e-3   ##coefficient of quadratic bottom friction
+drglim: 0.0   ## limiter for explicit friction (1.0 none, 0.0 implicit)
+drgscl: 0.0   ## scale factor for tidal drag (0.0 for no tidal drag)
+thkdrg: 500.0   ## thickness of bottom boundary layer for tidal drag (m)
+thkbot: 10.0   ## thickness of bottom boundary layer (m)
+sigjmp: 0.02   ## minimum density jump across interfaces (kg/m**3)
+tmljmp: 0.2   ## equivalent temperature jump across mixed-layer (degC)
+thkmls: 15.0   ## reference mixed-layer thickness for SSS relaxation (m)
+thkmlt: 0.0   ## reference mixed-layer thickness for SST relaxation (m)
+thkriv: 6.0   ## nominal thickness of river inflow (m)
+thkfrz: 20.0   ## maximum thickness of near-surface freezing zone (m)
+iceflg: 0   ## sea ice model flag (0=none,1=energy loan,2=coupled/esmf)
+tfrz_0: 0.0   ## ENLN: ice melting point (degC) at S=0psu
+tfrz_s: -0.054   ## ENLN: gradient of ice melting point (degC/psu)
+ticegr: 0.0   ## ENLN: temp. grad. inside ice (deg/m); =0 use surtmp
+hicemn: 0.5   ## ENLN: minimum ice thickness (m)
+hicemx: 10.0   ## ENLN: maximum ice thickness (m)
+ntracr: 0   ## number of tracers (0=none,negative to initialize)
+trcflg: 0   ## tracer flags (one digit per tr, most sig. replicated)
+tsofrq: 64   ## number of time steps between anti-drift offset calcs
+tofset: 0.0   ## temperature anti-drift offset (degC/century)
+sofset: 0.0   ## salnity anti-drift offset (psu/century)
+mlflag: 6   ## mixed layer flag (0=none,1=KPP,2-3=KT,4=PWP,5=MY,6=GISS)
+pensol: 1   ## KT: activate penetrating solar rad. (0=F,1=T)
+dtrate: 999.0   ## KT: maximum permitted m.l. detrainment rate (m/day)
+thkmin: 19.2   ## KT/PWP: minimum mixed-layer thickness (m)
+dypflg: 1   ## KT/PWP: diapycnal mixing flag (0=none, 1=KPP, 2=explicit)
+mixfrq: 64   ## KT/PWP: number of time steps between diapycnal mix calcs
+diapyc: 1.e-7   ## KT/PWP: diapycnal diffusivity x buoyancy freq. (m**2/s**2)
+rigr: 0.25   ##PWP: critical gradient richardson number
+ribc: 0.65   ##PWP: critical bulk richardson number
+rinfty: 0.7   ## KPP: maximum gradient richardson number (shear inst.)
+ricr: 0.3   ##KPP: critical bulk richardson number
+bldmin: 0.0   ## KPP: minimum surface boundary layer thickness (m)
+bldmax: 1200.0   ## K-PROF: maximum surface boundary layer thickness (m)
+cekman: 0.7   ## KPP/KT: scale factor for Ekman depth
+cmonob: 1.0   ## KPP: scale factor for Monin-Obukov depth
+bblkpp: 1   ## KPP: activate bottom boundary layer (0=F,1=T)
+shinst: 1   ## KPP: activate shear instability mixing (0=F,1=T)
+dbdiff: 1   ## KPP: activate double diffusion mixing (0=F,1=T)
+nonloc: 1   ## KPP: activate nonlocal b. layer mixing (0=F,1=T)
+botdiw: 0   ## GISS: activate bot.enhan.int.wav mixing (0=F,1=T)
+difout: 1   ## K-PROF: output visc/diff coffs in archive (0=F,1=T)
+difsmo: 1   ## K-PROF: activate horiz smooth diff coeffs (0=F,1=T)
+difm0: 50.e-4   ##KPP: max viscosity due to shear instability (m**2/s)
+difs0: 50.e-4   ##KPP: max diffusivity due to shear instability (m**2/s)
+difmiw: 3.e-5   ## KPP: background/internal wave viscosity (m**2/s)
+difsiw: 1.e-5   ## KPP: background/internal wave diffusivity (m**2/s)
+dsfmax: 10.e-4   ## KPP: salt fingering diffusivity factor (m**2/s)
+rrho0: 1.9   ##KPP: salt fingering rp=(alpha*delT)/(beta*delS)
+cs: 98.96   ##KPP: value for nonlocal flux term
+cstar: 10.0   ##KPP: value for nonlocal flux term
+cv: 0.0   ##KPP: buoyancy frequency ratio (0.0 to use a fn. of N)
+c11: 5.0   ##KPP: value for turb velocity scale
+hblflg: 2   ## KPP: b. layer interp. flag (0=const.,1=linear,2=quad.)
+niter: 2   ##KPP: iterations for semi-implicit soln. (2 recomended)
+fltflg: 0   ## FLOATS: synthetic float flag (0=no; 1=yes)
+nfladv: 4   ## FLOATS: advect every nfladv bacl. time steps (even, >=4)
+nflsam: 1   ## FLOATS: output (0=every nfladv steps; >0=no. of days)
+intpfl: 0   ## FLOATS: horiz. interp. (0=2nd order+n.n.; 1=n.n. only)
+iturbv: 0   ## FLOATS: add horiz. turb. advection velocity (0=no; 1=yes)
+ismpfl: 1   ## FLOATS: sample water properties at float (0=no; 1=yes)
+tbvar: 4.63e-6   ##FLOATS: horizontal turb. vel. variance scale (m**2/s**2)
+tdecri: 0.4   ## FLOATS: inverse decorrelation time scale (1/day)
+lbflag: 1   ## lateral barotropic bndy flag (0=none, 1=port, 2=input)
+tidflg: 0   ## TIDES: tidal forcing flag (0=none,1=open-bdy,2=bdy&body)
+tidcon: '11111111'   ## TIDES: 1 digit per (Q1K2P1N2O1K1S2M2), 0=off,1=on
+tidsal: 0.06   ## TIDES: scalar self attraction and loading factor (<0: file)
+tidgen: 1   ## TIDES: generic time (0=F,1=T)
+tidrmp: 3.0   ## TIDES: ramp time (days)
+tid_t0: 0.0   ## TIDES: origin for ramp time (model day)
+clmflg: 12   ## climatology frequency flag (6=bimonthly, 12=monthly)
+wndflg: 1   ## wind stress input flag (0=none,1=u/v-grid,2,3=p-grid)
+ustflg: 2   ## ustar forcing flag (3=input,1,2=wndspd,4=stress)
+flxflg: 99   ## thermal forcing flag (0=none,3=net-flux,1,2,4=sst-based,99=thermf_nersc)
+empflg: 0   ## E-P forcing flag (0=none,3=net_E-P, 1,2,4=sst-bas_E)
+dswflg: 0   ## diurnal shortwave flag (0=none,1=daily to diurnal corr.)
+sssflg: 1   ## SSS relaxation flag (0=none,1=clim)
+lwflag: 0   ## longwave (SST) flag (0=none,1=clim,2=atmos)
+sstflg: 0   ## SST relaxation flag (0=none,1=clim,2=atmos,3=observed)
+icmflg: 0   ## ice mask flag (0=none,1=clim,2=atmos,3=obs/coupled)
+flxoff: 0   ## net flux offset flag (0=F,1=T)
+flxsmo: 0   ## smooth surface fluxes (0=F,1=T)
+relax: 1   ## activate lateral boundary nudging (0=F,1=T)
+trcrlx: 0   ## activate lat. bound. tracer nudging (0=F,1=T)
+priver: 1   ## rivers as a precipitation bogas (0=F,1=T)
+epmass: 1   ## treat evap-precip as a mass exchange (0=F,1=T)
+
+##infile
+forcing_frc: era5   # forcing option, month, ecmwf, ncepr, ecmo, ecnc
+forcing_clm: era40
+temp_relax_tscale: 200.0  # temperature relaxation time scale (F in blkdat.input)
+saln_relax_tscale: 200.0  # salinity    relaxation time scale
+accum_avg: True           # laverage n Accumulate monthly averages every n hours
+accum_avg_intv_h: 2
+nestoflag: False   # lnesto, nestdto - saves nesting bnd cond at nestdto intervals
+nestiflag: False   # lnesti, nestdti - read and apply nesting bnd cond at nestdto intervals
+tideflag: False    # Tides (true,  CSR/FES, apply currents)
+tidechoice: CSR
+gpflag: False      # lgridp     Activate storage of gridpoint information
+
+##infile2 (perturb forcing)
+fversn: 1.2   ##'fversn' = version of inputfile (infile2.in)
+randf: 1      ##'randf ' = 1=random forcing, 0= no random forcing
+seed: 11      ##'seed  ' = Random forcing seed
+vslp: 10.0    ##'vslp  ' = Variance in slp
+vtaux: 9.e-4  ##'vtaux ' = Variance in tau_x
+vtauy: 9.e-4  ##'vtauy ' = Variance in tau_y
+vwspd: 2.5    ##'vwspd ' = Variance in tau_y
+vcloud: 4.e-2 ##'vcloud' = Variance in clouds
+vtair: 9.0    ##'vtair ' = Variance in air temperature
+vprcp: 1      ##'vprcp ' = Variance in precipitation
+vrlhum: 0.0   ##'vrlhum' = Variance in relative humidity
+scorr: 25.e4  ##'scorr ' = Horizontal radius of correlation (meters)
+tcorr: 2.0    ##'tcorr ' = Temporal radius of correlation (days)
+prsflg: 2     ##'prsflg' = 0 uncorr wind/slp, 1= wind from slp, 2=wind from slp limited by wndspd
+
+##ports.input
+nports: 2   ##'nports   ' = number of ports
+pefold: 1   ##'pefold   ' = port transport e-folding time in days
+kdport: [4, 3]   ##'kdport   ' = port orientation (1=N, 2=S, 3=E, 4=W)
+ifport: [222, 800]   ##'ifport   ' = first i-index
+ilport: [222, 800]   ##'ilport   ' = last  i-index (=ifport for east/west port)
+jfport: [813,   2]   ##'jfport   ' = first j-index
+jlport: [836,  30]   ##'jlport   ' = last  j-index (=jfport for north/south port)
+svpnow: [0.0, 0.0]   ##'svpnow   ' = existing port transport in Sv (+ve towards E or S)
+svport: [0.7, 0.7]   ##'svport   ' = target   port transport in Sv (+ve towards E or S)
+
+##infile.evp
+evp_time_step: 7200.  ## EVP time step
+evp_ice_strength: 27500.  ## EVP ice strength
+evp_sic_fac: 20.      ## EVP ice concentration factor
+evp_n_subcycles: 120  ## EVP nb of subcycles=elastic_tstep/dyn_tstep
+
+##infile.icestate
+albedo_melt_ice: 0.600  ## ALBEDO  : Albedo value of melting ice []
+albedo_dry_ice: 0.730   ## ALBEDO  : Albedo value of dry ice []
+albedo_snow_min: 0.710  ## ALBEDO  : Minimum albedo value of snow []
+albedo_snow_max: 0.850  ## ALBEDO  : Maximum albedo value of snow []
+frozen_ice_thick: 0.100 ## FREEZE  : Initial thickness of frozen ice [m]
+lead_max_sic: 0.995     ## LEAD    : Maximum value for ice concentration []
+snow_limit: 0.400       ## SNWLIM  : Maximum allowed snow thickness [m]
+qstore: 0.300           ## QSTORE  : Max heat store in frac. of ice latent heat []
+lateral_melt: 1         ## LATERAL MELT: 0=none, 1=standard (Drange94), 2=Hakkinen & Mellor
+

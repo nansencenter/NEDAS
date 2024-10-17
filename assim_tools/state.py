@@ -6,6 +6,7 @@ import importlib
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
+from utils.multiscale import get_scale_component
 
 """
 Note: The analysis is performed on a regular grid.
@@ -449,6 +450,9 @@ def prepare_state(c):
             fields[mem_id, rec_id] = fld
 
             ##misc. transform
+            if len(c.character_length) > 1:
+                ##get scale component for multiscale approach
+                fld = get_scale_component(c.grid, fld, c.character_length, c.s)
 
             ##read z_coords for the field
             ##only need to generate the uniq z coords, store in bank
@@ -461,6 +465,15 @@ def prepare_state(c):
     if c.debug:
         print(' done.\n')
     c.comm.Barrier()
+
+    ##additonal output of debugging
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        if c.pid_rec == 0:
+            print('mem', c.pid_mem, c.mem_list[c.pid_mem])
+        if c.pid_mem == 0:
+            print('rec', c.pid_rec, c.rec_list[c.pid_rec])
+        np.save(analysis_dir+'/fields_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), fields)
 
     return fields, z_coords
 

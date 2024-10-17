@@ -7,14 +7,14 @@ import subprocess
 from datetime import datetime
 
 from config import parse_config
-from grid import Grid
 from utils.conversion import t2s, s2t, dt1h, units_convert
+from grid import Grid
 
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
 from .diag_var import get_diag_var
-# from .forcing import
 from .namelist import namelist
+from . import forcing
 
 class Model(object):
     """
@@ -45,6 +45,7 @@ class Model(object):
         self.grid_bank = {}
         # self.grid
         # self.mask
+        self.perturb_history = {}
 
         self.run_process = None
         self.run_status = 'pending'
@@ -207,30 +208,82 @@ class Model(object):
         pass
 
 
+    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+        ##put sequence of operation here to generate the initial condition files for nextsim
+        model_data_dir = kwargs['model_data_dir']
+        ens_init_dir = kwargs['ens_init_dir']
+        time_start = kwargs['time_start']
+        time_end = kwargs['time_end']
+        job_submit_cmd = kwargs['job_submit_cmd']
+
+        ##prepare initial condition
+        ##restart files are in ens_init_dir, prepared beforehand
+        init_file = self.filename(**{**kwargs, 'path':ens_init_dir, 'time':time_start})
+
+        ##where restart files are stored for the model run
+        restart_file = self.filename(**{**kwargs, 'time':time_start})
+        restart_dir = os.path.dirname(restart_file)
+        os.system("mkdir -p "+restart_dir)
+
+        ##copy the files over
+        field_bin = init_file
+        field_dat = field_bin.replace('.bin', '.dat')
+        mesh_bin = init_file.replace('field', 'mesh')
+        mesh_dat = mesh_bin.replace('.bin', '.dat')
+        for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
+            os.system("cp "+file+" "+restart_dir)
+
+        ##prepare boundary forcing
+        ##where forcing files are stored in ens_init_dir
+        forcing_dir = os.path.join(os.path.dirname(os.path.dirname(init_file)), 'data', 'GENERIC_PS_ATM')
+        os.system("rm -rf "+forcing_dir+"; mkdir -p "+forcing_dir)
+
+        if 'perturb' in kwargs:
+            ##original generic_ps_atm forcing in model_data_dir, prepared beforehand
+            forcing_dir_orig = os.path.join(model_data_dir, 'GENERIC_PS_ATM')
+
+            ##make copy of original files, do batch processing (task_nproc commands in background)
+            shell_cmd = ""
+            n = 0  ##index in nproc commands
+            t = time_start
+            while t < time_end:
+                forcing_file_orig = forcing.filename(**{**kwargs, 'path':forcing_dir_orig, 'time':t})
+                offset = task_id * task_nproc + n
+                shell_cmd += f"{job_submit_cmd} 1 {offset} cp -L {forcing_file_orig} {forcing_dir}/. & "
+                n += 1
+                if n == task_nproc:  ##wait for all nproc commands to finish, before next batch
+                    n = 0
+                    shell_cmd += "wait; "
+                t += 24*dt1h  ##forcing files are stored daily
+            shell_cmd += "wait; "  ##wait for remaining commands
+            os.system(shell_cmd)
+
+        else:
+            ##just link all the forcing files over, no perturb needed
+            os.system("ln -fs "+forcing_dir_orig+"/* "+forcing_dir+"/.")
+
+
     def run(self, task_id=0, task_nproc=16, **kwargs):
         self.run_status = 'running'
 
-        host = kwargs['host']
-        nedas_dir = kwargs['nedas_dir']
-        code_dir = kwargs['code_dir']
-        data_dir = kwargs['data_dir']
-
-        restart_file = self.filename(**kwargs)
-        run_dir = os.path.dirname(os.path.dirname(restart_file))
-
-        # print('running nextsim v1 model in '+run_dir, flush=True)
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
+        job_submit_cmd = kwargs['job_submit_cmd']
+        model_code_dir = kwargs['model_code_dir']
+        model_src = os.path.join(model_code_dir, 'setup.src')
+        model_exe = os.path.join(model_code_dir, 'model', 'bin', 'nextsim.exec')
+        offset = task_id*task_nproc
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
-
+        prev_time = time - forecast_period * dt1h
+        member = kwargs['member']
         input_file = self.filename(**kwargs)
-        kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.filename(**kwargs_out)
+        output_file = self.filename(**{**kwargs, 'time':next_time})
 
-        ##check restart input files
+        ##check run_dir and input files
+        restart_file = self.filename(**kwargs)
+        run_dir = os.path.dirname(os.path.dirname(restart_file))
+        os.system("mkdir -p "+run_dir)
         field_bin = input_file
         field_dat = field_bin.replace('.bin', '.dat')
         mesh_bin = input_file.replace('field', 'mesh')
@@ -239,41 +292,37 @@ class Model(object):
             if not os.path.exists(file):
                 raise RuntimeError("input file is missing: "+file)
 
-        ##prepare the input files
-        ##restart files should be created by the cycling
-        ##other data:
+        ##perturb forcing
+        ens_init_dir = kwargs['ens_init_dir']
+        init_file = self.filename(**{**kwargs, 'path':ens_init_dir})
+        forcing_dir = os.path.join(os.path.dirname(os.path.dirname(init_file)), 'data', 'GENERIC_PS_ATM')
+        if 'perturb' in kwargs:
+            forcing.perturb_var(**{**kwargs, 'path':forcing_dir, 'time':time})
+
+        ##link input data files
+        model_data_dir = kwargs['model_data_dir']
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "rm -rf data; mkdir data; cd data; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'BATHYMETRY', '*')+" .; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'TOPAZ4', 'TP4DAILY_*')+" .; "
-        shell_cmd += "ln -fs "+os.path.join(data_dir, 'GENERIC_PS_ATM')+" .; "
-        subprocess.run(shell_cmd, shell=True)
+        shell_cmd += "ln -fs "+os.path.join(model_data_dir, 'BATHYMETRY', '*')+" .; "
+        shell_cmd += "ln -fs "+os.path.join(model_data_dir, 'TOPAZ4', 'TP4DAILY_*')+" .; "
+        shell_cmd += "ln -fs "+forcing_dir+" .; "
+        os.system(shell_cmd)
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        model_src = os.path.join(env_dir, 'nextsim.v1.src')
-        model_exe = os.path.join(code_dir, 'nextsim', 'model', 'bin', 'nextsim.exec')
-
-        offset = task_id*task_nproc
-        submit_cmd = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {offset} "
-
-        ##build the shell command line
+        ##build command to run the model
         shell_cmd = "source "+model_src+"; "
         shell_cmd += "cd "+run_dir+"; "
         shell_cmd += "export NEXTSIM_DATA_DIR="+os.path.join(run_dir,'data')+"; "
-        shell_cmd += submit_cmd
+        shell_cmd += job_submit_cmd+f" {task_nproc} {offset} "
         shell_cmd += model_exe+" --config-files=nextsim.cfg "
         shell_cmd += ">& run.log"
-        # print(shell_cmd, flush=True)
         log_file = os.path.join(run_dir, 'run.log')
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.5]:
-
             self.timestep *= dt_ratio
-
             namelist(self, time, forecast_period, run_dir)
 
-            self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+            self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
 
             ##check output
@@ -292,7 +341,16 @@ class Model(object):
         if not os.path.exists(output_file):
             raise RuntimeError(output_file+' not generated, run failed')
 
-
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
+        ##make a copy of output file to the output_dir
+        if 'output_dir' in kwargs:
+            output_dir = kwargs['output_dir']
+            if output_dir != kwargs['path']:
+                output_file_cp = self.filename(**{**kwargs, 'path':output_dir, 'time':next_time})
+                os.system("mkdir -p "+os.path.dirname(output_file_cp))
+                field_bin = output_file
+                field_dat = field_bin.replace('.bin', '.dat')
+                mesh_bin = output_file.replace('field', 'mesh')
+                mesh_dat = mesh_bin.replace('.bin', '.dat')
+                for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
+                    os.system("cp "+file+" "+os.path.dirname(output_file_cp)+"/.")
 

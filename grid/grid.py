@@ -1,13 +1,14 @@
 import numpy as np
-from numba import njit
+import os
+import inspect
+import copy
+from functools import cached_property
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 from matplotlib.tri import Triangulation
 from pyproj import Proj, Geod
 import shapefile
-import os, inspect
-from functools import cached_property
 
 class Grid(object):
     """
@@ -29,8 +30,9 @@ class Grid(object):
     See NEDAS/tutorials/grid_convert.ipynb for some examples.
     """
 
-    def __init__(self, proj, x, y, regular=True, cyclic_dim=None, pole_dim=None,
-                 pole_index=None, triangles=None, neighbors=None, dst_grid=None):
+    def __init__(self, proj, x, y, bounds=None, regular=True,
+                 cyclic_dim=None, pole_dim=None, pole_index=None,
+                 triangles=None, neighbors=None, dst_grid=None):
         """
         Initialize a Grid object.
 
@@ -40,6 +42,9 @@ class Grid(object):
 
         - x, y: np.array(field.shape)
           x, y coordinates for each element in the field.
+
+        - bounds: list[float], optional
+          [xmin, xmax, ymin, ymax] boundary limits
 
         - regular: bool, optional
           Whether grid is regular or unstructured. Default is True (regular).
@@ -66,8 +71,12 @@ class Grid(object):
 
         assert x.shape == y.shape, "x, y shape does not match"
 
+        if proj is None:
+            self.proj = Proj('+proj=stere') ##default projection
+        else:
+            self.proj = proj
+
         ##name of the projection
-        self.proj = proj
         if hasattr(proj, 'name'):
             self.proj_name = proj.name
         else:
@@ -105,10 +114,13 @@ class Grid(object):
             self.x = np.mod(self.x + 180., 360.) - 180.
 
         ##boundary corners of the grid
-        self.xmin = np.min(self.x)
-        self.xmax = np.max(self.x)
-        self.ymin = np.min(self.y)
-        self.ymax = np.max(self.y)
+        if bounds is not None:
+            self.xmin, self.xmax, self.ymin, self.ymax = bounds
+        else:
+            self.xmin = np.min(self.x)
+            self.xmax = np.max(self.x)
+            self.ymin = np.min(self.y)
+            self.ymax = np.max(self.y)
 
         if regular:
             self.nx = self.x.shape[1]
@@ -124,11 +136,14 @@ class Grid(object):
             self.x = self.x.flatten()
             self.y = self.y.flatten()
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
+            ##TODO: if cyclic_dim is not None need to pad around boundary additional wrap-around points to make triangulation cover the entire domain
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
             self.x_elem = np.mean(self.x[self.tri.triangles], axis=1)
             self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
+            self.Lx = self.xmax - self.xmin
+            self.Ly = self.ymax - self.ymin
 
             ##some triangle properties
             t = self.tri.triangles
@@ -145,7 +160,6 @@ class Grid(object):
         self._dst_grid = None
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
-
 
     @classmethod
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
@@ -183,7 +197,6 @@ class Grid(object):
             y += 0.5*dx
         self.__init__(proj, x, y, regular=True, **kwargs)
         return self
-
 
     @classmethod
     def random_grid(cls, proj, xstart, xend, ystart, yend, npoints, min_dist=None, **kwargs):
@@ -224,8 +237,36 @@ class Grid(object):
                 points.append((xp, yp))
         x = np.array([p[0] for p in points])
         y = np.array([p[1] for p in points])
-        self.__init__(proj, x, y, regular=False, **kwargs)
+        bounds = [xstart, xend, ystart, yend]
+        self.__init__(proj, x, y, bounds=bounds, regular=False, **kwargs)
+
         return self
+
+
+    def change_resolution_level(self, nlevel):
+        """
+        Generate a new grid with changed resolution
+        Input:
+         - nlevel: int
+           positive: downsample grid |nlevel| times, each time doubling the grid spacing
+           negative: upsample grid |nlevel| times, each time halving the grid spacing
+        Return:
+         - new_grid: Grid object
+        """
+        if not self.regular:
+            raise NotImplementedError("change_resolution only works for regular grid now")
+        if nlevel == 0:
+            return self
+        else:
+            new_grid = copy.deepcopy(self)
+            fac = 2**nlevel
+            new_grid.nx = int(self.nx / fac)
+            new_grid.ny = int(self.ny / fac)
+            assert new_grid.nx > 2 and new_grid.ny > 2, "grid.change_resolution_level: new resolution too low, resulting number of grid points less than 2"
+            new_grid.dx = self.Lx / new_grid.nx
+            new_grid.dy = self.Ly / new_grid.ny
+            new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
+            return new_grid
 
 
     def _mesh_dx(self):
@@ -247,7 +288,6 @@ class Grid(object):
         else:
             ##take the mean of triangle size, excluding the elongated ones
             return np.mean(sa[valid])
-
 
     @cached_property
     def mfx(self):
@@ -283,7 +323,6 @@ class Grid(object):
             _,_,gcdy = geod.inv(lon, lat, lon1y, lat1y)
             return self.dy / gcdy
 
-
     @property
     def dst_grid(self):
         """
@@ -291,7 +330,6 @@ class Grid(object):
         once specified a dst_grid, the setter will compute corresponding rotation_matrix and interp_weights
         """
         return self._dst_grid
-
 
     @dst_grid.setter
     def dst_grid(self, grid):
@@ -709,10 +747,11 @@ class Grid(object):
         return interp_weights
 
 
-    ###utility function for interpolation/refining (low->high resolution)
     def interp(self, fld, x=None, y=None, method='linear'):
         """
-        Apply the interpolation to given field
+        Interpolation of 2D field data (fld) from one grid (self or given x,y) to another (dst_grid).
+        This can be used for grid refining (low->high resolution) or grid thinning (high->low resolution).
+        This also converts between different grid geometries.
 
         Inputs:
         - fld: np.array
@@ -759,7 +798,6 @@ class Grid(object):
         else:
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
         return fld_interp.reshape(np.array(x).shape)
-
 
     ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
@@ -887,7 +925,6 @@ class Grid(object):
         dist = np.hypot(dist_x, dist_y)
         return dist
 
-
     ### Some methods for basic data visulisation and map plotting
     def _collect_shape_data(self, shapes):
         """
@@ -921,7 +958,6 @@ class Grid(object):
 
         return data
 
-
     @cached_property
     def land_data(self):
         """
@@ -945,7 +981,6 @@ class Grid(object):
 
         return self._collect_shape_data(shapes)
 
-
     @cached_property
     def river_data(self):
         """
@@ -955,7 +990,6 @@ class Grid(object):
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_rivers.shp'))
         shapes = sf.shapes()
         return self._collect_shape_data(shapes)
-
 
     @cached_property
     def lake_data(self):

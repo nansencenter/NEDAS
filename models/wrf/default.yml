@@ -1,16 +1,4 @@
 #&time_control
-run_days: 0
-run_hours: 36
-run_minutes: 0
-run_seconds: 0
-start_year: [2019]
-start_month: [09]
-start_day: [04]
-start_hour: [12]
-end_year: [2019]
-end_month: [09]
-end_day: [06]
-end_hour: [00]
 interval_seconds: 10800
 input_from_file: [True]
 history_interval: [60]

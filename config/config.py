@@ -70,11 +70,14 @@ class Config(object):
     def set_analysis_grid(self):
         ##initialize analysis grid
         if self.grid_def['type'] == 'custom':
+            pass
+            ''' !> define nextsim.dg grid
             proj = pyproj.Proj(self.grid_def['proj'])
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
             self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx)
+            '''
 
         else:
             ##get analysis grid from model module
@@ -82,15 +85,15 @@ class Config(object):
             kwargs = self.model_def[model_name]
             module = importlib.import_module('models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
-            model_dir = os.path.join(self.data_dir, model_name)
-            model.read_grid(path=model_dir)
             self.grid = model.grid
 
+        ''' !>
         self.ny, self.nx = self.grid.x.shape
 
         ##mask for invalid grid points
         # if self.mask
         self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+        '''
 
 
     def set_model_config(self):

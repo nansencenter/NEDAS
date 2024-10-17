@@ -1,4 +1,4 @@
-# v1.1
+# v1.0.1
 
     Use fully yaml-file-based configuration, no need for linux environment variables anymore.
 
@@ -7,6 +7,8 @@
     The entire workflow is based on python code now, scripts/run_exp.py is the top-level control script; assimilate.py and ensemble_forecast.py are the two main steps. More complex workflow can be introduced by the user, some examples will come in future releases.
 
     Some adaptive inflation algorithms added, more algorithms to be included soon.
+
+    Models now tested: qg, nextsim/v1, topaz/v4, wrf
 
 
 # v1.0-beta

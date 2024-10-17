@@ -54,15 +54,19 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In `<my_config_file>`:
 
-    set `host` to `<my_host_machine>`
+    Set `work_dir` to the working directory for the experiment.
 
-    set `nedas_dir` to the directory where NEDAS code is placed
+    Set `job_submit_cmd` to the parallel job submit command/script on the host machine, see example `config/samples/job_submit_betzy.sh` for more details.
 
-    set `work_dir` to the working directory for the experiment
+    Set `nproc` to the number of processors to be used for the experiment.
 
-    set other directories `home_dir`, `code_dir`, etc. accordingly
+- Setup models and datasets
 
-    In `config/env/<my_host_machine>`, you can create source files for running model on `<my_host_machine>`. For example, `config/env/betzy/qg.src` is sourced when running the 'qg' model on the 'betzy' machine.
+    In `models/<model_name>`, edit `setup.src` to provide environment for running the model. `model_code_dir` is where the model code is; `model_data_dir` is where the static input files are that the model requires during runtime; `ens_init_dir` is where the initial restart files are for the first cycle of the experiment.
+
+    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d_testcast.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
+
+    For the datasets that provide observations to be assimilated, setup their directories in config file, and make sure you implemented the `dataset.<dataset_name>` module.
 
 - Start the experiment
 
@@ -80,7 +84,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
 
-    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments.
+    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_exp.py --config_file=<my_config_file>`
 
     On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
 
