@@ -1,5 +1,7 @@
 nproc_per_run: 32
 nproc_per_util: 1
+restart_dt: 24
+forcing_dt: 6
 
 msh_filename: small_arctic_10km.msh  ##mesh filename
 

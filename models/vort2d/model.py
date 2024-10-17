@@ -2,12 +2,13 @@ import numpy as np
 import os
 import inspect
 import time
-import subprocess
+from netCDF4 import Dataset
 
 from pyproj import Proj
 from grid import Grid
 from config import parse_config
 from utils.conversion import t2s, s2t, dt1h
+from utils.shell_utils import run_command
 from utils.netcdf_lib import nc_read_var, nc_write_var
 
 from .util import initial_condition, advance_time
@@ -51,10 +52,10 @@ class Model(object):
         return os.path.join(path, tstr+mstr+'.nc')
 
     def read_grid(self, **kwargs):
-        return self.grid
+        pass
 
     def read_mask(self, **kwargs):
-        return self.mask
+        pass
 
     def read_var(self, **kwargs):
         ##check name in kwargs and read the variables from file
@@ -62,13 +63,14 @@ class Model(object):
         assert name in self.variables, 'variable name '+name+' not listed in variables'
         fname = self.filename(**kwargs)
 
-        is_vector = self.variables[name]['is_vector']
-        if is_vector:
-            var1 = nc_read_var(fname, self.variables[name]['name'][0])[0, ...]
-            var2 = nc_read_var(fname, self.variables[name]['name'][1])[0, ...]
-            var = np.array([var1, var2])
+        rec = self.variables[name]
+
+        if rec['is_vector']:
+            u = nc_read_var(fname, rec['name'][0])[0, ...]
+            v = nc_read_var(fname, rec['name'][1])[0, ...]
+            var = np.array([u, v])
         else:
-            var = nc_read_var(fname, self.variables[name]['name'])[0, ...]
+            var = nc_read_var(fname, rec['name'])[0, ...]
         return var
 
     def write_var(self, var, **kwargs):
@@ -96,20 +98,19 @@ class Model(object):
     def preprocess(self, task_id=0, **kwargs):
         restart_dir = kwargs['restart_dir']
         path = kwargs['path']
-        os.system("mkdir -p "+path)
+        run_command("mkdir -p "+path)
         file1 = self.filename(**{**kwargs, 'path':restart_dir})
         file2 = self.filename(**kwargs)
-        os.system(f"cp -fL {file1} {file2}")
+        run_command(f"cp -fL {file1} {file2}")
 
     def postprocess(self, task_id=0, **kwargs):
         pass
 
     def run(self, task_id=0, **kwargs):
-        self.run_status = 'running'
         state = self.read_var(**kwargs)
 
         path = kwargs['path']
-        subprocess.run("mkdir -p "+path, shell=True)
+        run_command("mkdir -p "+path)
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -118,6 +119,5 @@ class Model(object):
         next_state = advance_time(state, self.dx, forecast_period, self.dt, self.gen, self.diss)
 
         kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.filename(**kwargs_out)
         self.write_var(next_state, **kwargs_out)
 

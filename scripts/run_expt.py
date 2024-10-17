@@ -4,7 +4,7 @@
 import os
 from config import Config
 from utils.progress import timer
-from utils.parallel import run_script
+from utils.shell_utils import run_script
 from utils.conversion import t2s, s2t, dt1h
 from utils.dir_def import cycle_dir
 from scripts.preprocess import preprocess

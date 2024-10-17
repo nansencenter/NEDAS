@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
+from utils.shell_utils import run_command
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.progress import watch_log, find_keyword_in_file, watch_files
 from utils.dir_def import forecast_dir
@@ -323,7 +324,7 @@ class Model(object):
             mstr = ''
         run_dir = os.path.join(path, mstr[1:], 'SCRATCH')
         ##make sure model run directory exists
-        os.system(f"mkdir -p {run_dir}")
+        run_command(f"mkdir -p {run_dir}")
 
         ##generate namelists, blkdat, ice_in, etc.
         namelist(self, time, forecast_period, run_dir)
@@ -380,22 +381,22 @@ class Model(object):
             ##seawifs
             file = os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
-        os.system(shell_cmd)
+        run_command(shell_cmd)
 
         ##copy restart files from restart_dir
         tstr = time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
             file1 = os.path.join(path, 'restart.'+tstr+mstr+ext)
-            os.system(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
-            os.system(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
-        os.system(f"mkdir -p {os.path.join(run_dir, 'cice')}")
+            run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
+            run_command(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
+        run_command(f"mkdir -p {os.path.join(run_dir, 'cice')}")
         tstr = time.strftime('%Y-%m-%d-00000')
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
         file1 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
-        os.system(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
-        os.system(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
-        os.system(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
+        run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
+        run_command(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
+        run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
 
     def postprocess(self, task_id=0, **kwargs):
         ##TODO: run fixhycom_cice here
@@ -414,9 +415,9 @@ class Model(object):
         else:
             mstr = ''
         run_dir = os.path.join(path, mstr[1:], 'SCRATCH')
-        os.system(f"mkdir -p {run_dir}")  ##make sure model run directory exists
+        run_command(f"mkdir -p {run_dir}")  ##make sure model run directory exists
         log_file = os.path.join(run_dir, "run.log")
-        os.system("touch "+log_file)
+        run_command("touch "+log_file)
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -457,9 +458,9 @@ class Model(object):
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(path, 'restart.'+tstr+mstr+ext)
-            os.system(f"mv {file1} {file2}")
+            run_command(f"mv {file1} {file2}")
         tstr = next_time.strftime('%Y-%m-%d-00000')
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
-        os.system(f"mv {file1} {file2}")
+        run_command(f"mv {file1} {file2}")
 
