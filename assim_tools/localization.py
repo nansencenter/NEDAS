@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import interp1d
 from numba import njit
 
 ###localization:
@@ -46,4 +47,62 @@ def local_factor(dist, roi, localize_type='GC'):
         raise ValueError
 
     return lfactor.reshape(shape)
+
+def NICE_lookup_table(nens):
+    return table
+
+def NICE(X, Y, fac=1):
+    """
+    localization based on NICE (Morzfeld et al. 2023)
+    """
+    Ne = X.shape[1]
+    ##lookup table
+    # FileName = f'std_ro_Ne_{Ne}.mat'
+    # dat = scipy.io.loadmat(f'matlab/std_ro_Ne_{Ne}.mat')
+    # r = dat['r'].flatten()
+    # stdCrs = dat['stdCrs'].flatten()
+    CorrXY = np.corrcoef(X, Y)[0:X.shape[0], X.shape[0]:]
+    interp_func = interp1d(r, stdCrs, kind='linear', fill_value='extrapolate')
+    std_rho = interp_func(CorrXY)
+    std_rho[np.isclose(CorrXY, 1)] = 0
+    sig_rho = np.sqrt(np.sum(std_rho ** 2))
+    go = True
+    expo2 = 0
+    while go:
+        expo2 += 2
+        L = np.abs(CorrXY) ** expo2
+        Corr_NICER = L * CorrXY
+        if np.linalg.norm(Corr_NICER - CorrXY, 'fro') > fac * sig_rho:
+            go = False
+    expo1 = expo2 - 2
+    rho_exp1 = CorrXY ** expo1
+    rho_exp2 = CorrXY ** expo2
+    al = np.arange(0.1, 1.1, 0.1)
+    PrevCorr = CorrXY
+    for kk in range(len(al)):
+        L = (1 - al[kk]) * rho_exp1 + al[kk] * rho_exp2
+        Corr_NICE = L * CorrXY
+        if kk > 0 and np.linalg.norm(Corr_NICER - CorrXY, 'fro') > fac * sig_rho:
+            Corr_NICE = PrevCorr
+            break
+        elif np.linalg.norm(Corr_NICE - CorrXY, 'fro') > fac * sig_rho:
+            break
+        PrevCorr = Corr_NICE
+    Vy = np.diag(np.std(Y, axis=1))
+    Vx = np.diag(np.std(X, axis=1))
+    Cov_NICE = np.dot(Vx, np.dot(Corr_NICE, Vy))
+    return Cov_NICE, Corr_NICE
+
+def local_factor_adaptive(nens, cov, localize_type=''):
+
+    return lfactor.reshape(shape)
+
+
+# def local_factor(cov, dist, roi, localize_type):
+#     lfactor = np.ones(cov.shape)
+#     assert cov.shape == dist.shape, 'local_factor error: cov and dist shape mismatch'
+
+#     if 
+
+#     return lfactor
 

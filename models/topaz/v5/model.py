@@ -304,7 +304,3 @@ class Model(object):
         pass
 
 
-    def kill(self):
-        pass
-
-

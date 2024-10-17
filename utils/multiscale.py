@@ -1,125 +1,111 @@
 import numpy as np
+from grid import Grid
+from utils.fft_lib import fft2, ifft2, get_wn
 
-# from .fft_lib import fft2, ifft2, fftwn, get_wn
-from models.qg.util import spec2grid, grid2spec
+"""functions to perform scale decomposition, through bandpass filtering
+on spatial data (fields), can also use gcm_filter to achieve this.
+"""
 
-##scale decomposition
-
-##use gcm_filter to perform band pass filtering on spatial data
-
-
-# def lowpass_resp(k2d, k1, k2):
-#     r = np.zeros(k2d.shape)
-#     r[np.where(k2d<k1)] = 1
-#     r[np.where(k2d>k2)] = 0
-
-#     ind = np.where(np.logical_and(k2d>=k1, k2d<=k2))
-
-#     ##linear
-#     # r[ind] = (np.log(k2) - np.log(k2d[ind]))/(np.log(k2) - np.log(k1))
-#     r[ind] = (k2 - k2d[ind])/(k2 - k1)
-#     ##cos-square
-#     # r[ind] = np.cos((k2d[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
-
-#     return r
-
-
-# def scale_response(k2d, scales, s):
-#     ns = len(scales)
-#     resp = np.full(k2d.shape, 1.0)  ##default all ones
-#     if ns > 1:
-#         if s == 0:
-#             resp = lowpass_resp(k2d, scales[s], scales[s+1])
-#         if s == ns-1:
-#             resp = 1 - lowpass_resp(k2d, scales[s-1], scales[s])
-#         if s > 0 and s < ns-1:
-#             resp = lowpass_resp(k2d, scales[s], scales[s+1]) - lowpass_resp(k2d, scales[s-1], scales[s])
-#     return resp
-
-
-# def get_scale_comp(fld, scales, s):
-#     ##compute scale component of fld on the grid
-#     ##given scales: list of center wavenumber k defining the scale bands
-#     ##       s: the index for scale components
-
-#     # xk = grid2spec(x)
-#     # xkout = xk.copy()
-#     # ns = len(scales)
-#     # if ns > 1:
-#     #     kx, ky = get_wn(x)
-#     #     k2d = np.sqrt(kx**2 + ky**2)
-#     #     xkout = xk * get_scale_resp(k2d, scales, s)
-#     # return spec2grid(xkout)
-#     pass
-
-
-# def convolve_fft(grid, fld, kernel):
-#     assert grid.regular, 'Convolution using FFT approach only works for regular grids'
-#     fld_spec = fft2(fld)
-#     knl_spec = fft2(kernel)
-#     mask = np.isnan(fld)
-#     fld[mask] = 0.  ##temporarily put zeros in NaN area
-
-#     fld_conv_spec = fld_spec * knl_spec
-#     fld_conv = ifft2(fld_conv_spec)
-
-#     fld_conv[mask] = np.nan
-
-#     return fld_conv
-
-
-# def convolve(grid, fld, kernel):
-#     fld_shp = fld.shape
-#     assert fld_shp == grid.x.shape, 'fld shape mismatch with grid'
-
-#     x = grid.x.flatten()
-#     y = grid.y.flatten()
-#     fld = fld.flatten()
-#     mask = np.isnan(fld)
-#     fld_conv = fld.copy()
-
-#     for i in np.where(mask):
-#         fld_conv[i]
-
-#     return fld_conv
-
-
-def get_coords(psik):
-    nkx, nky = psik.shape
-    kmax = nky-1
-    kx_, ky_ = np.mgrid[-kmax:kmax+1, 0:kmax+1]
-    return kx_, ky_
-
-
-def spec_bandpass(xk, krange, s):
-    kx_, ky_ = get_coords(xk)
-    Kh = np.sqrt(kx_**2 + ky_**2)
-    xkout = xk.copy()
-    r = scale_response(Kh, krange, s)
-    return xkout * r
-
-
-def scale_response(Kh, krange, s):
-    ns = len(krange)
-    r = np.zeros(Kh.shape)
-    center_k = krange[s]
-    if s == 0:
-        r[np.where(Kh<=center_k)] = 1.0
-    else:
-        left_k = krange[s-1]
-        ind = np.where(np.logical_and(Kh>=left_k, Kh<=center_k))
-        r[ind] = np.cos((Kh[ind] - center_k)*(0.5*np.pi/(left_k - center_k)))**2
-    if s == ns-1:
-        r[np.where(Kh>=center_k)] = 1.0
-    else:
-        right_k = krange[s+1]
-        ind = np.where(np.logical_and(Kh>=center_k, Kh<=right_k))
-        r[ind] = np.cos((Kh[ind] - center_k)*(0.5*np.pi/(right_k - center_k)))**2
+def lowpass_response(k2d, k1, k2):
+    """
+    Low-pass spectral response function
+    Input
+    - k2d: array, 2d wavenumber
+    - k1, k2: float, wavenumbers defining the transition zone (from 1 to 0 in response)
+    Return
+    - r: array same dimension as k2d, the response function
+    """
+    r = np.zeros(k2d.shape)
+    r[np.where(k2d<k1)] = 1.0
+    r[np.where(k2d>k2)] = 0.0
+    ind = np.where(np.logical_and(k2d>=k1, k2d<=k2))
+    ##cos-square transition
+    r[ind] = np.cos((k2d[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
     return r
 
 
-def get_scale(fld, krange, s):
-    fldk = grid2spec(fld)
-    fldk = spec_bandpass(fldk, krange, s)
-    return spec2grid(fldk)
+def get_scale_component_spec_bandpass(grid, fld, character_length, s):
+    assert grid.regular, "get_scale_component_spec_bandpass only works for regular grid"
+
+    ##convert length to wavenumber
+    L = max(grid.Lx, grid.Ly)
+    character_k = L / np.array(character_length)
+
+    nscale = len(character_k)
+    if nscale == 1:
+        return fld ##nothing to be done, return the original field
+
+    kx, ky = get_wn(fld)
+    k2d = np.hypot(kx, ky)
+    fld_spec = fft2(fld)
+    if s == 0:
+        r = lowpass_response(k2d, character_k[s], character_k[s+1])
+    if s == nscale-1:
+        r = 1 - lowpass_response(k2d, character_k[s-1], character_k[s])
+    if s > 0 and s < nscale-1:
+        r = lowpass_response(k2d, character_k[s], character_k[s+1]) - lowpass_response(k2d, character_k[s-1], character_k[s])
+
+    return ifft2(fld_spec * r)
+
+
+def convolve(grid, fld, rgrid, response):
+    L = max(grid.Lx, grid.Ly)
+    kx, ky = get_wn(rgrid.x)
+    ny, nx = rgrid.x.shape
+    fld1 = fld.copy()
+    ##go through grid points in the field and perform convolution
+    for i in np.ndindex(grid.x.shape):
+        ##shift to the grid point i position
+        r = response * np.exp(-2 * np.pi * complex(0,1) * (kx*grid.x[i] + ky*grid.y[i]) / L)
+        ##convert to physical space
+        kernel = ifft2(r) * nx * ny / grid.x.size
+        w = rgrid.convert(kernel)
+        ##perform convolution
+        fld1[i] = np.nansum(fld * w)
+    return fld1
+
+
+def get_scale_component_convolve(grid, fld, character_length, s):
+    ##convert length to wavenumber
+    L = max(grid.Lx, grid.Ly)
+    character_k = L / np.array(character_length)
+
+    nscale = len(character_k)
+    if nscale == 1:
+        return fld ##nothing to be done, return the original field
+
+    ##make a regular grid for the kernel function
+    rgrid = Grid.regular_grid(grid.proj, grid.xmin, grid.xmax, grid.ymin, grid.ymax, grid.dx)
+    rgrid.set_destination_grid(grid)
+    kx, ky = get_wn(rgrid.x)
+    ny, nx = rgrid.x.shape
+    k2d = np.hypot(kx, ky)
+
+    if s == 0:
+        r = lowpass_response(k2d, character_k[s], character_k[s+1])
+        return convolve(grid, fld, rgrid, r)
+    if s == nscale-1:
+        r= lowpass_response(k2d, character_k[s-1], character_k[s])
+        return fld - convolve(grid, fld, rgrid, r)
+    if s > 0 and s < nscale-1:
+        r1 = lowpass_response(k2d, character_k[s-1], character_k[s])
+        r2 = lowpass_response(k2d, character_k[s], character_k[s+1])
+        return convolve(grid, fld, rgrid, r2) - convolve(grid, fld, rgrid, r1)
+
+
+def get_scale_component(grid, fld, character_length, s):
+    """
+    Get scale component using a bandpass filter in spectral space
+    Input:
+    - grid: Grid object
+    - fld: array, ny*nx, the input field
+    - character_length: list of characteristic length for each scale
+    - s: int, scale index
+    Return:
+    - fld: array, ny*nx, the scale component s of input fld
+    """
+    if grid.regular:
+        return get_scale_component_spec_bandpass(grid, fld, character_length, s)
+    else:
+        return get_scale_component_convolve(grid, fld, character_length, s)
 

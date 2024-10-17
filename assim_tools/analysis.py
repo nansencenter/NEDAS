@@ -3,8 +3,15 @@ from numba import njit
 from utils.parallel import by_rank, bcast_by_root
 from utils.progress import print_with_cache, progress_bar
 from utils.conversion import t2h, h2t
+import time
 from .localization import local_factor
-# from .inflation import relax_factor
+
+def analysis(c, state_prior, z_state, lobs, lobs_prior):
+    if c.assim_mode == 'batch':
+        return batch_assim(c, state_prior, z_state, lobs, lobs_prior)
+    elif c.assim_mode == 'serial':
+        return serial_assim(c, state_prior, z_state, lobs, lobs_prior)
+
 
 ###pack/unpack local state and obs data for jitted functions:
 def pack_local_state_data(c, par_id, state_prior, z_state):
@@ -18,6 +25,7 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
     data['mask'] = msk
     data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
     data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
+    ##TODO: build KDTree to allow faster subset finding
 
     data['fields'] = []
     for rec_id in c.rec_list[c.pid_rec]:
@@ -67,6 +75,7 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
     data['x'] = np.full(nlobs, np.nan)
     data['y'] = np.full(nlobs, np.nan)
     data['z'] = np.full(nlobs, np.nan)
+    ##TODO: build KDTree to allow faster subset finding
     data['t'] = np.full(nlobs, np.nan)
     data['err_std'] = np.full(nlobs, np.nan)
     data['hroi'] = np.ones(nlobs)
@@ -134,13 +143,13 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
         for l in range(np.sum((~msk).astype(int))):
             ntask += 1
 
+    t0 = time.time()
     ##now the actual work starts, loop through partitions stored on pid_mem
     print('assimilate in batch mode:\n')
     task = 0
     for par_id in c.par_list[c.pid_mem]:
 
         state_data = pack_local_state_data(c, par_id, state_prior, z_state)
-
         nens, nfld, nloc = state_data['state_prior'].shape
 
         ##skip forward if the partition is empty
@@ -158,15 +167,12 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
         ###TODO: obs_err_corr factored into obs_err
         obs_err = obs_data['err_std']
-
         impact_on_state = 1
 
         ##loop through the unmasked grid points in the partition
         for l in range(nloc):
-
             print(progress_bar(task, ntask))
             task += 1
-
             local_analysis(state_data['state_prior'][:, :, l],
                            state_data['x'][l], state_data['y'][l],
                            state_data['z'][:, l], state_data['t'][:],
@@ -176,18 +182,19 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
                            obs_data['obs_prior'],
                            obs_data['hroi'], obs_data['vroi'],
                            obs_data['troi'], impact_on_state,
-                           c.localize_type, c.filter_type)
-
+                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'],
+                           c.filter_type)
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print(' done.\n')
+    return state_prior, lobs_prior
 
-    return state_prior
 
-
+@njit(cache=True)
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,
-                   hroi, vroi, troi, impact_on_state, localize_type,
+                   hroi, vroi, troi, impact_on_state,
+                   localize_htype, localize_vtype, localize_ttype,
                    filter_type):
     """perform local analysis for one location"""
 
@@ -195,7 +202,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
     ##horizontal localization
     h_dist = np.hypot(obs_x - state_x, obs_y - state_y)
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
     if (h_lfactor==0).all():
         return  ##if the state is outside of hroi of all local obs, skip
 
@@ -207,13 +214,13 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
         ##vertical localization
         v_dist = np.abs(obs_z - state_z[n])
-        v_lfactor = local_factor(v_dist, vroi, localize_type)
+        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
         if (v_lfactor==0).all():
             continue  ##the state is outside of vroi of all obs, skip
 
         ##temporal localization
         t_dist = np.abs(obs_t - state_t[n])
-        t_lfactor = local_factor(t_dist, troi, localize_type)
+        t_lfactor = local_factor(t_dist, troi, localize_ttype)
         if (t_lfactor==0).all():
             continue  ##the state is outside of troi of all obs, skip
 
@@ -255,7 +262,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
         weights_old = weights
 
 
-@njit
+@njit(cache=True)
 def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_factor):
     """
     Compute the transform weights for the local ensemble
@@ -346,7 +353,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
     return weights
 
 
-@njit
+@njit(cache=True)
 def apply_ensemble_transform(ens_prior, weights):
     """Apply the weights to transform local ensemble"""
 
@@ -378,23 +385,16 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
 
     state_data = pack_local_state_data(c, par_id, state_prior, z_state)
     nens, nfld, nloc = state_data['state_prior'].shape
-
     obs_data = pack_local_obs_data(c, par_id, lobs, lobs_prior)
-
     obs_list = bcast_by_root(c.comm)(global_obs_list)(c)
 
     print('assimilate in serial mode:\n')
-
     ##go through the entire obs list, indexed by p, one scalar obs at a time
     for p in range(len(obs_list)):
-
         print(progress_bar(p, len(obs_list)))
 
-        obs_rec_id, obs_id, v = obs_list[p]
+        obs_rec_id, obs_id, v, pid_owner_obs = obs_list[p]
         obs_rec = c.obs_info['records'][obs_rec_id]
-
-        ##figure out with pid owns the obs_id
-        pid_owner_obs = [p for p,lst in c.obs_inds[obs_rec_id].items() if obs_id in lst][0]
 
         ##1. if the pid owns this obs, broadcast it to all pid
         if c.pid_mem == pid_owner_obs:
@@ -425,7 +425,8 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         state_t_dist = np.abs(obs['t'] - state_data['t'])
         update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
-                           obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
+                           obs['hroi'], obs['vroi'], obs['troi'],
+                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
 
         ##3. all pid update their own locally stored obs:
         obs_h_dist = c.grid.distance(obs['x'], obs['y'], obs_data['x'], obs_data['y'])
@@ -433,37 +434,32 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         obs_t_dist = np.abs(obs['t'] - obs_data['t'])
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
                          obs_h_dist, obs_v_dist, obs_t_dist,
-                         obs['hroi'], obs['vroi'], obs['troi'], c.localize_type, c.regress_type)
-
+                         obs['hroi'], obs['vroi'], obs['troi'],
+                         c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
     print(' done.\n')
-
     unpack_local_state_data(c, par_id, state_prior, state_data)
     unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
-
     return state_prior, lobs_prior
 
 
 def global_obs_list(c):
-    ##count number of obs for each obs_rec_id
-    nobs = np.array([np.sum([len(ind) for ind in c.obs_inds[r].values()])
-                     for r in c.obs_info['records'].keys()])
-
     ##form the full list of obs_ids
     obs_list = []
     for obs_rec_id in c.obs_info['records'].keys():
-        for obs_id in range(nobs[obs_rec_id]):
-            obs_rec = c.obs_info['records'][obs_rec_id]
-            v_list = [0, 1] if obs_rec['is_vector'] else [None]
-            for v in v_list:
-                obs_list.append((obs_rec_id, obs_id, v))
+        obs_rec = c.obs_info['records'][obs_rec_id]
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+
+        for pid_owner_obs, obs_ids in c.obs_inds[obs_rec_id].items():
+            for obs_id in obs_ids:
+                for v in v_list:
+                    obs_list.append((obs_rec_id, obs_id, v, pid_owner_obs))
 
     ##randomize the order of obs (this is optional)
     np.random.shuffle(obs_list)
-
     return obs_list
 
 
-@njit
+@njit(cache=True)
 def obs_increment(obs_prior, obs, obs_err, filter_type):
     """
     Compute analysis increment in observation space
@@ -510,8 +506,14 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
         ##assemble the increments
         obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
+    ##rank histogram filter (Anderson 2010)
     elif filter_type == 'RHF':
-        pass
+        ##compute likelihood
+
+        ##index sort
+        sort_ind = np.argsort(obs_prior)
+
+        ##
 
     else:
         print('Error: unknown filter type: '+filter_type)
@@ -519,17 +521,19 @@ def obs_increment(obs_prior, obs, obs_err, filter_type):
     return obs_incr
 
 
-@njit
+@njit(cache=True)
 def update_local_state(state_data, obs_prior, obs_incr,
                        h_dist, v_dist, t_dist,
-                       hroi, vroi, troi, localize_type, regress_type):
+                       hroi, vroi, troi,
+                       localize_htype, localize_vtype, localize_ttype,
+                       regress_type):
 
     nens, nfld, nloc = state_data.shape
 
     ##localization factor
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
-    v_lfactor = local_factor(v_dist, vroi, localize_type)
-    t_lfactor = local_factor(t_dist, troi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor(t_dist, troi, localize_ttype)
 
     nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
@@ -541,17 +545,19 @@ def update_local_state(state_data, obs_prior, obs_incr,
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub], regress_type)
 
 
-@njit
+@njit(cache=True)
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      h_dist, v_dist, t_dist,
-                     hroi, vroi, troi, localize_type, regress_type):
+                     hroi, vroi, troi,
+                     localize_htype, localize_vtype, localize_ttype,
+                     regress_type):
 
     nens, nlobs = obs_data.shape
 
     ##distance between local obs_data and the obs being assimilated
-    h_lfactor = local_factor(h_dist, hroi, localize_type)
-    v_lfactor = local_factor(v_dist, vroi, localize_type)
-    t_lfactor = local_factor(t_dist, troi, localize_type)
+    h_lfactor = local_factor(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor(t_dist, troi, localize_ttype)
 
     lfactor = h_lfactor * v_lfactor * t_lfactor
 
@@ -561,7 +567,7 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind], regress_type)
 
 
-@njit
+@njit(cache=True)
 def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     """
     Update the ensemble variable using the obs increments

@@ -56,6 +56,7 @@ def parse_obs_info(c):
         for time in c.time + np.array(c.obs_time_steps)*dt1h:
             obs_rec = {'name': vname,
                        'dataset_src': vrec['dataset_src'],
+                       'dataset_dir': vrec['dataset_dir'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
                        'obs_window_min': vrec['obs_window_min'],
@@ -393,7 +394,7 @@ def state_to_obs(c, **kwargs):
     ## if dataset module provides an obs_operator, use it to compute obs
     if hasattr(obs_src, 'obs_operator') and kwargs['model_src'] in obs_src.obs_operator and kwargs['name'] in obs_src.obs_operator[kwargs['model_src']]:
         if synthetic:
-            path = os.path.join(c.work_dir,'truth',t2s(time),kwargs['model_src'])
+            path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
         else:
             path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
 
@@ -427,7 +428,7 @@ def state_to_obs(c, **kwargs):
 
             else:  ##option 1.3: get the field from model.read_var
                 if synthetic:
-                    path = os.path.join(c.work_dir,'truth',t2s(time),kwargs['model_src'])
+                    path = os.path.join(c.model_def[kwargs['model_src']]['truth_dir'])
                 else:
                     path = os.path.join(c.work_dir,'cycle',t2s(time),kwargs['model_src'])
 
@@ -519,6 +520,7 @@ def prepare_obs(c):
         'x', 'y', 'z', 't' the coordinates for each measurement
         'err_std' the uncertainties for each measurement
         there can be other optional keys provided by read_obs() but we don't use them
+    - c.obs_info with updated nobs
     """
     if c.debug:
         by_rank(c.comm,0)(print_with_cache)('read obs sequence from datasets\n')
@@ -533,14 +535,14 @@ def prepare_obs(c):
         assert obs_rec['name'] in src.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
         ##directory storing the dataset files for this variable
-        path = os.path.join(c.data_dir, obs_rec['dataset_src'])
+        path = obs_rec['dataset_dir']
 
         ##read ens-mean z coords from z_file for this obs network
         z = read_mean_z_coords(c, obs_rec['time'])
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            truth_path = os.path.join(c.work_dir, 'truth', t2s(obs_rec['time']), obs_rec['model_src'])
+            truth_path = os.path.join(c.model_def[obs_rec['model_src']]['truth_dir'])
 
             seq = src.random_network(path, c.grid, c.mask, z, truth_path, **obs_rec)
 
@@ -561,7 +563,17 @@ def prepare_obs(c):
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
-    return obs_seq
+    ##additional output for debugging
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        if c.pid == 0:
+            np.save(analysis_dir+'/obs_inds.npy', c.obs_inds)
+            np.save(analysis_dir+'/partitions.npy', c.partitions)
+            np.save(analysis_dir+'/par_list.npy', c.par_list)
+        if c.pid_mem == 0:
+            np.save(analysis_dir+'/obs_seq.{}.npy'.format(c.pid_rec), obs_seq)
+
+    return c.obs_info, obs_seq
 
 
 def prepare_obs_from_state(c, obs_seq, fields, z_fields):
@@ -606,6 +618,11 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
             obs_prior_seq[mem_id, obs_rec_id] = seq
     if c.debug:
         print(' done.\n')
+
+    ##additional output for debugging
+    if c.debug:
+        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
+        np.save(analysis_dir+'/obs_prior_seq.{}.{}.npy'.format(c.pid_mem, c.pid_rec), obs_prior_seq)
 
     return obs_prior_seq
 

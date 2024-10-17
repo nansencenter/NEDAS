@@ -92,22 +92,25 @@ class Model(object):
         pass
 
 
+    def genrate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+        pass
+
+
     def run(self, task_id=0, task_nproc=1, **kwargs):
 
         self.run_status = 'running'
-        host = kwargs['host']
+
         nedas_dir = kwargs['nedas_dir']
-        code_dir = kwargs['code_dir']
-        data_dir = kwargs['data_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
+        model_code_dir = kwargs['model_code_dir']
+        model_data_dir = kwargs['model_data_dir']
 
         fname = self.filename(**kwargs)
         run_dir = os.path.dirname(fname)
         print('running wrf model in '+run_dir, flush=True)
 
-        env_dir = os.path.join(nedas_dir, 'config', 'env', host)
-        wrf_src = os.path.join(env_dir, 'wrf.src')
-        wrf_exe = os.path.join(code_dir, 'wrf', 'WRF', 'main', 'wrf.exe')
-        job_submitter = os.path.join(env_dir, 'job_submit.sh')+f" {task_nproc} {task_id*task_nproc} "
+        wrf_src = os.path.join(model_code_dir, 'setup.src')
+        wrf_exe = os.path.join(model_code_dir, 'main', 'wrf.exe')
 
         log_file = 'rsl.error.0000'
 
@@ -115,9 +118,9 @@ class Model(object):
 
         ##build the run command
         shell_cmd = "source "+wrf_src+"; "   ##enter wrf env
-        shell_cmd += job_submitter+" ./wrf.exe"
+        shell_cmd += job_submit_cmd+f" {task_nproc} {task_id*task_nproc} "+wrf_exe+" >& run.log"
 
-        self.run_process = subprocess.Popen(shell_cmd, shell=True, preexec_fn=os.setsid)
+        self.run_process = subprocess.Popen(shell_cmd, shell=True)
         self.run_process.wait()
 
         returncode = self.run_process.returncode
@@ -125,12 +128,7 @@ class Model(object):
             ##kill signal received, exit the run
             return
 
-
         # "SUCCESS COMPLETE" in log_file
 
         ##wrfrst at nexttime collect to bin file
-
-
-    def kill(self):
-        os.killpg(os.getpgid(self.run_process.pid), signal.SIGKILL)
 

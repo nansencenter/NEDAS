@@ -2,7 +2,6 @@ import numpy as np
 from perturb.random_field import random_field_powerlaw
 from utils.fft_lib import fft2, ifft2, get_wn
 
-
 def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
     """
     Initialize the 2d vortex model

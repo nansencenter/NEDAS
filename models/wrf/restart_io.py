@@ -76,7 +76,11 @@ def read_chunks(filename, chk_list, var_list):
 
 
 def write_chunks(filename, chk_list, var_list, chunks):
-    pass
+    for chk_id in chk_list:
+        with Dataset(filename+f'_{chk_id:04d}', 'r+') as f:
+            for vname in var_list:
+                _,_, _,_, _,_, chk = chunks[vname][chk_id]
+                f[vname][0, ...] = chk
 
 
 def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunks):
@@ -122,11 +126,30 @@ def transpose_fields_to_chunks():
     pass
 
 
+def read_fields_bin(comm, filename, var_list, var_dims):
+
+    return fields
+
+
 def write_fields_bin(comm, filename, var_list, var_dims, fields):
-    pass
+    pid = comm.Get_rank()
+    if pid == 0:
+        with open(filename, 'w') as f:
+            pass
+    comm.Barrier()
+    for vname in var_list:
+        with open(filename, 'r+b') as f:
+            f.seek()
+            f.write()
+
+
+def read_fields_nc(comm, filename, var_list, var_dims):
+
+    return fields
 
 
 def write_fields_nc(comm, filename, var_list, var_dims, fields):
+    """output a joined nc file for wrfrst, one variable per file"""
     for vname in var_list:
         with Dataset(filename+'_'+vname+'.nc', 'w') as f:
             ni,nj,nk, dim_i,dim_j,dim_k = var_dims[vname]

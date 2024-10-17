@@ -1,9 +1,24 @@
 import sys
 import os
+import re
 import inspect
 import argparse
 import yaml
 from distutils.util import strtobool
+
+def convert_scientific_notation(data):
+    if isinstance(data, dict):
+        return {key: convert_scientific_notation(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_scientific_notation(element) for element in data]
+    elif isinstance(data, str):
+        # Match scientific notation pattern and convert to float
+        if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
+            return float(data)
+        else:
+            return data
+    else:
+        return data
 
 def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     """
@@ -72,6 +87,8 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
         ##update value if they are specified in kwargs
         if key in kwargs:
             value = kwargs[key]
+
+        value = convert_scientific_notation(value)
 
         ##variable type for this argument
         if isinstance(value, bool):

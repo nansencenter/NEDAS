@@ -1,11 +1,5 @@
-host: 'betzy'   ##name of the host computer
-nedas_dir: '/cluster/home/yingyue/code/NEDAS' ##where NEDAS code is placed
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
-
-home_dir: '/cluster/home/yingyue'                ##path to home directory
-code_dir: '/cluster/home/yingyue/code'           ##where model codes are stored
-data_dir: '/cluster/work/users/yingyue/data'     ##where dataset are stored
-scratch_dir: '/cluster/work/users/yingyue'       ##path to scratch disk space
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
 nproc: 1        ##total number of processors
 nproc_mem: 1    ##number of processor groups
@@ -16,22 +10,14 @@ run_assim: True   ##if true, run the assimilation steps
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '202302200000'         ##end time of the experiment
-time_assim_start: '202301011200' ##start time of the first analysis cycle
-time_assim_end: '202302190000'   ##end time of the last analysis cycle
+time_end: '202302180000'         ##end time of the experiment
+time_assim_start: '202301010000' ##start time of the first analysis cycle
+time_assim_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
-time: '202301011200'
+time: '202301010000'
 prev_time: '202301010000'
-next_time: '202301020000'
-
-###define analysis window relative to `time`, in hours
-###Note: if obs_window_max-obs_window_min>cycle_period, there will be overlaps in obs
-### for each cycle, so watch out for overfitting
-##obs_window_min=-24
-##obs_window_max=0
-##obs_nt="1"  ##number of time steps in obs window, defined for each scale (nscale entries)
-##t_scale="6"  ##characteristic time scale, hours, averaging window for the state valid at t
+next_time: '202301011200'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -48,77 +34,52 @@ grid_def:
   dx: 1.0
 
 state_def:
-- name: 'velocity'
+- name: 'streamfunc'
   model_src: 'qg'
   var_type: 'field'
   err_type: 'normal'
 
 obs_def:
-- name: 'velocity'
+- name: 'streamfunc'
   dataset_src: 'qg'
+  dataset_dir: ''
   model_src: 'qg'
+  nobs: 3000
   obs_window_min: -6
   obs_window_max: 0
   err:
     type: 'normal'
-    std: 0.5
+    std: 0.2
   hroi: 100
-  vroi: 100000000
+  vroi: 5
   troi: 24
   impact_on_state:
+    -streamfunc: 1.0
 
 use_synthetic_obs: True
-
-###ensemble perturbation settings
-#perturb_variables="seaice_drift ocean_surf_height"
-##perturb_param_dir=$SCRATCH/perturb_param  ##where to find vars,hradius,tradius params
-
-###physical parameters, ###set default values in namelist_<model>.sh first, if experiments frequently change a parameter, set it here
 
 model_def:
   qg:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
+    model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
+    model_data_dir: ''
     nproc_per_mem: 1    ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
+    walltime: 1000     ##walltime in seconds
     ens_run_type: scheduler
+    ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
+    truth_dir: '/cluster/work/users/yingyue/qg/truth'
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
 regress_type: 'linear'
-#run_align_space=false  ##if true, run alignment after filter update in space/time
-#run_align_time=false
 
-inflate_type: prior
-inflate_coef: 1.0
-adaptive_inflation: True
+inflation:
+  type: 'posterior,relax'
+  adaptive: True
+  coef: 1.0
 
-###number of scale components
-###if > 1, use multiscale approach:
-###  1. coarse-graining the analysis 4D grid [t, z, y, x] to save computational cost
-###    since larger-scale components require smaller-dimensional grid to describe
-###  2. separately defined smoothing length scales (H,Z,T) and localization, inflation
-##`scale` indexes the nscale components
-#nscale=1
-
-inflate_type: ['relax']
-inflate_coef: 1.0
-relax_coef: 0.8
-adaptive_inflation: False
-adaptive_relaxation: True
-
-###localization setting
-localize_type: GC  ##GC, boxcar, adaptive
-
-###Note: radius of influence (roi), distance where localization factor goes to zero
-### roi=inf means no localization will be applied
-### each observation variable has an individual set of roi, defined in obs_def
-### for multiscale approach, the ROI is multiplied to a scaling factor which is
-### defined here for each scale
-#hroi_factor="1"
-#vroi_factor="1"
-#troi_factor="1"
-
-###inflation setting
-#inflate_type=post_fixed   ##prior_fixed, post_fixed, prior_adaptive, post_adaptive
-#inflate_factor="1"  ##inflation factor for each scale
+localization:
+  htype: 'GC'
+  vtype: 'GC'
+  ttype: 'GC'
 
