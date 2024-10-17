@@ -14,6 +14,7 @@ from . import restart
 from . import forcing
 
 class Model(object):
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
@@ -44,6 +45,7 @@ class Model(object):
         self.run_process = None
         self.run_status = 'pending'
         self.grid=''
+
 
 
     def filename(self, **kwargs):
