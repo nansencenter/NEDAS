@@ -36,7 +36,6 @@ class Model(object):
         self.run_process = None
         self.run_status = 'pending'
 
-
     def filename(self, **kwargs):
         """parse kwargs and find matching filename"""
         path = kwargs.get('path', '.')
@@ -51,18 +50,11 @@ class Model(object):
 
         return os.path.join(path, tstr+mstr+'.nc')
 
-
     def read_grid(self, **kwargs):
         return self.grid
 
-
-    def write_grid(self, grid, **kwargs):
-        pass
-
-
     def read_mask(self, **kwargs):
         return self.mask
-
 
     def read_var(self, **kwargs):
         ##check name in kwargs and read the variables from file
@@ -79,7 +71,6 @@ class Model(object):
             var = nc_read_var(fname, self.variables[name]['name'])[0, ...]
         return var
 
-
     def write_var(self, var, **kwargs):
         ##TODO: nc_write_var doesn't support parallel=True
         ##      can only work with nproc=1 now
@@ -95,20 +86,25 @@ class Model(object):
         else:
             nc_write_var(fname, {'t':None, 'y':self.ny, 'x':self.nx}, var, self.variables[name]['name'], var, recno={'t':0})
 
-
     def z_coords(self, **kwargs):
         return np.zeros(self.grid.x.shape)
 
-
-    def generate_initial_condition(self, task_id=0, task_nproc=1, **kwargs):
+    def generate_initial_condition(self):
         state = initial_condition(self.grid, self.Vmax, self.Rmw, self.Vbg, self.Vslope, self.loc_sprd)
-        path = kwargs.get('path', '.')
+        return state
+
+    def preprocess(self, task_id=0, **kwargs):
+        restart_dir = kwargs['restart_dir']
+        path = kwargs['path']
         os.system("mkdir -p "+path)
-        self.write_var(state, **kwargs)
+        file1 = self.filename(**{**kwargs, 'path':restart_dir})
+        file2 = self.filename(**kwargs)
+        os.system(f"cp -fL {file1} {file2}")
 
+    def postprocess(self, task_id=0, **kwargs):
+        pass
 
-    def run(self, task_id=0, task_nproc=1, **kwargs):
-        assert task_nproc==1, f"vort2d model only support serial runs (got task_nproc={task_nproc})"
+    def run(self, task_id=0, **kwargs):
         self.run_status = 'running'
         state = self.read_var(**kwargs)
 
@@ -124,12 +120,4 @@ class Model(object):
         kwargs_out = {**kwargs, 'time':next_time}
         output_file = self.filename(**kwargs_out)
         self.write_var(next_state, **kwargs_out)
-
-        ##make a copy of output forecast file to the output_dir
-        if 'output_dir' in kwargs:
-            output_dir = kwargs['output_dir']
-            if output_dir != path:
-                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
-                output_file_cp = self.filename(**kwargs_out_cp)
-                subprocess.run("mkdir -p "+output_dir+"; cp "+output_file+" "+output_file_cp, shell=True)
 

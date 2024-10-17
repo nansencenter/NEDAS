@@ -1,5 +1,5 @@
 import numpy as np
-from perturb.random_field import random_field_powerlaw
+from utils.random_perturb import random_field_powerlaw
 from utils.fft_lib import fft2, ifft2, get_wn
 
 def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
@@ -42,7 +42,6 @@ def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
 
     return vortex + bkg_flow
 
-
 def rankine_vortex(grid, Vmax, Rmw, center_x, center_y):
     """
     Generate a Rankine vortex velocity field
@@ -82,7 +81,6 @@ def rankine_vortex(grid, Vmax, Rmw, center_x, center_y):
 
     return np.array([u, v])
 
-
 def random_flow(grid, amp, power_law):
     """
     Generate a random velocity field as the background flow
@@ -118,7 +116,6 @@ def random_flow(grid, amp, power_law):
     v = amp * (v - np.mean(v)) / np.std(v)
 
     return np.array([u, v])
-
 
 def advance_time(fld, dx, t_intv, dt, gen, diss):
     """
@@ -182,7 +179,6 @@ def advance_time(fld, dx, t_intv, dt, gen, diss):
 
     return np.array([u, v])
 
-
 def get_scaled_wn(x, dx):
     """scaled wavenumber k for pseudospectral method"""
     n = x.shape[0]
@@ -190,7 +186,6 @@ def get_scaled_wn(x, dx):
     ki = (2.*np.pi) * wni / (n*dx)
     kj = (2.*np.pi) * wnj / (n*dx)
     return ki, kj
-
 
 def forcing(u, v, zeta, dx, gen, diss):
     """forcing terms on RHS of prognostic equations"""
@@ -212,6 +207,4 @@ def forcing(u, v, zeta, dx, gen, diss):
     ##dissipation term:
     f -= diss*(ki**2+kj**2)*zeta
     return f
-
-
 
