@@ -74,7 +74,7 @@ class QGModel(object):
         pass
 
     def read_mask(self, **kwargs):
-        return self.mask
+        pass
 
     def read_var(self, **kwargs):
         assert 'name' in kwargs, 'missing variable name in kwargs'

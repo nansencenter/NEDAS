@@ -20,7 +20,7 @@ def preprocess_model_state(c, model_name):
     scheduler = Scheduler(c.nproc // model.nproc_per_util, debug=c.debug)
 
     for mem_id in range(c.nens):
-        job_name = model_name+f'_mem{mem_id+1}'
+        job_name = f'preproc_{model_name}_mem{mem_id+1}'
         job_opt = {
             'job_submit_cmd': c.job_submit_cmd,
             'task_nproc': model.nproc_per_util,

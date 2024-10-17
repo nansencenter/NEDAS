@@ -2,13 +2,12 @@ import numpy as np
 import os
 import glob
 import inspect
-import signal
-import subprocess
 from datetime import datetime
 
 from config import parse_config
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.conversion import t2s, s2t, dt1h, units_convert
+from utils.shell_utils import run_command
 from utils.progress import watch_files
 from grid import Grid
 
@@ -274,7 +273,7 @@ class Model(object):
         else:
             mstr = ''
         run_dir = os.path.join(path, mstr)
-        os.system(f"mkdir -p {run_dir}")
+        run_command(f"mkdir -p {run_dir}")
 
         ##prepare restart files
         ##restart_dir kwargs is specified at runtime, if at initial cycle, it is from 'ens_init_dir'
@@ -289,7 +288,7 @@ class Model(object):
         mesh_dat = mesh_bin.replace('.bin', '.dat')
         for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
             shell_cmd += f"cp -fL {file} .; "
-        os.system(shell_cmd)
+        run_command(shell_cmd)
 
         ##prepare other input data (bathymetry, forcing, etc.) for the model run
         shell_cmd = f"cd {run_dir}; "
@@ -304,7 +303,7 @@ class Model(object):
         while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
             t += 24 * dt1h  ##forcing files are stored daily
-        os.system(shell_cmd)
+        run_command(shell_cmd)
 
     def postprocess(self, task_id=0, **kwargs):
         ##place holder for now
@@ -345,7 +344,7 @@ class Model(object):
         offset = task_id*self.nproc_per_run
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
-        os.system("touch "+log_file)
+        run_command("touch "+log_file)
 
         shell_cmd = f"source {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
@@ -364,7 +363,7 @@ class Model(object):
             ##this creates nextsim.cfg.in in run_dir/config
             ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
-            os.system("mkdir -p "+config_dir)
+            run_command("mkdir -p "+config_dir)
             namelist(self, time, forecast_period, config_dir)
 
             ##run the model and wait for results

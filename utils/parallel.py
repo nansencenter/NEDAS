@@ -1,12 +1,9 @@
 import numpy as np
 import os
-import sys
-import importlib.util
 from functools import wraps
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import threading
-import subprocess
 from .progress import print_with_cache, progress_bar
 
 class Comm(object):
@@ -175,7 +172,7 @@ class Scheduler(object):
         self.walltime = walltime
         self.debug = debug
         self.jobs = {}
-        self.executor = ThreadPoolExecutor(max_workers=nworker)
+        self.executor = ProcessPoolExecutor(max_workers=nworker)
         self.queue_open = True
         self.running_jobs = []
         self.pending_jobs = []
@@ -217,7 +214,7 @@ class Scheduler(object):
                 info['future'] = self.executor.submit(info['job'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
                 if self.debug:
-                    print(f"Scheduler: job {name} started by worker {worker_id}")
+                    print(f"Scheduler: Job {name} started by worker {worker_id}")
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -226,7 +223,7 @@ class Scheduler(object):
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    print(f'job {name} raised exception: {e}')
+                    print(f'Scheduler: Job {name} raised exception: {e}')
                     self.error_jobs.append(name)
                     ###not exiting...
                     raise e
@@ -235,7 +232,7 @@ class Scheduler(object):
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
                 if self.debug:
-                    print(f"Scheduler: job {name} completed")
+                    print(f"Scheduler: Job {name} completed")
 
             ##kill jobs that exceed walltime
             ##TODO: the kill signal isn't handled
@@ -268,31 +265,4 @@ class Scheduler(object):
 
     def shutdown(self):
         self.executor.shutdown(wait=True)
-
-def run_script(script_path, c):
-    """
-    Run a script at script_path, in a subprocess
-    If there is MPI environment run the script in parallel, if not run in serial
-    Pass configuration object c through runtime argument -c config.yml
-    """
-    ##dump config c content in a file
-    config_file = os.path.join(c.work_dir, 'config.yml')
-    c.dump_yaml(config_file)
-
-    if importlib.util.find_spec("mpi4py") is not None:
-        shell_cmd = f"{c.job_submit_cmd} {c.nproc} 0 python -m mpi4py {script_path} -c {config_file}"
-    else:
-        print("Warning: mpi4py not found in your environment, will try to run with nproc=1.")
-        shell_cmd = f"python {script_path} -c {config_file} --nproc=1"
-
-    if c.debug:
-        print(shell_cmd)
-
-    p = subprocess.Popen(shell_cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
-    p.wait()
-
-    ##handle error
-    if p.returncode != 0:
-        print(f"{script_path} raised error: {p.stderr}")
-        exit()
 

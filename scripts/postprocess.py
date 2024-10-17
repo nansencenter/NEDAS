@@ -18,7 +18,7 @@ def postprocess_model_state(c, model_name):
     os.system("mkdir -p "+path)
 
     for mem_id in range(c.nens):
-        job_name = model_name+f'_mem{mem_id+1}'
+        job_name = f'postproc_{model_name}_mem{mem_id+1}'
         job_opt = {
                     'path': path,
                     'member': mem_id,
