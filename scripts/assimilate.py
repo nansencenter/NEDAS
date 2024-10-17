@@ -13,7 +13,9 @@ from assim_tools.analysis import analysis
 from assim_tools.inflation import inflation
 from assim_tools.update import update_restart
 
-def main_assim_program(c):
+assimilate_script_path = os.path.abspath(__file__)
+
+def assimilate(c):
     assert c.nproc==c.comm.Get_size(), f"Error: nproc {c.nproc} not equal to mpi size {c.comm.Get_size()}"
 
     c.analysis_dir = analysis_dir(c, c.time)
@@ -41,11 +43,11 @@ def main_assim_program(c):
 
     inflation(c, 'prior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq)
 
-    state_prior, z_state, lobs, lobs_prior = transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
+    state_prior, z_state, lobs, lobs_prior = timer(c)(transpose_forward)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
 
     state_post, lobs_post = timer(c)(analysis)(c, state_prior, z_state, lobs, lobs_prior)
 
-    fields_post, obs_post_seq = transpose_backward(c, state_post, lobs_post)
+    fields_post, obs_post_seq = timer(c)(transpose_backward)(c, state_post, lobs_post)
 
     timer(c)(output_ens_mean)(c, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'))
 
@@ -55,30 +57,10 @@ def main_assim_program(c):
 
     timer(c)(update_restart)(c, fields_prior, fields_post)
 
-def assimilate(c):
-    """called by other script to run this assimilate.py in a subprocess with mpi, using all nproc cores"""
-
-    config_file = os.path.join(c.work_dir, 'config.yml')
-    c.dump_yaml(config_file)
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    assimilate_code = os.path.join(script_dir, 'assimilate.py')
-
-    shell_cmd = c.job_submit_cmd+f" {c.nproc} {0}"
-    shell_cmd += " python -m mpi4py "+assimilate_code
-    shell_cmd += " --config_file "+config_file
-
-    p = subprocess.Popen(shell_cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
-
-    p.wait()
-    if p.returncode != 0:
-        print(f"{p.stderr}")
-        exit()
-
 if __name__ == '__main__':
     from config import Config
     from utils.progress import timer
     c = Config(parse_args=True)
 
-    main_assim_program(c)
+    assimilate(c)
 

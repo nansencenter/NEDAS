@@ -4,14 +4,15 @@
 import os
 from config import Config
 from utils.progress import timer
+from utils.parallel import run_script
 from utils.conversion import t2s, s2t, dt1h
 from utils.dir_def import cycle_dir
 from scripts.preprocess import preprocess
 from scripts.postprocess import postprocess
-from scripts.perturb import perturb
-from scripts.assimilate import assimilate
+from scripts.perturb import perturb_script_path
+from scripts.assimilate import assimilate_script_path
 from scripts.ensemble_forecast import ensemble_forecast
-from scripts.diag import diag
+from scripts.diag import diag_script_path
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -26,24 +27,24 @@ while c.time < c.time_end:
 
     os.system("mkdir -p "+cycle_dir(c, c.time))
 
-    ##preparation of initial ensemble (linking files, perturbing icbc)
     preprocess(c)
-    perturb(c)
+
+    run_script(perturb_script_path, c)
 
     ##assimilation step
     if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         for c.scale_id in range(c.nscale):
-            assimilate(c)
+            run_script(assimilate_script_path, c)
 
-    postprocess(c)
+        postprocess(c)
 
     ##forecast step
     ensemble_forecast(c)
 
     ##compute diagnostics
     if c.run_diag:
-        diag(c)
+        run_script(diag_script_path, c)
 
     ##advance to next cycle
     c.prev_time = c.time
