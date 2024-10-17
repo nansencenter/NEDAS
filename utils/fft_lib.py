@@ -46,8 +46,12 @@ try:
 
 except ImportError:
     print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.")
-    ##or, if fftw is not available, comment out the above and use np.fft instead:
-    from numpy.fft import fft2, ifft2
+
+    def fft2(x):
+        return np.fft.fft2(x)
+
+    def ifft2(x):
+        return np.real(np.fft.ifft2(x))
 
 def fftwn(n):
     """
