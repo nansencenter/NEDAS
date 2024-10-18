@@ -1,20 +1,15 @@
+import numpy as np
+import os
+import subprocess
+import inspect
+import signal
 from datetime import datetime
 from functools import lru_cache
-import inspect
-import os
-import shutil
-import subprocess
-
-import numpy as np
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
 from config import parse_config
 
-from . import restart
-from . import forcing
-
 class Model(object):
-
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
@@ -47,7 +42,6 @@ class Model(object):
         self.grid=''
 
 
-
     def filename(self, **kwargs):
         if 'path' in kwargs:
             path = kwargs['path']
@@ -57,7 +51,7 @@ class Model(object):
             assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
             tstr = kwargs['time'].strftime('%Y_%j_%H')
         else:
-            tstr = '????_???_??'
+            tstr = '????????'
         if 'member' in kwargs and kwargs['member'] is not None:
             assert kwargs['member'] >= 0, 'member index shall be >= 0'
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
@@ -65,7 +59,7 @@ class Model(object):
         else:
             mstr = ''
             mdir = ''
-        return os.path.join(path, mdir, 'TP4restart'+tstr+mstr+'.a')
+        return os.path.join(path, mdir, 'init_25km_NH_'+tstr+mstr+'.nc')
 
 
     def read_grid(self, **kwargs):
@@ -258,58 +252,92 @@ class Model(object):
             print ('We do no perturbations as perturb section is not specified in the model configuration.')
 
 
-    def run(self, task_id=0, task_nproc=256, **kwargs):
-        """run the model for a single ensemble member.
-        """
-        # get the current ensemble member id
-        ens_mem_id = kwargs['member']
-        # ensemble member directory for the current member
-        ens_init_dir = os.path.join(kwargs['ens_init_dir'],
-                                    f'ens_{str(ens_mem_id).zfill(2)}')
-        # create directory for the initial ensemble
-        os.makedirs(ens_init_dir, exist_ok=True)
-        time = kwargs['time']
-        forecast_period = kwargs['forecast_period']
-        next_time = time + forecast_period * dt1h
-        prev_time = time - forecast_period * dt1h
-        # preparing the forcing perturbation
-        # 1. get the forcing filenames
-        file_options_forcing = kwargs['files']['forcing']
-        fname_forcing:dict[str, str] = dict()
-        for forcing_name in file_options_forcing.keys():
-            fname_forcing[forcing_name] = forcing.get_forcing_filename(file_options_forcing[forcing_name],
-                                                         ens_mem_id, time)
-        # add perturbations
-        try:
-            perturb_options = kwargs['perturb']
-            # if we have a perturbation for the forcing
-            try:
-                forcing_options = perturb_options['forcing']
-                file_options:dict = dict()
-                for forcing_name in forcing_options.keys():
-                    # we ignore entries that are not in the files options
-                    # e.g., path
-                    if forcing_name not in fname_forcing: continue
-                    # copy forcing files to the ensemble member directory
-                    fname = os.path.join(ens_init_dir,
-                                         os.path.basename(fname_forcing[forcing_name])
-                                         )
-                    if not os.path.exists(fname):
-                        shutil.copy(fname_forcing[forcing_name], ens_init_dir)
-                    # the forcing file options for the perturbation
-                    file_options[forcing_name] = {'fname': fname,
-                                                   **file_options_forcing[forcing_name]}
-                forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, prev_time)
-            except KeyError:
-                # we we do not perturb the forcing file
-                # simply link the forcing files
-                for forcing_name in forcing_options.keys():
-                    os.system(f'ln -s {fname_forcing[forcing_name]} {ens_init_dir}')
-        except KeyError:
-            print ('We do no perturbations as perturb section is not specified in the model configuration.')
+    def run(self, task_id=0, task_nproc=16, **kwargs):
+        self.run_status = 'running'
 
-        # run the model, i.e., calling the run.sh script
+        job_submit_cmd = kwargs['job_submit_cmd']
 
+        path = kwargs['path']
+        input_file = self.filename(**kwargs)
+        run_dir = os.path.dirname(input_file)
+        os.system("mkdir -p "+run_dir)
+        os.chdir(run_dir)
+        os.system('cp -f ' +  job_submit_cmd + ' .')
+        log_file = os.path.join(run_dir, "run.log")
+        print('hostname: ', os.system('/bin/hostname'))
+        os.system('touch '+log_file)
+        os.system("sh run.sh " + run_dir)
 
-if __name__ == '__main__':
-    pass
+#        time = kwargs['time']
+#        forecast_period = kwargs['forecast_period']
+#        next_time = time + forecast_period * dt1h
+#
+#        kwargs_out = {**kwargs, 'time':next_time}
+#        output_file = self.filename(**kwargs_out)
+#
+##        ##create namelist config files
+##        namelist(self, time, forecast_period, run_dir)
+#
+#        ##link files
+#        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{task_nproc:04d}')
+#        os.system("cp "+partit_file+" patch.input")
+#
+#        for ext in ['.a', '.b']:
+#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'regional.grid'+ext)+" regional.grid"+ext)
+#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}'+ext)+" regional.depth"+ext)
+#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'tbaric'+ext)+" tbaric"+ext)
+#        os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
+#
+#        ##TODO: switches for other forcing options
+#        if self.forcing_frc == 'era5':
+#            forcing_path = self.era5_path
+#        os.system("ln -fs "+forcing_path+" .")
+#        os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
+#        for ext in ['.a', '.b']:
+#            if self.priver == 1:
+#                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)+" forcing.rivers"+ext)
+#            if self.jerlv0 == 0:
+#                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)+" forcing.kpar"+ext)
+#            if self.relax == 1:
+#                for comp in ['saln', 'temp', 'intf', 'rmu']:
+#                    os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'relax_'+comp[:3]+ext)+" relax."+comp+ext)
+#            os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'thkdf4'+ext)+" thkdf4"+ext)
+#        os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'clim_tran.txt')+" .")
+#        # if self.gpflag: TODO
+#        # if self.nestoflag:
+#        # if self.nestiflag:
+#        # if self.tideflag:
+#
+#        model_src = os.path.join(self.basedir, 'setup.src')
+#        model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
+#        offset = task_id*task_nproc
+#
+#        ##build the shell command line
+#        shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
+#        shell_cmd += "cd "+run_dir+"; "          ##enter run directory
+#        shell_cmd += job_submit_cmd+f" {task_nproc} {offset} "
+#        shell_cmd += model_exe+f" {kwargs['member']+1} "
+#        shell_cmd += ">& run.log"
+#
+#        for tr in range(2):  ##number of tries
+#            with open(log_file, 'rt') as f:
+#                if '(normal)' in f.read():
+#                    break
+#            self.run_process = subprocess.Popen(shell_cmd, shell=True)
+#            self.run_process.wait()
+#
+#        with open(log_file, 'rt') as f:
+#            if '(normal)' not in f.read():
+#                raise RuntimeError('errors in '+log_file)
+#        if not os.path.exists(output_file):
+#            raise RuntimeError('output file not found: '+output_file)
+#
+#        if 'output_dir' in kwargs:
+#            output_dir = kwargs['output_dir']
+#            if output_dir != path:
+#                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
+#                output_file_cp = self.filename(**kwargs_out_cp)
+#                os.system("mkdir -p "+os.path.dirname(output_file_cp))
+#                os.system("cp "+output_file+" "+output_file_cp)
+#                os.system("cp "+output_file.replace('.a', '.b')+" "+output_file_cp.replace('.a', '.b'))
+
