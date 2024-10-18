@@ -19,7 +19,7 @@ offset=$2
 shift 2
 exe_command=$@
 
-if [ -z '$SLURM_TASKS_PER_NODE' ]; then
+if [ -z "$SLURM_NTASKS" ]; then
     ##running job from login node (slurm environment not found)
     ##this is not suitable for large amount of processors
     if [ "$nproc" -gt 16 ] || [ "$offset" -gt 16 ]; then
