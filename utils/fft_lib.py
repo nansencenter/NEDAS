@@ -45,7 +45,7 @@ try:
         return f
 
 except ImportError:
-    print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.")
+    print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
 
     def fft2(x):
         return np.fft.fft2(x)

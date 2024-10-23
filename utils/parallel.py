@@ -19,7 +19,7 @@ class Comm(object):
                 from mpi4py import MPI
                 self._comm = MPI.COMM_WORLD
             except ImportError:
-                print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.")
+                print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
                 self._comm = DummyComm()
 
         else:
@@ -193,7 +193,7 @@ class Scheduler(object):
         self.pending_jobs.append(name)
         self.njob += 1
         if self.debug:
-            print(f"Scheduler: Job {name} added: '{job.__name__, args, kwargs}'")
+            print(f"Scheduler: Job {name} added: '{job.__name__, args, kwargs}'", flush=True)
 
     def monitor_job_queue(self):
         """
@@ -214,7 +214,7 @@ class Scheduler(object):
                 info['future'] = self.executor.submit(info['job'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
                 if self.debug:
-                    print(f"Scheduler: Job {name} started by worker {worker_id}")
+                    print(f"Scheduler: Job {name} started by worker {worker_id}", flush=True)
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -223,7 +223,7 @@ class Scheduler(object):
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    print(f'Scheduler: Job {name} raised exception: {e}')
+                    print(f'Scheduler: Job {name} raised exception: {e}', flush=True)
                     self.error_jobs.append(name)
                     ###not exiting...
                     raise e
@@ -232,7 +232,7 @@ class Scheduler(object):
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
                 if self.debug:
-                    print(f"Scheduler: Job {name} completed")
+                    print(f"Scheduler: Job {name} completed", flush=True)
 
             ##kill jobs that exceed walltime
             ##TODO: the kill signal isn't handled

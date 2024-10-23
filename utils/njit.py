@@ -2,7 +2,7 @@ try:
     from numba import njit
 
 except ImportError:
-    print("Warning: numba is not found in your environment, will skip the njit precompiling of functions.")
+    print("Warning: numba is not found in your environment, will skip the njit precompiling of functions.", flush=True)
 
     ##define njit as en empty decorator
     from functools import wraps
