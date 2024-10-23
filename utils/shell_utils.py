@@ -25,11 +25,11 @@ def run_script(script_path, c):
     if importlib.util.find_spec("mpi4py") is not None:
         shell_cmd = f"{c.job_submit_cmd} {c.nproc} 0 python -m mpi4py {script_path} -c {config_file}"
     else:
-        print("Warning: mpi4py not found in your environment, will try to run with nproc=1.")
+        print("Warning: mpi4py not found in your environment, will try to run with nproc=1.", flush=True)
         shell_cmd = f"python {script_path} -c {config_file} --nproc=1"
 
     if c.debug:
-        print(shell_cmd)
+        print(shell_cmd, flush=True)
 
     p = subprocess.Popen(shell_cmd, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
     p.wait()
