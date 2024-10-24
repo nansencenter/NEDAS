@@ -6,15 +6,16 @@ from .conversion import ensure_list
 from .spatial_operation import gradx, grady, warp
 from .fft_lib import fft2, ifft2, get_wn
 
-def random_perturb(grid, fields, prev_perturb, **kwargs):
+def random_perturb(grid, fields, prev_perturb, dt=1, n=0, **kwargs):
     """
     Add random perturbation to the given 2D field
     Input:
         - grid: Grid object describing the 2d domain
         - fields: list of np.array shape[...,ny,nx]
         - prev_perturb; list of np.array from previous perturbation data, None if unavailable
+        - dt: float, interval (hours) between time steps
+        - n: int, current time step index
         - kwargs:
-            dt: time step (hours)
             variable: str, or list of str
             type: str: 'gaussian', 'powerlaw', or 'displace'
             amplitude: float, (or list of floats, in multiscale approach)
@@ -33,6 +34,10 @@ def random_perturb(grid, fields, prev_perturb, **kwargs):
             perturb[vname] = np.zeros((ns,2)+fld.shape[-2:])
         else:
             perturb[vname] = np.zeros((ns,)+fld.shape)
+
+        if prev_perturb[vname] is not None and n==0:
+            perturb[vname] = prev_perturb[vname]
+            continue
 
         ##loop over scale s and generate perturbation
         for s in range(ns):
@@ -54,7 +59,7 @@ def random_perturb(grid, fields, prev_perturb, **kwargs):
 
             ##create perturbations that are correlated in time
             autocorr = 0.75
-            ncorr = rec['tcorr'][s] / kwargs['dt']  ##time steps at decorrelation
+            ncorr = rec['tcorr'][s] / dt  ##time steps at decorrelation
             alpha = autocorr**(1.0 / ncorr)
             if prev_perturb[vname] is not None:
                 perturb[vname][s] = np.sqrt(1-alpha**2) * perturb[vname][s] + alpha * prev_perturb[vname][s]
@@ -78,7 +83,7 @@ def random_perturb(grid, fields, prev_perturb, **kwargs):
     for vname,rec in params.items():
         for s in range(rec['nscale']):
             if perturb_type == 'displace':
-                fields[vname] = warp(fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
+                fields[vname] = warp(grid, fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
 
             else:
                 if 'exp' in other_opts:
