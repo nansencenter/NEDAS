@@ -73,6 +73,9 @@ class Config(object):
             centered = self.grid_def.get('centered', False)
             self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered)
 
+            ##mask for invalid grid points (none for now, add option later)
+            self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+
         else:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
@@ -80,12 +83,12 @@ class Config(object):
             module = importlib.import_module('models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
             self.grid = model.grid
+            self.mask = model.mask
 
-        self.ny, self.nx = self.grid.x.shape
-
-        ##mask for invalid grid points
-        # if self.mask
-        self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+        if self.grid.regular:
+            self.ny, self.nx = self.grid.x.shape
+        else:
+            self.npoints = self.grid.x.size
 
     def set_model_config(self):
         ##initialize model config dict
