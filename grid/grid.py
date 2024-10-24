@@ -128,12 +128,14 @@ class Grid(object):
             self.dy = (self.ymax - self.ymin) / (self.ny - 1)
             self.Lx = self.nx * self.dx
             self.Ly = self.ny * self.dy
+            self.npoints = self.nx * self.ny
 
         else:
             ##Generate triangulation, if tiangles are provided its very quick,
             ##otherwise Triangulation will generate one, but slower.
             self.x = self.x.flatten()
             self.y = self.y.flatten()
+            self.npoints = self.x.size
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
             ##TODO: if cyclic_dim is not None need to pad around boundary additional wrap-around points to make triangulation cover the entire domain
             dx = self._mesh_dx()
@@ -398,9 +400,9 @@ class Grid(object):
             yi = self.y[:, 0]
             for d in self.cyclic_dim:
                 if d=='x':
-                    x_ = np.mod(x_ - xi.min(), self.Lx) + xi.min()
+                    x_ = np.mod(x_ - self.xmin, self.Lx) + self.xmin
                 elif d=='y':
-                    y_ = np.mod(y_ - yi.min(), self.Ly) + yi.min()
+                    y_ = np.mod(y_ - self.ymin, self.Ly) + self.ymin
         return x_, y_
 
     def find_index(self, x_, y_):
@@ -891,7 +893,7 @@ class Grid(object):
             fld_out = fld
         return fld_out
 
-    def distance(self, ref_x, ref_y, x, y):
+    def distance(self, ref_x, ref_y, x, y, p=2):
         """
         Compute distance for points (x,y) to the reference point
         Input:
@@ -899,6 +901,8 @@ class Grid(object):
           reference point coordinates
         - x, y: np.array(float)
           points whose distance to the reference points will be computed
+        - p: int
+          Minkowski p-norm order, default is 2
         Output:
         - dist: np.array(float)
         """
@@ -917,7 +921,12 @@ class Grid(object):
 
         ##TODO: account for other geometry (neighbors) here
 
-        dist = np.hypot(dist_x, dist_y)
+        if p == 1:
+            dist = dist_x + dist_y  ##Manhattan distance, order 1
+        elif p == 2:
+            dist = np.hypot(dist_x, dist_y)   ##Euclidean distance, order 2
+        else:
+            raise NotImplementedError(f"grid.distance: p-norm order {p} is not implemented for 2D grid")
         return dist
 
     ### Some methods for basic data visulisation and map plotting
