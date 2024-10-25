@@ -1,0 +1,11 @@
+##model nondimensional parameters
+nx: 40  ##model dimension
+F: 8    ##forcing parameter
+dt: 0.002 ##time step
+
+##some dimensional parameters
+restart_dt: 24  ##restart interval (hours)
+nproc_per_run: 1
+nproc_per_util: 1
+walltime: 10
+

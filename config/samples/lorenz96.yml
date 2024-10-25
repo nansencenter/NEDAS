@@ -1,0 +1,84 @@
+work_dir: '/tmp/lorenz96_test'
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_local.sh'
+
+nproc: 1
+
+nens: 20
+run_assim: True
+run_diag: False
+
+debug: False      ##if true, output debug data/message
+
+time_start: '200101010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '200102010000'         ##end time of the experiment
+time_assim_start: '200101030000' ##start time of the first analysis cycle
+time_assim_end: '200101222100'   ##end time of the last analysis cycle
+cycle_period: 3                 ##cycle period, in hours
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'lorenz96'
+
+state_def:
+- name: 'state'
+  model_src: 'lorenz96'
+  var_type: 'field'
+  err_type: 'normal'
+
+obs_def:
+- name: 'state'
+  dataset_src: 'lorenz96'
+  dataset_dir: ''
+  model_src: 'lorenz96'
+  nobs: 10
+  obs_window_min: -3
+  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 0.5
+  hroi: 6
+  vroi: inf
+  troi: inf
+  impact_on_state:
+
+use_synthetic_obs: True
+
+model_def:
+  lorenz96:
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/lorenz96/default.yml'
+    ens_run_type: scheduler
+    ens_init_dir: '/tmp/lorenz96_test/init_run'
+    truth_dir: '/tmp/lorenz96_test/truth'
+
+perturb:
+
+assim_mode: 'serial'
+filter_type: 'EAKF'
+
+nscale: 1
+scale_id: 0
+decompose_obs: False
+character_length: [10]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
+run_alignment: False
+alignment:
+  option: 'optical_flow'
+  variable: 'state'
+  nlevel: 3
+  smoothness_weight: 1
+
+inflation:
+  type: 'posterior,relax'
+  adaptive: True
+  coef: 1.0
+
+localization:
+  htype: 'GC'
+  vtype: 'GC'
+  ttype: 'GC'
