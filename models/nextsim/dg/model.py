@@ -2,12 +2,14 @@ import numpy as np
 import os
 import subprocess
 import inspect
-import signal
 from datetime import datetime
 from functools import lru_cache
+from time import sleep
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
 from config import parse_config
+from . import restart
+from . import forcing
 
 class Model(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
@@ -168,13 +170,17 @@ class Model(object):
             Keywords defined when the function is called:
             - member : int
                 ensemble member id
+            - time_start : datetime
+                start time of the forecast
+            - path : str
+                path to the working directory of the ensemble member
             These are defined in the configuration file of model_def/nextsim.dg section
-            - ens_init_dir : str
-                directory storing the initial ensemble
-            - restart : dict
-                restart file options.
-                See example configuration file for required keys and explanations.
-                This section is not necessary if the model does not use restart files.
+            - files : dict
+                This section contains the filenames for the restart file.
+                This must have a `restart` key that defines the filename `format`
+                and the strftime `time_format` code of the restart filename.
+                If perturbation is used, this section must also have a `lon_name`
+                and `lat_name` key
             - perturb : dict
                 perturbation options for the initial conditions.
                 See example configuration file for required keys and explanations.
@@ -183,10 +189,10 @@ class Model(object):
 
         """
         # get the current ensemble member id
-        ens_mem_id = kwargs['member']
+        ens_mem_id:int = kwargs['member'] + 1
         # ensemble member directory for the current member
-        ens_init_dir = os.path.join(kwargs['ens_init_dir'],
-                                    f'ens_{str(ens_mem_id).zfill(2)}')
+        ens_init_dir:str = os.path.join(kwargs['path'],
+                                        f'ens_{str(ens_mem_id).zfill(2)}')
         # create directory for the initial ensemble
         os.makedirs(ens_init_dir, exist_ok=True)
         # get all required filenames for the initial ensemble
@@ -199,145 +205,168 @@ class Model(object):
         except KeyError:
             print ('restart file is not specified in model configuration.'
                    ' We do not use restart files.')
-        # 3. get the forcing filenames
-        file_options_forcing = kwargs['files']['forcing']
+
+        # no need for perturbation if not specified in yaml file
+        if 'perturb' not in kwargs:
+            print ('We do no perturbations as perturb section is not specified in the model configuration.')
+            # we we do not perturb the restart file
+            # simply link the restart files
+            os.system(f'ln -s {fname_restart} {ens_init_dir}')
+            return
+
+        # get perturbation options
+        perturb_options = kwargs['perturb']
+
+        # here, if 'restart section is not under perturb section
+        # we only link the restart file to each ensemble directory
+        if 'restart' not in perturb_options:
+            # we we do not perturb the restart file
+            # simply link the restart files
+            os.system(f'ln -s {fname_restart} {ens_init_dir}')
+            return
+
+        # 3. add perturbations
+        restart_options = perturb_options['restart']
+        # copy restart files to the ensemble member directory
+        fname = os.path.join(ens_init_dir, os.path.basename(fname_restart))
+        subprocess.run(['cp', '-v', fname_restart, fname], check=True)
+        # prepare the restart file options for the perturbation
+        file_options = {'fname': fname,
+                        'lon_name':file_options_restart['lon_name'],
+                        'lat_name':file_options_restart['lat_name']}
+        # perturb the restart file
+        restart.perturb_restart(restart_options, file_options)
+
+
+    def prepare_forcing(self, task_id:int, task_nproc:int, **kwargs):
+        """Prepare forcing file for the next forecast for a single ensemble member.
+
+        Parameters
+        ----------
+        task_id : int
+            task id for parallel execution
+        task_nproc : int
+            number of processors for each task
+        **kwargs : dict
+            keyword arguments for the model configuration
+            Keywords defined when the function is called:
+            - member : int
+                ensemble member id
+            - time : datetime
+                start time of the forecast
+            - next_time : datetime
+                end time of the forecast
+            - path : str
+                path to the working directory of the ensemble member
+            These are defined in the configuration file of model_def/nextsim.dg section
+            - files : dict
+                This section contains the filenames for the forcing file.
+                This must have a `forcing` key with each subsection the
+                atmosphere/ocean. Within these subsections, the filename `format`
+                and the strftime `time_format` code of the restart filename.
+                If perturbation is used, this section must also have a `lon_name`
+                and `lat_name` key
+            - perturb : dict
+                perturbation options for the initial conditions.
+                See example configuration file for required keys and explanations.
+                This section is not necessary if the model does not use perturbation
+                for the initial conditions or forcings.
+
+        """
+        # get the current ensemble member id
+        ens_mem_id:int = kwargs['member'] + 1
+        # ensemble member directory for the current member
+        ens_init_dir:str = os.path.join(kwargs['path'],
+                                        f'ens_{str(ens_mem_id).zfill(2)}')
+        # create directory for the initial ensemble
+        os.makedirs(ens_init_dir, exist_ok=True)
+        # get all required filenames for the initial ensemble
+        # 1. get current time and the end time of the forecast
+        time:datetime = kwargs['time']
+        next_time:datetime = kwargs['next_time']
+        # 2. get the forcing filenames
+        file_options_forcing:dict[str, str] = kwargs['files']['forcing']
         fname_forcing:dict[str, str] = dict()
-        for forcing_name in file_options_forcing.keys():
+        for forcing_name in file_options_forcing:
             fname_forcing[forcing_name] = forcing.get_forcing_filename(file_options_forcing[forcing_name],
                                                          ens_mem_id, time)
-        # add perturbations
-        try:
-            perturb_options = kwargs['perturb']
-            # if we have a perturbation for the restart file
-            try:
-                restart_options = perturb_options['restart']
-                # copy restart files to the ensemble member directory
-                fname = os.path.join(ens_init_dir, os.path.basename(fname_restart))
-                if not os.path.exists(fname):
-                    shutil.copy(fname_restart, ens_init_dir)
-                # prepare the restart file options for the perturbation
-                file_options = {'fname': fname,
-                               'lon_name':file_options_restart['lon_name'],
-                               'lat_name':file_options_restart['lat_name']}
-                # perturb the restart file
-                restart.perturb_restart(restart_options, file_options, ens_mem_id, time)
-            except KeyError:
-                # we we do not perturb the restart file
-                # simply link the restart files
-                os.system(f'ln -s {fname_restart} {ens_init_dir}')
-            # if we have a perturbation for the forcing
-            try:
-                forcing_options = perturb_options['forcing']
-                file_options:dict = dict()
-                for forcing_name in forcing_options.keys():
-                    # we ignore entries that are not in the files options
-                    # e.g., path
-                    if forcing_name not in fname_forcing: continue
-                    # copy forcing files to the ensemble member directory
-                    fname = os.path.join(ens_init_dir,
-                                         os.path.basename(fname_forcing[forcing_name])
-                                         )
-                    if not os.path.exists(fname):
-                        shutil.copy(fname_forcing[forcing_name], ens_init_dir)
-                    # the forcing file options for the perturbation
-                    file_options[forcing_name] = {'fname': fname,
-                                                   **file_options_forcing[forcing_name]}
-                forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, time)
-            except KeyError:
-                # we we do not perturb the forcing file
-                # simply link the forcing files
-                for forcing_name in forcing_options.keys():
-                    os.system(f'ln -s {fname_forcing[forcing_name]} {ens_init_dir}')
-        except KeyError:
-            print ('We do no perturbations as perturb section is not specified in the model configuration.')
+
+        if 'perturb' not in kwargs:
+            print ('We do no perturbations as perturb section is not specified in the model configuration.',
+                   flush=True)
+            # we we do not perturb the forcing file
+            # simply link the forcing files
+            for forcing_name in file_options_forcing:
+                os.system(f'ln -s {fname_forcing[forcing_name]} {ens_init_dir}')
+            return
+
+        # get perturbation options
+        perturb_options = kwargs['perturb']
+
+        if 'forcing' not in perturb_options:
+            # we we do not perturb the forcing file
+            # simply link the forcing files
+            for forcing_name in file_options_forcing:
+                os.system(f'ln -s {fname_forcing[forcing_name]} {ens_init_dir}')
+            return
+
+        forcing_options = perturb_options['forcing']
+        # construct file options for forcing
+        file_options:dict = dict()
+        for forcing_name in forcing_options:
+            # we ignore entries that are not in the files options
+            # e.g., path
+            if forcing_name not in fname_forcing: continue
+            fname = os.path.join(ens_init_dir,
+                                    os.path.basename(fname_forcing[forcing_name])
+                                    )
+            # the forcing file options for the perturbation
+            file_options[forcing_name] = {'fname_src': fname_forcing[forcing_name],
+                                           'fname': fname,
+                                           **file_options_forcing[forcing_name]}
+        # add forcing perturbations
+        forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
 
 
     def run(self, task_id=0, task_nproc=16, **kwargs):
         self.run_status = 'running'
 
-        job_submit_cmd = kwargs['job_submit_cmd']
-
-        path = kwargs['path']
-        input_file = self.filename(**kwargs)
-        run_dir = os.path.dirname(input_file)
-        os.system("mkdir -p "+run_dir)
+        job_submit_cmd:str = kwargs['job_submit_cmd']
+        job_submit_node:str = kwargs['job_submit_node']
+        run_dir:str = kwargs['path']
+        n_ens:int = kwargs['n_ens']
         os.chdir(run_dir)
+        # copy the job submission script to the run directory
         os.system('cp -f ' +  job_submit_cmd + ' .')
-        log_file = os.path.join(run_dir, "run.log")
-        print('hostname: ', os.system('/bin/hostname'))
-        os.system('touch '+log_file)
-        os.system("sh run.sh " + run_dir)
-
-#        time = kwargs['time']
-#        forecast_period = kwargs['forecast_period']
-#        next_time = time + forecast_period * dt1h
-#
-#        kwargs_out = {**kwargs, 'time':next_time}
-#        output_file = self.filename(**kwargs_out)
-#
-##        ##create namelist config files
-##        namelist(self, time, forecast_period, run_dir)
-#
-#        ##link files
-#        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{task_nproc:04d}')
-#        os.system("cp "+partit_file+" patch.input")
-#
-#        for ext in ['.a', '.b']:
-#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'regional.grid'+ext)+" regional.grid"+ext)
-#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}'+ext)+" regional.depth"+ext)
-#            os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'tbaric'+ext)+" tbaric"+ext)
-#        os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
-#
-#        ##TODO: switches for other forcing options
-#        if self.forcing_frc == 'era5':
-#            forcing_path = self.era5_path
-#        os.system("ln -fs "+forcing_path+" .")
-#        os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
-#        for ext in ['.a', '.b']:
-#            if self.priver == 1:
-#                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)+" forcing.rivers"+ext)
-#            if self.jerlv0 == 0:
-#                os.system("ln -fs "+os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)+" forcing.kpar"+ext)
-#            if self.relax == 1:
-#                for comp in ['saln', 'temp', 'intf', 'rmu']:
-#                    os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'relax_'+comp[:3]+ext)+" relax."+comp+ext)
-#            os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'thkdf4'+ext)+" thkdf4"+ext)
-#        os.system("ln -fs "+os.path.join(self.basedir, 'relax', self.E, 'clim_tran.txt')+" .")
-#        # if self.gpflag: TODO
-#        # if self.nestoflag:
-#        # if self.nestiflag:
-#        # if self.tideflag:
-#
-#        model_src = os.path.join(self.basedir, 'setup.src')
-#        model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
-#        offset = task_id*task_nproc
-#
-#        ##build the shell command line
-#        shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
-#        shell_cmd += "cd "+run_dir+"; "          ##enter run directory
-#        shell_cmd += job_submit_cmd+f" {task_nproc} {offset} "
-#        shell_cmd += model_exe+f" {kwargs['member']+1} "
-#        shell_cmd += ">& run.log"
-#
-#        for tr in range(2):  ##number of tries
-#            with open(log_file, 'rt') as f:
-#                if '(normal)' in f.read():
-#                    break
-#            self.run_process = subprocess.Popen(shell_cmd, shell=True)
-#            self.run_process.wait()
-#
-#        with open(log_file, 'rt') as f:
-#            if '(normal)' not in f.read():
-#                raise RuntimeError('errors in '+log_file)
-#        if not os.path.exists(output_file):
-#            raise RuntimeError('output file not found: '+output_file)
-#
-#        if 'output_dir' in kwargs:
-#            output_dir = kwargs['output_dir']
-#            if output_dir != path:
-#                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
-#                output_file_cp = self.filename(**kwargs_out_cp)
-#                os.system("mkdir -p "+os.path.dirname(output_file_cp))
-#                os.system("cp "+output_file+" "+output_file_cp)
-#                os.system("cp "+output_file.replace('.a', '.b')+" "+output_file_cp.replace('.a', '.b'))
-
+        # specify the number of ensemble members
+        os.system(f'sed -i "s/--array N/--array {n_ens}/g" run.sh')
+        # submit the job
+        # the job submission must through job_submit_node
+        # specified in yaml file
+        # this should f-dahu, or dahu-oar3
+        # as oarsub is only available there
+        # the job submission is done in the run directory
+        process = subprocess.run(['ssh', job_submit_node,
+                                  f'cd {run_dir} && '
+                                  'oarsub -S ./run.sh'],
+                                capture_output=True)
+        # obtain the array job id for checking the jobs
+        s = process.stdout.decode('utf-8')
+        print (s, flush=True)
+        s = s.split('OAR_ARRAY_ID=')[-1]
+        array_job_id = int(s)
+        # check the status of the jobs
+        while True:
+            # checking this every 300 seconds
+            sleep(60)
+            # get the status of the jobs
+            process = subprocess.run(['ssh', job_submit_node,
+                                      'oarstat', '-s', f'-a {array_job_id}'],
+                                    capture_output=True)
+            s = process.stdout.decode('utf-8').split('\n')[:-1]
+            jobs_status = [job.split(':')[-1].replace(' ', '') for job in s]
+            # end this loop if all jobs are terminated
+            if all([status == 'Terminated' for status in jobs_status]):
+                break
+            if all([status == 'Error' for status in jobs_status]):
+                raise RuntimeError(f'Error job array {array_job_id} in {run_dir}')

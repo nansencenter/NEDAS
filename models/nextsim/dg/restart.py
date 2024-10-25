@@ -1,21 +1,18 @@
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta # type: ignore
+from datetime import datetime
 import os
-import warnings
 import typing
+import threading
 
-import cftime # type: ignore
 import netCDF4 # type: ignore
 import numpy as np
 import pyproj # type: ignore
 
-from utils.conversion import t2s
 from grid import Grid
-from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
-
+from perturb import gen_perturb, apply_perturb
 
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
+thread_lock = threading.Lock()
 def read_var(fname:str, varnames:list[str]) -> np.ma.MaskedArray:
     """reading a variable from a netcdf file
 
@@ -28,11 +25,12 @@ def read_var(fname:str, varnames:list[str]) -> np.ma.MaskedArray:
     itime : int
         time index in the forcing file
     """
-    with netCDF4.Dataset(fname, 'r') as f:
-        # read the variable
-        data: list[np.ndarray] = []
-        for vname in varnames:
-            data.append(f[vname][:])
+    data: list[np.ndarray] = []
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            # read the variable
+            for vname in varnames:
+                data.append(f[vname][:])
     return np.ma.array(data)
 
 
@@ -50,9 +48,11 @@ def write_var(fname:str, varnames: list[str], data: np.ndarray) -> None:
     """
     # We assume all variables in the forcing file exists
     assert os.path.exists(fname), f'{fname} does not exist; Please copy the forcing file to the correct path first.'
-    with netCDF4.Dataset(fname, 'r+') as f:
-        for i, vname in enumerate(varnames):
-            f[vname][:] = data[i]
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r+') as f:
+            for i, vname in enumerate(varnames):
+                f[vname][:] = data[i]
+            f.sync()
 
 
 def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
@@ -71,7 +71,7 @@ def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
     return fname
 
 
-def perturb_restart(restart_options:dict, file_options:dict, i_ens: int, time: datetime) -> None:
+def perturb_restart(restart_options:dict, file_options:dict) -> None:
     """perturb the initial conditions in restart files
 
     Parameters
@@ -91,13 +91,6 @@ def perturb_restart(restart_options:dict, file_options:dict, i_ens: int, time: d
         - lat_name: str
             name of the latitude variable in the forcing file
             This is obtained from the files/restart section of the model configuration file.
-
-    i_ens : int
-        ensemble index
-    time : datetime
-        current time
-    prev_time : datetime
-        previous time
     """
 
     # perturbation arrays
@@ -105,10 +98,12 @@ def perturb_restart(restart_options:dict, file_options:dict, i_ens: int, time: d
     # get the restart file name
     fname:str = file_options['fname']
     # get grid object
-    with netCDF4.Dataset(fname, 'r') as f:
-        grid = Grid(_proj, *_proj(f[file_options['lon_name']], f[file_options['lat_name']]
-                                )
-                    )
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            lon = f[file_options['lon_name']][:]
+            lat = f[file_options['lat_name']][:]
+    x, y = _proj(lon, lat)
+    grid:Grid = Grid(_proj, x, y)
 
     # get options for perturbing the forcing variables
     options = restart_options['variables']

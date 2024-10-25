@@ -6,6 +6,7 @@ from utils.progress import timer
 from utils.conversion import t2s, s2t, dt1h
 from scripts.generate_init_ensemble import generate_init_ensemble
 from scripts.ensemble_forecast import ensemble_forecast
+from scripts.prepare_forcing import prepare_forcing
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -25,7 +26,7 @@ while c.time < c.time_end:
     cycle_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time))
     os.makedirs(cycle_dir, exist_ok=True)
 
-    ##at first cycle, generate the initial ensemble
+    # at first cycle, generate the initial ensemble
     if c.time == c.time_start:
         for model_name, model in c.model_config.items():
             timer(c)(generate_init_ensemble)(c, model_name)
@@ -48,12 +49,16 @@ while c.time < c.time_end:
         except Exception as e:
             print(f"subprocess.run raised Exception {e}")
             exit()
-
     ###run the ensemble forecasts, use batch or scheduler approach
+
+
     for model_name, model in c.model_config.items():
+        # prepare the forcing
+        timer(c)(prepare_forcing)(c, model_name)
+        # run the ensemble forecast, use batch or scheduler approach
         timer(c)(ensemble_forecast)(c, model_name)
 
-    ##advance to next cycle
+    # advance to next cycle
     c.prev_time = c.time
     c.time = c.next_time
 

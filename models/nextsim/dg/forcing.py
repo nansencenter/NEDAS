@@ -1,7 +1,16 @@
+"""This module is used to perturb the forcing variables for the next forecast cycle.
+
+This module is specifically designed for neXtSIM-DG in NEDAS.
+The design follows the perturbation strategy in TOAPZ4 where
+the perturbation is temporally correlationed as an AR1 process.
+
+Parameters of the perturbation are read from the yaml file.
+The perturbation is applied to the forcing variables in the forcing files.
+"""
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta # type: ignore
 import os
-import warnings
+import threading
 import typing
 
 import cftime # type: ignore
@@ -13,11 +22,16 @@ from utils.conversion import t2s
 from grid import Grid
 from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
 
+from . import slicing_nc
+
 # both the topaz and ERA5 data are projected onto the same grid at the moment
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
+# the thread lock for reading and writing netcdf files
+thread_lock = threading.Lock()
 
-def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str, forcing_file_date_format:str) -> tuple[str, str]:
-    """Get the forcing file time based on the current time, the forcing start date and the forcing interval
+def get_fname_daterange(current_date: datetime, initial_date:str, interval:str, forcing_file_date_format:str) -> tuple[str, str]:
+    """Inferring the date range of the forcing file for the current time,
+    the forcing start date and the forcing interval in the initial forcing file given by yaml file.
 
     Parameters
     ----------
@@ -27,6 +41,8 @@ def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str
         forcing start date
     interval : str
         forcing interval
+    forcing_file_date_format : str
+        forcing file date format expressed in strftime format
 
     Returns
     -------
@@ -54,15 +70,72 @@ def get_forcing_file_time(current_date: datetime, initial_date:str, interval:str
     return start_date_str, end_date_str
 
 
-def get_time_index_from_nc(fname:str, time_varname:str, time_units_name:str, time: datetime) -> int:
-    """Get the time index from the netcdf file"""
-    with netCDF4.Dataset(fname, 'r') as f:
-        time_units = f[time_units_name].units
-        # get the start time of the current file
-        start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
-        # get the time step
-        time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
-    return np.rint((time - start_time) / time_step)
+def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: datetime, next_time: datetime) -> tuple[np.ndarray, list[datetime]]:
+    """Get the indices and corresponding time that includes time and next_time from the netcdf file
+
+    This function is not seeking the exact time and next_time in the forcing file,
+    but the time steps that include the time and next_time such that the perturbed forcing
+    file can be a bit smaller. Therefore, we allow for a few more time steps in this file.
+
+    Parameters
+    ----------
+    fname : str
+        forcing file name
+    time_varname : str
+        time variable name in the forcing file
+    time_units_name : str
+        variable name that gives time units in the forcing file
+    time : datetime
+        current time
+    next_time : datetime
+        time at the end of the forecast cycle
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        indices and corresponding time for the next forecast cycle
+    """
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            time_units = f[time_units_name].units
+            # get the start time in the forcing file
+            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
+            # get the time step in the forcing file
+            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
+            # get the indices of the current and next time steps
+            it0: int = int(np.rint((time - start_time) / time_step))
+            it1: int = int(np.rint((next_time - start_time) / time_step))
+            # get total number of time steps in the current file
+            nt: int = len(f[time_varname][:])
+            # extend the forcing time step by one to ensure all time steps are included
+            it0 = max(0, min(it0 - 1, nt - 1))
+            it1 = max(0, min(it1 + 1, nt - 1))
+            # get the all the time between current time and next time in the forcing file
+            file_time: list[datetime] = [cftime.num2date(f[time_varname][it], time_units)
+                                         for it in range(it0, it1 + 1)]
+    return np.arange(it0, it1 + 1), file_time
+
+
+def get_prev_time_from_nc(fname:str, time_varname:str, time_units_name:str, itime:int) -> datetime:
+    """Get the previous time in the netcdf file before the start of the forecast cycle
+
+    Parameters
+    ----------
+    fname : str
+        forcing file name
+    time_varname : str
+        time variable name in the forcing file
+    time_units_name : str
+        variable name that gives time units in the forcing file
+    itime : int
+        current time index in the forcing file
+    """
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            it :int = max(0, itime - 1)
+            time_units:str = f[time_units_name].units
+            prev_time: datetime = cftime.num2date(f[time_varname][it], units=time_units)
+    return prev_time
 
 
 def read_var(fname:str, varnames:list[str], itime: int) -> np.ma.MaskedArray:
@@ -77,11 +150,12 @@ def read_var(fname:str, varnames:list[str], itime: int) -> np.ma.MaskedArray:
     itime : int
         time index in the forcing file
     """
-    with netCDF4.Dataset(fname, 'r') as f:
-        # read the variable
-        data: list[np.ndarray] = []
-        for vname in varnames:
-            data.append(f[vname][itime])
+    data: list[np.ndarray] = []
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            # read the variable
+            for vname in varnames:
+                data.append(f[vname][itime])
     return np.ma.array(data)
 
 
@@ -99,9 +173,11 @@ def write_var(fname:str, varnames: list[str], data: np.ndarray, itime: int) -> N
     """
     # We assume all variables in the forcing file exists
     assert os.path.exists(fname), f'{fname} does not exist; Please copy the forcing file to the correct path first.'
-    with netCDF4.Dataset(fname, 'r+') as f:
-        for i, vname in enumerate(varnames):
-            f[vname][itime] = data[i]
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r+') as f:
+            for i, vname in enumerate(varnames):
+                f[vname][itime] = data[i]
+                f.sync()
 
 
 def geostrophic_perturb(fname:str, grid:Grid, options:dict, itime:int, pert:np.ndarray, varname:str) -> None:
@@ -180,7 +256,7 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
     forcing_start_date:str
     forcing_end_state:str
     forcing_start_date, forcing_end_state = \
-        get_forcing_file_time(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
+        get_fname_daterange(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
     fname: str
     try:
         fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
@@ -195,7 +271,7 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
     return fname
 
 
-def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: datetime, prev_time: datetime) -> None:
+def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: datetime, next_time:datetime) -> None:
     """perturb the forcing variables
 
     Parameters
@@ -211,72 +287,107 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
     i_ens : int
         ensemble index
     time : datetime
-        current time
-    prev_time : datetime
-        previous time
+        current time as the begining of the forecast cycle
+    next_time : datetime
+        end time of the next forecast cycle
     """
-
     # perturbation arrays
     pert: np.ndarray[typing.Any, np.dtype[np.float64]]
-    # path to the saved perturbation file for current time step
-    prev_perturb_file: str
     # path to the directory of the perturbation files
     pert_path: str = forcing_options['path']
+    # create the directory if it does not exist
+    os.makedirs(os.path.join(pert_path, f'ensemble_{i_ens}'), exist_ok=True)
+    # time index and time array
+    time_index: np.ndarray[typing.Any, np.dtype[np.int64]]
+    time_array: np.ndarray[typing.Any, np.dtype[np.float64]]
 
-    for forcing_name in forcing_options.keys():
+    for forcing_name in forcing_options:
+        if forcing_name not in file_options: continue
         # forcing options for each component, e.g., atmosphere or ocean
         forcing_options_comp:dict = forcing_options[forcing_name]
         file_options_comp:dict = file_options[forcing_name]
         # get the forcing file name
         fname:str = file_options_comp['fname']
-        # get current time index in the forcing file
-        itime:int = get_time_index_from_nc(fname, file_options_comp['time_name'],
-                                           file_options_comp['time_units_name'], time
-                                           )
+        # copy forcing files to the ensemble member directory
+        # we don't change the filename,
+        # but only copy limited time slices of the original forcing file
+        time_index, time_array = get_time_from_nc(file_options_comp['fname_src'],
+                                                  file_options_comp['time_name'],
+                                                  file_options_comp['time_units_name'],
+                                                  time, next_time
+                                                  )
+        # get prev_time
+        prev_time:datetime = get_prev_time_from_nc(file_options_comp['fname_src'],
+                                                   file_options_comp['time_name'],
+                                                   file_options_comp['time_units_name'],
+                                                   time_index[0]
+                                                   )
+        with thread_lock:
+            slicing_nc.copy_time_sliced_nc_file(file_options_comp['fname_src'],
+                                                fname, time_index,
+                                                file_options_comp['time_name'])
 
-        # get grid object
-        with netCDF4.Dataset(fname, 'r') as f:
-            grid = Grid(_proj, *_proj(f[file_options_comp['lon_name']],
-                                      f[file_options_comp['lat_name']]
-                                      )
-                        )
+        # get grid object for geometric information
+        with thread_lock:
+            with netCDF4.Dataset(fname, 'r') as f:
+                grid = Grid(_proj, *_proj(f[file_options_comp['lon_name']],
+                                        f[file_options_comp['lat_name']]
+                                        )
+                            )
 
-        # get options for perturbing the forcing variables
-        options = forcing_options_comp['variables']
-        for i, varname in enumerate(options['names']):
-            if typing.TYPE_CHECKING:
-                assert type(varname) == str, 'variable name must be a string'
+        for itime, time_f in enumerate(time_array):
+            # get options for perturbing the forcing variables
+            options = forcing_options_comp['variables']
+            for i, varname in enumerate(options['names']):
+                if typing.TYPE_CHECKING:
+                    assert type(varname) == str, 'variable name must be a string'
+                # variable name in saved .npy filename
+                varname_f:str = varname.replace("/", "_")
+                # get perturbations
+                pert_fname:str = os.path.join(pert_path, f'ensemble_{i_ens}',
+                                              f'perturb_{varname_f}_{t2s(time_f)}.npy')
+                if os.path.exists(pert_fname):
+                    pert = np.load(pert_fname)
+                else:
+                    # convert the horizontal correlation length scale to grid points
+                    hcorr:int = np.rint(float(options['hcorr'][i])/grid.dx)
+                    # generate new perturbations
+                    if prev_time != time_f:
+                        prev_perturb_fname:str = os.path.join(pert_path,
+                                                          f'ensemble_{i_ens}',
+                                                          f'perturb_{varname_f}_{t2s(prev_time)}.npy')
+                        pert_prev:np.ndarray = np.load(prev_perturb_fname)
+                        # generate random perturbations for the current time step with AR1 correlation
+                        pert_new:np.ndarray = gen_perturb(grid,
+                                                          options['type'][i], float(options['amp'][i]),
+                                                          hcorr)
+                        pert = apply_AR1_perturb(pert_new, float(options['tcorr'][i]), pert_prev)
+                    else:
+                        pert = gen_perturb(grid, options['type'][i], float(options['amp'][i]), hcorr)
 
-            # convert the horizontal correlation length scale to grid points
-            hcorr:int = np.rint(float(options['hcorr'][i])/grid.dx)
-            # get the perturbations
-            prev_perturb_file = os.path.join(pert_path, f'ensemble_{i_ens}', f'perturb_{varname.replace("/", "_")}_{t2s(prev_time)}.npy')
-            if os.path.exists(prev_perturb_file):
-                pert = np.load(prev_perturb_file)
-            else:
-                pert = gen_perturb(grid, options['type'][i], float(options['amp'][i]), hcorr)
+                    # save the perturbations for the next time step
+                    perturb_file:str = os.path.join(pert_path,
+                                                    f'ensemble_{i_ens}',
+                                                    f'perturb_{varname_f}_{t2s(time_f)}.npy')
+                    np.save(perturb_file, pert)
 
-            # apply perturbations to the variable data
-            # in the case of vector fields, we need to split the variable name
-            varname_list: list[str] = varname.split(';')
-            # read the variable data from forcing file
-            data: np.ndarray = read_var(fname, varname_list, itime)
-            # apply perturbations to the variable data
-            data = apply_perturb(grid, data, pert, options['type'][i])
-            # apply lower and upper bounds
-            lb = float(options['lower_bounds'][i]) if options['lower_bounds'][i] != 'None' else -np.inf
-            ub = float(options['upper_bounds'][i]) if options['upper_bounds'][i] != 'None' else np.inf
-            data = np.minimum(np.maximum(data, lb), ub)
-            # write the perturbed variable back to the forcing file
-            write_var(fname, varname_list, data, itime)
+                # apply perturbations to the variable data
+                # in the case of vector fields, we need to split the variable name
+                varname_list: list[str] = varname.split(';')
+                # read the variable data from forcing file
+                data: np.ndarray = read_var(fname, varname_list, itime)
+                # apply perturbations to the variable data
+                data = apply_perturb(grid, data, pert, options['type'][i])
+                # apply lower and upper bounds
+                lb = float(options['lower_bounds'][i]) if options['lower_bounds'][i] != 'None' else -np.inf
+                ub = float(options['upper_bounds'][i]) if options['upper_bounds'][i] != 'None' else np.inf
+                data = np.minimum(np.maximum(data, lb), ub)
+                # write the perturbed variable back to the forcing file
+                write_var(fname, varname_list, data, itime)
 
-            # generate wind perturbations and apply them to the atmosphere forcing files based on pressure perturbations
-            if forcing_name == 'atmosphere': geostrophic_perturb(fname, grid, forcing_options_comp['geostrophic_wind_adjust'],
-                                                                 itime, pert, varname)
+                # generate wind perturbations and apply them to the atmosphere forcing files based on pressure perturbations
+                if forcing_name == 'atmosphere': geostrophic_perturb(fname, grid,
+                                                                     forcing_options_comp['geostrophic_wind_adjust'],
+                                                                     itime, pert, varname)
 
-            # generate random perturbations for next time step with AR1 correlation
-            pert_new = gen_perturb(grid, options['type'][i], float(options['amp'][i]), hcorr)
-            pert = apply_AR1_perturb(pert_new, float(options['tcorr'][i]), pert)
-            # save the perturbations for the next time step
-            perturb_file:str = os.path.join(pert_path, f'ensemble_{i_ens}', f'perturb_{varname.replace("/", "_")}_{t2s(time)}.npy')
-            np.save(perturb_file, pert)
+            prev_time = time_f
