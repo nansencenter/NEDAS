@@ -21,7 +21,6 @@ def generate_init_ensemble(c, model_name):
 
         for mem_id in range(c.nens):
             job_name = model_name+f'_mem{mem_id+1}'
-            path = os.path.join(c.work_dir, 'cycle', t2s(c.time_start), model_name)
 
             job_opt = {'task_nproc': nproc_per_job,
                        'job_submit_cmd': c.job_submit_cmd,

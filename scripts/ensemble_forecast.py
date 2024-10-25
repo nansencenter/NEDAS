@@ -57,8 +57,10 @@ def ensemble_forecast_batch(c, model_name):
         os.system("mkdir -p "+path)
 
         job_opt = {'job_submit_cmd': c.job_submit_cmd,
+                   'job_submit_node': c.job_submit_node,
                    'path': path,
                    'time': c.time,
+                   'n_ens': c.nens,
                    'forecast_period': c.cycle_period,
                    'output_dir': output_dir,
                    **c.model_def[model_name],
