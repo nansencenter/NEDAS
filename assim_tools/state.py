@@ -1,7 +1,6 @@
 import numpy as np
 import os
 import struct
-
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
@@ -34,7 +33,11 @@ def parse_state_info(c):
     - info: dict
       A dictionary with some dimensions and list of unique field records
     """
-    info = {'nx':c.nx, 'ny':c.ny, 'size':0, 'fields':{}}
+    info = {}
+    info['size'] = 0
+    info['shape'] = c.grid.x.shape
+    info['fields'] = {}
+    info['scalars'] = {}
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
     variables = set()
@@ -71,6 +74,9 @@ def parse_state_info(c):
                     pos += nv * fld_size * type_size[rec['dtype']]
                     rec_id += 1
 
+        elif vrec['var_type'] == 'scalar':
+            pass
+
         else:
             raise NotImplementedError(f"{vrec['var_type']} is not supported in the state vector.")
 
@@ -80,7 +86,7 @@ def parse_state_info(c):
         print(f"variables: {variables}", flush=True)
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
-
+    info['variables'] = variables
     return info
 
 def write_state_info(binfile, info):
@@ -94,8 +100,14 @@ def write_state_info(binfile, info):
     - info: state_info
     """
     with open(binfile.replace('.bin','.dat'), 'wt') as f:
-        ##first line: some dimension sizes
-        f.write('{} {} {}\n'.format(info['nx'], info['ny'], info['size']))
+        ##first line: grid dimension
+        if len(info['shape']) == 1:
+            f.write('{}\n'.format(info['shape'][0]))
+        else:
+            f.write('{} {}\n'.format(info['shape'][0], info['shape'][1]))
+
+        ##second line: total size of the state
+        f.write('{}\n'.format(info['size']))
 
         ##followed by nfield lines: each for a field record
         for i, rec in info['fields'].items():
@@ -124,13 +136,20 @@ def read_state_info(binfile):
     """
     with open(binfile.replace('.bin','.dat'), 'r') as f:
         lines = f.readlines()
+        info = {}
 
         ss = lines[0].split()
-        info = {'nx':int(ss[0]), 'ny':int(ss[1]), 'size':int(ss[2]), 'fields':{}}
+        if len(ss)==1:
+            info['shape'] = (int(ss),)
+        else:
+            info['shape'] = (int(ss[0]), int(ss[1]))
+
+        info['size'] = int(lines[1])
 
         ##records for uniq fields
+        info['fields'] = {}
         rec_id = 0
-        for lin in lines[1:]:
+        for lin in lines[2:]:
             ss = lin.split()
             rec = {'name': ss[0],
                    'model_src': ss[1],
@@ -157,7 +176,7 @@ def write_field(binfile, info, mask, mem_id, rec_id, fld):
 
     - info: state_info dict
 
-    - mask: bool, np.array with shape (ny, nx)
+    - mask: bool, np.array with grid.x.shape
       True if the grid point is masked (for example land grid point in ocean models).
       The masked points will not be stored in the binfile to reduce disk usage.
 
@@ -170,11 +189,9 @@ def write_field(binfile, info, mask, mem_id, rec_id, fld):
     - fld: float, np.array
       The field to be written to the file
     """
-    ny = info['ny']
-    nx = info['nx']
     rec = info['fields'][rec_id]
 
-    fld_shape = (2, ny, nx) if rec['is_vector'] else (ny, nx)
+    fld_shape = (2,)+info['shape'] if rec['is_vector'] else info['shape']
     assert fld.shape == fld_shape, f'fld shape incorrect: expected {fld_shape}, got {fld.shape}'
 
     if rec['is_vector']:
@@ -196,7 +213,7 @@ def read_field(binfile, info, mask, mem_id, rec_id):
 
     - info: state_info dict
 
-    - mask: bool, np.array with shape (ny, nx)
+    - mask: bool, np.array with grid.x.shape
       True if the grid point is masked (for example land grid point in ocean models).
       The masked points will not be stored in the binfile to reduce disk usage.
 
@@ -210,12 +227,10 @@ def read_field(binfile, info, mask, mem_id, rec_id):
     - fld: float, np.array
       The field read from the file
     """
-    ny = info['ny']
-    nx = info['nx']
     rec = info['fields'][rec_id]
-    nv = 2 if rec['is_vector'] else 1
 
-    fld_shape = (2, ny, nx) if rec['is_vector'] else (ny, nx)
+    nv = 2 if rec['is_vector'] else 1
+    fld_shape = (2,)+info['shape'] if rec['is_vector'] else info['shape']
     fld_size = np.sum((~mask).astype(int))
 
     with open(binfile, 'rb') as f:
@@ -251,24 +266,32 @@ def distribute_state_tasks(c):
     return mem_list, rec_list
 
 def partition_grid(c):
+    if len(c.grid.x.shape)==2:
+        return partition_regular_grid(c)
+    else:
+        return partition_grid_points(c)
+
+def partition_regular_grid(c):
     """
     Generate spatial partitioning of the domain
     partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
     for each partition indexed by par_id, the tuple contains indices for slicing the domain
     """
+    ny, nx = c.grid.x.shape
+
     if c.assim_mode == 'batch':
         ##divide into square tiles with nx_tile grid points in each direction
         ##the workload on each tile is uneven since there are masked points
         ##so we divide into 3*nproc tiles so that they can be distributed
         ##according to their load (number of unmasked points)
-        nx_tile = np.maximum(int(np.round(np.sqrt(c.nx * c.ny / c.nproc_mem / 3))), 1)
+        nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / c.nproc_mem / 3))), 1)
 
         ##a list of (istart, iend, di, jstart, jend, dj) for tiles
         ##note: we have 3*nproc entries in the list
-        partitions = [(i, np.minimum(i+nx_tile, c.nx), 1,   ##istart, iend, di
-                       j, np.minimum(j+nx_tile, c.ny), 1)   ##jstart, jend, dj
-                      for j in np.arange(0, c.ny, nx_tile)
-                      for i in np.arange(0, c.nx, nx_tile) ]
+        partitions = [(i, np.minimum(i+nx_tile, nx), 1,   ##istart, iend, di
+                       j, np.minimum(j+nx_tile, ny), 1)   ##jstart, jend, dj
+                      for j in np.arange(0, ny, nx_tile)
+                      for i in np.arange(0, nx, nx_tile) ]
 
     elif c.assim_mode == 'serial':
         ##the domain is divided into tiles, each is formed by nproc_mem elements
@@ -284,9 +307,27 @@ def partition_grid(c):
 
         ##a list of (ist, ied, di, jst, jed, dj) for slicing
         ##note: we have nproc_mem entries in the list
-        partitions = [(i, c.nx, nx_intv, j, c.ny, ny_intv)
+        partitions = [(i, nx, nx_intv, j, ny, ny_intv)
                       for j in np.arange(ny_intv)
                       for i in np.arange(nx_intv) ]
+    return partitions
+
+def partition_grid_points(c):
+    """
+    Generate spatial partitioning of the domain
+    partitions: dict[par_id, tuple(start, end, interval)]
+    """
+    ##divide the partition in a similar fashion to serial mode in regular grid case
+    npoints = c.grid.x.size
+    nparts = c.nproc_mem
+
+    if c.assim_mode == 'batch':
+        n_tile = npoints // nparts
+        partitions = [(i, np.minimum(i+n_tile, npoints), 1) for i in np.arange(0, npoints, n_tile) ]
+
+    elif c.assim_mode == 'serial':
+        partitions = [(i, npoints, nparts) for i in np.arange(nparts)]
+
     return partitions
 
 def output_state(c, fields, state_file):
@@ -355,10 +396,9 @@ def output_ens_mean(c, fields, mean_file):
             print_1p(progress_bar(r, len(c.rec_list[c.pid_rec])))
 
         ##initialize a zero field with right dimensions for rec_id
-        if c.state_info['fields'][rec_id]['is_vector']:
-            sum_fld_pid = np.zeros((2, c.ny, c.nx))
-        else:
-            sum_fld_pid = np.zeros((c.ny, c.nx))
+        rec = c.state_info['fields'][rec_id]
+        fld_shape = (2,)+c.state_info['shape'] if rec['is_vector'] else c.state_info['shape']
+        sum_fld_pid = np.zeros(fld_shape)
 
         ##sum over all fields locally stored on pid
         for mem_id in c.mem_list[c.pid_mem]:

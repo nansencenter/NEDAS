@@ -85,11 +85,6 @@ class Config(object):
             self.grid = model.grid
             self.mask = model.mask
 
-        if self.grid.regular:
-            self.ny, self.nx = self.grid.x.shape
-        else:
-            self.npoints = self.grid.x.size
-
     def set_model_config(self):
         ##initialize model config dict
         self.model_config = {}
