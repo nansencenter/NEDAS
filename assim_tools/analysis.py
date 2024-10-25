@@ -1,5 +1,4 @@
 import numpy as np
-import time
 from utils.parallel import by_rank, bcast_by_root
 from utils.njit import njit
 from utils.progress import print_with_cache, progress_bar
@@ -19,12 +18,22 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
     data = {}
 
     ##x,y coordinates for local state variables on pid
-    ist,ied,di,jst,jed,dj = c.partitions[par_id]
-    ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
-    msk = c.mask[jst:jed:dj, ist:ied:di]
-    data['mask'] = msk
-    data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
-    data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
+    if len(c.grid.x.shape)==2:
+        ist,ied,di,jst,jed,dj = c.partitions[par_id]
+        ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
+        msk = c.mask[jst:jed:dj, ist:ied:di]
+        data['mask'] = msk
+        data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
+        data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
+    else:
+        ist,ied,di = c.partitions[par_id]
+        msk = c.mask[ist:ied:di]
+        data['mask'] = msk
+        data['x'] = c.grid.x[ist:ied:di][~msk]
+        if hasattr(c.grid, 'y'):
+            data['y'] = c.grid.y[ist:ied:di][~msk]
+        else:
+            data['y'] = np.zeros(np.sum((~msk).astype(int)))
     ##TODO: build KDTree to allow faster subset finding
 
     data['fields'] = []
@@ -79,6 +88,7 @@ def pack_local_obs_data(c, par_id, lobs, lobs_prior):
     data['hroi'] = np.ones(nlobs)
     data['vroi'] = np.ones(nlobs)
     data['troi'] = np.ones(nlobs)
+    # data['impact_on_state'] = np.ones(nl)
     data['obs_prior'] = np.full((c.nens, nlobs), np.nan)
     data['used'] = np.full(nlobs, False)
 
@@ -134,12 +144,15 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     ##count number of tasks
     ntask = 0
     for par_id in c.par_list[c.pid_mem]:
-        ist,ied,di,jst,jed,dj = c.partitions[par_id]
-        msk = c.mask[jst:jed:dj, ist:ied:di]
+        if len(c.grid.x.shape)==2:
+            ist,ied,di,jst,jed,dj = c.partitions[par_id]
+            msk = c.mask[jst:jed:dj, ist:ied:di]
+        else:
+            ist,ied,di = c.partitions[par_id]
+            msk = c.mask[ist:ied:di]
         for l in range(np.sum((~msk).astype(int))):
             ntask += 1
 
-    t0 = time.time()
     ##now the actual work starts, loop through partitions stored on pid_mem
     print_1p('>>> assimilate in batch mode:\n')
     task = 0
@@ -163,6 +176,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
         ###TODO: obs_err_corr factored into obs_err
         obs_err = obs_data['err_std']
+
         impact_on_state = 1
 
         ##loop through the unmasked grid points in the partition
@@ -184,7 +198,8 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     print_1p(' done.\n')
     return state_prior, lobs_prior
 
-@njit(cache=True)
+# @njit(cache=True)
+# @profile
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,
@@ -192,10 +207,10 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    localize_htype, localize_vtype, localize_ttype,
                    filter_type):
     """perform local analysis for one location"""
-
     nens, nfld = state_prior.shape
 
     ##horizontal localization
+    ##TODO: should use c.grid.distance
     h_dist = np.hypot(obs_x - state_x, obs_y - state_y)
     h_lfactor = local_factor(h_dist, hroi, localize_htype)
     if (h_lfactor==0).all():
@@ -418,7 +433,7 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
                            obs['hroi'], obs['vroi'], obs['troi'],
-                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
+                           c.localization['htype'], c.localization['vtype'], c.localization['ttype'])
 
         ##3. all pid update their own locally stored obs:
         obs_h_dist = c.grid.distance(obs['x'], obs['y'], obs_data['x'], obs_data['y'])
@@ -427,7 +442,7 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
                          obs_h_dist, obs_v_dist, obs_t_dist,
                          obs['hroi'], obs['vroi'], obs['troi'],
-                         c.localization['htype'], c.localization['vtype'], c.localization['ttype'], c.regress_type)
+                         c.localization['htype'], c.localization['vtype'], c.localization['ttype'])
     unpack_local_state_data(c, par_id, state_prior, state_data)
     unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
     print_1p(' done.\n')
@@ -449,7 +464,6 @@ def global_obs_list(c):
     np.random.shuffle(obs_list)
     return obs_list
 
-@njit(cache=True)
 def obs_increment(obs_prior, obs, obs_err, filter_type):
     """
     Compute analysis increment in observation space
@@ -565,7 +579,7 @@ def update_local_state(state_data, obs_prior, obs_incr,
                        h_dist, v_dist, t_dist,
                        hroi, vroi, troi,
                        localize_htype, localize_vtype, localize_ttype,
-                       regress_type):
+                       ):
 
     nens, nfld, nloc = state_data.shape
 
@@ -581,14 +595,14 @@ def update_local_state(state_data, obs_prior, obs_incr,
         for n in range(nfld):
             lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
 
-    state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub], regress_type)
+    state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
 
 @njit(cache=True)
 def update_local_obs(obs_data, used, obs_prior, obs_incr,
                      h_dist, v_dist, t_dist,
                      hroi, vroi, troi,
                      localize_htype, localize_vtype, localize_ttype,
-                     regress_type):
+                     ):
 
     nens, nlobs = obs_data.shape
 
@@ -602,10 +616,10 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     ##update the unused obs within roi
     ind = np.where(np.logical_and(~used, lfactor>0))[0]
 
-    obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind], regress_type)
+    obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind])
 
 @njit(cache=True)
-def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
     """
     Update the ensemble variable using the obs increments
 
@@ -636,31 +650,22 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor, regress_type):
     obs_prior_mean = np.mean(obs_prior)
     obs_prior_var = np.sum((obs_prior - obs_prior_mean)**2) / (nens-1)
 
-    if regress_type == 'linear':
-        ##linear regression relates the obs_prior with ens_prior
-
-        ##if there is no prior spread, don't update at all
-        if obs_prior_var == 0:
-            return ens_post
-
-        cov = np.zeros(ens_prior.shape[1:])
-        for m in range(nens):
-            cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / (nens-1)
-
-        reg_factor = cov / obs_prior_var
-
-        ##the updated posterior ensemble
-        for m in range(nens):
-            ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
-
+    ##if there is no prior spread, don't update at all
+    if obs_prior_var == 0:
         return ens_post
 
-    # elif regress_type == 'probit':
-        # pass
+    cov = np.zeros(ens_prior.shape[1:])
+    for m in range(nens):
+        cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / (nens-1)
 
-    else:
-        raise NotImplementedError('Error: unknown regression type: '+regress_type)
-        raise ValueError
+    reg_factor = cov / obs_prior_var
+
+    ##the updated posterior ensemble
+    for m in range(nens):
+        ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
+
+    return ens_post
+
 
 @njit(cache=True)
 def transform_to_probit():

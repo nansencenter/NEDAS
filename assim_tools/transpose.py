@@ -12,6 +12,38 @@ ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
 It is easier to perform i/o and pre/post processing on field-complete state,
 while easier to run assimilation algorithms with ensemble-complete state.
 """
+def pack_field_chunk(c, fld, is_vector, dst_pid):
+    fld_chk = {}
+    for par_id in c.par_list[dst_pid]:
+        if len(c.grid.x.shape)==2:
+            ##slice for this par_id
+            istart,iend,di,jstart,jend,dj = c.partitions[par_id]
+            ##save the unmasked points in slice to fld_chk for this par_id
+            mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+            if is_vector:
+                fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
+            else:
+                fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
+        else:
+            istart,iend,di = c.partitions[par_id]
+            mask_chk = c.mask[istart:iend:di]
+            if is_vector:
+                fld_chk[par_id] = fld[:, istart:iend:di][:, ~mask_chk]
+            else:
+                fld_chk[par_id] = fld[istart:iend:di][~mask_chk]
+    return fld_chk
+
+def unpack_field_chunk(c, fld, fld_chk, src_pid):
+    for par_id in c.par_list[src_pid]:
+        if len(c.grid.x.shape)==2:
+            istart,iend,di,jstart,jend,dj = c.partitions[par_id]
+            mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+            fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
+        else:
+            istart,iend,di = c.partitions[par_id]
+            mask_chk = c.mask[istart:iend:di]
+            fld[..., istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
+
 def transpose_field_to_state(c, fields):
     """
     transpose_field_to_state send chunks of field owned by a pid to other pid
@@ -47,8 +79,7 @@ def transpose_field_to_state(c, fields):
                 fld = fields[mem_id, rec_id].copy()
 
             ## - for each source pid_mem (src_pid) with fields[mem_id, rec_id],
-            ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to
-            ##   destination pid_mem (dst_pid) with its partition in par_list
+            ##   send chunk of fld to destination pid_mem (dst_pid) with its partition in par_list
             ## - every pid needs to send/recv to/from every pid, so we use cyclic
             ##   coreography here to prevent deadlock
 
@@ -64,17 +95,7 @@ def transpose_field_to_state(c, fields):
             ##    i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
             if m < len(c.mem_list[c.pid_mem]):
                 for dst_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
-                    fld_chk = {}
-                    for par_id in c.par_list[dst_pid]:
-                        ##slice for this par_id
-                        istart,iend,di,jstart,jend,dj = c.partitions[par_id]
-                        ##save the unmasked points in slice to fld_chk for this par_id
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        if rec['is_vector']:
-                            fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
-                        else:
-                            fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
-
+                    fld_chk = pack_field_chunk(c, fld, rec['is_vector'], dst_pid)
                     if dst_pid == c.pid_mem:
                         ##same pid, so just write to state
                         state[mem_id, rec_id] = fld_chk
@@ -123,9 +144,10 @@ def transpose_state_to_field(c, state):
                 mem_id = c.mem_list[c.pid_mem][m]
                 rec = c.state_info['fields'][rec_id]
                 if rec['is_vector']:
-                    fld = np.full((2, c.ny, c.nx), np.nan)
+                    fld = np.full((2,)+c.grid.x.shape, np.nan)
                 else:
-                    fld = np.full((c.ny, c.nx), np.nan)
+                    fld = np.full(c.grid.x.shape, np.nan)
+                fields[mem_id, rec_id] = fld
 
             ##this is just the reverse of transpose_field_to_state
             ## we take the exact steps, but swap send and recv operations here
@@ -150,12 +172,7 @@ def transpose_state_to_field(c, state):
                         fld_chk = c.comm_mem.recv(source=src_pid, tag=m)
 
                     ##unpack the fld_chk to form a complete field
-                    for par_id in c.par_list[src_pid]:
-                        istart,iend,di,jstart,jend,dj = c.partitions[par_id]
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
-
-                    fields[mem_id, rec_id] = fld
+                    unpack_field_chunk(c, fld, fld_chk, src_pid)
 
             ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
             for dst_pid in np.arange(c.pid_mem+1, c.nproc_mem):

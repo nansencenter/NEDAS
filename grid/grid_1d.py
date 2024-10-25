@@ -183,7 +183,7 @@ class Grid1D(object):
         interp_weights[:, 1] =  in_coords
         return interp_weights
 
-    def interp(self, fld, x=None, method='linear'):
+    def interp(self, fld, x=None, y=None, method='linear'):
         """
         Interpolation of 2D field data (fld) from one grid (self or given x,y) to another (dst_grid).
         This can be used for grid refining (low->high resolution) or grid thinning (high->low resolution).
@@ -287,7 +287,7 @@ class Grid1D(object):
             fld_out = fld
         return fld_out
 
-    def distance(self, ref_x, x, p=1):
+    def distance(self, ref_x, ref_y, x, y, p=1):
         """
         Compute distance for points x to the reference point
         """

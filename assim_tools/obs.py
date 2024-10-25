@@ -52,6 +52,14 @@ def parse_obs_info(c):
         src = importlib.import_module('dataset.'+vrec['dataset_src'])
         assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['dataset_src']+'.variables'
 
+        ##parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
+        impact_on_state = {}
+        for state_name in c.state_info['variables']:
+            impact_on_state[state_name] = 1.0
+        if 'impact_on_state' in vrec and vrec['impact_on_state'] is not None:
+            for state_name, impact_fac in vrec['impact_on_state'].items():
+                impact_on_state[state_name] = impact_fac
+
         ##loop through time steps in obs window
         for time in c.time + np.array(c.obs_time_steps)*dt1h:
             obs_rec = {'name': vname,
@@ -78,7 +86,7 @@ def parse_obs_info(c):
                        'hroi': vrec['hroi'],
                        'vroi': vrec['vroi'],
                        'troi': vrec['troi'],
-                       'impact_on_state': vrec['impact_on_state'],
+                       'impact_on_state': impact_on_state,
                        }
             obs_info['records'][obs_rec_id] = obs_rec
 
@@ -86,7 +94,7 @@ def parse_obs_info(c):
             obs_rec_id += 1
 
             ##we don't know the size of obs_seq yet
-            ##will wait for process_all_obs to update the seek position
+            ##will wait for prepare_obs to update the seek position
 
     return obs_info
 
@@ -113,7 +121,7 @@ def read_mean_z_coords(c, time):
     - time: datetime obj
 
     Return:
-    - z: np.array[nz, ny, nx]
+    - z: np.array[nz, grid.x.shape]
       z coordinate fields for all unique level k defined in state_info
     """
     ##first, get a list of indices k
@@ -121,7 +129,7 @@ def read_mean_z_coords(c, time):
     k_list = list(set([r['k'] for i,r in c.state_info['fields'].items() if r['time']==time]))
 
     ##get z coords for each level
-    z = np.zeros((len(k_list), c.ny, c.nx))
+    z = np.zeros((len(k_list),)+c.state_info['shape'])
     for k in range(len(k_list)):
 
         ##the rec_id in z_file corresponding to this level
@@ -146,7 +154,7 @@ def assign_obs(c, obs_seq):
 
     Inputs:
     - c: config module
-    - obs_seq: from process_all_obs()
+    - obs_seq: from prepare_obs()
 
     Returns:
     - obs_inds: dict[obs_rec_id, dict[par_id, inds]]
@@ -157,50 +165,22 @@ def assign_obs(c, obs_seq):
     ##each pid_rec has a subset of obs_rec_list
     obs_inds_pid = {}
     for obs_rec_id in c.obs_rec_list[c.pid_rec]:
-        obs_rec = obs_seq[obs_rec_id]
+        full_inds = np.arange(obs_seq[obs_rec_id]['obs'].shape[-1])
         obs_inds_pid[obs_rec_id] = {}
 
         if c.assim_mode == 'batch':
-            ##1. screen horizontally for obs inside hroi of partition par_id
-            hroi = c.obs_info['records'][obs_rec_id]['hroi']
-            xo = np.array(obs_rec['x'])  ##obs x,y
-            yo = np.array(obs_rec['y'])
-            x = c.grid.x[0,:]   ##grid x,y
-            y = c.grid.y[:,0]
-
-            ##loop over partitions with par_id
-            for par_id in range(len(c.partitions)):
-                ist,ied,di,jst,jed,dj = c.partitions[par_id]
-
-                ##condition 1: within the four corner points of the tile
-                hdist = np.hypot(np.minimum(np.abs(xo - x[ist]),
-                                            np.abs(xo - x[ied-1])),
-                                 np.minimum(np.abs(yo - y[jst]),
-                                            np.abs(yo - y[jed-1])) )
-                cond1 = (hdist < hroi)
-
-                ##condition 2: within [x_ist:x_ied, y_jst-hroi:y_jed+hroi]
-                cond2 = np.logical_and(np.logical_and(xo >= x[ist],
-                                                      xo <= x[ied-1]),
-                                       np.logical_and(yo > y[jst]-hroi,
-                                                      yo < y[jed-1]+hroi) )
-
-                ##condition 3: within [x_ist-hroi:x_ied+hroi, y_jst:y_jed]
-                cond3 = np.logical_and(np.logical_and(xo > x[ist]-hroi,
-                                                      xo < x[ied-1]+hroi),
-                                       np.logical_and(yo >= y[jst],
-                                                      yo <= y[jed-1]) )
-
-                ##if any of the 3 condition satisfies, the obs is within
-                ##hroi of any points in tile[par_id]
-                inds = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))[0]
-
-                obs_inds_pid[obs_rec_id][par_id] = inds
+            if len(c.grid.x.shape)==2:
+                ##screen horizontally for obs inside hroi of each partition
+                obs_inds_pid[obs_rec_id] = assign_obs_regular_tiles(c, obs_rec_id, obs_seq)
+            else:
+                ##for irregular grid or 1d grid, just store all the obs for now
+                ##TODO: spatial KDTree for faster subsetting of obs
+                for par_id in range(len(c.partitions)):
+                    obs_inds_pid[obs_rec_id][par_id] = full_inds
 
         elif c.assim_mode == 'serial':
             ##locality doesn't matter, we just divide obs_rec into nproc_mem
             ##partitions with par_id from 0 to nproc_mem-1
-            full_inds = np.arange(obs_rec['obs'].shape[-1])
 
             inds = distribute_tasks(c.comm_mem, full_inds)
             for par_id in range(c.nproc_mem):
@@ -215,6 +195,42 @@ def assign_obs(c, obs_seq):
 
     return obs_inds
 
+def assign_obs_regular_tiles(c, obs_rec_id, obs_seq):
+    hroi = c.obs_info['records'][obs_rec_id]['hroi']
+    xo = np.array(obs_seq[obs_rec_id]['x'])  ##obs x,y
+    yo = np.array(obs_seq[obs_rec_id]['y'])
+    x = c.grid.x[0,:]   ##grid x,y
+    y = c.grid.y[:,0]
+
+    ##loop over partitions with par_id
+    inds = {}
+    for par_id in range(len(c.partitions)):
+        ist,ied,di,jst,jed,dj = c.partitions[par_id]
+
+        ##condition 1: within the four corner points of the tile
+        hdist = np.hypot(np.minimum(np.abs(xo - x[ist]),
+                                    np.abs(xo - x[ied-1])),
+                         np.minimum(np.abs(yo - y[jst]),
+                                    np.abs(yo - y[jed-1])) )
+        cond1 = (hdist < hroi)
+
+        ##condition 2: within [x_ist:x_ied, y_jst-hroi:y_jed+hroi]
+        cond2 = np.logical_and(np.logical_and(xo >= x[ist],
+                                              xo <= x[ied-1]),
+                               np.logical_and(yo > y[jst]-hroi,
+                                              yo < y[jed-1]+hroi) )
+
+        ##condition 3: within [x_ist-hroi:x_ied+hroi, y_jst:y_jed]
+        cond3 = np.logical_and(np.logical_and(xo > x[ist]-hroi,
+                                              xo < x[ied-1]+hroi),
+                               np.logical_and(yo >= y[jst],
+                                              yo <= y[jed-1]) )
+
+        ##if any of the 3 condition satisfies, the obs is within
+        ##hroi of any points in tile[par_id]
+        inds[par_id] = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))[0]
+    return inds
+
 def distribute_partitions(c):
     """
     Distribute par_id across processors according to the work load on each partition
@@ -224,8 +240,12 @@ def distribute_partitions(c):
     if c.assim_mode == 'batch':
         ##distribute the list of par_id according to workload to each pid
         ##number of unmasked grid points in each tile
-        nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
-                              for ist,ied,di,jst,jed,dj in c.partitions] )
+        if len(c.grid.x.shape)==2:
+            nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
+                                for ist,ied,di,jst,jed,dj in c.partitions] )
+        else:
+            nlpts_loc = np.array([np.sum((~c.mask[ist:ied:di]).astype(int))
+                                for ist,ied,di in c.partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
@@ -549,8 +569,8 @@ def prepare_obs(c):
         ##e.g., multiscale approach:
         if c.nscale > 1 and c.decompose_obs:
             obs_grid = Grid(c.grid.proj, seq['x'], seq['y'], regular=False)
-            seq['obs'] = get_scale_component(obs_grid, seq['obs'], c.character_length, c.s)
-            seq['err_std'] *= get_error_scale_factor(obs_grid, c.character_length, c.s)
+            seq['obs'] = get_scale_component(obs_grid, seq['obs'], c.character_length, c.scale_id)
+            seq['err_std'] *= get_error_scale_factor(obs_grid, c.character_length, c.scale_id)
 
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
@@ -610,7 +630,7 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
             ##e.g., multiscale approach:
             if c.nscale > 1 and c.decompose_obs:
                 obs_grid = Grid(c.grid.proj, obs_seq[obs_rec_id]['x'], obs_seq[obs_rec_id]['y'], regular=False)
-                seq = get_scale_component(obs_grid, seq, c.character_length, c.s)
+                seq = get_scale_component(obs_grid, seq, c.character_length, c.scale_id)
 
             obs_prior_seq[mem_id, obs_rec_id] = seq
     c.comm.Barrier()
