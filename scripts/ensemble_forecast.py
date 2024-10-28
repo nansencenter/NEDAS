@@ -29,6 +29,7 @@ def ensemble_forecast_scheduler(c, model_name):
                        'path': path,
                        'member': mem_id,
                        'time': c.time,
+                       'next_time': c.next_time,
                        'forecast_period': c.cycle_period,
                        'output_dir': output_dir,
                        **c.model_def[model_name],
@@ -54,12 +55,14 @@ def ensemble_forecast_batch(c, model_name):
 
         path = os.path.join(c.work_dir, 'cycle', t2s(c.time), model_name)
         output_dir = os.path.join(c.work_dir, 'cycle', t2s(c.next_time), model_name)
-        os.system("mkdir -p "+path)
+        os.makedirs(path, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
 
         job_opt = {'job_submit_cmd': c.job_submit_cmd,
                    'job_submit_node': c.job_submit_node,
                    'path': path,
                    'time': c.time,
+                   'next_time': c.next_time,
                    'n_ens': c.nens,
                    'forecast_period': c.cycle_period,
                    'output_dir': output_dir,

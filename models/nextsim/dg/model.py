@@ -1,5 +1,7 @@
 import numpy as np
+import configparser
 import os
+import shutil
 import subprocess
 import inspect
 from datetime import datetime
@@ -199,12 +201,8 @@ class Model(object):
         # 1. get current time, which is supposed to be the start time
         time = kwargs['time_start']
         # 2. get the restart filename
-        try:
-            file_options_restart = kwargs['files']['restart']
-            fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
-        except KeyError:
-            print ('restart file is not specified in model configuration.'
-                   ' We do not use restart files.')
+        file_options_restart = kwargs['files']['restart']
+        fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
 
         # no need for perturbation if not specified in yaml file
         if 'perturb' not in kwargs:
@@ -229,7 +227,7 @@ class Model(object):
         restart_options = perturb_options['restart']
         # copy restart files to the ensemble member directory
         fname = os.path.join(ens_init_dir, os.path.basename(fname_restart))
-        subprocess.run(['cp', '-v', fname_restart, fname], check=True)
+        subprocess.run(['cp', '-v', fname_restart, fname])
         # prepare the restart file options for the perturbation
         file_options = {'fname': fname,
                         'lon_name':file_options_restart['lon_name'],
@@ -332,14 +330,53 @@ class Model(object):
         self.run_status = 'running'
 
         job_submit_cmd:str = kwargs['job_submit_cmd']
+        # the job submission must through job_submit_node
+        # if it is -t devel, the node is oar-dahu3
+        # else it is f-dahu
         job_submit_node:str = kwargs['job_submit_node']
         run_dir:str = kwargs['path']
         n_ens:int = kwargs['n_ens']
         os.chdir(run_dir)
         # copy the job submission script to the run directory
-        os.system('cp -f ' +  job_submit_cmd + ' .')
+        os.system('cp -fv ' +  job_submit_cmd + ' run.sh')
         # specify the number of ensemble members
         os.system(f'sed -i "s/--array N/--array {n_ens}/g" run.sh')
+        # copy the model configuration file to the run directory
+        os.system('cp -fv ' +  kwargs['model_config_file'] + ' default.cfg')
+        # configure the configuration file for current cycle
+        #   specify start and enf time of the job
+        #   get all required filenames for the initial ensemble
+        #     1. get current time, which is supposed to be the start time
+        time = kwargs['time']
+        #     2. get the restart filename
+        file_options_restart = kwargs['files']['restart']
+        fname_restart:str = restart.get_restart_filename(file_options_restart,
+                                                         1,
+                                                         time)
+        fname_restart = os.path.basename(fname_restart)
+        # Can we do it better?
+        # read the config file
+        model_config = configparser.ConfigParser()
+        model_config.optionxform = str
+        model_config.read('default.cfg')
+        model_config['model']['init_file'] = fname_restart
+        model_config['model']['start'] = kwargs["time"].strftime("%Y-%m-%dT%H:%M:%SZ")
+        model_config['model']['stop'] = kwargs["next_time"].strftime("%Y-%m-%dT%H:%M:%SZ")
+        model_config['ConfigOutput']['start'] = kwargs["time"].strftime("%Y-%m-%dT%H:%M:%SZ")
+        # changing the forcing file in ERA5Atmosphere
+        file_options_forcing:dict[str, str] = kwargs['files']['forcing']
+        fname_atmos_forcing = forcing.get_forcing_filename(file_options_forcing['atmosphere'],
+                                                         1, time)
+        fname_atmos_forcing = os.path.basename(fname_atmos_forcing)
+        model_config['ERA5Atmosphere']['file'] = fname_atmos_forcing
+        # changing the forcing file in ERA5Atmosphere
+        fname_ocn_forcing = forcing.get_forcing_filename(file_options_forcing['ocean'],
+                                                         1, time)
+        fname_ocn_forcing = os.path.basename(fname_ocn_forcing)
+        model_config['TOPAZOcean']['file'] = fname_ocn_forcing
+        # dump the config to new file
+        with open('default.cfg', 'w') as configfile:
+            model_config.write(configfile)
         # submit the job
         # the job submission must through job_submit_node
         # specified in yaml file
@@ -370,3 +407,16 @@ class Model(object):
                 break
             if all([status == 'Error' for status in jobs_status]):
                 raise RuntimeError(f'Error job array {array_job_id} in {run_dir}')
+        # move the restart file to output directory (next cycle)
+        os.chdir(run_dir)
+        file_options_restart = kwargs['files']['restart']
+        fname_restart:str = restart.get_restart_filename(file_options_restart,
+                                                         1,
+                                                         kwargs['next_time'])
+        fname_restart = os.path.basename(fname_restart)
+        for i in range(n_ens):
+            os.makedirs(os.path.join(kwargs['output_dir'],
+                                     f'ens_{str(i+1).zfill(2)}'), exist_ok=True)
+            subprocess.run(['mv', os.path.join(f'ens_{str(i+1).zfill(2)}', fname_restart),
+                            os.path.join(kwargs['output_dir'],
+                                     f'ens_{str(i+1).zfill(2)}')], check=True)
