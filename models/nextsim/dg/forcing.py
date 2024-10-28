@@ -113,6 +113,8 @@ def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: dat
             # get the all the time between current time and next time in the forcing file
             file_time: list[datetime] = [cftime.num2date(f[time_varname][it], time_units)
                                          for it in range(it0, it1 + 1)]
+            print (f'file time: {file_time[0]} to {file_time[-1]},'
+                   f'time: {time} to {next_time}')
     return np.arange(it0, it1 + 1), file_time
 
 
@@ -325,7 +327,8 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
         with thread_lock:
             slicing_nc.copy_time_sliced_nc_file(file_options_comp['fname_src'],
                                                 fname, time_index,
-                                                file_options_comp['time_name'])
+                                                file_options_comp['time_name'],
+                                                time_array[0])
 
         # get grid object for geometric information
         with thread_lock:
