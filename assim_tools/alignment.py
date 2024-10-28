@@ -28,7 +28,9 @@ def optical_flow(grid, mask, fld1, fld2, nlevel=5, niter_max=100, smoothness_wei
         gridc, fld1c = sop.coarsen(grid, fld1w, lev)
         _,     fld2c = sop.coarsen(grid, fld2,  lev)
         maskc = np.full(fld1c.shape, False, dtype=bool)
-        du_, dv_ = get_HS80_optical_flow(fld1c, fld2c, maskc, gridc.dx, gridc.dy, gridc.cyclic_dim, niter_max, smoothness_weight)
+        dx = gridc.dx / gridc.mfx
+        dy = gridc.dy / gridc.mfy
+        du_, dv_ = get_HS80_optical_flow(fld1c, fld2c, maskc, dx, dy, gridc.cyclic_dim, niter_max, smoothness_weight)
         _, du = sop.refine(gridc, du_, lev)
         _, dv = sop.refine(gridc, dv_, lev)
         u += du
