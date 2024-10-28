@@ -154,8 +154,10 @@ def get_velocity_from_press(grid, pres, wprsfac):
     fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
 
     ##pres gradients
-    dpresx = gradx(pres, grid.dx) * wprsfac
-    dpresy = grady(pres, grid.dx) * wprsfac
+    dx = grid.dx / grid.mfx  ##grid spacing in x direction
+    dy = grid.dy / grid.mfy
+    dpresx = gradx(pres, dx) * wprsfac
+    dpresy = grady(pres, dy) * wprsfac
 
     ##geostrophic wind near poles
     vcor =  dpresx / fcor / rhoa * np.sign(plat)

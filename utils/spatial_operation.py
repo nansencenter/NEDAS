@@ -1,12 +1,12 @@
 import numpy as np
 from .njit import njit
 
-@njit(cache=True)
+@njit
 def gradx(fld, dx, cyclic_dim=None):
     """gradient of input field in x direction
     input:
         -fld: array, input field, last two dimensions (ny, nx)
-        -dx: grid spacing in x
+        -dx: grid spacing in x, fld.shape
         -cyclic_dim: None (default) not cyclic boundary, or string 'x', 'y', 'xy', etc.
     return:
         -gradx of fld with same shape
@@ -21,13 +21,14 @@ def gradx(fld, dx, cyclic_dim=None):
         fld_gradx /= 2.*dx
     else:
         ##centered difference for the middle part
-        fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / (2.0*dx)
+        fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / 2.0
         ##one-sided difference for the left,right edge points
-        fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0]) / dx
-        fld_gradx[..., -1] = (fld[..., -2] - fld[..., -1]) / dx
+        fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0])
+        fld_gradx[..., -1] = (fld[..., -2] - fld[..., -1])
+        fld_gradx /= dx
     return fld_gradx
 
-@njit(cache=True)
+@njit
 def grady(fld, dy, cyclic_dim=None):
     """gradient of input fld in y direction, similar to gradx"""
     fld_grady = np.zeros(fld.shape)
@@ -40,25 +41,26 @@ def grady(fld, dy, cyclic_dim=None):
         fld_grady /= 2.*dy
     else:
         ##centered difference for the middle part
-        fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / (2.0*dy)
+        fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / 2.0
         ##one-sided difference for the left,right edge points
-        fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :]) / dy
-        fld_grady[..., -1, :] = (fld[..., -2, :] - fld[..., -1, :]) / dy
+        fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :])
+        fld_grady[..., -1, :] = (fld[..., -2, :] - fld[..., -1, :])
+        fld_grady /= dy
     return fld_grady
 
-@njit(cache=True)
+@njit
 def gradx2(fld, dx, cyclic_dim=None):
     return gradx(gradx(fld, dx, cyclic_dim), dx, cyclic_dim)
 
-@njit(cache=True)
+@njit
 def grady2(fld, dy, cyclic_dim=None):
     return grady(grady(fld, dy, cyclic_dim), dy, cyclic_dim)
 
-@njit(cache=True)
+@njit
 def gradxy(fld, dx, dy, cyclic_dim=None):
     return grady(gradx(fld, dx, cyclic_dim), dy, cyclic_dim)
 
-@njit(cache=True)
+@njit
 def laplacian(fld, dx, dy, cyclic_dim=None):
     return gradx2(fld, dx, cyclic_dim) + grady2(fld, dy, cyclic_dim)
 
