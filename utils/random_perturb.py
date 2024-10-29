@@ -72,9 +72,10 @@ def random_perturb(grid, fields, prev_perturb, dt=1, n=0, **kwargs):
         for s in range(ns):
             wprsfac = 1.
             if 'scale_wind' in other_opts:
+                rhoa = 1.2
                 r2d = 180/np.pi
                 fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
-                wind_scale = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor
+                wind_scale = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor / rhoa
                 wprsfac = params['atmos_surf_velocity']['amp'][s] / wind_scale
 
             perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], wprsfac)
