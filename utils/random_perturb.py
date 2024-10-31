@@ -70,15 +70,7 @@ def random_perturb(grid, fields, prev_perturb, dt=1, n=0, **kwargs):
             assert vname in params.keys(), f'{vname} not in variable list, cannot run press_wind_relate option'
 
         for s in range(ns):
-            wprsfac = 1.
-            if 'scale_wind' in other_opts:
-                rhoa = 1.2
-                r2d = 180/np.pi
-                fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
-                wind_scale = params['atmos_surf_press']['amp'][s] / params['atmos_surf_press']['hcorr'][s] / fcor / rhoa
-                wprsfac = params['atmos_surf_velocity']['amp'][s] / wind_scale
-
-            perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], wprsfac)
+            perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], ('scale_wind' in other_opts), params['atmos_surf_press']['amp'][s], params['atmos_surf_press']['hcorr'][s], params['atmos_surf_velocity']['amp'][s])
 
     ##now add perturbations to each field
     for vname,rec in params.items():
@@ -146,7 +138,7 @@ def parse_perturb_opts(**kwargs):
 
     return perturb_type, other_opts, params
 
-def get_velocity_from_press(grid, pres, wprsfac):
+def get_velocity_from_press(grid, pres, scale_wind=False, press_amp=None, press_hcorr=None, wind_amp=None):
     """derive wind velocity from pressure field """
     rhoa = 1.2
     r2d = 180/np.pi
@@ -154,9 +146,19 @@ def get_velocity_from_press(grid, pres, wprsfac):
     plon, plat = grid.proj(grid.x, grid.y, inverse=True)
     fcor = 2 * np.sin(40./r2d)* 2*np.pi / 86400  ##coriolis at 40N
 
-    ##pres gradients
-    dx = grid.dx / grid.mfx  ##grid spacing in x direction
+    ##grid spacing
+    dx = grid.dx / grid.mfx
     dy = grid.dy / grid.mfy
+    ##hcorr = rh * dx according to mid-domain dx (to be consistent with ReanalysisTP5/Perturb_forcing)
+    dx_ = grid.dx / grid.mfx[grid.ny//2, grid.nx//2]
+
+    wprsfac = 1.
+    if scale_wind:
+        ds = press_hcorr / dx_ * np.hypot(dx, dy)  ##horizontal scale
+        wind_scale = press_amp / ds / fcor / rhoa  ##expected wind scale from pressure field
+        wprsfac = wind_amp / wind_scale            ##scaling factor to match wind perturbation with given amp
+
+    ##pres gradients
     dpresx = gradx(pres, dx) * wprsfac
     dpresy = grady(pres, dy) * wprsfac
 
