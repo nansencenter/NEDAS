@@ -154,9 +154,9 @@ def get_velocity_from_press(grid, pres, scale_wind=False, press_amp=None, press_
 
     wprsfac = 1.
     if scale_wind:
-        ds = press_hcorr / dx_ * np.hypot(dx, dy)  ##horizontal scale
+        ds = 0.54 * press_hcorr / dx_ * np.hypot(dx, dy)  ##horizontal scale
         wind_scale = press_amp / ds / fcor / rhoa  ##expected wind scale from pressure field
-        wprsfac = wind_amp / wind_scale            ##scaling factor to match wind perturbation with given amp
+        wprsfac = wind_amp / wind_scale  ##scaling factor to match wind perturbation with given amp
 
     ##pres gradients
     dpresx = gradx(pres, dx) * wprsfac
