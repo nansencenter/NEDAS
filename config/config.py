@@ -3,7 +3,7 @@ import os
 import inspect
 import yaml
 import importlib
-import pyproj
+from pyproj import Proj
 from grid import Grid
 from utils.parallel import Comm
 from utils.conversion import s2t, t2s
@@ -47,14 +47,18 @@ class Config(object):
     def set_comm(self):
         ##initialize mpi communicator
         self.comm = Comm()
+        comm_size = self.comm.Get_size()  ##number of available processors
         if not hasattr(self, 'nproc'):
-            self.nproc = self.comm.Get_size()
+            self.nproc = comm_size
+        if self.nproc != comm_size:
+            print(f"Warning: nproc={self.nproc} in config doesn't match self.comm.size={comm_size}, resetting nproc to {comm_size}")
+            self.nproc = comm_size
         self.pid = self.comm.Get_rank()  ##current processor id
 
         ##divide processors into mem/rec groups
         if not hasattr(self, 'nproc_mem'):
             self.nproc_mem = self.nproc
-        assert self.nproc % self.nproc_mem == 0, f"nproc {self.nproc} is not evenly divided by nproc_mem {self.nproc_mem}"
+        assert self.nproc % self.nproc_mem == 0, f"nproc={self.nproc} is not evenly divided by nproc_mem={self.nproc_mem}"
         self.nproc_rec = int(self.nproc/self.nproc_mem)
         self.pid_mem = self.pid % self.nproc_mem
         self.pid_rec = self.pid // self.nproc_mem
@@ -66,7 +70,10 @@ class Config(object):
     def set_analysis_grid(self):
         ##initialize analysis grid
         if self.grid_def['type'] == 'custom':
-            proj = pyproj.Proj(self.grid_def['proj'])
+            if 'proj' in self.grid_def and self.grid_def['proj'] is not None:
+                proj = Proj(self.grid_def['proj'])
+            else:
+                proj = None
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
