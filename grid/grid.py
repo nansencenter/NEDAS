@@ -3,7 +3,7 @@ import os
 import inspect
 import copy
 from functools import cached_property
-import matplotlib.pyplot as plt
+from matplotlib import colormaps
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 from matplotlib.tri import Triangulation
@@ -203,6 +203,7 @@ class Grid(object):
         """
 
         self = cls.__new__(cls)
+        dx = float(dx)
         xcoord = np.arange(xstart, xend, dx)
         ycoord = np.arange(ystart, yend, dx)
         x, y = np.meshgrid(xcoord, ycoord)
@@ -893,7 +894,21 @@ class Grid(object):
             fld_out = fld
         return fld_out
 
-    def distance(self, ref_x, ref_y, x, y, p=2):
+    def distance_in_x(self, ref_x, x):
+        dist_x = np.abs(x - ref_x)
+        if self.cyclic_dim is not None:
+            if 'x' in self.cyclic_dim:
+                dist_x = np.minimum(dist_x, self.Lx - dist_x)
+        return dist_x
+
+    def distance_in_y(self, ref_y, y):
+        dist_y = np.abs(y - ref_y)
+        if self.cyclic_dim is not None:
+            if 'y' in self.cyclic_dim:
+                dist_y = np.minimum(dist_y, self.Ly - dist_y)
+        return dist_y
+
+    def distance(self, ref_x, x, ref_y, y, p=2):
         """
         Compute distance for points (x,y) to the reference point
         Input:
@@ -906,21 +921,11 @@ class Grid(object):
         Output:
         - dist: np.array(float)
         """
-
-        ##normal cartesian distances in x and y
-        dist_x = np.abs(x-ref_x)
-        dist_y = np.abs(y-ref_y)
-
-        ##if there are cyclic boundary condition, take care of the wrap around
-        if self.cyclic_dim is not None:
-            for d in self.cyclic_dim:
-                if d=='x':
-                    dist_x = np.minimum(dist_x, self.Lx - dist_x)
-                elif d=='y':
-                    dist_y = np.minimum(dist_y, self.Ly - dist_y)
-
         ##TODO: account for other geometry (neighbors) here
 
+        ##normal cartesian distances in x and y
+        dist_x = self.distance_in_x(ref_x, x)
+        dist_y = self.distance_in_y(ref_y, y)
         if p == 1:
             dist = dist_x + dist_y  ##Manhattan distance, order 1
         elif p == 2:
@@ -1046,7 +1051,7 @@ class Grid(object):
 
         return llgrid_xy
 
-    def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis'):
+    def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis', **kwargs):
         """
         Plot a scalar field using pcolor/tripcolor
 
@@ -1077,10 +1082,29 @@ class Grid(object):
                 ind = np.argsort(x[0,:])
                 x = np.take(x, ind, axis=1)
                 fld = np.take(fld, ind, axis=1)
-            c = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap)
+            c = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
         else:
-            c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap)
+            c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
         return c
+
+    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevel=20, cmap='viridis', markersize=10, **kwargs):
+        """
+        Same as plot_field, but showing individual scattered points instead
+        This is more suitable for plotting observations in space
+        """
+        if vmin is None:
+            vmin = np.nanmin(fld)
+        if vmax is None:
+            vmax = np.nanmax(fld)
+        dv = (vmax - vmin) / nlevel
+
+        v = np.array(fld)
+        vbound = np.maximum(np.minimum(v, vmax), vmin)
+
+        cmap = np.array([colormaps[cmap](x)[0:3] for x in np.linspace(0, 1, nlevel+1)])
+        cind = ((vbound - vmin) / dv).astype(int)
+
+        ax.scatter(self.x, self.y, markersize, color=cmap[cind], **kwargs)
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,

@@ -5,11 +5,16 @@ from functools import cached_property
 class Grid1D(object):
     """
     Grid class to handle fields defined on a 1D grid
+
+    Methods convert, interp and distance has the same input args as their counterparts in the Grid class.
+    This introduces y coordinates in Grid1D class, although y is not defined for 1D grid, this makes the code that
+    calles Grid/Grid1D methods to be easier to maintain.
     """
     def __init__(self, x, bounds=None, regular=True, cyclic=False, dst_grid=None):
 
         ##coordinates and properties of the 2D grid
         self.x = x
+        self.y = np.zeros(x.size)  ##dummy y coords
         self.regular = regular
         self.cyclic = cyclic
         if bounds is not None:
@@ -17,14 +22,18 @@ class Grid1D(object):
         else:
             self.xmin = np.min(self.x)
             self.xmax = np.max(self.x)
+        self.ymin, self.ymax = 0, 0
 
         self.nx = self.x.size
+        self.ny = 1
         if regular:
             self.dx = (self.xmax - self.xmin) / (self.nx - 1)
             self.Lx = self.nx * self.dx
         else:
             self.dx = np.mean(np.diff(np.sort(self.x)))
             self.Lx = self.xmax - self.xmin
+        self.Ly = 0
+        self.mfx, self.mfy = 1, 1
 
         self._dst_grid = None
         if dst_grid is not None:
@@ -287,14 +296,20 @@ class Grid1D(object):
             fld_out = fld
         return fld_out
 
-    def distance(self, ref_x, ref_y, x, y, p=1):
-        """
-        Compute distance for points x to the reference point
-        """
+    def distance_in_x(self, ref_x, x):
         ##normal cartesian distances in x and y
-        dist_x = np.abs(x-ref_x)
+        dist_x = np.abs(x - ref_x)
         ##if there are cyclic boundary condition, take care of the wrap around
         if self.cyclic:
             dist_x = np.minimum(dist_x, self.Lx - dist_x)
         return dist_x
+
+    def distance_in_y(self, ref_y, y):
+        return np.zeros(y.shape)
+
+    def distance(self, ref_x, x, ref_y=None, y=None, p=1):
+        """
+        Compute distance for points x to the reference point
+        """
+        return self.distance_in_x(ref_x, x)
 
