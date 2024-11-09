@@ -103,6 +103,9 @@ class ConformalMapping(object) :
         """
         Define when two confmapping object is the same
         """
+        if not isinstance(other, ConformalMapping):
+            return False
+
         for attr in ['lat_a', 'lon_a', 'lat_b', 'lon_b', 'wlim', 'elim', 'ires', 'slim', 'nlim', 'jres', 'mercator', 'mercfac', 'lold']:
             if getattr(self, '_'+attr) != getattr(other, '_'+attr):
                 return False
