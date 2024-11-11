@@ -113,8 +113,8 @@ def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: dat
             # get the all the time between current time and next time in the forcing file
             file_time: list[datetime] = [cftime.num2date(f[time_varname][it], time_units)
                                          for it in range(it0, it1 + 1)]
-            print (f'file time: {file_time[0]} to {file_time[-1]},'
-                   f'time: {time} to {next_time}')
+            print (f'file: {fname}; 'f'file time: {file_time[0]} to {file_time[-1]},'
+                   f'forecast time: {time} to {next_time}')
     return np.arange(it0, it1 + 1), file_time
 
 

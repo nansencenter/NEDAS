@@ -388,20 +388,27 @@ class Model(object):
                                   'oarsub -S ./run.sh'],
                                 capture_output=True)
         # obtain the array job id for checking the jobs
+        s = process.stderr.decode('utf-8')
+        print (s, flush=True)
         s = process.stdout.decode('utf-8')
         print (s, flush=True)
         s = s.split('OAR_ARRAY_ID=')[-1]
         array_job_id = int(s)
+        print (f'The array job id is {array_job_id}', flush=True)
         # check the status of the jobs
         while True:
             # checking this every 300 seconds
-            sleep(60)
+            sleep(120)
             # get the status of the jobs
             process = subprocess.run(['ssh', job_submit_node,
-                                      'oarstat', '-s', f'-a {array_job_id}'],
+                                      'oarstat', '-f', f'--array {array_job_id}',
+                                      '| grep "state = "'],
                                     capture_output=True)
-            s = process.stdout.decode('utf-8').split('\n')[:-1]
-            jobs_status = [job.split(':')[-1].replace(' ', '') for job in s]
+            s = process.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
+            print (s, flush=True)
+            s = [string for string in s if 'state=' in string]
+            print (s, flush=True)
+            jobs_status = [job.split('state=')[-1].replace(' ', '') for job in s]
             # end this loop if all jobs are terminated
             if all([status == 'Terminated' for status in jobs_status]):
                 break
