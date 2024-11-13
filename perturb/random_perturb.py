@@ -95,6 +95,7 @@ def gen_perturb(grid: Grid,
         perturb = np.array([du, dv])
     elif perturb_type == 'gaussian_evensen':
         perturb = random_field_gaussian_evensen(grid.nx, grid.ny, amp, hcorr)
+        perturb = perturb - perturb.mean()
     else:
         raise TypeError('unknown perturbation type: '+perturb_type)
 
@@ -207,7 +208,7 @@ def random_field_gaussian_evensen(nx:int, ny:int, amplitude:float, hcorr:int) ->
 
     # getting the Fourier space representation of the field
     gauss:np.ndarray = np.exp(-(kappa2*l*l+lambda2*p*p)/sigma/sigma)
-    ph:np.ndarray = c* gauss * val
+    ph:np.ndarray = amplitude* c* gauss * val
     # the nx*ny is the normalisation factor because fftw normalise the inverse fft by default
     return np.real(ifft2(ph * nx * ny))
 
