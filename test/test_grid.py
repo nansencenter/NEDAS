@@ -4,7 +4,6 @@ from grid import Grid
 from pyproj import Proj
 
 class TestGrid(unittest.TestCase):
-
     def test_regular_grid_creation(self):
         proj = Proj('+proj=stere')
         xstart, xend, ystart, yend = 0, 100, 0, 100
@@ -15,14 +14,12 @@ class TestGrid(unittest.TestCase):
         self.assertAlmostEqual(grid.dx, 1.0)
         self.assertAlmostEqual(grid.dy, 1.0)
 
-
     def test_random_grid_creation(self):
         proj = Proj('+proj=stere')
         xstart, xend, ystart, yend = 0, 100, 0, 100
         npoints = 1000
         grid = Grid.random_grid(proj, xstart, xend, ystart, yend, npoints)
         self.assertEqual(grid.x.size, npoints)
-
 
     def test_find_index_regular(self):
         proj = Proj('+proj=stere')
@@ -52,7 +49,6 @@ class TestGrid(unittest.TestCase):
         inside, _, _, _, _ = grid.find_index(x, y)
         self.assertFalse(inside[0])
 
-
     def test_find_index_irregular(self):
         proj = Proj('+proj=stere')
         x, y = np.meshgrid(np.arange(10), np.arange(10))
@@ -69,7 +65,6 @@ class TestGrid(unittest.TestCase):
         self.assertAlmostEqual(in_coords[0,2], 0.2)
         self.assertEqual(nearest[0], 31)
 
-
     def test_cyclic_dim(self):
         proj = Proj('+proj=stere')
         xstart, xend, ystart, yend = 0, 100, 0, 100
@@ -83,7 +78,6 @@ class TestGrid(unittest.TestCase):
         self.assertTrue((vertices[0] == np.array([9999, 9900, 0, 99])).all())
         self.assertTrue((in_coords[0] == np.array([0., 0.])).all())
         self.assertEqual(nearest[0], 9999)
-
 
     def test_pole_dim(self):
         grid1 = Grid.regular_grid(Proj('+proj=longlat'), -180, 181, 0, 91, 1, cyclic_dim='x')  ##lon lat grid
@@ -106,7 +100,6 @@ class TestGrid(unittest.TestCase):
         vfld2 = grid1.convert(vfld1, is_vector=True)
         self.assertFalse(np.isnan(vfld2).any())
 
-
     def test_rotate_vector(self):
         grid1 = Grid.regular_grid(Proj('+proj=stere +lat_0=90 +lon_0=0'), -1e6, 1e6, -1e6, 1e6, 1e4)
         grid2 = Grid.regular_grid(Proj('+proj=stere +lat_0=90 +lon_0=90'), -1e6, 1e6, -1e6, 1e6, 1e4)
@@ -119,7 +112,6 @@ class TestGrid(unittest.TestCase):
         vfld2 = grid1.convert(vfld1, is_vector=True)
         self.assertAlmostEqual(vfld2[0, 100, 100], 0.0)
         self.assertAlmostEqual(vfld2[1, 100, 100], -1.0)
-
 
 if __name__ == '__main__':
     unittest.main()
