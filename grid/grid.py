@@ -137,7 +137,7 @@ class Grid(object):
             self.y = self.y.flatten()
             self.npoints = self.x.size
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
-            ##TODO: if cyclic_dim is not None need to pad around boundary additional wrap-around points to make triangulation cover the entire domain
+            self.tri.inds = np.arange(self.npoints)
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
@@ -145,18 +145,9 @@ class Grid(object):
             self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
             self.Lx = self.xmax - self.xmin
             self.Ly = self.ymax - self.ymin
-
-            ##some triangle properties
-            t = self.tri.triangles
-            s1 = np.hypot(x[t[:,0]] - x[t[:,1]], y[t[:,0]] - y[t[:,1]])
-            s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
-            s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
-            s = 0.5*(s1+s2+s3)
-            self.tri.p = 2.0 * s  ##circumference
-            self.tri.a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
-            ##circumference-to-area ratio
-            ##(1: equilateral triangle, ~0: very elongated)
-            self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
+            if self.cyclic_dim is not None:
+                self._pad_cyclic_mesh_bounds()
+            self._triangle_properties()
 
         self._dst_grid = None
         if dst_grid is not None:
@@ -201,7 +192,6 @@ class Grid(object):
         - Grid:
           A Grid object representing the regular grid.
         """
-
         self = cls.__new__(cls)
         dx = float(dx)
         xcoord = np.arange(xstart, xend, dx)
@@ -238,16 +228,20 @@ class Grid(object):
         - Grid:
           A Grid object representing the randomly positioned grid.
         """
-
         self = cls.__new__(cls)
         points = []
+        ntry = 0
         while len(points) < npoints:
             xp = np.random.uniform(0, 1) * (xend - xstart) + xstart
             yp = np.random.uniform(0, 1) * (yend - ystart) + ystart
             if min_dist is not None:
                 near = [p for p in points if abs(p[0]-xp) <= min_dist and abs(p[1]-yp) <= min_dist]
+                ntry += 1
                 if not near:
                     points.append((xp, yp))
+                    ntry = 0
+                if ntry > 10:
+                    raise RuntimeError(f"tried 10 times, unable to insert more grid points so that dist<{min_dist}")
             else:
                 points.append((xp, yp))
         x = np.array([p[0] for p in points])
@@ -301,6 +295,20 @@ class Grid(object):
         else:
             ##take the mean of triangle size, excluding the elongated ones
             return np.mean(sa[valid])
+
+    def _triangle_properties(self):
+        t = self.tri.triangles
+        x = self.x[self.tri.inds]
+        y = self.y[self.tri.inds]
+        s1 = np.hypot(x[t[:,0]] - x[t[:,1]], y[t[:,0]] - y[t[:,1]])
+        s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
+        s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
+        s = 0.5*(s1+s2+s3)
+        self.tri.p = 2.0 * s  ##circumference
+        self.tri.a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+        ##circumference-to-area ratio
+        ##(1: equilateral triangle, ~0: very elongated)
+        self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
 
     @cached_property
     def mfx(self):
@@ -383,7 +391,7 @@ class Grid(object):
         """
         self.dst_grid = grid
 
-    def wrap_cyclic_xy(self, x_, y_):
+    def _wrap_cyclic_xy(self, x_, y_):
         """
         When interpolating for point x_,y_, if the coordinates falls outside of the domain,
         we wrap around and make then inside again, if the boundary condition is cyclic (self.cyclic_dim)
@@ -397,14 +405,46 @@ class Grid(object):
           Same as input but x, y values are wrapped to be within the boundaries again.
         """
         if self.cyclic_dim is not None:
-            xi = self.x[0, :]
-            yi = self.y[:, 0]
             for d in self.cyclic_dim:
                 if d=='x':
                     x_ = np.mod(x_ - self.xmin, self.Lx) + self.xmin
                 elif d=='y':
                     y_ = np.mod(y_ - self.ymin, self.Ly) + self.ymin
         return x_, y_
+
+    def _pad_cyclic_mesh_bounds(self):
+        ##repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
+        x = self.x
+        y = self.y
+        inds = np.arange(self.npoints)
+        if 'x' in self.cyclic_dim:
+            x = np.hstack([x, x-self.Lx, x+self.Lx])
+            y = np.hstack([y, y, y])
+            inds = np.hstack([inds, inds, inds])
+        if 'y' in self.cyclic_dim:
+            x = np.hstack([x, x, x])
+            y = np.hstack([y, y-self.Ly, y+self.Ly])
+            inds = np.hstack([inds, inds, inds])
+        if 'x' in self.cyclic_dim and 'y' in self.cyclic_dim:
+            x = np.hstack([x, x-self.Lx, x+self.Lx, x-self.Lx, x+self.Lx])
+            y = np.hstack([y, y-self.Ly, y-self.Ly, y+self.Ly, y+self.Ly])
+            inds = np.hstack([inds, inds, inds, inds, inds])
+        tri = Triangulation(x, y)
+
+        ##find the triangles that covers the domain and keep them
+        triangles = []
+        for i in range(tri.triangles.shape[0]):
+            t = tri.triangles[i,:]
+            if np.logical_and(x[t]>=self.xmin, x[t]<=self.xmax).any() and np.logical_and(y[t]>=self.ymin, y[t]<=self.ymax).any():
+                triangles.append(t)
+        triangles = np.array(triangles)
+
+        ##collect the uniq grid point indices (in self.x and self.y) and assign them to the triangles
+        uniq_inds = list(np.unique(triangles.reshape(-1)))
+        for i in np.ndindex(triangles.shape):
+            triangles[i] = uniq_inds.index(triangles[i])
+        self.tri = Triangulation(x[uniq_inds], y[uniq_inds], triangles=triangles)
+        self.tri.inds = inds[uniq_inds]
 
     def find_index(self, x_, y_):
         """
@@ -440,17 +480,16 @@ class Grid(object):
         x_ = np.array(x_).flatten()
         y_ = np.array(y_).flatten()
 
+        ##lon: pyproj.Proj works only for lon=-180:180
+        if self.proj_name == 'longlat':
+            x_ = np.mod(x_ + 180., 360.) - 180.
+
+        ###account for cyclic dim, when points drop "outside" then wrap around
+        x_, y_ = self._wrap_cyclic_xy(x_, y_)
+
         if self.regular:
             xi = self.x[0, :]
             yi = self.y[:, 0]
-
-            ##lon: pyproj.Proj works only for lon=-180:180
-            if self.proj_name == 'longlat':
-                xi = np.mod(xi + 180., 360.) - 180.
-                x_ = np.mod(x_ + 180., 360.) - 180.
-
-            ###account for cyclic dim, when points drop "outside" then wrap around
-            x_, y_ = self.wrap_cyclic_xy(x_, y_)
 
             ##sort the index to monoticially increasing
             ##x_,y_ are the sorted coordinates of grid points
@@ -579,18 +618,18 @@ class Grid(object):
             vertices = self.tri.triangles[triangle_map[inside], :]
 
             ##transform matrix for barycentric coords computation
-            a = self.x[vertices[:,0]] - self.x[vertices[:,2]]
-            b = self.x[vertices[:,1]] - self.x[vertices[:,2]]
-            c = self.y[vertices[:,0]] - self.y[vertices[:,2]]
-            d = self.y[vertices[:,1]] - self.y[vertices[:,2]]
+            a = self.tri.x[vertices[:,0]] - self.tri.x[vertices[:,2]]
+            b = self.tri.x[vertices[:,1]] - self.tri.x[vertices[:,2]]
+            c = self.tri.y[vertices[:,0]] - self.tri.y[vertices[:,2]]
+            d = self.tri.y[vertices[:,1]] - self.tri.y[vertices[:,2]]
             det = a*d-b*c
             t_matrix = np.zeros((len(vertices), 3, 2))
             t_matrix[:,0,0] = d/det
             t_matrix[:,0,1] = -b/det
             t_matrix[:,1,0] = -c/det
             t_matrix[:,1,1] = a/det
-            t_matrix[:,2,0] = self.x[vertices[:,2]]
-            t_matrix[:,2,1] = self.y[vertices[:,2]]
+            t_matrix[:,2,0] = self.tri.x[vertices[:,2]]
+            t_matrix[:,2,1] = self.tri.y[vertices[:,2]]
 
             ##get barycentric coords, according to https://en.wikipedia.org/wiki/
             ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
@@ -610,7 +649,7 @@ class Grid(object):
         if self.dst_grid.proj != self.proj:
             lon, lat = self.proj(x, y, inverse=True)
             x, y = self.dst_grid.proj(lon, lat)
-        x, y = self.dst_grid.wrap_cyclic_xy(x, y)
+        x, y = self.dst_grid._wrap_cyclic_xy(x, y)
         return x, y
 
     def _proj_from(self, x, y):
@@ -620,7 +659,7 @@ class Grid(object):
         if self.dst_grid.proj != self.proj:
             lon, lat = self.dst_grid.proj(x, y, inverse=True)
             x, y = self.proj(lon, lat)
-        x, y = self.wrap_cyclic_xy(x, y)
+        x, y = self._wrap_cyclic_xy(x, y)
         return x, y
 
     def _set_rotation_matrix(self):
@@ -785,6 +824,8 @@ class Grid(object):
 
         fld_interp = np.full(np.array(x).flatten().shape, np.nan)
         if fld.shape == self.x.shape:
+            if not self.regular:
+                fld = fld[self.tri.inds]
             if method == 'nearest':
                 # find the node of the triangle with the maximum weight
                 fld_interp[inside] = fld.flatten()[nearest]
@@ -792,7 +833,7 @@ class Grid(object):
                 # sum over the weights for each node of triangle
                 fld_interp[inside] = np.einsum('nj,nj->n', np.take(fld.flatten(), vertices), weights)
             else:
-                raise ValueError("'method' should be 'nearest' or 'linear'")
+                raise NotImplementedError(f"interp method {method} is not yet available")
         elif not self.regular and fld.shape == self.x_elem.shape:
             fld_interp[inside] = fld[indices]
         else:
@@ -1082,10 +1123,13 @@ class Grid(object):
                 ind = np.argsort(x[0,:])
                 x = np.take(x, ind, axis=1)
                 fld = np.take(fld, ind, axis=1)
-            c = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+            im = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+
         else:
-            c = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
-        return c
+            im = ax.tripcolor(self.tri, fld[self.tri.inds], vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+
+        self.set_xylim(ax)
+        return im
 
     def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevel=20, cmap='viridis', markersize=10, **kwargs):
         """
@@ -1105,6 +1149,8 @@ class Grid(object):
         cind = ((vbound - vmin) / dv).astype(int)
 
         ax.scatter(self.x, self.y, markersize, color=cmap[cind], **kwargs)
+
+        self.set_xylim(ax)
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
@@ -1254,6 +1300,8 @@ class Grid(object):
             ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
             ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
 
+        self.set_xylim(ax)
+
     def plot_land(self, ax, color=None, linecolor='k', linewidth=1,
                   showriver=False, rivercolor='c',
                   showgrid=True, dlon=20, dlat=5):
@@ -1317,6 +1365,9 @@ class Grid(object):
             for xy in self.llgrid_xy(dlon, dlat):
                 ax.plot(*zip(*xy), color='k', linewidth=0.5, linestyle=':', zorder=4)
 
+        self.set_xylim(ax)
+
+    def set_xylim(self, ax):
         ##set the correct extent of plot
         ax.set_xlim(self.xmin, self.xmax)
         ax.set_ylim(self.ymin, self.ymax)
