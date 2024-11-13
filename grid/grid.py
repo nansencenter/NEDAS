@@ -141,8 +141,8 @@ class Grid(object):
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
-            self.x_elem = np.mean(self.x[self.tri.triangles], axis=1)
-            self.y_elem = np.mean(self.y[self.tri.triangles], axis=1)
+            self.x_elem = np.mean(self.tri.x[self.tri.triangles], axis=1)
+            self.y_elem = np.mean(self.tri.y[self.tri.triangles], axis=1)
             self.Lx = self.xmax - self.xmin
             self.Ly = self.ymax - self.ymin
             if self.cyclic_dim is not None:
@@ -1126,7 +1126,9 @@ class Grid(object):
             im = ax.pcolor(x, y, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
 
         else:
-            im = ax.tripcolor(self.tri, fld[self.tri.inds], vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
+            if fld.shape == self.x.shape:
+                fld = fld[self.tri.inds]
+            im = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
 
         self.set_xylim(ax)
         return im
