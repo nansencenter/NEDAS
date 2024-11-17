@@ -25,12 +25,12 @@ def pack_field_chunk(c, fld, is_vector, dst_pid):
             else:
                 fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
         else:
-            istart,iend,di = c.partitions[par_id]
-            mask_chk = c.mask[istart:iend:di]
+            inds = c.partitions[par_id]
+            mask_chk = c.mask[inds]
             if is_vector:
-                fld_chk[par_id] = fld[:, istart:iend:di][:, ~mask_chk]
+                fld_chk[par_id] = fld[:, inds][:, ~mask_chk]
             else:
-                fld_chk[par_id] = fld[istart:iend:di][~mask_chk]
+                fld_chk[par_id] = fld[inds][~mask_chk]
     return fld_chk
 
 def unpack_field_chunk(c, fld, fld_chk, src_pid):
@@ -40,9 +40,9 @@ def unpack_field_chunk(c, fld, fld_chk, src_pid):
             mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
             fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
         else:
-            istart,iend,di = c.partitions[par_id]
-            mask_chk = c.mask[istart:iend:di]
-            fld[..., istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
+            inds = c.partitions[par_id]
+            mask_chk = c.mask[inds]
+            fld[..., inds][..., ~mask_chk] = fld_chk[par_id]
 
 def transpose_field_to_state(c, fields):
     """

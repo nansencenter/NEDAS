@@ -86,7 +86,7 @@ def parse_state_info(c):
         print(f"variables: {variables}", flush=True)
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
-    info['variables'] = variables
+    info['variables'] = list(variables)
     return info
 
 def write_state_info(binfile, info):
@@ -267,15 +267,16 @@ def distribute_state_tasks(c):
 
 def partition_grid(c):
     if len(c.grid.x.shape)==2:
-        return partition_regular_grid(c)
+        return partition_regular_slicing(c)
     else:
-        return partition_grid_points(c)
+        return partition_grid_point_list(c)
 
-def partition_regular_grid(c):
+def partition_regular_slicing(c):
     """
     Generate spatial partitioning of the domain
     partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
     for each partition indexed by par_id, the tuple contains indices for slicing the domain
+    Using regular slicing is more efficient than fancy indexing (used in irregular grid)
     """
     ny, nx = c.grid.x.shape
 
@@ -284,7 +285,8 @@ def partition_regular_grid(c):
         ##the workload on each tile is uneven since there are masked points
         ##so we divide into 3*nproc tiles so that they can be distributed
         ##according to their load (number of unmasked points)
-        nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / c.nproc_mem / 3))), 1)
+        ntile = c.nproc_mem * 3
+        nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / ntile))), 1)
 
         ##a list of (istart, iend, di, jstart, jend, dj) for tiles
         ##note: we have 3*nproc entries in the list
@@ -308,25 +310,41 @@ def partition_regular_grid(c):
         ##a list of (ist, ied, di, jst, jed, dj) for slicing
         ##note: we have nproc_mem entries in the list
         partitions = [(i, nx, nx_intv, j, ny, ny_intv)
-                      for j in np.arange(ny_intv)
-                      for i in np.arange(nx_intv) ]
+                      for j in range(ny_intv) for i in range(nx_intv) ]
     return partitions
 
-def partition_grid_points(c):
+def partition_grid_point_list(c):
     """
     Generate spatial partitioning of the domain
     partitions: dict[par_id, tuple(start, end, interval)]
     """
-    ##divide the partition in a similar fashion to serial mode in regular grid case
     npoints = c.grid.x.size
-    nparts = c.nproc_mem
-
     if c.assim_mode == 'batch':
-        n_tile = npoints // nparts
-        partitions = [(i, np.minimum(i+n_tile, npoints), 1) for i in np.arange(0, npoints, n_tile) ]
+        ##divide the domain into sqaure tiles, similar to regular_grid case, but collect
+        ##the grid points inside each tile and return the indices
+        ntile = c.nproc_mem * 3
+
+        if c.grid.Ly==0:
+            ##for 1D grid, just divide into equal sections, no y dimension
+            Dx = c.grid.Lx / ntile
+            partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0]
+                          for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
+
+        else:
+            ##for 2D grid, find number of tiles in each direction according to aspect ratio
+            ntile_y = max(int(np.sqrt(ntile * c.grid.Ly / c.grid.Lx)), 1)
+            ntile_x = max(ntile // ntile_y, 1)
+            Dx = c.grid.Lx / ntile_x
+            Dy = c.grid.Ly / ntile_y
+            partitions = [np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
+                                                  np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))
+                          for y in np.arange(c.grid.ymin, c.grid.ymax, Dy)
+                          for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
     elif c.assim_mode == 'serial':
-        partitions = [(i, npoints, nparts) for i in np.arange(nparts)]
+        ##just divide the list of points into nproc_mem parts, each part spanning the entire domain
+        nparts = c.nproc_mem
+        partitions = [np.arange(i, npoints, nparts) for i in np.arange(nparts)]
 
     return partitions
 

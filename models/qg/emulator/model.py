@@ -22,7 +22,7 @@ class QGModelEmulator(QGModel):
         self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
         self.unet_model.load_weights(self.weightfile)
 
-    def run(self, nens=1, task_id=0, task_nproc=1, **kwargs):
+    def run(self, nens=1, task_id=0, **kwargs):
         self.run_status = 'running'
         if nens>1:
             ##running ensmeble together, ignore kwargs['member']
