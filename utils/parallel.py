@@ -6,6 +6,14 @@ from concurrent.futures import ProcessPoolExecutor
 import threading
 from .progress import print_with_cache, progress_bar
 
+def check_parallel_io():
+    ##check if netcdf is built with parallel support
+    try:
+        with Dataset('dummy.nc', mode='w', parallel=True):
+            return True
+    except Exception:
+        return False
+
 class Comm(object):
     """Communicator class with MPI support"""
 
@@ -17,17 +25,68 @@ class Comm(object):
             ##program is called from mpi, initialize comm
             try:
                 from mpi4py import MPI
+                self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
+                self.rank = self._comm.Get_rank()
+                self.size = self._comm.Get_size()
+
             except ImportError:
                 print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
+                self._MPI = None
                 self._comm = DummyComm()
 
         else:
             ##serial program, use a dummy communicator
+            self._MPI = None
             self._comm = DummyComm()
+
+        self.parallel_io = check_parallel_io()
+
+        ##file lock to ensure only one processor access a file at a time
+        self._locks = {}
 
     def __getattr__(self, attr):
         return getattr(self._comm, attr)
+
+    def _init_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename not in self._locks:
+            lock_win = self._MPI.Win.Allocate_shared(4, 4, comm=self._comm)
+            lock_mem, _ = lock_win.Shared_query(0)
+            lock_mem = np.frombuffer(lock_mem, dtype='i')
+            if self._comm.rank == 0:
+                lock_mem[0] = -1
+                # print(f"Rank 0 initialized {filename} lock_mem to {lock_mem[0]}", flush=True)
+            # print(f"Rank {self._comm.rank} queried {filename} lock_mem: {lock_mem[0]}", flush=True)
+            self._locks[filename] = (lock_mem, lock_win)
+
+    def acquire_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename not in self._locks:
+            self._init_file_lock(filename)
+        lock_mem, lock_win = self._locks[filename]
+        while True:
+            # print(f"pid {self.rank} waiting for {filename}", lock_mem, flush=True)
+            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
+            if lock_mem[0] == -1:
+                lock_mem[0] = self.rank
+                lock_win.Unlock(0)
+                # print(f"pid {self.rank} acquires {filename} lock_mem={lock_mem[0]}", flush=True)
+                break
+            lock_win.Unlock(0)
+            time.sleep(0.01)
+
+    def release_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename in self._locks:
+            lock_mem, lock_win = self._locks[filename]
+            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
+            lock_mem[0] = -1
+            lock_win.Unlock(0)
+            # print(f"pid {self.rank} releases {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
