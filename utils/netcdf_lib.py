@@ -1,8 +1,27 @@
 import numpy as np
 from netCDF4 import Dataset
+import time
 
-##netcdf file io
-def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
+def nc_open(filename, mode, comm):
+    if comm is None:
+        return Dataset(filename, mode, format='NETCDF4')
+    else:
+        if comm.parallel_io:
+            return Dataset(filename, mode, format='NETCDF4', parallel=True)
+        else:
+            comm.acquire_file_lock(filename)
+            try:
+                return Dataset(filename, mode, format='NETCDF4')
+            except Exception:
+                comm.release_file_lock(filename)
+                raise
+
+def nc_close(filename, f, comm):
+    f.close()
+    if comm is not None and not comm.parallel_io:
+        comm.release_file_lock(filename)
+
+def nc_write_var(filename, dim, varname, dat, recno=None, attr=None, comm=None):
     """
     Write a variable to a netcdf file
 
@@ -27,8 +46,11 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
     - attr: dict, optional
       Additional attribute to output to the variable
       Dictionary {'name of attr':'value of attr'}
+
+    - comm: Comm object
     """
-    f = Dataset(filename, 'a', format='NETCDF4')
+    f = nc_open(filename, 'a', comm)
+
     ndim = len(dim)
     s = ()  ##slice for each dimension
     d = 0
@@ -40,6 +62,7 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
             s += (slice(None),)
             assert(dat.shape[d] == dim[name]), "dat size for dimension "+name+" mismatch with dim["+name+"]={}".format(dim[name])
             d += 1
+
         if name in f.dimensions:
             if dim[name] is not None:
                 assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size ({}) mismatch with file ({})".format(dim[name], f.dimensions[name].size)
@@ -54,10 +77,10 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None):
     if attr is not None:
         for akey in attr:
             f[varname].setncattr(akey, attr[akey])
-    f.close()
 
+    nc_close(filename, f, comm)
 
-def nc_read_var(filename, varname):
+def nc_read_var(filename, varname, comm=None):
     """
     Read a variable from an netcdf file
 
@@ -71,13 +94,17 @@ def nc_read_var(filename, varname):
     - varname: str
       Name of the variable to read
 
+    - comm: Comm object
     Return:
     - dat: np.array
       The variable read from the file
     """
-    f = Dataset(filename, 'r')
+    f = nc_open(filename, 'r', comm)
+
     assert varname in f.variables, 'variable '+varname+' is not defined in '+filename
     dat = f[varname][...].data
-    f.close()
+
+    nc_close(filename, f, comm)
+
     return dat
 
