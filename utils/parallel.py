@@ -9,6 +9,7 @@ from .progress import print_with_cache, progress_bar
 def check_parallel_io():
     ##check if netcdf is built with parallel support
     try:
+        from netCDF4 import Dataset
         with Dataset('dummy.nc', mode='w', parallel=True):
             return True
     except Exception:
@@ -52,13 +53,12 @@ class Comm(object):
         if self._MPI is None:
             return
         if filename not in self._locks:
-            lock_win = self._MPI.Win.Allocate_shared(4, 4, comm=self._comm)
+            lock_win = self._MPI.Win.Allocate_shared(1, 1, comm=self._comm)
             lock_mem, _ = lock_win.Shared_query(0)
-            lock_mem = np.frombuffer(lock_mem, dtype='i')
+            lock_mem = np.frombuffer(lock_mem, dtype='B')
             if self._comm.rank == 0:
-                lock_mem[0] = -1
-                # print(f"Rank 0 initialized {filename} lock_mem to {lock_mem[0]}", flush=True)
-            # print(f"Rank {self._comm.rank} queried {filename} lock_mem: {lock_mem[0]}", flush=True)
+                lock_mem[0] = 0
+            # print(f"Rank {self._comm.rank} initialized lock on {filename} lock_mem: {lock_mem[0]}", flush=True)
             self._locks[filename] = (lock_mem, lock_win)
 
     def acquire_file_lock(self, filename):
@@ -68,12 +68,12 @@ class Comm(object):
             self._init_file_lock(filename)
         lock_mem, lock_win = self._locks[filename]
         while True:
-            # print(f"pid {self.rank} waiting for {filename}", lock_mem, flush=True)
+            # print(f"pid {self.rank} waiting for lock on {filename}", lock_mem, flush=True)
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
-            if lock_mem[0] == -1:
-                lock_mem[0] = self.rank
+            if lock_mem[0] == 0:
+                lock_mem[0] = 1
                 lock_win.Unlock(0)
-                # print(f"pid {self.rank} acquires {filename} lock_mem={lock_mem[0]}", flush=True)
+                # print(f"pid {self.rank} acquires lock on {filename} lock_mem={lock_mem[0]}", flush=True)
                 break
             lock_win.Unlock(0)
             time.sleep(0.01)
@@ -84,9 +84,9 @@ class Comm(object):
         if filename in self._locks:
             lock_mem, lock_win = self._locks[filename]
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
-            lock_mem[0] = -1
+            lock_mem[0] = 0
             lock_win.Unlock(0)
-            # print(f"pid {self.rank} releases {filename}", flush=True)
+            # print(f"pid {self.rank} releases lock on {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
