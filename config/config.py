@@ -25,6 +25,7 @@ class Config(object):
         self.set_comm()
         self.set_analysis_grid()
         self.set_model_config()
+        self.set_dataset_config()
 
         ##these attributes will also be useful during runtime
         for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
@@ -99,6 +100,15 @@ class Config(object):
             ##load model class instance
             module = importlib.import_module('models.'+model_name)
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
+
+    def set_dataset_config(self):
+        ##initialize dataset config dict
+        self.dataset_config = {}
+        for rec in self.obs_def:
+            ##load dataset module
+            dataset_name = rec['dataset_src']
+            module = importlib.import_module('dataset.'+dataset_name)
+            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **rec)
 
     def show_summary(self):
         ##print a summary

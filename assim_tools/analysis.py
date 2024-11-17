@@ -198,8 +198,7 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     print_1p(' done.\n')
     return state_prior, lobs_prior
 
-# @njit(cache=True)
-# @profile
+@njit(cache=True)
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
                    obs, obs_err, obs_x, obs_y, obs_z, obs_t,
                    obs_prior,

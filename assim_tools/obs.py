@@ -1,7 +1,6 @@
 import numpy as np
 import os
 import struct
-import importlib
 from grid import Grid
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
@@ -49,8 +48,9 @@ def parse_obs_info(c):
         vname = vrec['name']
 
         ##some properties of the variable is defined in its source module
-        src = importlib.import_module('dataset.'+vrec['dataset_src'])
-        assert vname in src.variables, 'variable '+vname+' not defined in dataset.'+vrec['dataset_src']+'.variables'
+        dataset = c.dataset_config[vrec['dataset_src']]
+        variables = dataset.variables
+        assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.Obs.variables'
 
         ##parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
         impact_on_state = {}
@@ -69,10 +69,10 @@ def parse_obs_info(c):
                        'nobs': vrec.get('nobs', 0),
                        'obs_window_min': vrec['obs_window_min'],
                        'obs_window_max': vrec['obs_window_max'],
-                       'dtype': src.variables[vname]['dtype'],
-                       'is_vector': src.variables[vname]['is_vector'],
-                       'units': src.variables[vname]['units'],
-                       'z_units': src.variables[vname]['z_units'],
+                       'dtype': variables[vname]['dtype'],
+                       'is_vector': variables[vname]['is_vector'],
+                       'units': variables[vname]['units'],
+                       'z_units': variables[vname]['z_units'],
                        'time': time,
                        'dt': 0,
                        'pos': pos,
@@ -169,19 +169,11 @@ def assign_obs(c, obs_seq):
         obs_inds_pid[obs_rec_id] = {}
 
         if c.assim_mode == 'batch':
-            if len(c.grid.x.shape)==2:
-                ##screen horizontally for obs inside hroi of each partition
-                obs_inds_pid[obs_rec_id] = assign_obs_regular_tiles(c, obs_rec_id, obs_seq)
-            else:
-                ##for irregular grid or 1d grid, just store all the obs for now
-                ##TODO: spatial KDTree for faster subsetting of obs
-                for par_id in range(len(c.partitions)):
-                    obs_inds_pid[obs_rec_id][par_id] = full_inds
+            ##screen horizontally for obs inside hroi of each partition
+            obs_inds_pid[obs_rec_id] = assign_obs_to_tiles(c, obs_rec_id, obs_seq)
 
         elif c.assim_mode == 'serial':
-            ##locality doesn't matter, we just divide obs_rec into nproc_mem
-            ##partitions with par_id from 0 to nproc_mem-1
-
+            ##locality doesn't matter, we just divide obs_rec into nproc_mem parts
             inds = distribute_tasks(c.comm_mem, full_inds)
             for par_id in range(c.nproc_mem):
                 obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
@@ -195,41 +187,35 @@ def assign_obs(c, obs_seq):
 
     return obs_inds
 
-def assign_obs_regular_tiles(c, obs_rec_id, obs_seq):
+def assign_obs_to_tiles(c, obs_rec_id, obs_seq):
     hroi = c.obs_info['records'][obs_rec_id]['hroi']
+
     xo = np.array(obs_seq[obs_rec_id]['x'])  ##obs x,y
     yo = np.array(obs_seq[obs_rec_id]['y'])
-    x = c.grid.x[0,:]   ##grid x,y
-    y = c.grid.y[:,0]
 
     ##loop over partitions with par_id
-    inds = {}
+    obs_inds = {}
     for par_id in range(len(c.partitions)):
-        ist,ied,di,jst,jed,dj = c.partitions[par_id]
+        ##find bounding box for this partition
+        if len(c.grid.x.shape)==2:
+            ist,ied,di,jst,jed,dj = c.partitions[par_id]
+            xmin, xmax, ymin, ymax = c.grid.x[0,ist], c.grid.x[0,ied-1], c.grid.y[jst,0], c.grid.y[jed-1,0]
+        else:
+            inds = c.partitions[par_id]
+            x = c.grid.x[inds]
+            y = c.grid.y[inds]
+            xmin, xmax, ymin, ymax = x.min(), x.max(), y.min(), y.max()
+        Dx = 0.5 * (xmax - xmin)
+        Dy = 0.5 * (ymax - ymin)
+        xc = xmin + Dx
+        yc = ymin + Dy
 
-        ##condition 1: within the four corner points of the tile
-        hdist = np.hypot(np.minimum(np.abs(xo - x[ist]),
-                                    np.abs(xo - x[ied-1])),
-                         np.minimum(np.abs(yo - y[jst]),
-                                    np.abs(yo - y[jed-1])) )
-        cond1 = (hdist < hroi)
-
-        ##condition 2: within [x_ist:x_ied, y_jst-hroi:y_jed+hroi]
-        cond2 = np.logical_and(np.logical_and(xo >= x[ist],
-                                              xo <= x[ied-1]),
-                               np.logical_and(yo > y[jst]-hroi,
-                                              yo < y[jed-1]+hroi) )
-
-        ##condition 3: within [x_ist-hroi:x_ied+hroi, y_jst:y_jed]
-        cond3 = np.logical_and(np.logical_and(xo > x[ist]-hroi,
-                                              xo < x[ied-1]+hroi),
-                               np.logical_and(yo >= y[jst],
-                                              yo <= y[jed-1]) )
-
-        ##if any of the 3 condition satisfies, the obs is within
-        ##hroi of any points in tile[par_id]
-        inds[par_id] = np.where(np.logical_or(cond1, np.logical_or(cond2, cond3)))[0]
-    return inds
+        ##observations within the bounding box + halo region of width hroi will be assigned to
+        ##this partition. Although this will include some observations near the corner that are
+        ##not within hroi of any grid points, this is favorable for the efficiency in finding subset
+        obs_inds[par_id] = np.where(np.logical_and(c.grid.distance_in_x(xc, xo) <= Dx+hroi,
+                                                   c.grid.distance_in_y(yc, yo) <= Dy+hroi))[0]
+    return obs_inds
 
 def distribute_partitions(c):
     """
@@ -244,8 +230,8 @@ def distribute_partitions(c):
             nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
                                 for ist,ied,di,jst,jed,dj in c.partitions] )
         else:
-            nlpts_loc = np.array([np.sum((~c.mask[ist:ied:di]).astype(int))
-                                for ist,ied,di in c.partitions] )
+            nlpts_loc = np.array([np.sum((~c.mask[inds]).astype(int))
+                                for inds in c.partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
@@ -350,7 +336,7 @@ def state_to_obs(c, **kwargs):
             we can get it through read_field() from the state_file
        1.3, If the obs is not one of the state variable, we get it through model_src.read_var()
 
-    2, If obs_name is one of the variables provided by obs_src.obs_operator, we call it to
+    2, If obs_name is one of the variables provided by obs.obs_operator, we call it to
        obtain the obs seq. Typically the obs_operator performs more complex computation, such
        as path integration, radiative transfer model, etc. (slowest)
 
@@ -396,23 +382,23 @@ def state_to_obs(c, **kwargs):
         seq = np.full(nobs, np.nan)
 
     ##obs dataset source module
-    obs_src = importlib.import_module('dataset.'+kwargs['dataset_src'])
+    dataset = c.dataset_config[kwargs['dataset_src']]
     ##model source module
     model = c.model_config[kwargs['model_src']]
 
     ##option 1  TODO: update README
     ## if dataset module provides an obs_operator, use it to compute obs
-    if hasattr(obs_src, 'obs_operator') and kwargs['model_src'] in obs_src.obs_operator and kwargs['name'] in obs_src.obs_operator[kwargs['model_src']]:
+    if hasattr(dataset, 'obs_operator') and kwargs['model_src'] in dataset.obs_operator and kwargs['name'] in dataset.obs_operator[kwargs['model_src']]:
         if synthetic:
             path = model.truth_dir
         else:
             path = forecast_dir(c, time, kwargs['model_src'])
 
-        operator = obs_src.obs_operator[kwargs['model']]
+        operator = obs.obs_operator[kwargs['model']]
         # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['dataset_src']+'.obs_operator for '+kwargs['model_src']
 
         ##get the obs seq from operator
-        seq = operator[kwargs['name']](path, c.grid, c.mask, **kwargs)
+        seq = operator[kwargs['name']](path=path, grid=c.grid, mask=c.mask, **kwargs)
 
     ##option 2:
     ## if obs variable is one of the state variable, or can be computed by the model,
@@ -538,11 +524,8 @@ def prepare_obs(c):
         obs_rec = c.obs_info['records'][obs_rec_id]
 
         ##load the dataset module
-        src = importlib.import_module('dataset.'+obs_rec['dataset_src'])
-        assert obs_rec['name'] in src.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
-
-        ##directory storing the dataset files for this variable
-        path = obs_rec['dataset_dir']
+        dataset = c.dataset_config[obs_rec['dataset_src']]
+        assert obs_rec['name'] in dataset.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
         ##read ens-mean z coords from z_file for this obs network
         z = read_mean_z_coords(c, obs_rec['time'])
@@ -550,7 +533,7 @@ def prepare_obs(c):
         if c.use_synthetic_obs:
             ##generate synthetic obs network
             model = c.model_config[obs_rec['model_src']]
-            seq = src.random_network(path, c.grid, c.mask, z, model.truth_dir, **obs_rec)
+            seq = dataset.random_network(z=z, truth_dir=model.truth_dir, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -560,7 +543,7 @@ def prepare_obs(c):
 
         else:
             ##read dataset files and obtain obs sequence
-            seq = src.read_obs(path, c.grid, c.mask, z, **obs_rec)
+            seq = dataset.read_obs(z=z, **obs_rec)
         del z
 
         by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
