@@ -1,5 +1,5 @@
 import os
-from ..forday import forday, dayfor
+from ..time_format import forday, dayfor
 
 def bool_str(value):
     if value:
