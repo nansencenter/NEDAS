@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from datetime import datetime, timedelta
-from ..forday import forday, dayfor
+from ..time_format import forday, dayfor
 
 def bool_str(value):
     if value:
@@ -195,12 +195,12 @@ def blkdat(m):
     nmlstr += f"{str(m.nsdzi):^8s}  'nsdzi' = STOKES: number of interfaces in Stokes Drift input\n"
     return nmlstr
 
-def limits(m, time, forecast_period):
-    refyear = time.year
-    day1 = int(time.strftime('%j'))
-    hour1 = int(time.strftime('%H'))
-    day2 = day1 + int(forecast_period / 24)
-    hour2 = (hour1 + forecast_period) % 24
+def limits(m):
+    refyear = m.time.year
+    day1 = int(m.time.strftime('%j'))
+    hour1 = int(m.time.strftime('%H'))
+    day2 = day1 + int(m.forecast_period / 24)
+    hour2 = (hour1 + m.forecast_period) % 24
 
     fdtime = dayfor(m.yrflag, refyear, day1, hour1)
     ldtime = dayfor(m.yrflag, refyear, day2, hour2)
@@ -217,12 +217,12 @@ def ports(m):
         nmlstr += f"{str(m.jlport[i]):^8s} 'jlport   ' = last  j-index (=jfport for north/south port)\n"
     return nmlstr
 
-def ice_in(m, time, forecast_period):
+def ice_in(m):
     year_init = 1958 ##time.year
     time_init = datetime(year_init, 1, 1, 0, 0, 0)
-    sec0 = (time - time_init) / timedelta(seconds=1)
+    sec0 = (m.time - time_init) / timedelta(seconds=1)
     istep0 = int(np.floor(sec0 / m.cice_dt)) - 1
-    npt = int(np.floor(forecast_period * 3600 / m.cice_dt)) + 1
+    npt = int(np.floor(m.forecast_period * 3600 / m.cice_dt)) + 1
 
     ##namelist input for cice model "ice_in"
     nmlstr  = f"&setup_nml\n"
@@ -603,24 +603,22 @@ def ice_in(m, time, forecast_period):
     nmlstr += f"/\n"
     return nmlstr
 
-def namelist(m, time, forecast_period, run_dir='.'):
+def namelist(m, run_dir='.'):
     """
     Generate namelists for TP5 model runs,
     Inputs:
     - m: Model object with configs
-    - time: datetime obj for the starting time of the run
-    - forecast_period: forecast period in hours for the run
     - run_dir: path to the run directory
     """
     with open(os.path.join(run_dir, 'blkdat.input'), 'wt') as f:
         f.write(blkdat(m))
 
     with open(os.path.join(run_dir, 'limits'), 'wt') as f:
-        f.write(limits(m, time, forecast_period))
+        f.write(limits(m))
 
     with open(os.path.join(run_dir, 'ports.input'), 'wt') as f:
         f.write(ports(m))
 
     with open(os.path.join(run_dir, 'ice_in'), 'wt') as f:
-        f.write(ice_in(m, time, forecast_period))
+        f.write(ice_in(m))
 

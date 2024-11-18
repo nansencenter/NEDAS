@@ -35,6 +35,8 @@ class ModelConfig(object):
             self.member = kwargs['member']
         else:
             self.member = None
+        if self.member is not None:
+            assert self.member >= 0, f"member index should be >= 0, got {self.member}"
 
         if 'name' not in kwargs:
             self.name = list(self.variables.keys())[0]  ##if not specified, use first variable listed
@@ -53,8 +55,14 @@ class ModelConfig(object):
         else:
             self.k = self.variables[self.name]['levels'][0]  ##get the first level if not specified
 
+        if 'units' in kwargs:
+            units = kwargs['units']
+        else:
+            units = self.variables[self.name]['units']
+
         ##now some additional args for runtime utility functions
-        for key in ['job_submit_cmd', 'restart_dir', 'forecast_period']:
+        for key in ['job_submit_cmd', 'comm', 'restart_dir', 'forecast_period']:
+            setattr(self, key, None)
             if key in kwargs:
                 setattr(self, key, kwargs[key])
 

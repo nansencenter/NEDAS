@@ -44,6 +44,11 @@ class DatasetConfig(object):
         if self.time is not None:
             assert isinstance(self.time, datetime), "kwargs['time'] is not a datetime object"
 
+        if 'units' in kwargs:
+            units = kwargs['units']
+        else:
+            units = self.variables[self.name]['units']
+
         ##other args used in random_network
         for key in ['grid', 'mask', 'z', 'nobs', 'obs_window_min', 'obs_window_max']:
             if key in kwargs:
