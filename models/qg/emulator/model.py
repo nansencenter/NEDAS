@@ -23,6 +23,7 @@ class QGModelEmulator(QGModel):
         self.unet_model.load_weights(self.weightfile)
 
     def run(self, nens=1, task_id=0, **kwargs):
+        kwargs = super().super().parse_kwargs(**kwargs)
         self.run_status = 'running'
         if nens>1:
             ##running ensmeble together, ignore kwargs['member']

@@ -26,43 +26,34 @@ class ModelConfig(object):
 
     def parse_kwargs(self, **kwargs):
         ##args that pinpoints a certain model state variable
-        if 'path' in kwargs:
-            self.path = kwargs['path']
-        else:
-            self.path = '.'
+        if 'path' not in kwargs:
+            kwargs['path'] = '.'  ##default path is current dir
 
-        if 'member' in kwargs:
-            self.member = kwargs['member']
-        else:
-            self.member = None
-        if self.member is not None:
-            assert self.member >= 0, f"member index should be >= 0, got {self.member}"
+        if 'member' not in kwargs:
+            kwargs['member'] = None
+        if kwargs['member'] is not None:
+            assert kwargs['member'] >= 0, f"member index should be >= 0, got {kwargs['member']}"
 
         if 'name' not in kwargs:
-            self.name = list(self.variables.keys())[0]  ##if not specified, use first variable listed
-        else:
-            self.name = kwargs['name']
+            kwargs['name'] = list(self.variables.keys())[0]  ##if not specified, use first variable listed
+        assert kwargs['name'] in self.variables, f"'{kwargs['name']}' is not defined in model variables"
 
-        if 'time' in kwargs:
-            self.time = kwargs['time']
-        else:
-            self.time = None
-        if self.time is not None:
-            assert isinstance(kwargs['time'], datetime), 'time is expected to be a datetime object'
+        if 'time' not in kwargs:
+            kwargs['time'] = None
+        if kwargs['time'] is not None:
+            assert isinstance(kwargs['time'], datetime), "kwargs 'time' is expected to be a datetime object'"
 
-        if 'k' in kwargs:
-            self.k = kwargs['k']
-        else:
-            self.k = self.variables[self.name]['levels'][0]  ##get the first level if not specified
+        levels = list(self.variables[kwargs['name']]['levels'])
+        if 'k' not in kwargs:
+            kwargs['k'] = levels[0]  ##set to the first level if not specified
+        assert kwargs['k'] in levels, f"level {kwargs['k']} is not available for variable {kwargs['name']}"
 
-        if 'units' in kwargs:
-            units = kwargs['units']
-        else:
-            units = self.variables[self.name]['units']
+        if 'units' not in kwargs:
+            kwargs['units'] = self.variables[kwargs['name']]['units']
 
-        ##now some additional args for runtime utility functions
-        for key in ['job_submit_cmd', 'comm', 'restart_dir', 'forecast_period']:
-            setattr(self, key, None)
-            if key in kwargs:
-                setattr(self, key, kwargs[key])
+        for key in ['job_submit_cmd', 'restart_dir', 'forecast_period', 'comm']:
+            if key not in kwargs:
+                kwargs[key] = None
+
+        return kwargs
 
