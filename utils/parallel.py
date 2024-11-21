@@ -28,8 +28,6 @@ class Comm(object):
                 from mpi4py import MPI
                 self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
-                self.rank = self._comm.Get_rank()
-                self.size = self._comm.Get_size()
 
             except ImportError:
                 print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
@@ -47,7 +45,9 @@ class Comm(object):
         self._locks = {}
 
     def __getattr__(self, attr):
-        return getattr(self._comm, attr)
+        if hasattr(self._comm, attr):
+            return getattr(self._comm, attr)
+        raise AttributeError
 
     def _init_file_lock(self, filename):
         if self._MPI is None:
@@ -56,9 +56,9 @@ class Comm(object):
             lock_win = self._MPI.Win.Allocate_shared(1, 1, comm=self._comm)
             lock_mem, _ = lock_win.Shared_query(0)
             lock_mem = np.frombuffer(lock_mem, dtype='B')
-            if self._comm.rank == 0:
+            if self.Get_rank() == 0:
                 lock_mem[0] = 0
-            # print(f"Rank {self._comm.rank} initialized lock on {filename} lock_mem: {lock_mem[0]}", flush=True)
+            # print(f"Rank {self.Get_rank()} initialized lock on {filename} lock_mem: {lock_mem[0]}", flush=True)
             self._locks[filename] = (lock_mem, lock_win)
 
     def acquire_file_lock(self, filename):
@@ -68,12 +68,12 @@ class Comm(object):
             self._init_file_lock(filename)
         lock_mem, lock_win = self._locks[filename]
         while True:
-            # print(f"pid {self.rank} waiting for lock on {filename}", lock_mem, flush=True)
+            # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
             if lock_mem[0] == 0:
                 lock_mem[0] = 1
                 lock_win.Unlock(0)
-                # print(f"pid {self.rank} acquires lock on {filename} lock_mem={lock_mem[0]}", flush=True)
+                # print(f"pid {self.Get_rank()} acquires lock on {filename}", flush=True)
                 break
             lock_win.Unlock(0)
             time.sleep(0.01)
@@ -86,7 +86,7 @@ class Comm(object):
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
             lock_mem[0] = 0
             lock_win.Unlock(0)
-            # print(f"pid {self.rank} releases lock on {filename}", flush=True)
+            # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
