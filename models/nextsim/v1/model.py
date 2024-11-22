@@ -7,7 +7,7 @@ from datetime import datetime
 from config import parse_config
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.conversion import t2s, s2t, dt1h, units_convert
-from utils.shell_utils import run_command
+from utils.shell_utils import run_command, makedir
 from utils.progress import watch_files
 from grid import Grid
 
@@ -15,18 +15,15 @@ from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
 from .namelist import namelist
 from .diag import *
+from ...model_config import ModelConfig
 
-class Model(object):
+class NextsimModel(ModelConfig):
     """
     Class for configuring and running the nextsim v1 model (lagrangian version)
     """
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
-        ##parse config file and obtain a list of attributes
-        code_dir = os.path.dirname(inspect.getfile(self.__class__))
-        config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
-        for key, value in config_dict.items():
-            setattr(self, key, value)
+        super().__init__(config_file, parse_args, **kwargs)
 
         ##Note: we only work with restart files, normal nextsim binfile have some variables names that
         ##are different from restart files, e.g. Concentration instead of M_conc
@@ -73,40 +70,26 @@ class Model(object):
         self.run_status = 'pending'
 
     def filename(self, **kwargs):
-        if 'name' not in kwargs:
-            name = list(self.variables.keys())[0]   ##if not specified, return the first variable name
-        else:
-            name = kwargs['name']
-
-        if 'path' in kwargs:
-            path = kwargs['path']
-        else:
-            path = '.'
-
-        if 'member' in kwargs and kwargs['member'] is not None:
+        kwargs = super().parse_kwargs(**kwargs)
+        if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
 
-        if name in {**self.native_variables, **self.diag_variables}:
-            if 'time' in kwargs and kwargs['time'] is not None:
-                assert isinstance(kwargs['time'], datetime), 'Error: time is not a datetime object'
+        if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
+            if kwargs['time'] is not None:
                 tstr = kwargs['time'].strftime('%Y%m%dT%H%M%SZ')
-                return os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+                return os.path.join(kwargs['path'], mstr, self.restart_input_path, 'field_'+tstr+'.bin')
 
             else:
                 tstr = '*'
-                search = os.path.join(path, mstr, self.restart_input_path, 'field_'+tstr+'.bin')
+                search = os.path.join(kwargs['path'], mstr, self.restart_input_path, 'field_'+tstr+'.bin')
                 flist = glob.glob(search)
                 assert len(flist)>0, 'no matching files found: '+search
-                return flist[0]
+                return flist[0]   ##return the first matching file
 
-        elif name in self.atmos_forcing_variables:
-            time = kwargs['time']
-            return os.path.join(path, mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+time.strftime('%Y%m%d')+".nc")
-
-        else:
-            raise ValueError(f"variable name '{name}' is not defined for nextsim.v1 model!")
+        elif kwargs['name'] in self.atmos_forcing_variables:
+            return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
 
     def read_grid_from_mshfile(self, mshfile):
         grid_info = read_mshfile(mshfile)
@@ -116,12 +99,8 @@ class Model(object):
         self.edges = np.array([np.array(el.node_indices) for el in grid_info['edges']])
 
     def read_grid(self, **kwargs):
-        if 'name' not in kwargs:
-            name = list(self.variables.keys())[0]   ##if not specified, return the first variable name
-        else:
-            name = kwargs['name']
-
-        if name in {**self.native_variables, **self.diag_variables}:
+        kwargs = super().parse_kwargs(**kwargs)
+        if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
             meshfile = self.filename(**kwargs).replace('field', 'mesh')
             ###only need to read the uniq grid once, store known meshfile in memory bank
             if meshfile not in self.grid_bank:
@@ -134,7 +113,7 @@ class Model(object):
                 self.grid_bank[meshfile] = Grid(proj, x, y, regular=False, triangles=triangles)
             self.grid = self.grid_bank[meshfile]
 
-        elif name in self.atmos_forcing_variables:
+        elif kwargs['name'] in self.atmos_forcing_variables:
             self.grid = Grid.regular_grid(proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
 
     def write_grid(self, **kwargs):
@@ -144,8 +123,8 @@ class Model(object):
         Note: now we assume that number of mesh elements and their indices doesn't change!
         only updating the mesh node position x,y
         """
-        name = kwargs['name']
-        if name in self.native_variables:
+        kwargs = super().parse_kwargs(**kwargs)
+        if kwargs['name'] in self.native_variables:
             meshfile = self.filename(**kwargs).replace('field', 'mesh')
 
             write_data(meshfile, 'Nodes_x', self.grid.x)
@@ -166,29 +145,23 @@ class Model(object):
 
     def read_var(self, **kwargs):
         """read variable from a model restart file"""
-        assert 'name' in kwargs, 'please specify variable name in read_var'
-        name = kwargs['name']
-        assert name in self.variables, 'variable '+name+' not defined in nextsim.v1.variables'
-
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
+        name = kwargs['name']
+        rec = self.variables[name]
 
         if name in self.native_variables:
-            rec = self.native_variables[name]
             var = read_data(fname, rec['name'])
-
             ##nextsim restart file concatenates u,v component, so reshape if is_vector
             if rec['is_vector']:
                 var = var.reshape((2, -1))
 
         elif name in self.diag_variables:
-            rec = self.diag_variables[name]
             var = rec['getter'](**kwargs)
 
         elif name in self.atmos_forcing_variables:
-            rec = self.atmos_forcing_variables[name]
             time = kwargs['time']
             nt_in_file = int(np.round(time.hour / rec['dt']))
-
             if rec['is_vector']:
                 u = nc_read_var(fname, rec['name'][0])[nt_in_file, ...]
                 v = nc_read_var(fname, rec['name'][1])[nt_in_file, ...]
@@ -197,34 +170,23 @@ class Model(object):
                 var = nc_read_var(fname, rec['name'])[nt_in_file, ...]
 
         ##convert units if native unit is not the same as required by kwargs
-        if 'units' in kwargs and 'units' in self.variables[name]:
-            units = kwargs['units']
-        else:
-            units = self.variables[name]['units']
-        var = units_convert(units, self.variables[name]['units'], var)
+        var = units_convert(kwargs['units'], rec['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
         """write variable back to a model restart file"""
-        assert 'name' in kwargs, 'please specify variable name in write_var'
-        name = kwargs['name']
-        assert name in self.variables, 'variable '+name+' not defined in nextsim.v1.variables'
-
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
+        name = kwargs['name']
+        rec = self.variables[name]
 
         ##convert units back if necessary
-        if 'units' in kwargs and 'units' in self.variables[name]:
-            units = kwargs['units']
-        else:
-            units = self.variables[name]['units']
-        var = units_convert(units, self.variables[name]['units'], var, inverse=True)
+        var = units_convert(kwargs['units'], rec['units'], var, inverse=True)
 
         if name in self.native_variables:
-            rec = self.native_variables[name]
             ##nextsim restart file concatenates u,v component, so flatten if is_vector
-            if kwargs['is_vector']:
+            if rec['is_vector']:
                 var = var.flatten()
-
             ##check if original var is on mesh nodes or elements
             # var_orig = read_data(fname, rec['name']).flatten()
             # if var_orig.size != var.size:
@@ -236,7 +198,6 @@ class Model(object):
             write_data(fname, rec['name'], var)
 
         elif name in self.atmos_forcing_variables:
-            rec = self.atmos_forcing_variables[name]
             time = kwargs['time']
             nt_in_file = int(np.round(time.hour / rec['dt']))
             ny, nx = var.shape[-2:]
@@ -253,33 +214,29 @@ class Model(object):
         return np.zeros(self.grid.x.shape)
 
     def read_param(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         return getattr(self, kwargs['name'])
 
     def write_param(self, param, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         setattr(self, kwargs['name'], param)
 
     def preprocess(self, task_id=0, **kwargs):
         ##put sequence of operation here to generate the initial condition files for nextsim
+        kwargs = super().parse_kwargs(**kwargs)
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
 
-        if 'path' in kwargs:
-            path = kwargs['path']
-        else:
-            path = '.'
-        if 'member' in kwargs and kwargs['member'] is not None:
+        if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        run_dir = os.path.join(path, mstr)
-        run_command(f"mkdir -p {run_dir}")
+        run_dir = os.path.join(kwargs['path'], mstr)
+        makedir(run_dir)
 
         ##prepare restart files
-        ##restart_dir kwargs is specified at runtime, if at initial cycle, it is from 'ens_init_dir'
-        ##during the cycling it is from forecast_dir at prev_time
-        restart_dir = kwargs['restart_dir']  ##where the restart files are from
-        restart_file = self.filename(**{**kwargs, 'path':restart_dir})
+        restart_file = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
         shell_cmd = f"cd {run_dir}; "
         shell_cmd += f"mkdir -p {self.restart_input_path}; cd {self.restart_input_path}; "
         field_bin = restart_file
@@ -311,24 +268,21 @@ class Model(object):
         pass
 
     def run(self, task_id=0, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
-        prev_time = time - forecast_period * dt1h
         input_file = self.filename(**kwargs)
         output_file = self.filename(**{**kwargs, 'time':next_time})
 
-        if 'path' in kwargs:
-            path = kwargs['path']
-        else:
-            path = '.'
-        if 'member' in kwargs and kwargs['member'] is not None:
+        if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        run_dir = os.path.join(path, mstr)
+        run_dir = os.path.join(kwargs['path'], mstr)
+        makedir(run_dir)
 
         ##check input files
         field_bin = input_file
@@ -341,7 +295,7 @@ class Model(object):
 
         ##build command to run the model
         job_submit_cmd = kwargs['job_submit_cmd']
-        offset = task_id*self.nproc_per_run
+        offset = task_id * self.nproc_per_run
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
         run_command("touch "+log_file)
@@ -363,13 +317,12 @@ class Model(object):
             ##this creates nextsim.cfg.in in run_dir/config
             ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
-            run_command("mkdir -p "+config_dir)
+            makedir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
             ##run the model and wait for results
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
-
 
         ##checkout output files
         watch_files([output_file])
