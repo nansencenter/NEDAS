@@ -1,60 +1,68 @@
 import numpy as np
+from .njit import njit
 
+@njit
 def gradx(fld, dx, cyclic_dim=None):
     """gradient of input field in x direction
     input:
         -fld: array, input field, last two dimensions (ny, nx)
-        -dx: grid spacing in x
+        -dx: grid spacing in x, fld.shape
         -cyclic_dim: None (default) not cyclic boundary, or string 'x', 'y', 'xy', etc.
     return:
         -gradx of fld with same shape
     """
     fld_gradx = np.zeros(fld.shape)
     if cyclic_dim is not None and 'x' in cyclic_dim:
-        fld_gradx = (np.roll(fld, -1, axis=-1) - np.roll(fld, 1, axis=-1)) / (2.0*dx)
+        ##centered difference of the neighboring grid points
+        fld_gradx[..., :-1] = fld[..., 1:]  ##right neighbor
+        fld_gradx[..., -1]  = fld[..., 0]
+        fld_gradx[..., 1:] -= fld[..., :-1] ##left neighbor
+        fld_gradx[..., 0]  -= fld[..., -1]
+        fld_gradx /= 2.*dx
     else:
-        fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / (2.0*dx)
-        fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0]) / dx
-        fld_gradx[..., -1] = (fld[..., -2] - fld[..., -1]) / dx
+        ##centered difference for the middle part
+        fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / 2.0
+        ##one-sided difference for the left,right edge points
+        fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0])
+        fld_gradx[..., -1] = (fld[..., -2] - fld[..., -1])
+        fld_gradx /= dx
     return fld_gradx
 
-
+@njit
 def grady(fld, dy, cyclic_dim=None):
     """gradient of input fld in y direction, similar to gradx"""
     fld_grady = np.zeros(fld.shape)
     if cyclic_dim is not None and 'y' in cyclic_dim:
-        fld_grady = (np.roll(fld, -1, axis=-2) - np.roll(fld, 1, axis=-2)) / (2.0*dy)
+        ##centered difference of the neighboring grid points
+        fld_grady[..., :-1, :] = fld[..., 1:, :]
+        fld_grady[..., -1, :]  = fld[..., 0, :]
+        fld_grady[..., 1:, :] -= fld[..., :-1, :]
+        fld_grady[..., 0, :]  -= fld[..., -1, :]
+        fld_grady /= 2.*dy
     else:
-        fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / (2.0*dy)
-        fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :]) / dy
-        fld_grady[..., -1, :] = (fld[..., -2, :] - fld[..., -1, :]) / dy
+        ##centered difference for the middle part
+        fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / 2.0
+        ##one-sided difference for the left,right edge points
+        fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :])
+        fld_grady[..., -1, :] = (fld[..., -2, :] - fld[..., -1, :])
+        fld_grady /= dy
     return fld_grady
 
+@njit
+def gradx2(fld, dx, cyclic_dim=None):
+    return gradx(gradx(fld, dx, cyclic_dim), dx, cyclic_dim)
 
-def deriv_x(grid, fld):
-    assert grid.x.shape == fld.shape[-2:], "deriv_x: input fld size mismatch with grid"
-    return gradx(fld, grid.dx, grid.cyclic_dim)
+@njit
+def grady2(fld, dy, cyclic_dim=None):
+    return grady(grady(fld, dy, cyclic_dim), dy, cyclic_dim)
 
+@njit
+def gradxy(fld, dx, dy, cyclic_dim=None):
+    return grady(gradx(fld, dx, cyclic_dim), dy, cyclic_dim)
 
-def deriv_y(grid, fld):
-    assert grid.x.shape == fld.shape[-2:], "deriv_y: input fld size mismatch with grid"
-    return grady(fld, grid.dy, grid.cyclic_dim)
-
-
-def deriv_xx(grid, fld):
-    return deriv_x(grid, deriv_x(grid, fld))
-
-
-def deriv_yy(grid, fld):
-    return deriv_y(grid, deriv_y(grid, fld))
-
-
-def deriv_xy(grid, fld):
-    return deriv_y(grid, deriv_x(grid, fld))
-
-
-def laplacian(grid, fld):
-    return deriv_xx(grid, fld) + deriv_yy(grid, fld)
+@njit
+def laplacian(fld, dx, dy, cyclic_dim=None):
+    return gradx2(fld, dx, cyclic_dim) + grady2(fld, dy, cyclic_dim)
 
 
 def coarsen(grid, fld, nlevel):
@@ -69,6 +77,8 @@ def coarsen(grid, fld, nlevel):
     - fld1: new field on new grid
     """
     assert grid.x.shape == fld.shape[-2:], "coarsen: input fld size mismatch with grid"
+    if nlevel == 0:
+        return grid, fld
     grid1 = grid.change_resolution_level(nlevel)
     grid.set_destination_grid(grid1)
     fld1 = np.zeros(fld.shape[:-2]+(grid1.ny, grid1.nx))
@@ -77,9 +87,9 @@ def coarsen(grid, fld, nlevel):
     return grid1, fld1
 
 
-def sharpen(grid, fld, nlevel):
+def refine(grid, fld, nlevel):
     """
-    sharpen the image by upsampling the grid points by factors of 2,
+    refine the image by upsampling the grid points by factors of 2,
     input:
     - grid: Grid object of the original grid
     - fld: array with last two dimensions ny,nx
@@ -88,7 +98,9 @@ def sharpen(grid, fld, nlevel):
     - grid1: new grid with higher resolution
     - fld1: new field on new grid
     """
-    assert grid.x.shape == fld.shape[-2:], "sharpen: input fld size mismatch with grid"
+    assert grid.x.shape == fld.shape[-2:], "refine: input fld size mismatch with grid"
+    if nlevel == 0:
+        return grid, fld
     grid1 = grid.change_resolution_level(-nlevel)
     grid.set_destination_grid(grid1)
     fld1 = np.zeros(fld.shape[:-2]+(grid1.ny, grid1.nx))
@@ -110,6 +122,6 @@ def warp(grid, fld, u, v):
     assert grid.x.shape == v.shape, "warp: input v size mismatch with grid"
     fld1 = fld.copy()
     for ind in np.ndindex(fld.shape[:-2]):
-        fld1[ind, ...] = grid.interp(fld[ind, ...], grid.x+u, grid.y+v, method='linear')
+        fld1[ind] = grid.interp(fld[ind], grid.x-u, grid.y-v, method='linear')
     return fld1
 

@@ -191,10 +191,10 @@ class ABFile(object) :
     def scanitem(self,item=None,conversion=None) :
         line = self._fileb.readline().strip()
         if item is not None :
-            pattern="^(.*)'(%-6s)'[ =]*"%item
+            pattern=r"^(.*)'(%-6s)'[ =]*"%item
             m=re.match(pattern,line)
         else :
-            m=re.match("^(.*)'(.*)'[ =]*",line)
+            m=re.match(r"^(.*)'(.*)'[ =]*",line)
         if m :
             if conversion :
                 value = conversion(m.group(1))
@@ -266,7 +266,7 @@ class ABFile(object) :
 
     @classmethod
     def strip_ab_ending(cls,fname) :
-        m=re.match( "^(.*)(\.[ab]$)", fname)
+        m=re.match(r"^(.*)(\.[ab]$)", fname)
         if m :
             return m.group(1)
         else :
@@ -325,7 +325,7 @@ class ABFileBathy(ABFile) :
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^min,max[ ]+(.*)[ ]*=(.*)",line)
+            m = re.match(r"^min,max[ ]+(.*)[ ]*=(.*)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"] = m.group(1).strip()
@@ -392,7 +392,7 @@ class ABFileRmu(ABFile) :
         self._header.append(self.readline())
         self._header.append(self.readline())
         self._header.append(self.readline())
-        m = re.match("i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
+        m = re.match(r"i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
         if m :
             self._idm = int(m.group(1))
             self._jdm = int(m.group(2))
@@ -406,7 +406,7 @@ class ABFileRmu(ABFile) :
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^min,max[ ]+(.*)[ ]*=(.*)",line)
+            m = re.match(r"^min,max[ ]+(.*)[ ]*=(.*)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"] = m.group(1).strip()
@@ -659,12 +659,31 @@ class ABFileForcing(ABFile) :
         super(ABFileForcing,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
         self._cline1=cline1
         self._cline2=cline2
-        if action == "w" :
-            pass
-        else :
+        if self._action[0] == "r" :
             self.read_header()
             self.read_field_info()
             self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+        elif self._action == "w":
+            self._idm = idm
+            self._jdm = jdm
+
+    def find_record(self, fieldname, dtime1):
+        record = None
+        for i,d in self._fields.items() :
+            if d["field"] == fieldname and d["dtime1"] == dtime1:
+                record=i
+        return record
+
+    def write_bfile_info(self) :
+        self._fileb.seek(0)
+        self.write_header()
+        for i in range(len(self._fields)):
+            fieldname = self._fields[i]["field"]
+            dtime1 = self._fields[i]["dtime1"]
+            rdtime = self._fields[i]["range"]
+            hmin = self._fields[i]["min"]
+            hmax = self._fields[i]["max"]
+            self._fileb.write("%s:dtime1,range = %12.4f%12.4f,%14.6e%14.6e\n"%(fieldname,dtime1,rdtime,hmin,hmax))
 
     def read_header(self) :
         self._header=[]
@@ -700,6 +719,17 @@ class ABFileForcing(ABFile) :
         hmin,hmax = self._filea.writerecord(field,mask)
         self._fileb.write("%s:dtime1,range = %12.4f%12.4f,%14.6e%14.6e\n"%(fieldname,dtime1,rdtime,hmin,hmax))
 
+    def overwrite_field(self, field, mask, fieldname, dtime1) :
+        assert self._action == "r+"
+        record = self.find_record(fieldname, dtime1)
+        assert record is not None, f"Do not find dtime1={dtime1} in current file, existing"
+        self._open_filea_if_necessary(field)
+        self.check_dimensions(field)
+        hmin,hmax = self._filea.writerecord(field, mask, record=record)
+        self._fields[record]["min"] = hmin
+        self._fields[record]["max"] = hmax
+        self.write_bfile_info()
+
     def read_field_info(self) :
         # Get list of fields from .b file
         #plon:  min,max =        -179.99806         179.99998
@@ -709,7 +739,7 @@ class ABFileForcing(ABFile) :
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^(.*):dtime1,range[ ]*=[ ]+([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)[ ]*,[ ]*([0-9\-\.e+]+)[ ]*([0-9\-\.e+]+)",line)
+            m = re.match(r"^(.*):dtime1,range[ ]*=[ ]+([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)[ ]*,[ ]*([0-9\-\.e+]+)[ ]*([0-9\-\.e+]+)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"]  = m.group(1).strip()
@@ -718,7 +748,7 @@ class ABFileForcing(ABFile) :
                 self._fields[i]["min"]  = float(m.group(4).strip())
                 self._fields[i]["max"]  = float(m.group(5).strip())
             else :
-                raise NameError("cant parse forcing field")
+                raise NameError("cant parse forcing field in "+self._basename)
             i+=1
             line=self.readline().strip()
 
@@ -805,12 +835,12 @@ class ABFileRestart(ABFile) :
         self._header.append(self.readline())
         self._header.append(self.readline())
 
-        m=re.match("RESTART2: iexpt,iversn,yrflag,sigver[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)",self._header[0])
+        m=re.match(r"RESTART2: iexpt,iversn,yrflag,sigver[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)",self._header[0])
         self._iexpt=int(m.group(1))
         self._iversn=int(m.group(2))
         self._yrflag=int(m.group(3))
         self._sigver=int(m.group(4))
-        m2=re.match("RESTART2: nstep,dtime,thbase[ ]*=[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",self._header[1])
+        m2=re.match(r"RESTART2: nstep,dtime,thbase[ ]*=[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",self._header[1])
         self._nstep=int(m2.group(1))
         self._dtime=float(m2.group(2))
         self._thbase=float(m2.group(3))
@@ -821,7 +851,7 @@ class ABFileRestart(ABFile) :
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^([a-zA-Z0-9_ ]+): layer,tlevel,range =[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",line)
+            m = re.match(r"^([a-zA-Z0-9_ ]+): layer,tlevel,range =[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"] = m.group(1).strip()
@@ -952,7 +982,7 @@ class ABFileRelax(ABFile) :
         self._header.append(self.readline())
         self._header.append(self.readline())
         #print "test",self._header
-        m = re.match("i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
+        m = re.match(r"i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
         if m :
             self._idm = int(m.group(1))
             self._jdm = int(m.group(2))
@@ -962,13 +992,13 @@ class ABFileRelax(ABFile) :
         #print self._idm,self._jdm
 
     def read_field_info(self) :
-        # Typical line 
+        # Typical line
         #tem: month,layer,dens,range = 01  01 28.100  -3.3520899E+00    1.0784083E+01
         self._fields={}
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^([a-z_ ]+):[ ]*month[ ]*,[ ]*layer[ ]*,[ ]*dens[ ]*,[ ]*range[ ]*=[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",line)
+            m = re.match(r"^([a-z_ ]+):[ ]*month[ ]*,[ ]*layer[ ]*,[ ]*dens[ ]*,[ ]*range[ ]*=[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"] = m.group(1).strip()
@@ -1021,7 +1051,7 @@ class ABFileRelaxZ(ABFile) :
         self._header.append(self.readline())
         self._cline1=self._header[0].strip()
         self._cline2=self._header[1].strip()
-        m = re.match("i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
+        m = re.match(r"i/jdm[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)",self._header[4].strip())
         if m :
             self._idm = int(m.group(1))
             self._jdm = int(m.group(2))
@@ -1055,7 +1085,7 @@ class ABFileRelaxZ(ABFile) :
         line=self.readline().strip()
         i=0
         while line :
-            m = re.match("^(.*):[ ]*depth,[ ]*range[ ]*=[ ]*([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)",line)
+            m = re.match(r"^(.*):[ ]*depth,[ ]*range[ ]*=[ ]*([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)[ ]+([0-9\-\.e+]+)",line)
             if m :
                 self._fields[i] = {}
                 self._fields[i]["field"]  = m.group(1).strip()
@@ -1063,7 +1093,7 @@ class ABFileRelaxZ(ABFile) :
                 self._fields[i]["min"]  = float(m.group(3).strip())
                 self._fields[i]["max"]  = float(m.group(4).strip())
             else :
-                raise NameError("cant parse forcing field")
+                raise NameError("cant parse relax field in "+self._basename)
             i+=1
             line=self.readline().strip()
 

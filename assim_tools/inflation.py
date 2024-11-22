@@ -32,15 +32,14 @@ def inflation(c, flag, fields_prior, prior_mean_file, obs_seq, obs_prior_seq, fi
                 adaptive_relaxation(c, obs_seq, obs_prior_seq, obs_post_seq)
             relax_to_prior_perturb(c, fields_prior, fields_post, prior_mean_file, post_mean_file)
 
-
 def inflate_state(c, fields, mean_file):
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.rec_list.items() if len(lst)>0][0]
     c.pid_show = pid_rec_show * c.nproc_mem + pid_mem_show
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     coef = c.inflation['coef']
-    print(f'inflating ensemble with inflate_coef={coef}\n')
+    print_1p(f'>>> inflating ensemble with inflate_coef={coef}\n')
 
     ##process the fields, each processor goes through its own subset of
     ##mem_id,rec_id simultaneously
@@ -54,22 +53,23 @@ def inflate_state(c, fields, mean_file):
         fields_mean = read_field(mean_file, c.state_info, c.mask, 0, rec_id)
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
-                print(progress_bar(m*nr+r, nm*nr))
+                print(f"PID {c.pid}: inflate_state mem{mem_id+1:03d}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nm*nr))
 
             ##inflate the ensemble perturbations by coef
             fields[mem_id, rec_id] = coef*(fields[mem_id, rec_id] - fields_mean) + fields_mean
-    if c.debug:
-        print(' done.\n')
-
+    c.comm.Barrier()
+    print_1p(' done.\n')
 
 def relax_to_prior_perturb(c, fields_prior, fields_post, prior_mean_file, post_mean_file):
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.rec_list.items() if len(lst)>0][0]
     c.pid_show = pid_rec_show * c.nproc_mem + pid_mem_show
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     coef = c.inflation['coef']
-    print(f'relaxing to prior ensemble perturbations with relax_coef={coef}\n')
+    print_1p(f'relaxing to prior ensemble perturbations with relax_coef={coef}\n')
 
     ##process the fields, each processor goes through its own subset of
     ##mem_id,rec_id simultaneously
@@ -85,14 +85,15 @@ def relax_to_prior_perturb(c, fields_prior, fields_post, prior_mean_file, post_m
 
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
-                print(progress_bar(m*nr+r, nm*nr))
+                print(f"PID {c.pid}: relax_to_prior_perturb mem{mem_id+1:03d}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nm*nr))
             ##inflate the ensemble perturbations by relaxing to prior perturbations
             fld_prior = fields_prior[mem_id, rec_id]
             fld_post = fields_post[mem_id, rec_id]
             fld_post = fld_post_mean + coef*(fld_prior - fld_prior_mean) + (1.-coef)*(fld_post - fld_post_mean)
-    if c.debug:
-        print(' done.\n')
-
+    c.comm.Barrier()
+    print_1p(' done.\n')
 
 def obs_space_stats(c, obs_seq, obs_prior_seq, obs_post_seq=None):
     """observation-space statistics"""
@@ -160,33 +161,31 @@ def obs_space_stats(c, obs_seq, obs_prior_seq, obs_post_seq=None):
             stats['vara'] += np.sum(variance_obs_post)
     return stats
 
-
 def adaptive_prior_inflation(c, obs_seq, obs_prior_seq):
     """compute prior inflate coef by obs-space statistics (Desroziers et al. 2005)"""
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print("adaptive prior inflation:\n")
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p(">>> adaptive prior inflation:\n")
     stats = obs_space_stats(c, obs_seq, obs_prior_seq)
     if stats['total_nobs'] < 3:
-        print(f"insufficient nobs to establish statistics")
+        print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
         inflate_coef = 1.
     else:
         varb = stats['varb'] / stats['total_nobs']
         varo = stats['varo'] / stats['total_nobs']
         omb2 = stats['omb2'] / stats['total_nobs']
         if c.debug:
-            print(f"varb = {varb}, varo={varo}\n")
-            print(f"omb2 = {omb2}\n")
+            print_1p(f"varb = {varb}, varo={varo}\n")
+            print_1p(f"omb2 = {omb2}\n")
         inflate_coef = np.sqrt((omb2 - varo) / varb)
     c.inflation['coef'] = inflate_coef
 
-
 def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
     """compute posterior inflate coef by obs-space statistics (Desroziers et al. 2005) """
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print("adaptive posterior inflation:\n")
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p(">>> adaptive posterior inflation:\n")
     stats = obs_space_stats(c, obs_seq, obs_prior_seq, obs_post_seq)
     if stats['total_nobs'] < 3:
-        print(f"insufficient nobs to establish statistics")
+        print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
         inflate_coef = 1.
     else:
         varb = stats['varb'] / stats['total_nobs']
@@ -196,20 +195,19 @@ def adaptive_post_inflation(c, obs_seq, obs_prior_seq, obs_post_seq):
         omaamb = stats['omaamb'] / stats['total_nobs']
         amb2 = stats['amb2'] / stats['total_nobs']
         if c.debug:
-            print(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-            print(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+            print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
+            print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
         # inflate_coef = np.sqrt(omaamb/vara)
         inflate_coef = np.sqrt((omb2-varo-amb2)/vara)
     c.inflation['coef'] = inflate_coef
 
-
 def adaptive_relaxation(c,  obs_seq, obs_prior_seq, obs_post_seq):
     """Adaptive covariance relaxation method (Ying and Zhang 2015, QJRMS)"""
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print("adaptive covariance relaxation:\n")
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p(">>> adaptive covariance relaxation:\n")
     stats = obs_space_stats(c, obs_seq, obs_prior_seq, obs_post_seq)
     if stats['total_nobs'] < 3:
-        print(f"insufficient nobs to establish statistics")
+        print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
         relax_coef = 0.
     else:
         varb = stats['varb'] / stats['total_nobs']
@@ -221,9 +219,9 @@ def adaptive_relaxation(c,  obs_seq, obs_prior_seq, obs_post_seq):
         beta = np.sqrt(varb/vara)
         lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
         if c.debug:
-            print(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-            print(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-            print(f"beta = {beta}, lambda = {lamb}\n")
+            print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
+            print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+            print_1p(f"beta = {beta}, lambda = {lamb}\n")
         if beta <= 1:
             relax_coef = 0
         else:

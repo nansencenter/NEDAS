@@ -1,53 +1,57 @@
 import numpy as np
 
-###fft implementation using FFTW
-import pyfftw
+try:
+    ###fft implementation using FFTW
+    import pyfftw
 
-def fft2(f):
-    """
-    2D FFT implemented by pyFFTW
-    """
-    ##prepare fftw plan
-    a = pyfftw.empty_aligned(f.shape, dtype='float32')
-    b = pyfftw.empty_aligned(f.shape[:-1] + (f.shape[-1]//2+1,), dtype='complex64')
-    fft_obj = pyfftw.FFTW(a, b, axes=(-2, -1))
+    def fft2(f):
+        """
+        2D FFT implemented by pyFFTW
+        """
+        ##prepare fftw plan
+        a = pyfftw.empty_aligned(f.shape, dtype='float32')
+        b = pyfftw.empty_aligned(f.shape[:-1] + (f.shape[-1]//2+1,), dtype='complex64')
+        fft_obj = pyfftw.FFTW(a, b, axes=(-2, -1))
 
-    ##perform the fft2, output fh with same shape as f (keep dimension info)
-    fh_ = fft_obj(f)
-    fh = np.zeros(f.shape, dtype='complex64')
+        ##perform the fft2, output fh with same shape as f (keep dimension info)
+        fh_ = fft_obj(f)
+        fh = np.zeros(f.shape, dtype='complex64')
 
-    nup = f.shape[-1]//2+1
+        nup = f.shape[-1]//2+1
 
-    ##top half of the spectrum
-    fh[..., 0:nup] = fh_
+        ##top half of the spectrum
+        fh[..., 0:nup] = fh_
 
-    ##the bottom half is conj of top half of the spectrum
-    if f.shape[-1]%2 == 0:
-        fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-2:0:-1])
-        fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-2:0:-1])
-    else:
-        fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-1:0:-1])
-        fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-1:0:-1])
+        ##the bottom half is conj of top half of the spectrum
+        if f.shape[-1]%2 == 0:
+            fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-2:0:-1])
+            fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-2:0:-1])
+        else:
+            fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-1:0:-1])
+            fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-1:0:-1])
 
-    return fh
+        return fh
 
+    def ifft2(fh):
+        """
+        Inverse 2D FFT implemented by pyFFTW
+        """
+        ##prepare fftw plan
+        b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
+        a = pyfftw.empty_aligned(fh.shape, dtype='float32')
+        fft_obj = pyfftw.FFTW(b, a, axes=(-2, -1), direction='FFTW_BACKWARD')
+        ##perform the ifft2
+        f = fft_obj(fh[..., 0:fh.shape[1]//2+1])
+        return f
 
-def ifft2(fh):
-    """
-    Inverse 2D FFT implemented by pyFFTW
-    """
-    ##prepare fftw plan
-    b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
-    a = pyfftw.empty_aligned(fh.shape, dtype='float32')
-    fft_obj = pyfftw.FFTW(b, a, axes=(-2, -1), direction='FFTW_BACKWARD')
-    ##perform the ifft2
-    f = fft_obj(fh[..., 0:fh.shape[1]//2+1])
-    return f
+except ImportError:
+    print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
 
+    def fft2(x):
+        return np.fft.fft2(x)
 
-##or, if fftw is not available, comment out the above and use np.fft instead:
-##from np.fft import fft2, ifft2
-
+    def ifft2(x):
+        return np.real(np.fft.ifft2(x))
 
 def fftwn(n):
     """
@@ -67,7 +71,6 @@ def fftwn(n):
     else:
         wn = np.concatenate((np.arange(0, nup), np.arange(1-nup, 0)))
     return wn
-
 
 def get_wn(fld):
     """

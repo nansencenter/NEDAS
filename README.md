@@ -64,7 +64,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In `models/<model_name>`, edit `setup.src` to provide environment for running the model. `model_code_dir` is where the model code is; `model_data_dir` is where the static input files are that the model requires during runtime; `ens_init_dir` is where the initial restart files are for the first cycle of the experiment.
 
-    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d_testcast.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
+    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
 
     For the datasets that provide observations to be assimilated, setup their directories in config file, and make sure you implemented the `dataset.<dataset_name>` module.
 
@@ -84,7 +84,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
     In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
 
-    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_exp.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_exp.py --config_file=<my_config_file>`
+    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_expt.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_expt.py --config_file=<my_config_file>`
 
     On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
 
@@ -92,7 +92,7 @@ The Next-generation Ensemble Data Assimilation System (NEDAS) provides a light-w
 
 * **config/** contains a `Config` class to handle configuration files, and some sample yaml configuration files are provided.
 
-* **scripts/** contains top-level control scripts `run_exp.py`, and the two main steps `ensemble_forecast.py` and `assimilate.py`. Users can take these as an example and create their own workflow in their experiments.
+* **scripts/** contains top-level control scripts `run_expt.py`, and the two main steps `ensemble_forecast.py` and `assimilate.py`. Users can take these as an example and create their own workflow in their experiments.
 
 * **assim\_tools/** contains the functions handling model state variables in `state.py`, functions handling observations in `obs.py`, core DA algorithms in `analysis.py`, and post-processing functions in `update.py`.
 

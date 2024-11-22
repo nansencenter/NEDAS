@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from utils.progress import print_with_cache, progress_bar
 from utils.parallel import by_rank
 
@@ -11,6 +12,37 @@ ensemble-complete), or having all the par_id but a subset of mem_id,rec_id
 It is easier to perform i/o and pre/post processing on field-complete state,
 while easier to run assimilation algorithms with ensemble-complete state.
 """
+def pack_field_chunk(c, fld, is_vector, dst_pid):
+    fld_chk = {}
+    for par_id in c.par_list[dst_pid]:
+        if len(c.grid.x.shape)==2:
+            ##slice for this par_id
+            istart,iend,di,jstart,jend,dj = c.partitions[par_id]
+            ##save the unmasked points in slice to fld_chk for this par_id
+            mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+            if is_vector:
+                fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
+            else:
+                fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
+        else:
+            inds = c.partitions[par_id]
+            mask_chk = c.mask[inds]
+            if is_vector:
+                fld_chk[par_id] = fld[:, inds][:, ~mask_chk]
+            else:
+                fld_chk[par_id] = fld[inds][~mask_chk]
+    return fld_chk
+
+def unpack_field_chunk(c, fld, fld_chk, src_pid):
+    for par_id in c.par_list[src_pid]:
+        if len(c.grid.x.shape)==2:
+            istart,iend,di,jstart,jend,dj = c.partitions[par_id]
+            mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+            fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
+        else:
+            inds = c.partitions[par_id]
+            mask_chk = c.mask[inds]
+            fld[..., inds][..., ~mask_chk] = fld_chk[par_id]
 
 def transpose_field_to_state(c, fields):
     """
@@ -29,8 +61,7 @@ def transpose_field_to_state(c, fields):
     """
 
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('transpose field-complete to ensemble-complete\n')
+    print('transpose field-complete to ensemble-complete\n')
     state = {}
 
     nr = len(c.rec_list[c.pid_rec])
@@ -39,8 +70,7 @@ def transpose_field_to_state(c, fields):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            if c.debug:
-                print(progress_bar(r*nm_max+m, nr*nm_max))
+            # print(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare the fld for sending if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -49,8 +79,7 @@ def transpose_field_to_state(c, fields):
                 fld = fields[mem_id, rec_id].copy()
 
             ## - for each source pid_mem (src_pid) with fields[mem_id, rec_id],
-            ##   send chunk of fld[..., jstart:jend:dj, istart:iend:di] to
-            ##   destination pid_mem (dst_pid) with its partition in par_list
+            ##   send chunk of fld to destination pid_mem (dst_pid) with its partition in par_list
             ## - every pid needs to send/recv to/from every pid, so we use cyclic
             ##   coreography here to prevent deadlock
 
@@ -66,17 +95,7 @@ def transpose_field_to_state(c, fields):
             ##    i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
             if m < len(c.mem_list[c.pid_mem]):
                 for dst_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
-                    fld_chk = {}
-                    for par_id in c.par_list[dst_pid]:
-                        ##slice for this par_id
-                        istart,iend,di,jstart,jend,dj = c.partitions[par_id]
-                        ##save the unmasked points in slice to fld_chk for this par_id
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        if rec['is_vector']:
-                            fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
-                        else:
-                            fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
-
+                    fld_chk = pack_field_chunk(c, fld, rec['is_vector'], dst_pid)
                     if dst_pid == c.pid_mem:
                         ##same pid, so just write to state
                         state[mem_id, rec_id] = fld_chk
@@ -89,10 +108,8 @@ def transpose_field_to_state(c, fields):
                 if m < len(c.mem_list[src_pid]):
                     src_mem_id = c.mem_list[src_pid][m]
                     state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-    if c.debug:
-        print(' done.\n')
+    # print(' done.\n')
     return state
-
 
 def transpose_state_to_field(c, state):
     """
@@ -109,8 +126,7 @@ def transpose_state_to_field(c, state):
     """
 
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('transpose ensemble-complete to field-complete\n')
+    print('transpose ensemble-complete to field-complete\n')
     fields = {}
 
     ##all pid goes through their own task list simultaneously
@@ -121,17 +137,17 @@ def transpose_state_to_field(c, state):
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
 
         for m in range(nm_max):
-            if c.debug:
-                print(progress_bar(r*nm_max+m, nr*nm_max))
+            # print(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare an empty fld for receiving if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
                 mem_id = c.mem_list[c.pid_mem][m]
                 rec = c.state_info['fields'][rec_id]
                 if rec['is_vector']:
-                    fld = np.full((2, c.ny, c.nx), np.nan)
+                    fld = np.full((2,)+c.grid.x.shape, np.nan)
                 else:
-                    fld = np.full((c.ny, c.nx), np.nan)
+                    fld = np.full(c.grid.x.shape, np.nan)
+                fields[mem_id, rec_id] = fld
 
             ##this is just the reverse of transpose_field_to_state
             ## we take the exact steps, but swap send and recv operations here
@@ -156,12 +172,7 @@ def transpose_state_to_field(c, state):
                         fld_chk = c.comm_mem.recv(source=src_pid, tag=m)
 
                     ##unpack the fld_chk to form a complete field
-                    for par_id in c.par_list[src_pid]:
-                        istart,iend,di,jstart,jend,dj = c.partitions[par_id]
-                        mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
-                        fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
-
-                    fields[mem_id, rec_id] = fld
+                    unpack_field_chunk(c, fld, fld_chk, src_pid)
 
             ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
             for dst_pid in np.arange(c.pid_mem+1, c.nproc_mem):
@@ -169,10 +180,8 @@ def transpose_state_to_field(c, state):
                     dst_mem_id = c.mem_list[dst_pid][m]
                     c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                     del state[dst_mem_id, rec_id]   ##free up memory
-    if c.debug:
-        print(' done.\n')
+    # print(' done.\n')
     return fields
-
 
 def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     """
@@ -205,12 +214,11 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
 
-    if c.debug:
-        if ensemble:
-            print('obs prior sequences: ')
-        else:
-            print('obs sequences: ')
-        print('transpose obs to local obs\n')
+    if ensemble:
+        print('obs prior sequences: ')
+    else:
+        print('obs sequences: ')
+    print('transpose obs to local obs\n')
 
     ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
     ##        input_obs -> tmp_obs
@@ -222,8 +230,7 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            if c.debug:
-                print(progress_bar(r*nm_max+m, nr*nm_max))
+            # print(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare the obs seq for sending if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -293,8 +300,7 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
                     else:
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-    if c.debug:
-        print(' done.\n')
+    # print(' done.\n')
 
     ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
     ##        tmp_obs -> output_obs
@@ -304,7 +310,6 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
             output_obs[key] = data
 
     return output_obs
-
 
 def transpose_lobs_to_obs(c, lobs):
     """
@@ -324,9 +329,8 @@ def transpose_lobs_to_obs(c, lobs):
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
 
-    if c.debug:
-        print('obs post sequences: ')
-        print('transpose local obs to obs\n')
+    print('obs post sequences: ')
+    print('transpose local obs to obs\n')
 
     obs_seq = {}
     nr = len(c.obs_rec_list[c.pid_rec])
@@ -335,8 +339,7 @@ def transpose_lobs_to_obs(c, lobs):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            if c.debug:
-                print(progress_bar(r*nm_max+m, nr*nm_max))
+            # print(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare an empty obs_seq for receiving if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -381,48 +384,41 @@ def transpose_lobs_to_obs(c, lobs):
                 if m < len(c.mem_list[dst_pid]):
                     dst_mem_id = c.mem_list[dst_pid][m]
                     c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
-    if c.debug:
-        print(' done.\n')
+    # print(' done.\n')
     return obs_seq
-
 
 def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     """
     transpose funcs called by assimilate.py
     """
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('tranpose:\n')
+    print('>>> tranpose:\n')
 
-    if c.debug:
-        print('state variable fields: ')
+    print('state variable fields: ')
     state_prior = transpose_field_to_state(c, fields_prior)
 
-    if c.debug:
-        print('z coords fields: ')
+    print('z coords fields: ')
     z_state = transpose_field_to_state(c, z_fields)
 
     lobs = transpose_obs_to_lobs(c, obs_seq)
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
 
     if c.debug:
-        analysis_dir = os.path.join(c.work_dir, 'cycle', t2s(c.time), 'analysis', c.s_dir)
-        np.save(analysis_dir+'/state_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), state_prior)
-        np.save(analysis_dir+'/z_state.{}.{}.npy'.format(c.pid_mem, c.pid_rec), z_state)
-        np.save(analysis_dir+'/lobs.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs)
-        np.save(analysis_dir+'/lobs_prior.{}.{}.npy'.format(c.pid_mem, c.pid_rec), lobs_prior)
+        np.save(os.path.join(c.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state_prior)
+        np.save(os.path.join(c.analysis_dir, f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), z_state)
+        np.save(os.path.join(c.analysis_dir, f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), lobs)
+        np.save(os.path.join(c.analysis_dir, f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), lobs_prior)
 
     return state_prior, z_state, lobs, lobs_prior
 
-
 def transpose_backward(c, state_post, lobs_post):
     print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    if c.debug:
-        print('transpose back:\n')
+    print('>>> transpose back:\n')
 
+    print('state variable fields: ')
     fields_post = transpose_state_to_field(c, state_post)
+
     obs_post_seq = transpose_lobs_to_obs(c, lobs_post)
 
     return fields_post, obs_post_seq
-
 

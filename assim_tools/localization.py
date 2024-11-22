@@ -1,10 +1,16 @@
 import numpy as np
 from scipy.interpolate import interp1d
-from numba import njit
+from utils.njit import njit
 
-###localization:
-@njit
+# def local_factor(cov, dist, roi, localize_type):
+# def local_factor(state_data, obs_data, c.localization):
+#     lfactor = np.ones(cov.shape)
+#     assert cov.shape == dist.shape, 'local_factor error: cov and dist shape mismatch'
+#     return lfactor.reshape(shape)
+
+@njit(cache=True)
 def local_factor(dist, roi, localize_type='GC'):
+# def local_factor_distance_based(dist, roi, localize_type='GC'):
     """
     Localization factor based on distance and radius of influence (roi)
 
@@ -48,20 +54,18 @@ def local_factor(dist, roi, localize_type='GC'):
 
     return lfactor.reshape(shape)
 
-def NICE_lookup_table(nens):
-    return table
-
-def NICE(X, Y, fac=1):
+@njit(cache=True)
+def local_factor_NICE(CorrXY, fac=1):
     """
     localization based on NICE (Morzfeld et al. 2023)
     """
-    Ne = X.shape[1]
+    # Ne = X.shape[1]
     ##lookup table
     # FileName = f'std_ro_Ne_{Ne}.mat'
     # dat = scipy.io.loadmat(f'matlab/std_ro_Ne_{Ne}.mat')
     # r = dat['r'].flatten()
     # stdCrs = dat['stdCrs'].flatten()
-    CorrXY = np.corrcoef(X, Y)[0:X.shape[0], X.shape[0]:]
+    # CorrXY = np.corrcoef(X, Y)[0:X.shape[0], X.shape[0]:]
     interp_func = interp1d(r, stdCrs, kind='linear', fill_value='extrapolate')
     std_rho = interp_func(CorrXY)
     std_rho[np.isclose(CorrXY, 1)] = 0
@@ -88,21 +92,38 @@ def NICE(X, Y, fac=1):
         elif np.linalg.norm(Corr_NICE - CorrXY, 'fro') > fac * sig_rho:
             break
         PrevCorr = Corr_NICE
-    Vy = np.diag(np.std(Y, axis=1))
-    Vx = np.diag(np.std(X, axis=1))
-    Cov_NICE = np.dot(Vx, np.dot(Corr_NICE, Vy))
-    return Cov_NICE, Corr_NICE
+    # Vy = np.diag(np.std(Y, axis=1))
+    # Vx = np.diag(np.std(X, axis=1))
+    # Cov_NICE = np.dot(Vx, np.dot(Corr_NICE, Vy))
+    return Corr_NICE
 
-def local_factor_adaptive(nens, cov, localize_type=''):
+# def NICE_lookup_table(c, nens):
+    # return table
 
-    return lfactor.reshape(shape)
+# def NICE_generate_lookup_table(filename, nens):
+#     nos = 1e5;
+# rTMP = 0:.05:.95;
+# for Ne = 20;%[5 10 20 30 40 60 80 100]
+#     fprintf('Ne = %g\n',Ne)
+#     stdCrsTMP = zeros(length(rTMP),1);
+#     for kk=1:length(rTMP)
+#         CrTMP = zeros(nos,1);
+#         for jj=1:nos
+#             C = eye(2);
+#             C(1,2) = rTMP(kk);
+#             C(2,1) = rTMP(kk);
+#             sC = chol(C)';
+#             samps = sC*randn(2,Ne);
+#             tmp = corr(samps');
+#             CrTMP(jj) = tmp(1,2);
+#         end
+#         stdCrsTMP(kk) = std(CrTMP);
+#     end 
 
+#     r = [rTMP 1]; 
+#     stdCrs = [stdCrsTMP; 0]; 
+#     FileName = strcat('std_ro_Ne_',num2str(Ne),'.mat');
+#     save(FileName,'r','stdCrs')
+# end
 
-# def local_factor(cov, dist, roi, localize_type):
-#     lfactor = np.ones(cov.shape)
-#     assert cov.shape == dist.shape, 'local_factor error: cov and dist shape mismatch'
-
-#     if 
-
-#     return lfactor
 

@@ -1,24 +1,42 @@
+import numpy
 import sys
 import os
 import re
 import inspect
 import argparse
 import yaml
-from distutils.util import strtobool
 
-def convert_scientific_notation(data):
+def convert_notation(data):
     if isinstance(data, dict):
-        return {key: convert_scientific_notation(value) for key, value in data.items()}
+        return {key: convert_notation(value) for key, value in data.items()}
     elif isinstance(data, list):
-        return [convert_scientific_notation(element) for element in data]
+        return [convert_notation(element) for element in data]
     elif isinstance(data, str):
-        # Match scientific notation pattern and convert to float
+        ## Match scientific notation pattern and convert to float
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
+        ## convert "inf" to numpy.inf
+        elif data == "inf":
+            return numpy.inf
+        elif data == "-inf":
+            return -numpy.inf
+        ## convert string to bool
+        # elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+        #     return True
+        # elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+        #     return False
         else:
             return data
     else:
         return data
+
+def str2bool(data):
+    if data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+        return 1
+    elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+        return 0
+    else:
+        raise ValueError(f"Invalid input value for str2bool: {data}")
 
 def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     """
@@ -33,7 +51,7 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
       if true, parse runtime arguments with argparse
       NB: only enable this once in a program to avoid namespace confusion
     - **kwargs
-      config_dict entries can also be set here
+      config_dict entries can also be added/updated through kwargs
 
     Return:
     - config_dict: dict[key, value]
@@ -50,6 +68,9 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
 
     if parse_args:
         input_args = sys.argv[1:]
+        if len(input_args) == 0:
+            print(f"Usage: {sys.argv[0]} -c YAML_config_file")
+            exit()
     else:
         input_args = {}
 
@@ -78,21 +99,20 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
         with open(args.config_file, 'r') as f:
             config_dict = {**config_dict, **yaml.safe_load(f)}
 
+    ##append new config variables defined in kwargs
+    config_dict = {**config_dict, **kwargs}
+
     ##continue building the parser with additional arguments to update
     ##individual config variables in config_dict
     parser = argparse.ArgumentParser()
 
     for key, value in config_dict.items():
 
-        ##update value if they are specified in kwargs
-        if key in kwargs:
-            value = kwargs[key]
+        value = convert_notation(value)
 
-        value = convert_scientific_notation(value)
-
-        ##variable type for this argument
+        ##bool variable type needs special treatment for parsing runtime input string
         if isinstance(value, bool):
-            key_type = lambda x: bool(strtobool(x))
+            key_type = lambda x: bool(str2bool(x))
         else:
             key_type = type(value)
 
@@ -104,14 +124,12 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
 
     ##show help message
     if args.help:
-        print(f"""Parsing configuration:
+        print(f"""
+Default configuration variables are defined in 'default.yml' in the code directory.
 
-Default values can be defined in default.yml in the code directory
+You can specify a YAML config file by [-c YAML_FILE] or [--config_file YAML_FILE] to overwrite the default configuration.
 
-You can specify a yaml config file to overwrite (part of) the default configuration
-usage: code.py [-c YAML_FILE] [--config_file YAML_FILE]
-
-The following arguments also allow you to update a configuration variable at runtime:
+Furthermore, you can also overwrite some configuration variables by specifying them at runtime:
 """)
         parser.print_help()
         exit()
