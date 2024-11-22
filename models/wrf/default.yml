@@ -1,3 +1,6 @@
+model_code_dir: '/cluster/home/yingyue/code/wrf'
+model_data_dir: '/cluster/work/users/yingyue/data'
+
 #&time_control
 interval_seconds: 10800
 input_from_file: [True]

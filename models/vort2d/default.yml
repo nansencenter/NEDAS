@@ -1,3 +1,9 @@
+nproc_per_run: 1
+nproc_per_util: 1
+ens_init_dir: ''
+ens_run_type: scheduler
+walltime: 100
+
 nx: 128   ##grid dimensions
 ny: 128
 

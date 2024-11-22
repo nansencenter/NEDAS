@@ -1,22 +1,8 @@
 
-#
-# To create a makefile called Makefile and immediately exectute it, thus producing an
-# executable called sqg4.0, cut and paste the following line:
-#
-# mkmf -x -v -p qg2.93 -t mkmf.template.intel path_names  > mkmf.log
-#
-# or if you have mpif.h in your src directory and you don't want to execute the make command:
-#
-# mkmf -p qg2.93 -t mkmf.template.intel path_names 
-#
-# (be sure not to have exactly one carriage return per path name in path_names...  
-# otherwise you get a parsing error from mkmf)
-#
-
 FC = ifort
 LD = ifort
 FFLAGS =  -O3 -r8 -i4 -assume byterecl -free -ipo -nowarn
-LIBS = -L/cluster/software/FFTW/3.3.8-intel-2019b/lib -lfftw3 -L/user/lib64 -lm
+LIBS = -L$(FFTW_DIR)/lib -lfftw3 -L/user/lib64 -lm
 LDFLAGS = $(LIBS)
 TMPFILES = *.mod
 

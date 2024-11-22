@@ -2,9 +2,18 @@ import numpy as np
 import os
 from functools import wraps
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import threading
-from utils.progress import print_with_cache, progress_bar
+from .progress import print_with_cache, progress_bar
+
+def check_parallel_io():
+    ##check if netcdf is built with parallel support
+    try:
+        from netCDF4 import Dataset
+        with Dataset('dummy.nc', mode='w', parallel=True):
+            return True
+    except Exception:
+        return False
 
 class Comm(object):
     """Communicator class with MPI support"""
@@ -15,16 +24,69 @@ class Comm(object):
         mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
         if any([ev in os.environ for ev in mpi_env_var]):
             ##program is called from mpi, initialize comm
-            from mpi4py import MPI
-            self._comm = MPI.COMM_WORLD
+            try:
+                from mpi4py import MPI
+                self._MPI = MPI
+                self._comm = MPI.COMM_WORLD
+
+            except ImportError:
+                print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
+                self._MPI = None
+                self._comm = DummyComm()
 
         else:
             ##serial program, use a dummy communicator
+            self._MPI = None
             self._comm = DummyComm()
 
-    def __getattr__(self, attr):
-        return getattr(self._comm, attr)
+        self.parallel_io = check_parallel_io()
 
+        ##file lock to ensure only one processor access a file at a time
+        self._locks = {}
+
+    def __getattr__(self, attr):
+        if hasattr(self._comm, attr):
+            return getattr(self._comm, attr)
+        raise AttributeError
+
+    def _init_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename not in self._locks:
+            lock_win = self._MPI.Win.Allocate_shared(1, 1, comm=self._comm)
+            lock_mem, _ = lock_win.Shared_query(0)
+            lock_mem = np.frombuffer(lock_mem, dtype='B')
+            if self.Get_rank() == 0:
+                lock_mem[0] = 0
+            # print(f"Rank {self.Get_rank()} initialized lock on {filename} lock_mem: {lock_mem[0]}", flush=True)
+            self._locks[filename] = (lock_mem, lock_win)
+
+    def acquire_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename not in self._locks:
+            self._init_file_lock(filename)
+        lock_mem, lock_win = self._locks[filename]
+        while True:
+            # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
+            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
+            if lock_mem[0] == 0:
+                lock_mem[0] = 1
+                lock_win.Unlock(0)
+                # print(f"pid {self.Get_rank()} acquires lock on {filename}", flush=True)
+                break
+            lock_win.Unlock(0)
+            time.sleep(0.01)
+
+    def release_file_lock(self, filename):
+        if self._MPI is None:
+            return
+        if filename in self._locks:
+            lock_mem, lock_win = self._locks[filename]
+            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
+            lock_mem[0] = 0
+            lock_win.Unlock(0)
+            # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
@@ -66,7 +128,6 @@ class DummyComm(object):
     def reduce(self, obj, root=0):
         return obj
 
-
 def by_rank(comm, rank):
     """
     Decorator for func() to be run only by rank 0 in comm
@@ -81,7 +142,6 @@ def by_rank(comm, rank):
             return result
         return wrapper
     return decorator
-
 
 def bcast_by_root(comm):
     """
@@ -99,7 +159,6 @@ def bcast_by_root(comm):
             return result
         return wrapper
     return decorator
-
 
 def distribute_tasks(comm, tasks, load=None):
     """
@@ -160,19 +219,19 @@ def distribute_tasks(comm, tasks, load=None):
 
     return task_list
 
-
 class Scheduler(object):
     """
     A scheduler class for queuing and running multiple jobs on available workers (group of processors).
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker, walltime=None):
+    def __init__(self, nworker, walltime=None, debug=False):
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
+        self.debug = debug
         self.jobs = {}
-        self.executor = ThreadPoolExecutor(max_workers=nworker)
+        self.executor = ProcessPoolExecutor(max_workers=nworker)
         self.queue_open = True
         self.running_jobs = []
         self.pending_jobs = []
@@ -192,6 +251,8 @@ class Scheduler(object):
                            'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
+        if self.debug:
+            print(f"Scheduler: Job {name} added: '{job.__name__, args, kwargs}'", flush=True)
 
     def monitor_job_queue(self):
         """
@@ -211,7 +272,8 @@ class Scheduler(object):
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'], worker_id, *info['args'], **info['kwargs'])
                 self.running_jobs.append(name)
-                # print('job '+name+f' submitted to {worker_id}')
+                if self.debug:
+                    print(f"Scheduler: Job {name} started by worker {worker_id}", flush=True)
 
             ##if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -220,13 +282,16 @@ class Scheduler(object):
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    print(f'job {name} raised exception: {e}')
-                    raise e
+                    print(f'Scheduler: Job {name} raised exception: {e}', flush=True)
                     self.error_jobs.append(name)
+                    ###not exiting...
+                    raise e
                     return
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
+                if self.debug:
+                    print(f"Scheduler: Job {name} completed", flush=True)
 
             ##kill jobs that exceed walltime
             ##TODO: the kill signal isn't handled
@@ -238,7 +303,9 @@ class Scheduler(object):
             #             self.error_jobs.append(name)
             #             return
 
-            print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
+            ##just show a progress bar if not output debug messages
+            if not self.debug:
+                print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 
             time.sleep(0.1)  ##don't check too frequently, will increase overhead
 

@@ -15,10 +15,6 @@ time_assim_start: '202301010000' ##start time of the first analysis cycle
 time_assim_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
-time: '202301010000'
-prev_time: '202301010000'
-next_time: '202301011200'
-
 obs_time_steps: [0]
 obs_time_scale: 0
 state_time_steps: [0]
@@ -48,23 +44,20 @@ obs_def:
   vroi: 5
   troi: 24
   impact_on_state:
-    -streamfunc: 1.0
+     streamfunc: 1.0
 
 use_synthetic_obs: True
 
 model_def:
   qg.emulator:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/emulator/default.yml'
-    model_code_dir: ''
-    model_data_dir: ''
-    nproc_per_mem: 1    ##number of processors to run a forecast
+    nproc_per_run: 1    ##number of processors to run a forecast
     ens_run_type: batch
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
-regress_type: 'linear'
 
 inflation:
   type: 'posterior,relax'

@@ -1,83 +1,127 @@
-work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
+##working directory for your experiment
+work_dir: '/cluster/work/users/yingyue/qg'
+
+##"job_submit_cmd nproc offset executable" will run 'executable' on your computer
+##using 'nproc' processors (starting from the 'offset'-th in the available processor list)
 job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
-nproc: 1        ##total number of processors
-nproc_mem: 1    ##number of processor groups
+##total number of available processors
+nproc: 16
 
-nens: 100         ##ensemble size
+##some experiment design parameters
+nens: 20          ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
-
+run_diag: False   ##if true, run diagnotics
 debug: False      ##if true, output debug data/message
 
-time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '202302180000'         ##end time of the experiment
-time_assim_start: '202301010000' ##start time of the first analysis cycle
-time_assim_end: '202302180000'   ##end time of the last analysis cycle
-cycle_period: 12                 ##cycle period, in hours
+##time control of the experiment
+time_start: '202301010000'       ## start time of the experiment, format ccyymmddHHMM
+time_end: '202302180000'         ## end time of the experiment
+time_assim_start: '202301010000' ## start time of the first analysis cycle
+time_assim_end: '202302180000'   ## end time of the last analysis cycle
+cycle_period: 12                 ## cycle period, in hours
 
-time: '202301010000'
-prev_time: '202301010000'
-next_time: '202301011200'
+obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time
+obs_time_scale: 0                ## smoothing window in hours for observations
+state_time_steps: [0]            ## time steps defining the 4D state vector, hours, relative to cycle time
+state_time_scale: 0              ## smoothing window in hours for state variables
 
-obs_time_steps: [0]
-obs_time_scale: 0
-state_time_steps: [0]
-state_time_scale: 0
-
+##analysis grid definition, for now we support only uniform analysis grids
+## if type==custom, configure a Grid.regular_grid
+## if you want to use the model grid directly (if only 1 model is involved), set type==model_name
 grid_def:
   type: 'custom'
-  proj: '+proj=stere'
-  xmin: 0
-  xmax: 256
-  ymin: 0
-  ymax: 256
-  dx: 1.0
+  proj:
+  xmin: -1                 ##coordinate range in x and y, use meter units but can be nondimensional too
+  xmax: 257
+  ymin: -1
+  ymax: 257
+  dx: 0.1                  ##grid spacing in coordinate units (resolution)
+  centered: False
 
+##state vector definition (a list of definitions, one for each variable)
 state_def:
-- name: 'streamfunc'
-  model_src: 'qg'
-  var_type: 'field'
-  err_type: 'normal'
+- name: 'streamfunc'      ## name of the variable
+  model_src: 'qg'         ## which model the variable come from
+  var_type: 'field'       ## if 'field' the variable consists of 2D fields, if 'scalar' it is a number
+  err_type: 'normal'      ## which error model to use, now only 'normal'
 
+##observation definition (a list of definitions, one for each variable)
 obs_def:
-- name: 'streamfunc'
-  dataset_src: 'qg'
-  dataset_dir: ''
-  model_src: 'qg'
-  nobs: 3000
-  obs_window_min: -6
+- name: 'streamfunc'      ## name of the variable
+  dataset_src: 'qg'       ## which dataset module it comes from
+  dataset_dir: ''         ## path to where the dataset is stored
+  model_src: 'qg'         ## which model to use to compute observation priors
+  nobs: 3000              ## number of observations (if generating synthetic obs)
+  obs_window_min: -6      ## observation within the window (in hours) will be considered valid at cycle time
   obs_window_max: 0
   err:
-    type: 'normal'
-    std: 0.2
-  hroi: 100
-  vroi: 5
-  troi: 24
-  impact_on_state:
-    -streamfunc: 1.0
+    type: 'normal'        ## observation error model (normal, ...)
+    std: 0.2              ## error standard deviation (in observation physical units)
+  hroi: 100               ## horizontal localization radius (in grid coordinate units)
+  vroi: 5                 ## vertical   ..            .. (vertical coordinate units)
+  troi: 24                ## temporal   ..            .. (hours)
+  impact_on_state:        ## a list of impact factor of this observation on state variables
+    streamfunc: 1.0       ## unlisted state variable has a default of 1.0,
+                          ## this can help removing the analysis increment only on certain variables
 
-use_synthetic_obs: True
+use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
 
+##model configuration dict(model_name, opts)
+##will use config_file as starting point, additional variables will overwrite config_file settings
+##if new variables introduced here, they will be appended to the configuration
 model_def:
   qg:
-    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
-    model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
-    model_data_dir: ''
-    nproc_per_mem: 1    ##number of processors to run a forecast
-    walltime: 1000     ##walltime in seconds
-    ens_run_type: scheduler
-    ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
-    truth_dir: '/cluster/work/users/yingyue/qg/truth'
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'  ##configuration file
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'  ##source file to enter environment
+    model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'           ##where to find model executable
+    nproc_per_run: 1    ## number of processors for one model.run
+    nproc_per_util: 1   ## number of processors for other utility funcs, model.preprocess, etc.
+    walltime: 1000      ## walltime in seconds
+    restart_dt: 12      ## restart file interval in hours
+    forcing_dt: 12      ## boundary forcing interval
+    ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
+    ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'   ##path to the initial ensemble restart files
+    truth_dir: '/cluster/work/users/yingyue/qg/truth'         ##path to the truth files (for synthetic obs)
 
-assim_mode: 'batch'
-filter_type: 'ETKF'
-regress_type: 'linear'
+##perturbatio scheme (a list of individual perturbation methods can be set here)
+perturb:
+- variable: 'streamfunc'   ## which variable, or a list of variables to perturb
+  model_src: 'qg'          ## which model the variable(s) come from
+  type: 'gaussian'         ## type of perturbation (gaussian, powerlaw, displace, ...)
+  amp: 1                   ## amplitude
+  hcorr: 10                ## horizontal correlation length (in grid.x,y coordinate units)
+  tcorr: 12                ## temporal correlation length (in hours)
 
+##more details in assimilation algorithm
+assim_mode: 'batch'          ##assimilation mode (batch or serial)
+filter_type: 'ETKF'          ##filter type for the update (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+
+##multiscale approach in assimilation
+nscale: 1                    ## number of scale components
+scale_id: 0                  ## current scale component index
+decompose_obs: False         ## if true, decompose observations as well
+character_length: [16]       ## characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]      ## scale factor for localization distances
+obs_err_scale_fac: [1]       ## scale factor for observation error variances
+
+##alignment technique in assimilation
+run_alignment: False         ## if true, run alignment technique
+alignment:
+  variable: 'streamfunc'     ## which variable the alignment is based on
+  nlevel: 5                  ## number of resolution levels in multi-grid approach
+  smoothness_weight: 1       ## weight in cost function to enforce smoothness of displace vector field
+
+##covariance inflation technique in assimilation
 inflation:
-  type: 'posterior,relax'
-  adaptive: True
-  coef: 1.0
+  type: 'posterior,relax'   ## type of inflation (posterior/prior, relax/inflate
+  adaptive: True            ## if true, run an adaptive version of the inflation scheme
+  coef: 1.0                 ## static inflation coefficient
 
+##covariance localization technique in assimilation
+## type of localization kernel (GC, step, exp, NICE...)
+## specified for horizontal (h), vertical (v) and temporal (t) separately
+## for distance-based localization, the radius of influence (roi) is specified in obs_def
 localization:
   htype: 'GC'
   vtype: 'GC'

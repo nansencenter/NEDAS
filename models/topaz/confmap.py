@@ -1,5 +1,6 @@
 ###adapted from NERSC-HYCOM-CICE/pythonlibs/modelgrid
 import numpy as np
+from pyproj import Geod
 
 # some constants
 _pi_1=np.pi
@@ -9,11 +10,7 @@ _rad=1.0/_deg
 _epsil=1.0E-9
 
 class ConformalMapping(object) :
-    def __init__(self,lat_a,lon_a,lat_b,lon_b,
-            wlim,elim,ires,
-            slim,nlim,jres,
-            mercator,
-            mercfac,lold) :
+    def __init__(self,lat_a,lon_a,lat_b,lon_b,wlim,elim,ires,slim,nlim,jres,mercator,mercfac,lold) :
         """Constructor: arguments: (grid.info)
             lat_a, lon_a      : position of pole A in geo coordinates
             lat_b, lon_b      : position of pole B in geo coordinates
@@ -76,6 +73,43 @@ class ConformalMapping(object) :
         w=self._cmnb/self._cmna
         self._mu_s=np.arctan2(np.imag(w),np.real(w))
         self._psi_s=2.*np.arctan(abs(w))
+
+        ##grid spacing in meters
+        ii, jj = np.meshgrid(np.arange(self._ires), np.arange(self._jres))
+        lat, lon = self.gind2ll(ii+1., jj+1.)
+        geod = Geod(ellps='sphere')
+        _, _, dist_x = geod.inv(lon[:, 1:], lat[:, 1:], lon[:, :-1], lat[:, :-1])
+        _, _, dist_y = geod.inv(lon[1:, :], lat[1:, :], lon[:-1, :], lat[:-1, :])
+        self._dx = np.median(dist_x)
+        self._dy = np.median(dist_y)
+
+    def __call__(self, x, y, inverse=False):
+        """
+        mimick the pyproj.Proj object, when called proj can perform mapping from long/lat to x/y and inverse)
+        """
+        if not inverse:
+            i, j = self.ll2gind(y, x)
+            xo = (i-1) * self._dx
+            yo = (j-1) * self._dy
+        else:
+            i = np.atleast_1d(x / self._dx + 1)
+            j = np.atleast_1d(y / self._dy + 1)
+            yo, xo = self.gind2ll(i, j)
+        if xo.size == 1:
+            return xo.item(), yo.item()
+        return xo, yo
+
+    def __eq__(self, other):
+        """
+        Define when two confmapping object is the same
+        """
+        if not isinstance(other, ConformalMapping):
+            return False
+
+        for attr in ['lat_a', 'lon_a', 'lat_b', 'lon_b', 'wlim', 'elim', 'ires', 'slim', 'nlim', 'jres', 'mercator', 'mercfac', 'lold']:
+            if getattr(self, '_'+attr) != getattr(other, '_'+attr):
+                return False
+        return True
 
     @classmethod
     def init_from_file(cls,filename) :
@@ -247,5 +281,4 @@ class ConformalMapping(object) :
     def gind2ll(self,i,j,shifti=0.,shiftj=0.):
         """ Returns lat and lon for grid index i,j """
         return self.get_grid_point(i,j,shifti=shifti,shiftj=shiftj)
-
 

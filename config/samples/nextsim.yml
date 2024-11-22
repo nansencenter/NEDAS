@@ -1,23 +1,19 @@
 work_dir: '/cluster/work/users/yingyue/nextsim_test'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'  ##job submit command wrapper
 
-nproc: 512        ##total number of processors
-nproc_mem: 512    ##number of processor groups
+nproc: 128        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: False ##if true, run the assimilation steps
+run_assim: True  ##if true, run the assimilation steps
+run_diag: False
 
-debug: False      ##if true, output debug data/message
+debug: False     ##if true, output debug data/message
 
-time_start: '200702010000'       ##start time of the experiment, format ccyymmddHHMM
+time_start: '200612220000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '200702150000'         ##end time of the experiment
-time_assim_start: '200702020000' ##start time of the first analysis cycle
+time_assim_start: '200701010000' ##start time of the first analysis cycle
 time_assim_end: '200702140000'   ##end time of the last analysis cycle
-cycle_period: 6                  ##cycle period, in hours
-
-time: '200702010000'
-prev_time: '200702010000'
-next_time: '200702010600'
+cycle_period: 24                 ##cycle period, in hours
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -27,11 +23,12 @@ state_time_scale: 0
 grid_def:
   type: 'custom'
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=60'
-  xmin: -2500000
-  xmax: 2500000
-  ymin: -2000000
-  ymax: 2500000
-  dx: 3000
+  xmin: -2.5e6
+  xmax: 2.498e6
+  ymin: -2e6
+  ymax: 2.5e6
+  dx: 3e3
+  centered: True
 
 state_def:
 - name: 'seaice_conc'
@@ -61,31 +58,43 @@ obs_def:
   vroi: 1e10
   troi: 24
   impact_on_state:
-    - seaice_velocity: 0.5
+    seaice_velocity: 0.5
 
 use_synthetic_obs: False
 
 model_def:
   nextsim.v1:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/nextsim/v1/default.yml'
-    model_code_dir: '/cluster/home/yingyue/code/nextsim'
-    model_data_dir: '/cluster/work/users/yingyue/data'
-    nproc_per_mem: 32    ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/nextsim/v1/env/setup_fram.src'
+    nextsim_dir: '/cluster/home/yingyue/code/nextsim'
+    nextsim_mesh_dir: '/cluster/projects/nn2993k/sim/mesh'
+    nextsim_data_dir: '/cluster/projects/nn2993k/yingyue/data'
+    atmos_forcing_path: 'GENERIC_PS_ATM'
+    ocean_forcing_path: 'TOPAZ4_reanalysis-merged'
+    nproc_per_run: 32
+    walltime: 10000
+    restart_dt: 6
+    forcing_dt: 6
     ens_run_type: scheduler
-    ens_init_dir: '/cluster/work/users/yingyue/nextsim_ens_runs/control'
+    ens_init_dir: '/cluster/projects/nn2993k/yingyue/nextsim_ens_runs/control'
     truth_dir: ''
-    perturb:
-      variables: ['atmos_surf_wind', 'atmos_surf_press']
-      type: ['gaussian', 'gaussian']
-      amp: [10., 1000.]
-      hcorr: [2.5e5, 2.5e5]
-      tcorr: [48, 48]
-      press_wind_relate: False
+
+perturb:
+- variable: ['atmos_surf_press', 'atmos_surf_velocity']
+  model_src: 'nextsim.v1'
+  type: 'gaussian,press_wind_relate,scale_wind'
+  amp: [50, 1]
+  hcorr: [2e5, 2e5]
+  tcorr: [72, 72]
+#- variable: 'seaice_conc'
+#  model_src: 'nextsim.v1'
+#  type: 'displace'
+#  amp: 3e4
+#  hcorr: 2e5
+#  tcorr: 72
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
-regress_type: 'linear'
 
 inflation:
   type: 'posterior,relax'

@@ -4,7 +4,7 @@ import argparse
 import threading
 import numpy as np
 from netCDF4 import Dataset
-from utils.parallel import distribute_tasks
+from utils.parallel import distribute_tasks, Comm
 
 def read_chunks(filename, chk_list, var_list):
     ##get the total dimensions for each variable
@@ -74,14 +74,12 @@ def read_chunks(filename, chk_list, var_list):
                 chunks[vname][chk_id] = (i1,i2, j1,j2, k1,k2, f[vname][0, ...])
     return var_dims, chunks
 
-
 def write_chunks(filename, chk_list, var_list, chunks):
     for chk_id in chk_list:
         with Dataset(filename+f'_{chk_id:04d}', 'r+') as f:
             for vname in var_list:
                 _,_, _,_, _,_, chk = chunks[vname][chk_id]
                 f[vname][0, ...] = chk
-
 
 def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunks):
     fields = {}
@@ -120,16 +118,13 @@ def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunk
 
     return fields
 
-
 def transpose_fields_to_chunks():
 
     pass
 
-
 def read_fields_bin(comm, filename, var_list, var_dims):
 
     return fields
-
 
 def write_fields_bin(comm, filename, var_list, var_dims, fields):
     pid = comm.Get_rank()
@@ -142,11 +137,9 @@ def write_fields_bin(comm, filename, var_list, var_dims, fields):
             f.seek()
             f.write()
 
-
 def read_fields_nc(comm, filename, var_list, var_dims):
 
     return fields
-
 
 def write_fields_nc(comm, filename, var_list, var_dims, fields):
     """output a joined nc file for wrfrst, one variable per file"""
@@ -162,17 +155,14 @@ def write_fields_nc(comm, filename, var_list, var_dims, fields):
             f.createVariable(vname, float, (dim_k, dim_j, dim_i))
             f[vname][...] = fields[vname]
 
-
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(description='Program to read chunks of wrf restart files into a binary file, or reverse')
     parser.add_argument('mode', choices=['join', 'split'], help='operation mode: join or split')
     parser.add_argument('filename', help='wrf restart file name: wrfrst_d01_<time>')
     parser.add_argument('nchk', default=1, type=int, help='number of processors (chunks)')
     args = parser.parse_args()
 
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
+    comm = Comm()
     pid = comm.Get_rank()
 
     chk_list = np.arange(args.nchk)
