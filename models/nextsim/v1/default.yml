@@ -3,6 +3,8 @@ nproc_per_util: 1
 restart_dt: 24
 forcing_dt: 6
 
+nextsim_dir: '/cluster/home/yingyue/code/nextsim'
+nextsim_mesh_dir: '/cluster/projects/nn2993k/sim/mesh'
 msh_filename: small_arctic_10km.msh  ##mesh filename
 
 ice_type: topaz4_rean
