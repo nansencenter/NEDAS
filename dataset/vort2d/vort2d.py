@@ -22,6 +22,7 @@ class Dataset(DatasetConfig):
 
     def random_network(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
+        name = kwargs['name']
         grid = kwargs['grid']
 
         ##get truth vortex position, some network is vortex-following
@@ -34,7 +35,7 @@ class Dataset(DatasetConfig):
         else:
             network_type = 'global'
 
-        if kwargs['name'] == 'velocity':
+        if name == 'velocity':
 
             nobs = kwargs['nobs']
             if network_type == 'global':
@@ -68,7 +69,7 @@ class Dataset(DatasetConfig):
                     'err_std': np.ones(nobs) * kwargs['err']['std']
                     }
 
-        elif kwargs['name'] == 'vortex_position':
+        elif name == 'vortex_position':
             obs_seq = {'obs': np.array([[np.nan, np.nan]]),
                     't': np.array([kwargs['time']]),
                     'z': np.array([0]),
@@ -77,7 +78,7 @@ class Dataset(DatasetConfig):
                     'err_std': np.array([kwargs['err']['std']])
                     }
 
-        elif kwargs['name'] in ['vortex_intensity', 'vortex_size']:
+        elif name in ['vortex_intensity', 'vortex_size']:
             obs_seq = {'obs': np.array([np.nan]),
                     't': np.array([kwargs['time']]),
                     'z': np.array([0]),
@@ -87,7 +88,7 @@ class Dataset(DatasetConfig):
                     }
 
         else:
-            raise ValueError('unknown obs variable: '+kwargs['name'])
+            raise ValueError('unknown obs variable: '+name)
 
         return obs_seq
 
@@ -145,8 +146,7 @@ class Dataset(DatasetConfig):
         ##get the velocity field from model
         module = importlib.import_module('models.vort2d')
         model = getattr(module, 'Model')(**kwargs)
-        kwargs['name'] = 'velocity'
-        return model.read_var(**kwargs)
+        return model.read_var(**{**kwargs, 'name':'velocity'})
 
     def get_vortex_position(self, **kwargs):
         velocity = self.get_velocity(**kwargs)
