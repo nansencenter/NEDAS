@@ -9,8 +9,7 @@ diag_script_path = os.path.abspath(__file__)
 
 def diag(c):
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print_1p('\nRunning diagnostics \n')
-
+    print_1p('\n\033[1;33mRunning diagnostics \033[0m\n')
 
 if __name__ == "__main__":
     from config import Config

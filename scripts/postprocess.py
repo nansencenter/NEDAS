@@ -10,7 +10,7 @@ def postprocess_model_state(c, model_name):
     This function prepares the necessary files for an ensemble forecast
     """
     ##copy the necessary files for each model
-    print(f"\nPostprocessing files for {model_name} ensemble", flush=True)
+    print(f"\n\033[1;33mPostprocessing files for {model_name} ensemble\033[0m", flush=True)
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
 

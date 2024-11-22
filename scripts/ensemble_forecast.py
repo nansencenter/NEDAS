@@ -12,7 +12,7 @@ def ensemble_forecast_scheduler(c, model_name):
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
     os.system("mkdir -p "+path)
-    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
+    print(f"\n\033[1;33mRunning {model_name} ensemble forecast in {path}\033[0m", flush=True)
 
     nworker = c.nproc // model.nproc_per_run
     scheduler = Scheduler(nworker, model.walltime, debug=c.debug)
@@ -44,7 +44,7 @@ def ensemble_forecast_batch(c, model_name):
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
     os.system("mkdir -p "+path)
-    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
+    print(f"\n\033[1;33munning {model_name} ensemble forecast in {path}\033[0m", flush=True)
 
     job_opt = {
         'job_submit_cmd': c.job_submit_cmd,
