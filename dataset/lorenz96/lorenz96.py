@@ -15,8 +15,6 @@ class Dataset(DatasetConfig):
         kwargs = super().parse_kwargs(**kwargs)
 
         nobs = kwargs['nobs']
-        if nobs is None:
-            nobs = 1
         obs_x = np.random.uniform(kwargs['grid'].xmin, kwargs['grid'].xmax, nobs)
 
         obs_seq = {'obs': np.full(nobs, np.nan),
