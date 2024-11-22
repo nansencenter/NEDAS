@@ -17,10 +17,6 @@ class DatasetConfig(object):
 
         self.variables = {}
 
-        for key in ['grid', 'mask', 'z', 'nobs', 'obs_window_min', 'obs_window_max', 'err', 'hroi', 'vroi', 'troi', 'impact_on_state']:
-            if not hasattr(self, key):
-                setattr(self, key, None)
-
     def parse_kwargs(self, **kwargs):
         """
         Parse the input kwargs to pinpoint a specific file/variable...
