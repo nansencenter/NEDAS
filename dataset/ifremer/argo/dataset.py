@@ -5,7 +5,7 @@ from netCDF4 import Dataset
 from utils.conversion import dt1h
 from ..dataset_config import DatasetConfig
 
-class ArgoData(DatasetConfig):
+class Dataset(DatasetConfig):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -57,7 +57,7 @@ class ArgoData(DatasetConfig):
         return: obs_seq dict with lists of obs,x,y,z,time
         """
         kwargs = super().parse_kwargs(**kwargs)
-        obs_name = kwargs['name']
+        name = kwargs['name']
         model_z = kwargs['z']
         model_grid = kwargs['grid']
         model_mask = kwargs['mask']
@@ -67,10 +67,10 @@ class ArgoData(DatasetConfig):
                    'err_std':[],
                    'profile_id':[], 'level_id':[] }
 
-        for file_name in self.filename(**kwargs):
+        for fname in self.filename(**kwargs):
 
             ##read the profiles from nc file
-            f = Dataset(file_name)
+            f = Dataset(fname)
 
             nprof = f.dimensions['N_PROF'].size
             nlev = f.dimensions['N_LEVELS'].size
@@ -99,10 +99,10 @@ class ArgoData(DatasetConfig):
                     zm[:, k] = model_grid.interp(model_z[k, ...], x, y)
 
             ##observed variable
-            if obs_name == 'ocean_temp' and 'TEMP' in f.variables:
+            if name == 'ocean_temp' and 'TEMP' in f.variables:
                 obs = f['TEMP'][0:nprof, 0:nlev].data
                 obs_qc = f['TEMP_QC'][0:nprof, 0:nlev].data
-            elif obs_name == 'ocean_saln' and 'PSAL' in f.variables:
+            elif name == 'ocean_saln' and 'PSAL' in f.variables:
                 obs = f['PSAL'][0:nprof, 0:nlev].data
                 obs_qc = f['PSAL_QC'][0:nprof, 0:nlev].data
             else:
@@ -156,11 +156,11 @@ class ArgoData(DatasetConfig):
                 for l in range(nlev):
                     if flag2[p,l] == 0:
                         continue
-                    if obs_name == 'ocean_temp':
+                    if name == 'ocean_temp':
                         if obs[p,l] < self.TEMP_MIN or obs[p,l] > self.TEMP_MAX:
                             flag1[p] = 0
                             flag2[p,:] = 0
-                    if obs_name == 'ocean_saln':
+                    if name == 'ocean_saln':
                         if obs[p,l] < self.SALN_MIN or obs[p,l] > self.SALN_MAX:
                             flag1[p] = 0
                             flag2[p,:] = 0
@@ -208,7 +208,7 @@ class ArgoData(DatasetConfig):
                     obs_seq['z'].append(z[p,l])
                     obs_seq['y'].append(y[p])
                     obs_seq['x'].append(x[p])
-                    obs_seq['err_std'].append(np.sqrt(self.OBS_ERR_VAR[obs_name]))
+                    obs_seq['err_std'].append(np.sqrt(self.OBS_ERR_VAR[name]))
                     obs_seq['profile_id'].append(p)
                     obs_seq['level_id'].append(l)
 

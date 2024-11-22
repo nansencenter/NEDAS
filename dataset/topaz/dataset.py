@@ -7,7 +7,7 @@ from models.topaz.time_format import datetojul
 from .uf_data import read_uf_data
 from ..dataset_config import DatasetConfig
 
-class TopazPrepData(DatasetConfig):
+class Dataset(DatasetConfig):
     """
     Observations already preprocessed by TOPAZ EnKF Prep_Routines, saved in unformatted binary format
     """
@@ -24,16 +24,6 @@ class TopazPrepData(DatasetConfig):
             'seaice_drift': {'name':'IDRFT', 'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km'},
             }
         self.z_units = 'm'
-
-        ##set default grid if not specified
-        if self.grid is None:
-            ##use native grid
-            grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
-            self.grid = get_topaz_grid(grid_info_file)
-        if self.mask is None:
-            self.mask = np.full(self.grid.x.shape, False)
-        if self.z_coords is None:
-            self.z_coords = np.zeros(self.grid.x.shape)
 
     def filename(self, **kwargs):
         kwargs = super().filename(**kwargs)
@@ -67,6 +57,7 @@ class TopazPrepData(DatasetConfig):
     def read_obs(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         name = kwargs['name']
+        model_grid = kwargs['grid']
 
         is_vector = self.variables[name]['is_vector']
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
@@ -88,7 +79,7 @@ class TopazPrepData(DatasetConfig):
                 obs_seq['t'].append(kwargs['time'])
                 obs_seq['z'].append(-data[i][5])  ##depth
                 lon, lat = data[i][3], data[i][4]
-                x, y = self.grid.proj(lon, lat)
+                x, y = model_grid.proj(lon, lat)
                 obs_seq['y'].append(y)
                 obs_seq['x'].append(x)
                 obs_seq['err_std'].append(np.sqrt(data[i][1]))
