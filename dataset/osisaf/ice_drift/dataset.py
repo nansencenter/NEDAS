@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import netCDF4
 import pyproj
 from grid import Grid
-from ..dataset_config import DatasetConf
+from ...dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
 

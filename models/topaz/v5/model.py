@@ -97,6 +97,12 @@ class Topaz5Model(ModelConfig):
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'forcing')
 
+    def read_grid(self, **kwargs):
+        pass
+
+    def read_mask(self, **kwargs):
+        pass
+
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
@@ -125,7 +131,7 @@ class Topaz5Model(ModelConfig):
 
         elif name in self.atmos_forcing_variables:
             rec = self.atmos_forcing_variables[name]
-            dtime = (kwarts['time'] - datetime(1900,12,31)) / (24*dt1h)
+            dtime = (kwargs['time'] - datetime(1900,12,31)) / (24*dt1h)
             if rec['is_vector']:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
                 var1 = f1.read_field(rec['name'][0], dtime)
@@ -146,11 +152,11 @@ class Topaz5Model(ModelConfig):
     def write_var(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
+        name = kwargs['name']
 
         ##convert back to old units
-        var = units_convert(kwargs['units'], self.variables[self.name]['units'], var, inverse=True)
+        var = units_convert(kwargs['units'], self.variables[name]['units'], var, inverse=True)
 
-        name = kwargs['name']
         if name in self.hycom_variables:
             rec = self.hycom_variables[name]
             ##open the restart file for over-writing
@@ -310,13 +316,13 @@ class Topaz5Model(ModelConfig):
         tstr = time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
-            file1 = os.path.join(path, 'restart.'+tstr+mstr+ext)
+            file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
             run_command(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
         run_command(f"mkdir -p {os.path.join(run_dir, 'cice')}")
         tstr = time.strftime('%Y-%m-%d-00000')
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
-        file1 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
+        file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
         run_command(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
         run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
