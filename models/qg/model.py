@@ -201,7 +201,7 @@ class QGModel(ModelConfig):
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
-            namelist(self, time, dt, dt_ratio, run_dir)
+            namelist(self, time, forecast_period, dt_ratio, run_dir)
 
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
