@@ -16,23 +16,26 @@ class Dataset(DatasetConfig):
         self.operator = {}
 
     def random_network(self, **kwargs):
-        super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
 
-        if self.nobs is None:
-            self.nobs = 1000
+        if kwargs['nobs'] is None:
+            nobs = 1000
+        else:
+            nobs = kwargs['nobs']
 
-        obs_y = np.random.uniform(self.grid.ymin, self.grid.ymax, self.nobs)
-        obs_x = np.random.uniform(self.grid.xmin, self.grid.xmax, self.nobs)
+        grid = kwargs['grid']
+        obs_y = np.random.uniform(grid.ymin, grid.ymax, nobs)
+        obs_x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
         # obs_z = np.random.uniform(0, 1, self.nobs)
-        obs_z = np.zeros(self.nobs)
+        obs_z = np.zeros(nobs)
 
-        obs_seq = {'obs': np.full(self.nobs, np.nan),
-                't': np.full(self.nobs, self.time),
+        obs_seq = {'obs': np.full(nobs, np.nan),
+                't': np.full(nobs, kwargs['time']),
                 'z': obs_z,
                 'y': obs_y,
                 'x': obs_x,
-                'err_std': np.ones(self.nobs) * self.err['std']
+                'err_std': np.ones(nobs) * kwargs['err']['std']
                 }
         return obs_seq
 
