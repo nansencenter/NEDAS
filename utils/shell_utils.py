@@ -39,3 +39,10 @@ def run_script(script_path, c):
         print(f"{script_path} raised error: {p.stderr}")
         exit()
 
+def makedir(dirname):
+    try:
+        os.makedirs(dirname, exist_ok=True)
+    except FileExistsError:
+        ##can happen if multiple processor are trying to make the same directory
+        pass
+

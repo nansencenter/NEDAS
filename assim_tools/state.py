@@ -41,11 +41,13 @@ def parse_state_info(c):
     rec_id = 0   ##record id for a 2D field
     pos = 0      ##seek position for rec
     variables = set()
+    err_types = set()
 
     ##loop through variables in state_def
     for vrec in ensure_list(c.state_def):
         vname = vrec['name']
         variables.add(vname)
+        err_types.add(vrec['err_type'])
 
         if vrec['var_type'] == 'field':
             ##this is a state variable 'field' with dimensions t, z, y, x
@@ -87,6 +89,7 @@ def parse_state_info(c):
 
     info['size'] = pos ##size of a complete state (fields) for 1 memeber
     info['variables'] = list(variables)
+    info['err_types'] = list(err_types)
     return info
 
 def write_state_info(binfile, info):
@@ -481,7 +484,7 @@ def prepare_state(c):
             model.grid.set_destination_grid(c.grid)
 
             ##read field from restart file
-            var = model.read_var(path=path, member=mem_id, **rec)
+            var = model.read_var(path=path, member=mem_id, comm=c.comm, **rec)
             fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
 
             ##misc. transform can be added here
