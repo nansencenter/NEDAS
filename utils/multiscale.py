@@ -5,7 +5,6 @@ from .fft_lib import fft2, ifft2, get_wn
 """functions to perform scale decomposition, through bandpass filtering
 on spatial data (fields), can also use gcm_filter to achieve this.
 """
-
 def lowpass_response(k2d, k1, k2):
     """
     Low-pass spectral response function
@@ -22,7 +21,6 @@ def lowpass_response(k2d, k1, k2):
     ##cos-square transition
     r[ind] = np.cos((k2d[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
     return r
-
 
 def get_scale_component_spec_bandpass(grid, fld, character_length, s):
     assert grid.regular, "get_scale_component_spec_bandpass only works for regular grid"
@@ -47,7 +45,6 @@ def get_scale_component_spec_bandpass(grid, fld, character_length, s):
 
     return ifft2(fld_spec * r)
 
-
 def convolve(grid, fld, rgrid, response):
     L = max(grid.Lx, grid.Ly)
     kx, ky = get_wn(rgrid.x)
@@ -63,7 +60,6 @@ def convolve(grid, fld, rgrid, response):
         ##perform convolution
         fld1[i] = np.nansum(fld * w)
     return fld1
-
 
 def get_scale_component_convolve(grid, fld, character_length, s):
     ##convert length to wavenumber
@@ -93,7 +89,6 @@ def get_scale_component_convolve(grid, fld, character_length, s):
         r2 = lowpass_response(k2d, character_k[s], character_k[s+1])
         return convolve(grid, fld, rgrid, r2) - convolve(grid, fld, rgrid, r1)
 
-
 def get_scale_component(grid, fld, character_length, s):
     """
     Get scale component using a bandpass filter in spectral space
@@ -113,7 +108,6 @@ def get_scale_component(grid, fld, character_length, s):
         for i in np.ndindex(fld.shape[:-1]):
             flds[i] = get_scale_component_convolve(grid, fld[i], character_length, s)
     return flds
-
 
 def get_error_scale_factor(grid, character_length, s):
     err_scale_fac = np.ones(grid.x.shape)

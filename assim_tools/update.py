@@ -75,7 +75,7 @@ def update_restart(c, fields_prior, fields_post):
             #     raise ValueError('nan detected in var_post')
 
             ##write the posterior variable to restart file
-            model.write_var(var_post, path=path, member=mem_id, **rec)
+            model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)
 
     c.comm.Barrier()
     print_1p(' done.\n')

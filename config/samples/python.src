@@ -3,15 +3,12 @@ ulimit -s 2000000
 # Load the right modules
 module --force purge
 ml load StdEnv
-ml load GCCcore/12.3.0
-ml load Python/3.11.3-GCCcore-12.3.0
-ml load FFTW/3.3.10-GCC-12.3.0
-ml load HDF5/1.14.0-iimpi-2023a
-ml load impi/2021.9.0-intel-compilers-2023.1.0
+ml load GCCcore/13.3.0
+ml load Python/3.12.3-GCCcore-13.3.0
+ml load FFTW/3.3.10-GCC-13.3.0
+ml load impi/2021.13.0-intel-compilers-2024.2.0
 
 export PYTHONPATH=$PYTHONPATH:$HOME/code/NEDAS
 
-##enter the project env
-source $HOME/yp/bin/activate
+source $HOME/py/bin/activate
 
-unset I_MPI_PMI_LIBRARY

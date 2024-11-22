@@ -58,7 +58,7 @@ obs_def:
   vroi: 1e10
   troi: 24
   impact_on_state:
-  - seaice_velocity: 0.5
+    seaice_velocity: 0.5
 
 use_synthetic_obs: False
 
@@ -71,8 +71,8 @@ model_def:
     nextsim_data_dir: '/cluster/projects/nn2993k/yingyue/data'
     atmos_forcing_path: 'GENERIC_PS_ATM'
     ocean_forcing_path: 'TOPAZ4_reanalysis-merged'
-    nproc_per_run: 32    ##number of processors to run a forecast
-    walltime: 10000      ##walltime in seconds
+    nproc_per_run: 32
+    walltime: 10000
     restart_dt: 6
     forcing_dt: 6
     ens_run_type: scheduler
@@ -95,7 +95,6 @@ perturb:
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
-regress_type: 'linear'
 
 inflation:
   type: 'posterior,relax'
