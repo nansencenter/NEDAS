@@ -48,12 +48,8 @@ class Config(object):
     def set_comm(self):
         ##initialize mpi communicator
         self.comm = Comm()
-        comm_size = self.comm.Get_size()  ##number of available processors
         if not hasattr(self, 'nproc'):
-            self.nproc = comm_size
-        if self.nproc != comm_size:
-            print(f"Warning: nproc={self.nproc} in config doesn't match self.comm.size={comm_size}, resetting nproc to {comm_size}")
-            self.nproc = comm_size
+            self.nproc = self.comm.Get_size()  ##number of available processors
         self.pid = self.comm.Get_rank()  ##current processor id
 
         ##divide processors into mem/rec groups

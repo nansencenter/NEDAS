@@ -9,7 +9,7 @@ def preprocess_model_state(c, model_name):
     """
     This function prepares the necessary files for an ensemble forecast
     """
-    print(f"\nPreprocessing {model_name} ensemble members", flush=True)
+    print(f"\n\033[1;33mPreprocessing {model_name} ensemble members\033[0m", flush=True)
     model = c.model_config[model_name]
     if c.time==c.time_start:
         restart_dir = model.ens_init_dir

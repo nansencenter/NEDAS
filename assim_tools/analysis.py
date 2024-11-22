@@ -20,21 +20,14 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
     ##x,y coordinates for local state variables on pid
     if len(c.grid.x.shape)==2:
         ist,ied,di,jst,jed,dj = c.partitions[par_id]
-        ii, jj = np.meshgrid(np.arange(ist,ied,di), np.arange(jst,jed,dj))
         msk = c.mask[jst:jed:dj, ist:ied:di]
-        data['mask'] = msk
         data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
         data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
     else:
-        ist,ied,di = c.partitions[par_id]
-        msk = c.mask[ist:ied:di]
-        data['mask'] = msk
-        data['x'] = c.grid.x[ist:ied:di][~msk]
-        if hasattr(c.grid, 'y'):
-            data['y'] = c.grid.y[ist:ied:di][~msk]
-        else:
-            data['y'] = np.zeros(np.sum((~msk).astype(int)))
-    ##TODO: build KDTree to allow faster subset finding
+        inds = c.partitions[par_id]
+        msk = c.mask[inds]
+        data['x'] = c.grid.x[inds][~msk]
+        data['y'] = c.grid.y[inds][~msk]
 
     data['fields'] = []
     for rec_id in c.rec_list[c.pid_rec]:
@@ -43,18 +36,22 @@ def pack_local_state_data(c, par_id, state_prior, z_state):
         for v in v_list:
             data['fields'].append((rec_id, v))
 
+    ##var_id, index in state_info['variables'] list
+
     nfld = len(data['fields'])
     nloc = len(data['x'])
-    data['rec_id'] = np.full(nfld, 0)
     data['t'] = np.full(nfld, np.nan)
-    data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
     data['z'] = np.zeros((nfld, nloc))
-    for m in range(c.nens):
-        for n in range(nfld):
-            rec_id, v = data['fields'][n]
-            rec = c.state_info['fields'][rec_id]
-            data['rec_id'][n] = rec_id
-            data['t'][n] = t2h(rec['time'])
+    data['var_id'] = np.full(nfld, 0)
+    data['err_type'] = np.full(nfld, 0)
+    data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
+    for n in range(nfld):
+        rec_id, v = data['fields'][n]
+        rec = c.state_info['fields'][rec_id]
+        data['t'][n] = t2h(rec['time'])
+        data['err_type'][n] = c.state_info['err_types'].index(rec['err_type'])
+        data['var_id'][n] = c.state_info['variables'].index(rec['name'])
+        for m in range(c.nens):
             data['z'][n, :] += np.squeeze(z_state[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  ##ens mean z
             data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :])
     return data
@@ -71,64 +68,89 @@ def unpack_local_state_data(c, par_id, state_prior, data):
 
 def pack_local_obs_data(c, par_id, lobs, lobs_prior):
     """pack lobs and lobs_prior into arrays for the jitted functions"""
+    data = {}
 
     ##number of local obs on partition
     nlobs = np.sum([lobs[r][par_id]['obs'].size for r in c.obs_info['records'].keys()])
+    n_obs_rec = len(c.obs_info['records'])        ##number of obs records
+    n_state_var = len(c.state_info['variables'])  ##number of state variable names
 
-    data = {}
-    data['start_i'] = {}
-    data['obs'] = np.full(nlobs, np.nan)
     data['obs_rec_id'] = np.full(nlobs, np.nan)
+    data['obs'] = np.full(nlobs, np.nan)
     data['x'] = np.full(nlobs, np.nan)
     data['y'] = np.full(nlobs, np.nan)
     data['z'] = np.full(nlobs, np.nan)
-    ##TODO: build KDTree to allow faster subset finding
     data['t'] = np.full(nlobs, np.nan)
     data['err_std'] = np.full(nlobs, np.nan)
-    data['hroi'] = np.ones(nlobs)
-    data['vroi'] = np.ones(nlobs)
-    data['troi'] = np.ones(nlobs)
-    # data['impact_on_state'] = np.ones(nl)
     data['obs_prior'] = np.full((c.nens, nlobs), np.nan)
     data['used'] = np.full(nlobs, False)
+    data['hroi'] = np.ones(n_obs_rec)
+    data['vroi'] = np.ones(n_obs_rec)
+    data['troi'] = np.ones(n_obs_rec)
+    data['impact_on_state'] = np.ones((n_obs_rec, n_state_var))
 
     i = 0
-    for r, obs_rec in c.obs_info['records'].items():
+    for obs_rec_id in range(n_obs_rec):
+        obs_rec = c.obs_info['records'][obs_rec_id]
 
-        d = lobs[r][par_id]['x'].size
+        data['hroi'][obs_rec_id] = obs_rec['hroi']
+        data['vroi'][obs_rec_id] = obs_rec['vroi']
+        data['troi'][obs_rec_id] = obs_rec['troi']
+        for state_var_id in range(len(c.state_info['variables'])):
+            state_vname = c.state_info['variables'][state_var_id]
+            data['impact_on_state'][obs_rec_id, state_var_id] = obs_rec['impact_on_state'][state_vname]
+
+        local_inds = c.obs_inds[obs_rec_id][par_id]
+        d = len(local_inds)
         v_list = [0, 1] if obs_rec['is_vector'] else [None]
-
         for v in v_list:
-            data['start_i'][r, v] = i
-            data['obs'][i:i+d] = np.squeeze(lobs[r][par_id]['obs'][v, :])
-            data['obs_rec_id'][i:i+d] = r
-            data['x'][i:i+d] = lobs[r][par_id]['x']
-            data['y'][i:i+d] = lobs[r][par_id]['y']
-            data['z'][i:i+d] = lobs[r][par_id]['z'].astype(np.float32)
-            data['t'][i:i+d] = np.array([t2h(t) for t in lobs[r][par_id]['t']])
-            data['err_std'][i:i+d] = lobs[r][par_id]['err_std']
-            data['hroi'][i:i+d] = np.ones(d) * c.obs_info['records'][r]['hroi']
-            data['vroi'][i:i+d] = np.ones(d) * c.obs_info['records'][r]['vroi']
-            data['troi'][i:i+d] = np.ones(d) * c.obs_info['records'][r]['troi']
+            data['obs_rec_id'][i:i+d] = np.full(d, obs_rec_id)
+            data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, :])
+            data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x']
+            data['y'][i:i+d] = lobs[obs_rec_id][par_id]['y']
+            data['z'][i:i+d] = lobs[obs_rec_id][par_id]['z'].astype(np.float32)
+            data['t'][i:i+d] = np.array([t2h(t) for t in lobs[obs_rec_id][par_id]['t']])
+            data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std']
             for m in range(c.nens):
-                data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, r][par_id][v, :])
-
+                data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, :])
             i += d
-
     return data
 
 def unpack_local_obs_data(c, par_id, lobs, lobs_prior, data):
     """unpack data and write back to the original lobs_prior dict"""
+    n_obs_rec = len(c.obs_info['records'])
     i = 0
-    for r, obs_rec in c.obs_info['records'].items():
+    for obs_rec_id in range(n_obs_rec):
+        obs_rec = c.obs_info['records'][obs_rec_id]
 
-        d = lobs[r][par_id]['x'].size
+        local_inds = c.obs_inds[obs_rec_id][par_id]
+        d = len(local_inds)
         v_list = [0, 1] if obs_rec['is_vector'] else [None]
-
         for v in v_list:
             for m in range(c.nens):
-                lobs_prior[m, r][par_id][v, :] = data['obs_prior'][m, i:i+d]
+                lobs_prior[m, obs_rec_id][par_id][v, :] = data['obs_prior'][m, i:i+d]
             i += d
+
+def global_obs_list(c):
+    ##form the global list of obs (in serial mode the main loop is over this list)
+    n_obs_rec = len(c.obs_info['records'])
+
+    i = {}  ##location in full obs vector on owner pid
+    for owner_pid in range(c.nproc_mem):
+        i[owner_pid] = 0
+
+    obs_list = []
+    for obs_rec_id in range(n_obs_rec):
+        obs_rec = c.obs_info['records'][obs_rec_id]
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+        for owner_pid in c.obs_inds[obs_rec_id].keys():
+            for _ in c.obs_inds[obs_rec_id][owner_pid]:
+                for v in v_list:
+                    obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
+                    i[owner_pid] += 1
+
+    np.random.shuffle(obs_list)  ##randomize the order of obs (this is optional)
+    return obs_list
 
 ###functions for the batch assimilation mode:
 def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
@@ -148,8 +170,8 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
             ist,ied,di,jst,jed,dj = c.partitions[par_id]
             msk = c.mask[jst:jed:dj, ist:ied:di]
         else:
-            ist,ied,di = c.partitions[par_id]
-            msk = c.mask[ist:ied:di]
+            inds = c.partitions[par_id]
+            msk = c.mask[inds]
         for l in range(np.sum((~msk).astype(int))):
             ntask += 1
 
@@ -157,7 +179,6 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
     print_1p('>>> assimilate in batch mode:\n')
     task = 0
     for par_id in c.par_list[c.pid_mem]:
-
         state_data = pack_local_state_data(c, par_id, state_prior, z_state)
         nens, nfld, nloc = state_data['state_prior'].shape
 
@@ -166,7 +187,9 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
             continue
 
         obs_data = pack_local_obs_data(c, par_id, lobs, lobs_prior)
+
         nlobs = obs_data['x'].size
+        impact_on_state =1
 
         ##if there is no obs to assimilate, update progress message and skip
         if nlobs == 0:
@@ -174,19 +197,19 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
             print_1p(progress_bar(task-1, ntask))
             continue
 
-        ###TODO: obs_err_corr factored into obs_err
-        obs_err = obs_data['err_std']
-
-        impact_on_state = 1
-
         ##loop through the unmasked grid points in the partition
         for l in range(nloc):
             print_1p(progress_bar(task, ntask))
             task += 1
+            hdist = c.grid.distance(state_data['x'][l], obs_data['x'], state_data['y'][l], obs_data['y'], p=2)
+
+            for n in range(nfld):
+                corr = corrcoef(state_data['state_prior'][:,n,l], obs_data['obs_prior'][:,:])
+
             local_analysis(state_data['state_prior'][:, :, l],
                            state_data['x'][l], state_data['y'][l],
                            state_data['z'][:, l], state_data['t'][:],
-                           obs_data['obs'], obs_err,
+                           obs_data['obs'], obs_data['err_std'],
                            obs_data['x'], obs_data['y'],
                            obs_data['z'], obs_data['t'],
                            obs_data['obs_prior'],
@@ -197,6 +220,20 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
         unpack_local_state_data(c, par_id, state_prior, state_data)
     print_1p(' done.\n')
     return state_prior, lobs_prior
+
+@njit
+def corrcoef(x, y):
+    nens, nlobs = y.shape
+    x_mean = np.mean(x)
+    y_mean = np.zeros(nlobs)
+    for m in range(nens):
+        y_mean += y[m,:]
+    y_mean /= nens
+    cov = np.zeros(nlobs)
+    for m in range(nens):
+        cov += (x[m] - x_mean) * (y[m,:] - y_mean)
+    cov /= (nens -1)
+    return cov
 
 @njit(cache=True)
 def local_analysis(state_prior, state_x, state_y, state_z, state_t,
@@ -210,7 +247,7 @@ def local_analysis(state_prior, state_x, state_y, state_z, state_t,
 
     ##horizontal localization
     ##TODO: should use c.grid.distance
-    h_dist = np.hypot(obs_x - state_x, obs_y - state_y)
+    h_dist = np.abs(obs_x - state_x) + np.abs(obs_y - state_y)
     h_lfactor = local_factor(h_dist, hroi, localize_htype)
     if (h_lfactor==0).all():
         return  ##if the state is outside of hroi of all local obs, skip
@@ -391,6 +428,7 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
 
     state_data = pack_local_state_data(c, par_id, state_prior, z_state)
     nens, nfld, nloc = state_data['state_prior'].shape
+
     obs_data = pack_local_obs_data(c, par_id, lobs, lobs_prior)
     obs_list = bcast_by_root(c.comm)(global_obs_list)(c)
 
@@ -399,34 +437,30 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     for p in range(len(obs_list)):
         print_1p(progress_bar(p, len(obs_list)))
 
-        obs_rec_id, obs_id, v, pid_owner_obs = obs_list[p]
+        obs_rec_id, v, owner_pid, i = obs_list[p]
         obs_rec = c.obs_info['records'][obs_rec_id]
 
         ##1. if the pid owns this obs, broadcast it to all pid
-        if c.pid_mem == pid_owner_obs:
-            ##local obs index in obs_data
-            i = obs_data['start_i'][obs_rec_id, v]
-            i += np.where(c.obs_inds[obs_rec_id][pid_owner_obs]==obs_id)[0][0]
-
+        if c.pid_mem == owner_pid:
             ##collect obs info
             obs = {}
-            for key in ('obs', 'x', 'y', 'z', 't', 'err_std',
-                        'hroi', 'vroi', 'troi'):
-                obs[key] = obs_data[key][i]
             obs['prior'] = obs_data['obs_prior'][:, i]
-
+            for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
+                obs[key] = obs_data[key][i]
+            for key in ('hroi', 'vroi', 'troi', 'impact_on_state'):
+                obs[key] = obs_data[key][obs_rec_id]
             ##mark this obs as used
             obs_data['used'][i] = True
 
         else:
             obs = None
-        obs = c.comm_mem.bcast(obs, root=pid_owner_obs)
+        obs = c.comm_mem.bcast(obs, root=owner_pid)
 
         ##compute obs-space increment
         obs_incr = obs_increment(obs['prior'], obs['obs'], obs['err_std'], c.filter_type)
 
         ##2. all pid update their own locally stored state:
-        state_h_dist = c.grid.distance(obs['x'], obs['y'], state_data['x'], state_data['y'])
+        state_h_dist = c.grid.distance(obs['x'], state_data['x'], obs['y'], state_data['y'], p=2)
         state_v_dist = np.abs(obs['z'] - state_data['z'])
         state_t_dist = np.abs(obs['t'] - state_data['t'])
         update_local_state(state_data['state_prior'], obs['prior'], obs_incr,
@@ -435,7 +469,7 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
                            c.localization['htype'], c.localization['vtype'], c.localization['ttype'])
 
         ##3. all pid update their own locally stored obs:
-        obs_h_dist = c.grid.distance(obs['x'], obs['y'], obs_data['x'], obs_data['y'])
+        obs_h_dist = c.grid.distance(obs['x'], obs_data['x'], obs['y'], obs_data['y'], p=2)
         obs_v_dist = np.abs(obs['z'] - obs_data['z'])
         obs_t_dist = np.abs(obs['t'] - obs_data['t'])
         update_local_obs(obs_data['obs_prior'], obs_data['used'], obs['prior'], obs_incr,
@@ -446,22 +480,6 @@ def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     unpack_local_obs_data(c, par_id, lobs, lobs_prior, obs_data)
     print_1p(' done.\n')
     return state_prior, lobs_prior
-
-def global_obs_list(c):
-    ##form the full list of obs_ids
-    obs_list = []
-    for obs_rec_id in c.obs_info['records'].keys():
-        obs_rec = c.obs_info['records'][obs_rec_id]
-        v_list = [0, 1] if obs_rec['is_vector'] else [None]
-
-        for pid_owner_obs, obs_ids in c.obs_inds[obs_rec_id].items():
-            for obs_id in obs_ids:
-                for v in v_list:
-                    obs_list.append((obs_rec_id, obs_id, v, pid_owner_obs))
-
-    ##randomize the order of obs (this is optional)
-    np.random.shuffle(obs_list)
-    return obs_list
 
 def obs_increment(obs_prior, obs, obs_err, filter_type):
     """
@@ -664,7 +682,6 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
         ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
 
     return ens_post
-
 
 @njit(cache=True)
 def transform_to_probit():

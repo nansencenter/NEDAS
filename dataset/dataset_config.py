@@ -17,42 +17,32 @@ class DatasetConfig(object):
 
         self.variables = {}
 
-        for key in ['grid', 'mask', 'z', 'nobs', 'obs_window_min', 'obs_window_max', 'err', 'hroi', 'vroi', 'troi', 'impact_on_state']:
-            setattr(self, key, None)
-            if key in kwargs:
-                setattr(self, key, kwargs[key])
-
     def parse_kwargs(self, **kwargs):
         """
         Parse the input kwargs to pinpoint a specific file/variable...
         """
         ##args to pinpoint a certain observatino record, used by read_obs, etc.
-        if 'path' in kwargs:
-            self.path = kwargs['path']
-        else:
-            self.path = self.dataset_dir
+        if 'path' not in kwargs:
+            kwargs['path'] = self.dataset_dir
 
-        if 'name' in kwargs:
-            self.name = kwargs['name']
-        else:
-            self.name = list(self.variables.keys())[0]
+        if 'name' not in kwargs:
+            kwargs['name'] = list(self.variables.keys())[0]
+        assert kwargs['name'] in self.variables, f"'{kwargs['name']}' is not defined in dataset variables"
 
-        if 'time' in kwargs:
-            self.time = kwargs['time']
-        else:
-            self.time = None
-        if self.time is not None:
-            assert isinstance(self.time, datetime), "kwargs['time'] is not a datetime object"
+        if 'time' not in kwargs:
+            kwargs['time'] = None
+        if kwargs['time'] is not None:
+            assert isinstance(kwargs['time'], datetime), "kwargs 'time' is not a datetime object"
 
-        if 'units' in kwargs:
-            units = kwargs['units']
-        else:
-            units = self.variables[self.name]['units']
+        if 'units' not in kwargs:
+            kwargs['units'] = self.variables[kwargs['name']]['units']
 
         ##other args used in random_network
-        for key in ['grid', 'mask', 'z', 'nobs', 'obs_window_min', 'obs_window_max']:
-            if key in kwargs:
-                setattr(self, key, kwargs[key])
+        for key in ['grid', 'mask', 'z', 'truth_dir', 'nobs', 'obs_window_min', 'obs_window_max']:
+            if key not in kwargs:
+                kwargs[key] = None
+
+        return kwargs
 
     def read_obs(self, **kwargs):
         """

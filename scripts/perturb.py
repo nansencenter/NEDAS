@@ -24,7 +24,6 @@ def perturb(c):
 
     c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print_1p("\nPerturbing the ensemble model state and forcing\n")
 
     ##first go through the fields to count how many (for showing progress)
     nfld = 0
@@ -104,7 +103,7 @@ def perturb(c):
             np.save(psfile, perturb[vname])
 
     c.comm.Barrier()
-    print_1p(' done.\n')
+    print_1p(' done.\n\n')
 
 def distribute_perturb_tasks(c):
     task_list_full = []
@@ -118,7 +117,10 @@ if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
+    print_1p = by_rank(c.comm, 0)(print_with_cache)
+    print_1p("\n\033[1;33mPerturbing the ensemble model state and forcing\033[0m\n")
     if not hasattr(c, 'perturb') or c.perturb is None:
+        print_1p('no perturbation defined in config\n\n')
         exit()
 
     timer(c)(perturb)(c)

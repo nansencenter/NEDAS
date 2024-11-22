@@ -2,8 +2,7 @@ import numpy as np
 import os
 from ..dataset_config import DatasetConfig
 
-class QGObs(DatasetConfig):
-
+class Dataset(DatasetConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 

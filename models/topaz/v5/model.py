@@ -78,55 +78,61 @@ class Topaz5Model(ModelConfig):
         self.run_status = 'pending'
 
     def filename(self, **kwargs):
-        super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
 
-        if self.member is not None:
-            mstr = '_mem{:03d}'.format(self.member+1)
+        if kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
 
         ##filename for each model component
-        if self.name in self.hycom_variables:
-            tstr = self.time.strftime('%Y_%j_%H_0000')
-            return os.path.join(self.path, 'restart.'+tstr+mstr+'.a')
+        if kwargs['name'] in self.hycom_variables:
+            tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
+            return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
-        elif self.name in self.cice_variables:
-            tstr = self.time.strftime('%Y-%m-%d-00000')
-            return os.path.join(self.path, 'iced.'+tstr+mstr+'.nc')
+        elif kwargs['name'] in self.cice_variables:
+            tstr = kwargs['time'].strftime('%Y-%m-%d-00000')
+            return os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
 
-        elif self.name in self.atmos_forcing_variables:
-            return os.path.join(self.path, mstr[1:], 'SCRATCH', 'forcing')
+        elif kwargs['name'] in self.atmos_forcing_variables:
+            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'forcing')
+
+    def read_grid(self, **kwargs):
+        pass
+
+    def read_mask(self, **kwargs):
+        pass
 
     def read_var(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
 
-        is_vector = self.variables[self.name]['is_vector']
-
         ##get the variable from restart files
-        if self.name in self.hycom_variables:
-            rec = self.hycom_variables[self.name]
+        name = kwargs['name']
+        if name in self.hycom_variables:
+            rec = self.hycom_variables[name]
             f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
-            if is_vector:
-                var1 = f.read_field(rec['name'][0], level=self.k, tlevel=1, mask=None)
-                var2 = f.read_field(rec['name'][1], level=self.k, tlevel=1, mask=None)
+            if rec['is_vector']:
+                var1 = f.read_field(rec['name'][0], level=kwargs['k'], tlevel=1, mask=None)
+                var2 = f.read_field(rec['name'][1], level=kwargs['k'], tlevel=1, mask=None)
                 var = np.array([var1, var2])
             else:
-                var = f.read_field(rec['name'], level=self.k, tlevel=1, mask=None)
+                var = f.read_field(rec['name'], level=kwargs['k'], tlevel=1, mask=None)
             f.close()
 
-        elif self.name in self.cice_variables:
-            rec = self.cice_variables[self.name]
-            if is_vector:
+        elif name in self.cice_variables:
+            rec = self.cice_variables[name]
+            if rec['is_vector']:
                 var1 = nc_read_var(fname, rec['name'][0])
                 var2 = nc_read_var(fname, rec['name'][1])
                 var = np.array([var1, var2])
             else:
                 var = nc_read_var(fname, rec['name'])
 
-        elif self.name in self.atmos_forcing_variables:
-            rec = self.atmos_forcing_variables[self.name]
-            dtime = (self.time - datetime(1900,12,31)) / (24*dt1h)
-            if is_vector:
+        elif name in self.atmos_forcing_variables:
+            rec = self.atmos_forcing_variables[name]
+            dtime = (kwargs['time'] - datetime(1900,12,31)) / (24*dt1h)
+            if rec['is_vector']:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
                 var1 = f1.read_field(rec['name'][0], dtime)
                 f2 = ABFileForcing(fname+'.'+rec['name'][1], 'r')
@@ -140,54 +146,53 @@ class Topaz5Model(ModelConfig):
                 f.close()
 
         ##convert units if necessary
-        var = units_convert(self.units, self.variables[name]['units'], var)
+        var = units_convert(kwargs['units'], self.variables[name]['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
-
-        is_vector = self.variables[self.name]['is_vector']
+        name = kwargs['name']
 
         ##convert back to old units
-        var = units_convert(self.units, self.variables[self.name]['units'], var, inverse=True)
+        var = units_convert(kwargs['units'], self.variables[name]['units'], var, inverse=True)
 
-        if self.name in self.hycom_variables:
-            rec = self.hycom_variables[self.name]
+        if name in self.hycom_variables:
+            rec = self.hycom_variables[name]
             ##open the restart file for over-writing
             ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
             f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
-            if is_vector:
+            if rec['is_vector']:
                 for i in range(2):
-                    f.overwrite_field(var[i,...], None, rec['name'][i], level=self.k, tlevel=1)
+                    f.overwrite_field(var[i,...], None, rec['name'][i], level=kwargs['k'], tlevel=1)
             else:
-                f.overwrite_field(var, None, rec['name'], level=self.k, tlevel=1)
+                f.overwrite_field(var, None, rec['name'], level=kwargs['k'], tlevel=1)
             f.close()
 
-        elif self.name in self.cice_variables:
-            rec = self.cice_variables[self.name]
-            if is_vector:
-                # var = np.array([var1, var2])
+        elif name in self.cice_variables:
+            rec = self.cice_variables[name]
+            if rec['is_vector']:
                 for i in range(2):
                     if rec['name'][i][-2:] == '_n':  ##ncat variable
                         dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                        recno = {'ncat':self.k}
+                        recno = {'ncat':kwargs['k']}
                     else:
                         dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = None
-                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=self.comm)
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
             else:
                 if rec['name'][-2:] == '_n':  ##ncat variable
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                    recno = {'ncat':self.k}
+                    recno = {'ncat':kwargs['k']}
                 else:
                     dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = None
-                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=self.comm)
+                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
 
-        elif self.name in self.atmos_forcing_variables:
-            rec = self.atmos_forcing_variables[self.name]
-            dtime = (self.time - datetime(1900,12,31)) / timedelta(days=1)
-            if is_vector:
+        elif name in self.atmos_forcing_variables:
+            rec = self.atmos_forcing_variables[name]
+            dtime = (kwargs['time'] - datetime(1900,12,31)) / timedelta(days=1)
+            if rec['is_vector']:
                 for i in range(2):
                     f = ABFileForcing(fname+'.'+rec['name'][i], 'r+')
                     f.overwrite_field(var[i,...], None, rec['name'][i], dtime)
@@ -233,20 +238,23 @@ class Topaz5Model(ModelConfig):
             return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):
-        super().parse_kwargs(**kwargs)
-        offset = task_id * self.nproc_per_util
-        next_time = self.time + self.forecast_period * dt1h
+        kwargs = super().parse_kwargs(**kwargs)
 
-        if self.member is not None:
-            mstr = '_mem{:03d}'.format(self.member+1)
+        offset = task_id * self.nproc_per_util
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
+
+        if kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        run_dir = os.path.join(self.path, mstr[1:], 'SCRATCH')
+        run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
         ##make sure model run directory exists
         run_command(f"mkdir -p {run_dir}")
 
         ##generate namelists, blkdat, ice_in, etc.
-        namelist(self, run_dir)
+        namelist(self, time, forecast_period, run_dir)
 
         ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
         for varname in self.force_synoptic_names:
@@ -254,7 +262,7 @@ class Topaz5Model(ModelConfig):
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
             f = ABFileForcing(forcing_file, 'r')
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
-            t = self.time
+            t = time
             dt = self.forcing_dt
             rdtime = dt / 24
             while t <= next_time:
@@ -303,16 +311,18 @@ class Topaz5Model(ModelConfig):
         run_command(shell_cmd)
 
         ##copy restart files from restart_dir
-        tstr = self.time.strftime('%Y_%j_%H_0000')
+        restart_dir = kwargs['restart_dir']
+        job_submit_cmd = kwargs['job_submit_cmd']
+        tstr = time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
-            file = os.path.join(self.restart_dir, 'restart.'+tstr+mstr+ext)
-            file1 = os.path.join(path, 'restart.'+tstr+mstr+ext)
+            file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
+            file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
             run_command(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
         run_command(f"mkdir -p {os.path.join(run_dir, 'cice')}")
-        tstr = self.time.strftime('%Y-%m-%d-00000')
-        file = os.path.join(self.restart_dir, 'iced.'+tstr+mstr+'.nc')
-        file1 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
+        tstr = time.strftime('%Y-%m-%d-00000')
+        file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
+        file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"{job_submit_cmd} 1 {offset} cp -fL {file} {file1}")
         run_command(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
         run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
@@ -322,26 +332,28 @@ class Topaz5Model(ModelConfig):
         pass
 
     def run(self, task_id=0, **kwargs):
-        super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
-        next_time = self.time + self.forecast_period * dt1h
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
 
-        if self.member is not None:
-            mstr = '_mem{:03d}'.format(self.member+1)
+        if kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        run_dir = os.path.join(self.path, mstr[1:], 'SCRATCH')
+        run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
         run_command(f"mkdir -p {run_dir}")  ##make sure model run directory exists
         log_file = os.path.join(run_dir, "run.log")
         run_command("touch "+log_file)
 
         ##check if input file exists
         input_files = []
-        tstr = self.time.strftime('%Y_%j_%H_0000')
+        tstr = time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
             input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
-        tstr = self.time.strftime('%Y-%m-%d-00000')
+        tstr = time.strftime('%Y-%m-%d-00000')
         input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
         for file in input_files:
             if not os.path.exists(file):
@@ -352,12 +364,13 @@ class Topaz5Model(ModelConfig):
             return
 
         offset = task_id*self.nproc_per_run
+        job_submit_cmd = kwargs['job_submit_cmd']
 
         ##build the shell command line
         model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
         shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
         shell_cmd += "cd "+run_dir+"; "             ##enter run directory
-        shell_cmd += self.job_submit_cmd+f" {self.nproc} {offset} "+model_exe+" >& run.log"
+        shell_cmd += job_submit_cmd+f" {self.nproc} {offset} "+model_exe+" >& run.log"
 
         self.run_process = subprocess.Popen(shell_cmd, shell=True)
         self.run_process.wait()
@@ -369,10 +382,10 @@ class Topaz5Model(ModelConfig):
         tstr = next_time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
-            file2 = os.path.join(self.path, 'restart.'+tstr+mstr+ext)
+            file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             run_command(f"mv {file1} {file2}")
         tstr = next_time.strftime('%Y-%m-%d-00000')
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
-        file2 = os.path.join(self.path, 'iced.'+tstr+mstr+'.nc')
+        file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"mv {file1} {file2}")
 

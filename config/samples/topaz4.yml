@@ -87,7 +87,7 @@ obs_def:
   vroi: 2
   troi: 24
   impact_on_state:
-    -ocean_temp: 1.0
+     ocean_temp: 1.0
 
 use_synthetic_obs: False
 
@@ -102,7 +102,6 @@ model_def:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
-regress_type: 'linear'
 
 inflation:
   type: ''

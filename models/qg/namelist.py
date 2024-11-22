@@ -13,12 +13,10 @@ def value_str(value):
         vstr = f'{value}'
     return vstr
 
-def namelist(m, forecast_period, dt_ratio=1, run_dir='.'):
+def namelist(m, time, forecast_period, dt_ratio=1, run_dir='.'):
     """Generate namelist for qg model
     Input:
     - m: Model class object with model configurations
-    - time_start: start time (datetime obj) of the model run
-    - forecast_period: hours to run the model
     - dt_ratio: factor to multiply dt with
     """
     dt = m.dt * dt_ratio

@@ -44,7 +44,7 @@ obs_def:
   vroi: 5
   troi: 24
   impact_on_state:
-    -streamfunc: 1.0
+     streamfunc: 1.0
 
 use_synthetic_obs: True
 
@@ -58,7 +58,6 @@ model_def:
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
-regress_type: 'linear'
 
 inflation:
   type: 'posterior,relax'

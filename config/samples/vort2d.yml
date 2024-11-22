@@ -44,7 +44,7 @@ obs_def:
   vroi: 10
   troi: 10
   impact_on_state:
-    -velocity: 1.0
+     velocity: 1.0
 
 use_synthetic_obs: True
 
@@ -59,7 +59,6 @@ perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
-regress_type: 'linear'
 
 nscale: 1
 scale_id: 0

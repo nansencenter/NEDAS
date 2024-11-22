@@ -21,7 +21,7 @@ def assimilate(c):
     c.analysis_dir = analysis_dir(c, c.time)
     if c.pid == 0:
         os.system("mkdir -p "+c.analysis_dir)
-        print(f"\nRunning assimilation step in {c.analysis_dir}\n", flush=True)
+        print(f"\n\033[1;33mRunning assimilation step in {c.analysis_dir}\033[0m\n", flush=True)
 
     c.state_info = bcast_by_root(c.comm)(parse_state_info)(c)
     c.mem_list, c.rec_list = bcast_by_root(c.comm)(distribute_state_tasks)(c)

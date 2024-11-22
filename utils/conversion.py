@@ -31,8 +31,13 @@ def units_convert(units, s_units, var, inverse=False):
                              'F':lambda x: (x-32)*5./9.+273.15,
                             },
                  'Pa':      {'hPa':lambda x: x*100.,
+                             'mbar':lambda x: x*100.,
                             },
                  'kg/m2/s': {'Mg/m2/3h':lambda x: x/3/3.6,
+                            },
+                 'W/m2':    {'J/m2/6h':lambda x:x,
+                            },
+                 'precip m/s': {'precip m/6h':lambda x:x,
                             },
                 }
     unit_to   = {'m/s':     {'km/h':lambda x: x*3.6,
@@ -44,8 +49,13 @@ def units_convert(units, s_units, var, inverse=False):
                              'F':lambda x: (x-273.15)*9./5.+32.,
                             },
                  'Pa':      {'hPa':lambda x: x/100.,
+                             'mbar':lambda x: x/100.,
                             },
                  'kg/m2/s': {'Mg/m2/3h':lambda x: x*3*3.6,
+                            },
+                 'W/m2':    {'J/m2/6h':lambda x:x,
+                            },
+                 'precip m/s': {'precip m/6h':lambda x:x,
                             },
                 }
     if units != s_units:

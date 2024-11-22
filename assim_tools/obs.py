@@ -50,7 +50,7 @@ def parse_obs_info(c):
         ##some properties of the variable is defined in its source module
         dataset = c.dataset_config[vrec['dataset_src']]
         variables = dataset.variables
-        assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.Obs.variables'
+        assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.dataset.variables'
 
         ##parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
         impact_on_state = {}
@@ -64,11 +64,10 @@ def parse_obs_info(c):
         for time in c.time + np.array(c.obs_time_steps)*dt1h:
             obs_rec = {'name': vname,
                        'dataset_src': vrec['dataset_src'],
-                       'dataset_dir': vrec['dataset_dir'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
-                       'obs_window_min': vrec['obs_window_min'],
-                       'obs_window_max': vrec['obs_window_max'],
+                       'obs_window_min': vrec.get('obs_window_min'),
+                       'obs_window_max': vrec.get('obs_window_max'),
                        'dtype': variables[vname]['dtype'],
                        'is_vector': variables[vname]['is_vector'],
                        'units': variables[vname]['units'],
@@ -530,10 +529,10 @@ def prepare_obs(c):
         ##read ens-mean z coords from z_file for this obs network
         z = read_mean_z_coords(c, obs_rec['time'])
 
+        model = c.model_config[obs_rec['model_src']]
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            model = c.model_config[obs_rec['model_src']]
-            seq = dataset.random_network(z=z, truth_dir=model.truth_dir, **obs_rec)
+            seq = dataset.random_network(grid=model.grid, mask=model.mask, z=z, truth_dir=model.truth_dir, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -543,7 +542,7 @@ def prepare_obs(c):
 
         else:
             ##read dataset files and obtain obs sequence
-            seq = dataset.read_obs(z=z, **obs_rec)
+            seq = dataset.read_obs(grid=model.grid, mask=model.mask, z=z, **obs_rec)
         del z
 
         by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))

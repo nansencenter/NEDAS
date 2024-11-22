@@ -20,10 +20,12 @@ os.system("mkdir -p "+c.work_dir)
 
 print("Cycling start...", flush=True)
 
-c.prev_time = c.time
+if c.time == c.time_start:
+    c.prev_time = c.time
+
 while c.time < c.time_end:
     c.next_time = c.time + c.cycle_period * dt1h
-    print(f"\nCURRENT CYCLE: {c.time} => {c.next_time}", flush=True)
+    print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
 
     os.system("mkdir -p "+cycle_dir(c, c.time))
 
