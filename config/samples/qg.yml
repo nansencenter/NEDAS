@@ -43,7 +43,7 @@ obs_def:
   vroi: 5
   troi: 24
   impact_on_state:
-  - streamfunc: 1.0
+    streamfunc: 1.0
 
 use_synthetic_obs: True
 
@@ -61,7 +61,6 @@ perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
-regress_type: 'linear'
 
 ##multiscale approach
 nscale: 1                    ## number of scale components

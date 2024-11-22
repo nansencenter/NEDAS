@@ -3,7 +3,7 @@ job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betz
 
 nproc: 512       ##total number of processors
 
-nens: 100         ##ensemble size
+nens: 100        ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
 run_diag: False
 
@@ -52,19 +52,33 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_conc'
+- name: 'seaice_conc_n'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_thick'
+- name: 'seaice_thick_n'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
 
 obs_def:
+- name: 'ocean_temp'
+  dataset_src: 'topaz'
+  dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
+  model_src: 'topaz.v5'
+  obs_window_min: -168
+  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 2e5
+  vroi: 2
+  troi: 24
+  impact_on_state:
+    ocean_temp: 1.0
 - name: 'seaice_conc'
-  dataset_src: 'osisaf'
-  dataset_dir: '/cluster/work/users/yingyue/data/OSISAF'
+  dataset_src: 'osisaf.ice_conc'
+  dataset_dir: '/cluster/projects/nn2993k/sim/data/OSISAF_ice_conc/polstere'
   model_src: 'topaz.v5'
   obs_window_min: -6
   obs_window_max: 0
@@ -75,7 +89,7 @@ obs_def:
   vroi: 2
   troi: 24
   impact_on_state:
-  - ocean_temp: 1.0
+    ocean_temp: 1.0
 
 use_synthetic_obs: False
 
@@ -128,7 +142,6 @@ perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
-regress_type: 'linear'
 
 inflation:
   type: ''

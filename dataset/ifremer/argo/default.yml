@@ -1,0 +1,11 @@
+dataset_dir: './'
+
+ONEM: 9806.
+NUM_OBS_PER_LAYER: 1
+TEMP_MIN: -2.
+TEMP_MAX: 40.
+SALN_MIN: 16.
+SALN_MAX: 37.5
+OBS_ERR_VAR:
+  ocean_temp: 0.5
+  ocean_saln: 0.02

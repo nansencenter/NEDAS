@@ -1,1 +1,1 @@
-from .qg_obs import QGObs as Dataset
+from .qg import Dataset

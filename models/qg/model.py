@@ -3,6 +3,7 @@ import os
 import subprocess
 from grid import Grid
 from utils.conversion import t2s, dt1h
+from utils.shell_utils import run_command
 from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
@@ -43,17 +44,16 @@ class QGModel(ModelConfig):
         self.run_status = 'pending'
 
     def filename(self, **kwargs):
-        super().parse_kwargs(**kwargs)
-
-        if self.member is not None:
-            mstr = '{:04d}'.format(self.member+1)
+        kwargs = super().parse_kwargs(**kwargs)
+        if kwargs['member'] is not None:
+            mstr = '{:04d}'.format(kwargs['member']+1)
         else:
             mstr = ''
 
-        assert self.time is not None, 'missing time in kwargs'
-        tstr = self.time.strftime('%Y%m%d_%H')
+        assert kwargs['time'] is not None, 'missing time in kwargs'
+        tstr = kwargs['time'].strftime('%Y%m%d_%H')
 
-        return os.path.join(self.path, mstr, 'output_'+tstr+'.bin')
+        return os.path.join(kwargs['path'], mstr, 'output_'+tstr+'.bin')
 
     def read_grid(self, **kwargs):
         pass
@@ -62,12 +62,11 @@ class QGModel(ModelConfig):
         pass
 
     def read_var(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
-        assert self.name in self.variables, 'variable name '+self.name+' not listed in variables'
 
-        assert self.k>=0 and self.k<self.nz, f'level index {self.k} is not within range 0-{self.nz}'
-
-        k1 = int(self.k)
+        k = kwargs['k']
+        k1 = int(k)
         if k1 < self.nz-1:
             k2 = k1+1
         else:
@@ -76,11 +75,11 @@ class QGModel(ModelConfig):
         psik1 = read_data_bin(fname, self.kmax, self.nz, k1)
         psik2 = read_data_bin(fname, self.kmax, self.nz, k2)
 
-        if self.name == 'streamfunc':
+        if kwargs['name'] == 'streamfunc':
             var1 = spec2grid(psik1).T
             var2 = spec2grid(psik2).T
 
-        elif self.name == 'velocity':
+        elif kwargs['name'] == 'velocity':
             uk1 = psi2u(psik1)
             vk1 = psi2v(psik1)
             u1 = spec2grid(uk1).T
@@ -92,13 +91,13 @@ class QGModel(ModelConfig):
             v2 = spec2grid(vk2).T
             var2 = np.array([u2, v2])
 
-        elif self.name == 'vorticity':
+        elif kwargs['name'] == 'vorticity':
             zetak1 = psi2zeta(psik1)
             var1 = spec2grid(zetak1).T
             zetak2 = psi2zeta(psik2)
             var2 = spec2grid(zetak2).T
 
-        elif self.name == 'temperature':
+        elif kwargs['name'] == 'temperature':
             tempk1 = psi2temp(psik1)
             var1 = spec2grid(tempk1).T
             tempk2 = psi2temp(psik2)
@@ -106,57 +105,57 @@ class QGModel(ModelConfig):
 
         ##vertical interp between var1 and var2
         if k1 < self.nz-1:
-            return (var1*(k2-self.k) + var2*(self.k-k1)) / (k2-k1)
+            return (var1*(k2-k) + var2*(k-k1)) / (k2-k1)
         else:
             return var1
 
     def write_var(self, var, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
-        assert self.name in self.variables, 'variable name '+self.name+' not listed in variables'
 
-        assert self.k>=0 and self.k<self.nz, f'level index {self.k} is not within range 0-{self.nz}'
-
-        if self.k==int(self.k):
-            if self.name == 'streamfunc':
+        k = kwargs['k']
+        if k==int(k):
+            if kwargs['name'] == 'streamfunc':
                 psik = grid2spec(var.T)
 
-            elif self.name == 'velocity':
+            elif kwargs['name'] == 'velocity':
                 uk = grid2spec(var[0,...].T)
                 vk = grid2spec(var[1,...].T)
                 psik = zeta2psi(uv2zeta(uk, vk))
 
-            elif self.name == 'vorticity':
+            elif kwargs['name'] == 'vorticity':
                 zetak = grid2spec(var.T)
                 psik = zeta2psi(zetak)
 
-            elif self.name == 'temperature':
+            elif kwargs['name'] == 'temperature':
                 tempk = grid2spec(var.T)
                 psik = temp2psi(tempk)
 
-            write_data_bin(fname, psik, self.kmax, self.nz, int(self.k))
+            write_data_bin(fname, psik, self.kmax, self.nz, int(k))
 
     def z_coords(self, **kwargs):
-        super().parse_kwargs(**kwargs)
-        z = np.full(self.grid.x.shape, self.k)
+        kwargs = super().parse_kwargs(**kwargs)
+        z = np.full(self.grid.x.shape, kwargs['k'])
         return z
 
     def preprocess(self, task_id=0, **kwargs):
-        super().parse_kwargs(**kwargs)
-
-        restart_file = self.filename(**{**kwargs, 'path':self.restart_dir})
+        kwargs = super().parse_kwargs(**kwargs)
+        restart_dir = kwargs['restart_dir']
+        restart_file = self.filename(**{**kwargs, 'path':restart_dir})
 
         ##restart file to be used in this experiment, in work_dir/cycle/...
         input_file = self.filename(**kwargs)
         input_dir = os.path.dirname(input_file)
 
         ##just cp the prepared files to the work_dir location
-        subprocess.run("mkdir -p "+input_dir+"; cp "+restart_file+" "+input_file, shell=True)
+        run_command("mkdir -p "+input_dir)
+        run_command("cp "+restart_file+" "+input_file)
 
     def postprocess(self, task_id=0, **kwargs):
         pass
 
     def run(self, task_id=0, **kwargs):
-        super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
 
         task_nproc = self.nproc_per_run
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
@@ -164,9 +163,11 @@ class QGModel(ModelConfig):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        subprocess.run("mkdir -p "+run_dir, shell=True)
+        run_command("mkdir -p "+run_dir)
 
-        next_time = self.time + self.forecast_period * dt1h
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
         output_file = self.filename(**{**kwargs, 'time':next_time})
 
         ##check status, skip if already run
@@ -181,7 +182,11 @@ class QGModel(ModelConfig):
         qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
 
         offset = task_id*task_nproc
-        submit_cmd = self.job_submit_cmd+f" {task_nproc} {offset} "
+        job_submit_cmd = kwargs['job_submit_cmd']
+        if job_submit_cmd is not None:
+            submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
+        else:
+            submit_cmd = ""
 
         ##build the shell command line
         shell_cmd = "source "+self.model_env+"; "   ##enter the qg model env
@@ -196,7 +201,7 @@ class QGModel(ModelConfig):
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
-            namelist(self, self.forecast_period, dt_ratio, run_dir)
+            namelist(self, time, dt, dt_ratio, run_dir)
 
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
