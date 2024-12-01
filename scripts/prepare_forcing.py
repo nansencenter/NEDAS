@@ -69,7 +69,6 @@ def prepare_forcing(c, model_name) -> None:
     scheduler.shutdown()
     print(' done.', flush=True)
 
-
 if __name__ == "__main__":
     from config import Config
     from utils.progress import timer

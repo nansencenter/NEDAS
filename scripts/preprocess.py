@@ -4,8 +4,9 @@ from utils.progress import timer
 from utils.conversion import t2s
 from utils.parallel import Scheduler
 from utils.dir_def import forecast_dir
+from utils.shell_utils import makedir
 
-def preprocess_model_state(c, model_name):
+def preprocess(c, model_name):
     """
     This function prepares the necessary files for an ensemble forecast
     """
@@ -17,18 +18,20 @@ def preprocess_model_state(c, model_name):
         restart_dir = forecast_dir(c, c.prev_time, model_name)
     print(f"using restart files in {restart_dir}", flush=True)
 
+    path = forecast_dir(c, c.time, model_name)
+    makedir(path)
+
     scheduler = Scheduler(c.nproc // model.nproc_per_util, debug=c.debug)
 
     for mem_id in range(c.nens):
         job_name = f'preproc_{model_name}_mem{mem_id+1}'
         job_opt = {
-            'job_submit_cmd': c.job_submit_cmd,
-            'task_nproc': model.nproc_per_util,
             'restart_dir': restart_dir,
-            'path': forecast_dir(c, c.time, model_name),
+            'path': path,
             'member': mem_id,
             'time': c.time,
             'forecast_period': c.cycle_period,
+            **c.job_submit,
             }
         scheduler.submit_job(job_name, model.preprocess, **job_opt)  ##add job to the queue
 
@@ -38,13 +41,13 @@ def preprocess_model_state(c, model_name):
     scheduler.shutdown()
     print(' done.', flush=True)
 
-def preprocess(c):
+def run(c):
     for model_name, model in c.model_config.items():
-        timer(c)(preprocess_model_state)(c, model_name)
+        timer(c)(preprocess)(c, model_name)
 
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
-    preprocess(c)
+    run(c)
 

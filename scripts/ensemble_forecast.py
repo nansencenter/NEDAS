@@ -22,11 +22,11 @@ def ensemble_forecast_scheduler(c, model_name):
         job_name = f'forecast_{model_name}_mem{mem_id+1}'
 
         job_opt = {
-            'job_submit_cmd': c.job_submit_cmd,
             'path': path,
             'member': mem_id,
             'time': c.time,
             'forecast_period': c.cycle_period,
+            **c.job_submit,
             }
         scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
 
@@ -48,16 +48,16 @@ def ensemble_forecast_batch(c, model_name):
     print(f"\n\033[1;33munning {model_name} ensemble forecast\033[0m in {path}", flush=True)
 
     job_opt = {
-        'job_submit_cmd': c.job_submit_cmd,
         'path': path,
         'nens': c.nens,
         'time': c.time,
         'forecast_period': c.cycle_period,
+        **c.job_submit,
         }
     model.run(**job_opt)
     print('done.', flush=True)
 
-def ensemble_forecast(c):
+def run(c):
     for model_name, model in c.model_config.items():
         if model.ens_run_type == 'batch':
             timer(c)(ensemble_forecast_batch)(c, model_name)
@@ -70,5 +70,5 @@ if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
-    ensemble_forecast(c)
+    run(c)
 

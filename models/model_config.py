@@ -51,7 +51,7 @@ class ModelConfig(object):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']]['units']
 
-        for key in ['job_submit_cmd', 'restart_dir', 'forecast_period', 'comm']:
+        for key in ['restart_dir', 'forecast_period', 'comm']:
             if key not in kwargs:
                 kwargs[key] = None
 

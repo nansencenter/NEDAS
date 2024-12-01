@@ -21,7 +21,7 @@ source /applis/environments/conda.sh
 conda activate nedas
 export PYTHONPATH=$PYTHONPATH:$WD/NEDAS
 
-python $CD/scripts/run_exp.py \
+python $CD/scripts/run_expt.py \
     --config_file=$CD/config/samples/$model.yml \
     --nens $nens \
     --nproc $nproc \

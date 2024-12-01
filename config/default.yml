@@ -1,9 +1,13 @@
 ##working directory for your experiment
 work_dir: '/cluster/work/users/yingyue/qg'
-
-##"job_submit_cmd nproc offset executable" will run 'executable' on your computer
-##using 'nproc' processors (starting from the 'offset'-th in the available processor list)
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+job_submit:
+  host: 'localhost'     ##machine name, laptop or supercomputer
+  project:              ##project for resource allocation
+  queue:                ##job queue name
+  scheduler:            ##which scheduler is used on the machine
+  run_separate_jobs: False  ##if true, submit each job separately to the scheduler
+                            ##otherwise jobs will be run as steps in a shared job allocation
+  use_job_array: False  ##if use job array function on scheduler
 
 ##total number of available processors
 nproc: 16
