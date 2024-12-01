@@ -1,82 +1,46 @@
 import numpy as np
-import configparser
 import os
-import shutil
 import subprocess
-import inspect
 from datetime import datetime
-from functools import lru_cache
 from time import sleep
 
-from utils.conversion import units_convert, t2s, s2t, dt1h
 from config import parse_config
-from . import restart
-from . import forcing
+from utils.conversion import units_convert, dt1h
+from utils.shell_utils import run_command, run_job, makedir
+from . import restart, forcing, namelist
+from ...model_config import ModelConfig
 
-class Model(object):
+class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
+        super().__init__(config_file, parse_args, **kwargs)
 
-        ##parse config file and obtain a list of attributes
-        code_dir = os.path.dirname(inspect.getfile(self.__class__))
-        config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
-        for key, value in config_dict.items():
-            setattr(self, key, value)
-
-        levels = np.arange(1, 51, 1)
         level_sfc = np.array([0])
         self.variables = {
-                'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-                'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-                'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-                'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
-                'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
-                'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
-                'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-                'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-                'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-                'seaice_velocity': {'name':('uice', 'vice'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-                'seaice_conc': {'name':'ficem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'%'},
-                'seaice_thick': {'name':'hicem', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'m'},
-                }
+            'seaice_conc': {},
+
+            }
         self.z_units = 'm'
-#        self.read_grid()
 
         self.run_process = None
         self.run_status = 'pending'
-        self.grid=''
-
 
     def filename(self, **kwargs):
-        if 'path' in kwargs:
-            path = kwargs['path']
-        else:
-            path = '.'
-        if 'time' in kwargs and kwargs['time'] is not None:
-            assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
+        kwargs = super().parse_kwargs(**kwargs)
+        if kwargs['time'] is not None:
             tstr = kwargs['time'].strftime('%Y_%j_%H')
         else:
             tstr = '????????'
-        if 'member' in kwargs and kwargs['member'] is not None:
-            assert kwargs['member'] >= 0, 'member index shall be >= 0'
+        if kwargs['member'] is not None:
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
-            mdir = '{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-            mdir = ''
-        return os.path.join(path, mdir, 'init_25km_NH_'+tstr+mstr+'.nc')
-
+        return os.path.join(path, mstr[1:], 'init_25km_NH_'+tstr+mstr+'.nc')
 
     def read_grid(self, **kwargs):
         pass
 
-
-    def write_grid(self, **kwargs):
-        pass
-
-
     def read_mask(self):
         pass
-
 
     def read_var(self, **kwargs):
         ##check name in kwargs and read the variables from file
@@ -109,7 +73,6 @@ class Model(object):
         var = units_convert(units, variables[name]['units'], var)
         return var
 
-
     def write_var(path, grid, var, **kwargs):
         ##check name in kwargs
         assert 'name' in kwargs, 'please specify which variable to write, name=?'
@@ -130,35 +93,10 @@ class Model(object):
         ##open the restart file for over-writing
         ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
 
-
-    @lru_cache(maxsize=3)
     def z_coords(self, **kwargs):
-        """calculate vertical coordinates given the 3D model state
-        """
-        ##check if level is provided
-        assert 'k' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
+        return 0
 
-        z = np.zeros(grid.x.shape)
-        if kwargs['k'] == 0:
-            ##if level index is 0, this is the surface, so just return zeros
-            return z
-        else:
-            ##get layer thickness above level k, convert to z_units, and integrate to total depth
-            for k in [k for k in levels if k>=kwargs['k']]:
-                rec = kwargs.copy()
-                rec['name'] = 'ocean_layer_thick'
-                rec['units'] = variables['ocean_layer_thick']['units']
-                rec['k'] = k
-                d = read_var(path, grid, **rec)
-                if kwargs['units'] == 'm':
-                    onem = 9806.
-                    z -= d/onem  ##accumulate depth in meters, negative relative to surface
-                else:
-                    raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
-            return z
-
-
-    def generate_initial_condition(self, task_id:int=0, task_nproc:int=1, **kwargs):
+    def preprocess(self, task_id:int=0, **kwargs):
         """generate initial condition for a single ensemble member.
 
         Parameters
@@ -235,16 +173,13 @@ class Model(object):
         # perturb the restart file
         restart.perturb_restart(restart_options, file_options)
 
-
-    def prepare_forcing(self, task_id:int, task_nproc:int, **kwargs):
+    def prepare_forcing(self, task_id:int, **kwargs):
         """Prepare forcing file for the next forecast for a single ensemble member.
 
         Parameters
         ----------
         task_id : int
             task id for parallel execution
-        task_nproc : int
-            number of processors for each task
         **kwargs : dict
             keyword arguments for the model configuration
             Keywords defined when the function is called:
@@ -325,8 +260,8 @@ class Model(object):
         # add forcing perturbations
         forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
 
-
-    def run(self, task_id=0, task_nproc=16, **kwargs):
+    def run(self, task_id=0, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
         job_submit_cmd:str = kwargs['job_submit_cmd']
@@ -356,27 +291,9 @@ class Model(object):
         fname_restart = os.path.basename(fname_restart)
         # Can we do it better?
         # read the config file
-        model_config = configparser.ConfigParser()
-        model_config.optionxform = str
-        model_config.read('default.cfg')
-        model_config['model']['init_file'] = fname_restart
-        model_config['model']['start'] = kwargs["time"].strftime("%Y-%m-%dT%H:%M:%SZ")
-        model_config['model']['stop'] = kwargs["next_time"].strftime("%Y-%m-%dT%H:%M:%SZ")
-        model_config['ConfigOutput']['start'] = kwargs["time"].strftime("%Y-%m-%dT%H:%M:%SZ")
-        # changing the forcing file in ERA5Atmosphere
-        file_options_forcing:dict[str, str] = kwargs['files']['forcing']
-        fname_atmos_forcing = forcing.get_forcing_filename(file_options_forcing['atmosphere'],
-                                                         1, time)
-        fname_atmos_forcing = os.path.basename(fname_atmos_forcing)
-        model_config['ERA5Atmosphere']['file'] = fname_atmos_forcing
-        # changing the forcing file in ERA5Atmosphere
-        fname_ocn_forcing = forcing.get_forcing_filename(file_options_forcing['ocean'],
-                                                         1, time)
-        fname_ocn_forcing = os.path.basename(fname_ocn_forcing)
-        model_config['TOPAZOcean']['file'] = fname_ocn_forcing
-        # dump the config to new file
-        with open('default.cfg', 'w') as configfile:
-            model_config.write(configfile)
+        ##moved to namelist.py
+        namelist.make_namelist(**kwargs)
+
         # submit the job
         # the job submission must through job_submit_node
         # specified in yaml file
