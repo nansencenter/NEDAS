@@ -4,7 +4,6 @@ import subprocess
 import tempfile
 
 class JobSubmitter(object):
-
     def __init__(self, **kwargs):
         """
         Input kwargs:
@@ -18,10 +17,11 @@ class JobSubmitter(object):
         -walltime: int, maximum run time allowed (in seconds)
         -run_separate_jobs: bool, if true, submit each job separately to the scheduler, otherwise run in the same allocation as job steps.
         -use_job_array: bool, if true, use job array for ensemble members
-        -nens: int, ensemble size
+        -array_size: int, size of the job array
         """
         ## setting default parameters if not specified in kwargs
         self.job_name = kwargs.get('job_name', 'run')
+        self.run_dir = kwargs.get('run_dir', '.')
         self._nproc = kwargs.get('nproc', 1)
         self._ppn = kwargs.get('ppn', 1)
         self._offset = kwargs.get('offset', 0)
@@ -31,16 +31,7 @@ class JobSubmitter(object):
         self.walltime = kwargs.get('walltime', 3600)
         self.run_separate_jobs = kwargs.get('run_separate_jobs', False)
         self.use_job_array = kwargs.get('use_job_array', False)
-        self.nens = 1
-
-        ##some host specific settings here:
-        if self.host == 'betzy':
-            ##get the node name
-            r = subprocess.run("hostname", capture_output=True, text=True)
-            if r.stdout.strip()[:5] == 'login':
-                if self.nproc > 16:
-                    print("WARNING: you are running job on Betzy login node, reducing to nproc=16...")
-                    self.nproc = 16
+        self.array_size = 1
 
     @property
     def nproc(self):
@@ -69,6 +60,7 @@ class JobSubmitter(object):
         """
         Number of processors to skip from the beginning for the job
         This allows different jobs to spawm the total available nproc in the allocation
+        Discarded if run_separate_jobs
         """
         return self._offset
 
@@ -81,7 +73,7 @@ class JobSubmitter(object):
         """
         Number of compute nodes for the job
         """
-        return self._nproc // self._ppn
+        return (self._nproc + self._ppn - 1) // self._ppn
 
     @property
     def offset_node(self):
@@ -93,23 +85,23 @@ class JobSubmitter(object):
     @property
     def nproc_avail(self):
         """
-        Number of available processors on a host machine
+        Number of available processors on a host machine (only used when not run_separate_jobs)
         Vanila JobSubmitter assumes that requested nproc is always available
         This should be redefined in subclasses to machine specific behavior
         """
-        return self.nproc
+        return self.nproc + self.offset
 
     @property
     def nnode_avail(self):
         """
-        Number of available compute nodes on a host machine
+        Number of available compute nodes on a host machine (only used when not run_separate_jobs)
         """
-        return self.nnode
+        return self.nnode + self.offset_node
 
     @property
     def ppn_avail(self):
         """
-        Number of available processors per compute node
+        Number of available processors per compute node (only used when not run_separate_jobs)
         """
         return self.ppn
 
@@ -134,14 +126,24 @@ class JobSubmitter(object):
         return commands
 
     def check_resources(self):
+        ##check if requested resource is available
         assert self.nproc+self.offset <= self.nproc_avail, f"Requested nproc={self.nproc} and offset={self.offset} exceeds nproc_avail={self.nproc_avail}"
-        assert self.nnode+self.offset_ndoe <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
+        assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
+
+        ##host specific settings
+        ##don't allow more than 6 processors on betzy login node
+        if self.host == 'betzy':
+            p = subprocess.run("hostname", capture_output=True, text=True)
+            if p.stdout.strip()[:5] == 'login':
+                assert self.nproc+self.offset < 6, "Unsafe to run more than 6 processors on Betzy login node, aborting"
 
     def run_job_as_step(self, commands):
         """
         Run 'commands' from within a job allocation
         Use nproc processors starting from the offset+1 processor of the allocation
         """
+        self.check_resources()
+
         commands = self.parse_commands(commands)
 
         p = subprocess.Popen(commands, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
@@ -153,39 +155,7 @@ class JobSubmitter(object):
             sys.exit(1)
 
     def submit_job_and_monitor(self, commands):
-        """
-        Build a job script with commands and submit it to the queue
-        Monitor job status in the queue and wait until it finishes
-        """
-        self.check_resources()
-
-        ##create a temporary job script to be submitted to the queue
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.sh') as job_script:
-            job_script.write("#!/bin/bash\n")
-
-            ##add scheduler headers here
-
-            ##add the commands
-            commands = self.parse_commands(commands)
-            job_script.write(commands)
-            job_script.write('\n')
-
-            self.job_script = job_script.name
-
-        ##submit the job script
-        self.job_id = subprocess.Popen(f"bash {self.job_script}", shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
-
-        ##wait for job to complete
-        ##with schedulers this should be replaced by a query of the queue status
-        self.job_id.wait()
-
-        ##clean up temp job script
-        os.remove(self.job_script)
-
-        ##handle error
-        if self.job_id.returncode != 0:
-            print(f"JobSubmitter: job '{self.job_name}' exited with error")
-            sys.exit(1)
+        raise NotImplementedError("run_separate_jobs=True is not availalbe without a scheduler")
 
     def run(self, commands):
         """
