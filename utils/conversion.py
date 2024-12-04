@@ -98,7 +98,7 @@ def seconds_to_timestr(seconds):
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
-    return f"{hours}:{minutes:02}:{seconds:02}"
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 def ensure_list(v):
     if isinstance(v, list):

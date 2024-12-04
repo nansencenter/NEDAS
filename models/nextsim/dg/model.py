@@ -15,10 +15,9 @@ class Model(ModelConfig):
         super().__init__(config_file, parse_args, **kwargs)
 
         level_sfc = np.array([0])
-        self.variables = {
-            'seaice_conc': {},
-
-            }
+        self.variables = {  ##TODO: a list of model variables defined here
+             'seaice_conc': {'name':'M_conc', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'%'},
+             }
         self.z_units = 'm'
 
         self.run_process = None
@@ -34,7 +33,7 @@ class Model(ModelConfig):
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
-        return os.path.join(path, mstr[1:], 'init_25km_NH_'+tstr+mstr+'.nc')
+        return os.path.join(kwargs['path'], mstr[1:], 'init_25km_NH_'+tstr+mstr+'.nc')
 
     def read_grid(self, **kwargs):
         pass
@@ -43,58 +42,26 @@ class Model(ModelConfig):
         pass
 
     def read_var(self, **kwargs):
-        ##check name in kwargs and read the variables from file
-        assert 'name' in kwargs, 'please specify which variable to get, name=?'
+        kwargs = super().parse_kwargs(**kwargs)
+        fname = self.filename(**kwargs)
         name = kwargs['name']
-        assert name in variables, 'variable name '+name+' not listed in variables'
-        fname = filename(path, **kwargs)
+        rec = self.variables[name]
 
-        if 'k' in kwargs:
-            ##Note: ocean level indices are negative in assim_tools.state
-            ##      but in abfiles, they are defined as positive indices
-            k = -kwargs['k']
-        else:
-            k = -variables[name]['levels'][-1]  ##get the first level if not specified
-        if 'mask' in kwargs:
-            mask = kwargs['mask']
-        else:
-            mask = None
+        ##TODO: read model variable logic here, can come from restart.py
 
-        if 'is_vector' in kwargs:
-            is_vector = kwargs['is_vector']
-        else:
-            is_vector = variables[name]['is_vector']
-
-        if 'units' in kwargs:
-            units = kwargs['units']
-        else:
-            units = variables[name]['units']
-
-        var = units_convert(units, variables[name]['units'], var)
+        var = units_convert(kwargs['units'], rec['units'], var)
         return var
 
-    def write_var(path, grid, var, **kwargs):
-        ##check name in kwargs
-        assert 'name' in kwargs, 'please specify which variable to write, name=?'
+    def write_var(self, var, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+        fname = self.filename(**kwargs)
         name = kwargs['name']
-        assert name in variables, 'variable name '+name+' not listed in variables'
-        fname = filename(path, **kwargs)
-
-        ##same logic for setting level indices as in read_var()
-        if 'k' in kwargs:
-            k = -kwargs['k']
-        else:
-            k = -variables[name]['levels'][-1]
-        if 'mask' in kwargs:
-            mask = kwargs['mask']
-        else:
-            mask = None
+        rec = self.variables[name]
 
         ##open the restart file for over-writing
-        ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
 
     def z_coords(self, **kwargs):
-        return 0
+        return np.zeros(self.grid.x.shape)
 
     def preprocess(self, task_id:int=0, **kwargs):
         """generate initial condition for a single ensemble member.
@@ -261,86 +228,32 @@ class Model(ModelConfig):
         forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
 
     def run(self, task_id=0, **kwargs):
+        ##TODO: add the logic to run only 1 member here
+        pass
+
+    def run_batch(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
-
-        job_submit_cmd:str = kwargs['job_submit_cmd']
-        # the job submission must through job_submit_node
-        # if it is -t devel, the node is oar-dahu3
-        # else it is f-dahu
-        job_submit_node:str = kwargs['job_submit_node']
+        
         run_dir:str = kwargs['path']
-        n_ens:int = kwargs['n_ens']
-        os.chdir(run_dir)
-        # copy the job submission script to the run directory
-        os.system('cp -fv ' +  job_submit_cmd + ' run.sh')
-        # specify the number of ensemble members
-        os.system(f'sed -i "s/--array N/--array {n_ens}/g" run.sh')
-        # copy the model configuration file to the run directory
-        os.system('cp -fv ' +  kwargs['model_config_file'] + ' default.cfg')
-        # configure the configuration file for current cycle
-        #   specify start and enf time of the job
-        #   get all required filenames for the initial ensemble
-        #     1. get current time, which is supposed to be the start time
-        time = kwargs['time']
-        #     2. get the restart filename
-        file_options_restart = kwargs['files']['restart']
-        fname_restart:str = restart.get_restart_filename(file_options_restart,
-                                                         1,
-                                                         time)
-        fname_restart = os.path.basename(fname_restart)
-        # Can we do it better?
-        # read the config file
-        ##moved to namelist.py
-        namelist.make_namelist(**kwargs)
+        nens:int = kwargs['nens']
 
-        # submit the job
-        # the job submission must through job_submit_node
-        # specified in yaml file
-        # this should f-dahu, or dahu-oar3
-        # as oarsub is only available there
-        # the job submission is done in the run directory
-        process = subprocess.run(['ssh', job_submit_node,
-                                  f'cd {run_dir} && '
-                                  'oarsub -S ./run.sh'],
-                                capture_output=True)
-        # obtain the array job id for checking the jobs
-        s = process.stderr.decode('utf-8')
-        print (s, flush=True)
-        s = process.stdout.decode('utf-8')
-        print (s, flush=True)
-        s = s.split('OAR_ARRAY_ID=')[-1]
-        array_job_id = int(s)
-        print (f'The array job id is {array_job_id}', flush=True)
-        # check the status of the jobs
-        while True:
-            # checking this every 300 seconds
-            sleep(120)
-            # get the status of the jobs
-            process = subprocess.run(['ssh', job_submit_node,
-                                      'oarstat', '-f', f'--array {array_job_id}',
-                                      '| grep "state = "'],
-                                    capture_output=True)
-            s = process.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
-            print (s, flush=True)
-            s = [string for string in s if 'state=' in string]
-            print (s, flush=True)
-            jobs_status = [job.split('state=')[-1].replace(' ', '') for job in s]
-            # end this loop if all jobs are terminated
-            if all([status == 'Terminated' for status in jobs_status]):
-                break
-            if all([status == 'Error' for status in jobs_status]):
-                raise RuntimeError(f'Error job array {array_job_id} in {run_dir}')
-        # move the restart file to output directory (next cycle)
-        os.chdir(run_dir)
-        file_options_restart = kwargs['files']['restart']
-        fname_restart:str = restart.get_restart_filename(file_options_restart,
-                                                         1,
-                                                         kwargs['next_time'])
-        fname_restart = os.path.basename(fname_restart)
-        for i in range(n_ens):
-            os.makedirs(os.path.join(kwargs['output_dir'],
-                                     f'ens_{str(i+1).zfill(2)}'), exist_ok=True)
-            subprocess.run(['mv', os.path.join(f'ens_{str(i+1).zfill(2)}', fname_restart),
-                            os.path.join(kwargs['output_dir'],
-                                     f'ens_{str(i+1).zfill(2)}')], check=True)
+        for member in range(nens):
+            ens_dir = os.path.join(run_dir, f"ens_{member:02}")
+            makedir(ens_dir)
+
+            ##this creates run_dir/ens_??/nextsim.cfg
+            namelist.make_namelist(ens_dir, member=member, **kwargs)
+
+        ##build shell commands for running the model using job array
+        shell_cmd = "echo starting the script...; "
+        shell_cmd += f"source {self.model_env}; "
+        shell_cmd += f"cd {run_dir}; "
+        shell_cmd += f"echo {run_dir}; "
+        shell_cmd += "cd ens_$(printf '%02d' JOB_ARRAY_INDEX); "
+        shell_cmd += "echo $(pwd); "
+        shell_cmd += "cp $NDG_BLD_DIR/nextsim .; "
+        shell_cmd += "./nextsim --config-file nextsim.cfg > time.step"
+
+        run_job(shell_cmd, nproc=self.nproc_per_run, ppn=32, array_size=nens, run_dir=run_dir, **kwargs)
+

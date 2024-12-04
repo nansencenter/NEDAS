@@ -15,6 +15,8 @@ def ensemble_forecast_scheduler(c, model_name):
     makedir(path)
     print(f"\n\033[1;33mRunning {model_name} ensemble forecast\033[0m in {path}", flush=True)
 
+    ##if using external scheduler, c.job_submit['run_separate_jobs']
+    ##all jobs will run directly, nworker is nens
     nworker = c.nproc // model.nproc_per_run
     scheduler = Scheduler(nworker, model.walltime, debug=c.debug)
 
@@ -54,7 +56,7 @@ def ensemble_forecast_batch(c, model_name):
         'forecast_period': c.cycle_period,
         **c.job_submit,
         }
-    model.run(**job_opt)
+    model.run_batch(**job_opt)
     print('done.', flush=True)
 
 def run(c):
