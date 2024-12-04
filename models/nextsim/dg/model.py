@@ -228,18 +228,44 @@ class Model(ModelConfig):
         forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
 
     def run(self, task_id=0, **kwargs):
-        ##TODO: add the logic to run only 1 member here
-        pass
+        kwargs = super().parse_kwargs(**kwargs)
+        self.run_status = 'running'
+        nproc = self.nproc_per_run
+        offset = task_id*self.nproc_per_run
+
+        member = kwargs['member']
+        if member is not None:
+            run_dir:str = os.path.join(kwargs['path'], f"ens_{member+1:02}")
+        else:
+            run_dir = kwargs['path']
+        makedir(run_dir)
+        namelist.make_namelist(run_dir, **kwargs)
+
+        ##build shell commands for running the model
+        shell_cmd = "echo starting the script...; "
+        shell_cmd += f"source {self.model_env}; "
+        shell_cmd += f"cd {run_dir}; "
+        shell_cmd += f"echo {run_dir}; "
+        shell_cmd += "cp $NDG_BLD_DIR/nextsim .; "
+        if self.parallel_mode == 'openmp':
+            shell_cmd += f"export OMP_NUM_THREADS={nproc}; "
+            shell_cmd += "./nextsim --config-file nextsim.cfg > time.step"
+        elif self.parallel_mode == 'mpi':
+            shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
+        else:
+            raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
+
+        run_job(shell_cmd, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
     def run_batch(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
-        
+        assert kwargs['use_job_array'], "use_job_array shall be True if running ensemble in batch mode."
+
         run_dir:str = kwargs['path']
         nens:int = kwargs['nens']
-
         for member in range(nens):
-            ens_dir = os.path.join(run_dir, f"ens_{member:02}")
+            ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
             makedir(ens_dir)
 
             ##this creates run_dir/ens_??/nextsim.cfg
@@ -253,7 +279,13 @@ class Model(ModelConfig):
         shell_cmd += "cd ens_$(printf '%02d' JOB_ARRAY_INDEX); "
         shell_cmd += "echo $(pwd); "
         shell_cmd += "cp $NDG_BLD_DIR/nextsim .; "
-        shell_cmd += "./nextsim --config-file nextsim.cfg > time.step"
+        if self.parallel_mode == 'openmp':
+            shell_cmd += f"export OMP_NUM_THREADS={self.nproc_per_run}; "
+            shell_cmd += "./nextsim --config-file nextsim.cfg > time.step"
+        elif self.parallel_mode == 'mpi':
+            shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
+        else:
+            raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, nproc=self.nproc_per_run, ppn=32, array_size=nens, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
 

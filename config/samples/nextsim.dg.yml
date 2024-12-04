@@ -1,14 +1,18 @@
 work_dir: '/bettik/yumengch-ext/DATA/nextsim.dg'   ##working directory for the experiment
-job_submit_cmd: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/run.sh'
-# here, we specify the node for OAR job submission
-# it should be either f-dahu or dahu-oar3 (only for -t devel)
-job_submit_node: 'dahu-oar3'
+job_submit:
+  host: gricad
+  scheduler: oar
+  ppn: 32
+  project: pr-sasip
+  queue: devel
+  run_separate_jobs: True
+  use_job_array: True
 
-nproc: 8          ##total number of processors
-nproc_mem: 2      ##number of processor groups
+nproc: 32          ##total number of processors
 
-nens: 2          ##ensemble size
-run_assim: False  ##if true, run the assimilation steps
+nens: 20         ##ensemble size
+run_assim: True  ##if true, run the assimilation steps
+run_diag: False
 
 debug: True       ##if true, output debug data/message
 
@@ -17,10 +21,6 @@ time_end: '201001040000'         ##end time of the experiment
 time_assim_start: '201010300000' ##start time of the first analysis cycle
 time_assim_end: '201001040000'   ##end time of the last analysis cycle
 cycle_period: 24                 ##cycle period, in hours
-
-time: '201001010000'
-prev_time: '201001010000'
-next_time: '201001020000'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -50,31 +50,33 @@ obs_def:
   err:
     type: 'normal'
     std: 0.2
-  hroi: 100
-  vroi: 2
+  hroi: 1e5
+  vroi: 1e10
   troi: 24
   impact_on_state:
-    -ocean_temp: 1.0
+    seaice_conc: 1.0
 
 use_synthetic_obs: False
 
 model_def:
   nextsim.dg:
     config_file: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/default.yml'
-    model_config_file: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/default.cfg'
-    nproc_per_mem: 4   ##number of processors to run a forecast
+    model_env: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/setup-gricad.src'
+    nproc_per_run: 8    ##number of processors to run a forecast
+    parallel_mode: openmp
     walltime: 10000     ##walltime in seconds
     ens_run_type: batch
     ens_init_dir: '/bettik/yumengch-ext/DATA/nextsim.dg'
     truth_dir: ''
 
+perturb:
+
 assim_mode: 'batch'
 filter_type: 'ETKF'
-regress_type: 'linear'
 
 inflation:
-  type: ''
-  adaptive: False
+  type: 'posterior,relax'
+  adaptive: True
   coef: 1.0
 
 localization:

@@ -4,7 +4,7 @@ from utils.conversion import dt1h
 from . import restart, forcing
 
 def make_namelist(path='.', **kwargs):
-    ens_mem_id:int = kwargs['member'] + 1
+    ens_mem_id:int = kwargs['member'] + 1  ##TODO: member could be None for deterministic runs
     time = kwargs['time']
     forecast_period = kwargs['forecast_period']
     next_time = time + forecast_period * dt1h

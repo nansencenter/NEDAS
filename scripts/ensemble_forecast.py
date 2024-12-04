@@ -15,9 +15,14 @@ def ensemble_forecast_scheduler(c, model_name):
     makedir(path)
     print(f"\n\033[1;33mRunning {model_name} ensemble forecast\033[0m in {path}", flush=True)
 
-    ##if using external scheduler, c.job_submit['run_separate_jobs']
-    ##all jobs will run directly, nworker is nens
-    nworker = c.nproc // model.nproc_per_run
+    if c.job_submit.get('run_separate_jobs', False):
+        ##all jobs will be submitted to external scheduler's queue
+        ##just assign a worker to each ensemble member
+        nworker = c.nens
+    else:
+        ##Scheduler will use nworkers to spawn ensemble member runs to
+        ##the available nproc processors
+        nworker = c.nproc // model.nproc_per_run
     scheduler = Scheduler(nworker, model.walltime, debug=c.debug)
 
     for mem_id in range(c.nens):
