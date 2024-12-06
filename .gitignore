@@ -9,3 +9,4 @@ slurm*out
 *.npz
 log/
 output
+.env
