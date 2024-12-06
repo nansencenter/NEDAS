@@ -1,5 +1,16 @@
 # model config parameters
+#grid definition
+##TODO: get stere proj x,y start and end directly, instead of converting from lon,lat
+grid:
+  proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
+  xstart:
+  xend:
+  ystart:
+  yend:
+  dx:
 
+restart_dt: 24  ##model restart interval (hours)
+##physical parameters
 
 # here, we specify the required files
 files:

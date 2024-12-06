@@ -42,7 +42,7 @@ state_def:
 
 obs_def:
 - name: 'seaice_conc'
-  dataset_src: 'osisaf'
+  dataset_src: 'osisaf.ice_conc'
   dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
   model_src: 'nextsim.dg'
   obs_window_min: -6
@@ -69,7 +69,7 @@ model_def:
     ens_init_dir: '/bettik/yumengch-ext/DATA/nextsim.dg'
     truth_dir: ''
 
-perturb:
+perturb:  ##leave blank, use nextsim.dg specific perturb settings
 
 assim_mode: 'batch'
 filter_type: 'ETKF'

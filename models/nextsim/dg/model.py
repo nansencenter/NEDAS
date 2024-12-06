@@ -20,8 +20,7 @@ class Model(ModelConfig):
              }
         self.z_units = 'm'
 
-        self.run_process = None
-        self.run_status = 'pending'
+        #self.grid = 
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -64,6 +63,11 @@ class Model(ModelConfig):
         return np.zeros(self.grid.x.shape)
 
     def preprocess(self, task_id:int=0, **kwargs):
+        """Preprocessing method for nextsim.dg"""
+        self.prepare_restart(task_id, **kwargs)
+        self.prepare_forcing(task_id, **kwargs)
+
+    def prepare_restart(self, task_id:int=0, **kwargs):
         """generate initial condition for a single ensemble member.
 
         Parameters
@@ -228,8 +232,8 @@ class Model(ModelConfig):
         forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
 
     def run(self, task_id=0, **kwargs):
+        """Run nextsim.dg model forecast"""
         kwargs = super().parse_kwargs(**kwargs)
-        self.run_status = 'running'
         nproc = self.nproc_per_run
         offset = task_id*self.nproc_per_run
 
@@ -255,11 +259,11 @@ class Model(ModelConfig):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, job_name='nextsim.dg.run', nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
     def run_batch(self, task_id=0, **kwargs):
+        """Run nextsim.dg model ensemble forecast, use job array to spawn the member runs"""
         kwargs = super().parse_kwargs(**kwargs)
-        self.run_status = 'running'
         assert kwargs['use_job_array'], "use_job_array shall be True if running ensemble in batch mode."
 
         run_dir:str = kwargs['path']
@@ -287,5 +291,5 @@ class Model(ModelConfig):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, job_name='nextsim.dg.ens_run', nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
 

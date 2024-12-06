@@ -8,7 +8,7 @@ import numpy as np
 import pyproj # type: ignore
 
 from grid import Grid
-from perturb import gen_perturb, apply_perturb
+from .perturb import gen_perturb, apply_perturb
 
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
