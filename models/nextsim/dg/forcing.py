@@ -20,7 +20,7 @@ import pyproj # type: ignore
 
 from utils.conversion import t2s
 from grid import Grid
-from perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
+from .perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
 
 from . import slicing_nc
 
