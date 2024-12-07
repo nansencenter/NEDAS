@@ -1,7 +1,5 @@
 import os
-
 from utils.progress import timer
-from utils.conversion import t2s
 from utils.parallel import Scheduler
 from utils.dir_def import forecast_dir
 from utils.shell_utils import makedir
@@ -21,7 +19,19 @@ def preprocess(c, model_name):
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
 
-    scheduler = Scheduler(c.nproc // model.nproc_per_util, debug=c.debug)
+    if c.job_submit.get('run_separate_jobs', False):
+        ##ideally, if in preprocess method jobs are submitted through run_job, then
+        ##here nworker should be c.nens
+        ## model preprocess method typically contain a lot of serial subprocess.run
+        ##not necessarily using run_job and JobSubmitter class to run the job
+        ##so temporarily use os.cpu_count to limit the resource here
+        nproc_avail = os.cpu_count()
+        nworker = min(c.nens, nproc_avail)
+    else:
+        ##Scheduler will use nworkers to spawn preprocess task for each member
+        ##to the available nproc processors
+        nworker = c.nproc // model.nproc_per_util
+    scheduler = Scheduler(nworker, debug=c.debug)
 
     for mem_id in range(c.nens):
         job_name = f'preproc_{model_name}_mem{mem_id+1}'

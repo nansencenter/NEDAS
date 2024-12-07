@@ -23,9 +23,9 @@ while c.time < c.time_end:
 
     os.system("mkdir -p "+cycle_dir(c, c.time))
 
-    preprocess.run(c)
+    #preprocess.run(c)
 
-    perturb.run(c)
+    #perturb.run(c)
 
     ##assimilation step
     if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
@@ -33,10 +33,10 @@ while c.time < c.time_end:
         for c.scale_id in range(c.nscale):
             assimilate.run(c)
 
-        postprocess.run(c)
+    #    postprocess.run(c)
 
     ##forecast step
-    ensemble_forecast.run(c)
+    #ensemble_forecast.run(c)
 
     ##compute diagnostics
     if c.run_diag:

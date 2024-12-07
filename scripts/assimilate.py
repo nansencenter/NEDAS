@@ -1,8 +1,7 @@
-import numpy as np
 import os
 import sys
 import importlib.util
-from utils.conversion import t2s, s2t, dt1h
+from utils.conversion import dt1h
 from utils.parallel import bcast_by_root
 from utils.progress import timer
 from utils.shell_utils import run_job, makedir
@@ -70,7 +69,7 @@ def run(c):
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
         commands = f"{sys.executable} {script_file} -c {config_file} --nproc=1"
 
-    run_job(commands, job_name='assimilate', nproc=c.nproc, **c.job_submit)
+    run_job(commands, job_name='assimilate', run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
 
 if __name__ == '__main__':
     from config import Config

@@ -1,5 +1,3 @@
-import os
-
 from utils.progress import timer
 from utils.conversion import t2s
 from utils.parallel import Scheduler
