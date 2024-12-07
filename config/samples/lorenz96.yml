@@ -1,12 +1,15 @@
 work_dir: '/tmp/lorenz96_test'
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_local.sh'
+
+job_submit:
+  host:
+  scheduler:
+  ppn: 1
 
 nproc: 1
 
 nens: 20
 run_assim: True
 run_diag: False
-
 debug: False      ##if true, output debug data/message
 
 time_start: '200101010000'       ##start time of the experiment, format ccyymmddHHMM

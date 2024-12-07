@@ -1,10 +1,8 @@
-import numpy as np
 import os
-import inspect
+import numpy as np
 from grid import Grid1D
-from config import parse_config
-from utils.conversion import t2s, s2t, dt1h
-from utils.shell_utils import run_command
+from utils.conversion import dt1h
+from utils.shell_utils import run_command, makedir
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from .core import M_nl
 from ..model_config import ModelConfig
@@ -63,7 +61,7 @@ class L96Model(ModelConfig):
 
     def preprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        run_command("mkdir -p "+kwargs['path'])
+        makedir(kwargs['path'])
         file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
         file2 = self.filename(**kwargs)
         run_command(f"cp -fL {file1} {file2}")
@@ -77,7 +75,7 @@ class L96Model(ModelConfig):
 
         state = self.read_var(**kwargs)
 
-        run_command("mkdir -p "+kwargs['path'])
+        makedir(kwargs['path'])
 
         next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
 

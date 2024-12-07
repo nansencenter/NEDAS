@@ -1,11 +1,15 @@
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
+job_submit:
+  host:
+  scheduler:
+  ppn: 16
 
 nproc: 5        ##total number of processors
 
 nens: 20         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
-
+run_diag: False
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
