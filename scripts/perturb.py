@@ -1,7 +1,7 @@
-import numpy as np
 import os
 import sys
 import importlib.util
+import numpy as np
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
@@ -124,7 +124,7 @@ def run(c):
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
         commands = f"{sys.executable} {script_file} -c {config_file} --nproc=1"
 
-    run_job(commands, job_name="perturb", nproc=c.nproc, **c.job_submit)
+    run_job(commands, job_name="perturb", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
 
 if __name__ == "__main__":
     from config import Config
@@ -137,4 +137,3 @@ if __name__ == "__main__":
         exit()
 
     timer(c)(perturb)(c)
-
