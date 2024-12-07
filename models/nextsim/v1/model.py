@@ -1,16 +1,11 @@
-import numpy as np
 import os
 import glob
-import inspect
-from datetime import datetime
-
-from config import parse_config
+import numpy as np
 from utils.netcdf_lib import nc_read_var, nc_write_var
-from utils.conversion import t2s, s2t, dt1h, units_convert
-from utils.shell_utils import run_command, makedir
+from utils.conversion import dt1h, units_convert
+from utils.shell_utils import run_command, makedir, run_job
 from utils.progress import watch_files
 from grid import Grid
-
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
 from .namelist import namelist
@@ -70,6 +65,9 @@ class NextsimModel(ModelConfig):
         self.run_status = 'pending'
 
     def filename(self, **kwargs):
+        """
+        Get the filename with specified variable name, time, member, etc. 
+        """
         kwargs = super().parse_kwargs(**kwargs)
         if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
@@ -92,6 +90,9 @@ class NextsimModel(ModelConfig):
             return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
 
     def read_grid_from_mshfile(self, mshfile):
+        """
+        Read mshfile and update the self.grid object
+        """
         grid_info = read_mshfile(mshfile)
         x, y = grid_info['nodes_x'], grid_info['nodes_y']
         triangles = np.array([np.array(el.node_indices) for el in grid_info['triangles']])
@@ -99,6 +100,9 @@ class NextsimModel(ModelConfig):
         self.edges = np.array([np.array(el.node_indices) for el in grid_info['edges']])
 
     def read_grid(self, **kwargs):
+        """
+        Update self.grid object based on input kwargs
+        """
         kwargs = super().parse_kwargs(**kwargs)
         if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
             meshfile = self.filename(**kwargs).replace('field', 'mesh')
@@ -222,6 +226,7 @@ class NextsimModel(ModelConfig):
         setattr(self, kwargs['name'], param)
 
     def preprocess(self, task_id=0, **kwargs):
+        """Preprocess the dir, collect input files for model run"""
         ##put sequence of operation here to generate the initial condition files for nextsim
         kwargs = super().parse_kwargs(**kwargs)
         time = kwargs['time']
@@ -294,8 +299,6 @@ class NextsimModel(ModelConfig):
                 raise RuntimeError("input file is missing: "+file)
 
         ##build command to run the model
-        job_submit_cmd = kwargs['job_submit_cmd']
-        offset = task_id * self.nproc_per_run
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
         run_command("touch "+log_file)
@@ -303,7 +306,7 @@ class NextsimModel(ModelConfig):
         shell_cmd = f"source {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += f"export NEXTSIM_DATA_DIR={os.path.join(run_dir,'data')}; "
-        shell_cmd += f"{job_submit_cmd} {self.nproc_per_run} {offset} {model_exe} --config-files=config/nextsim.cfg >& run.log"
+        shell_cmd += f"JOB_EXECUTE {model_exe} --config-files=config/nextsim.cfg >& run.log"
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.5]:
@@ -321,8 +324,9 @@ class NextsimModel(ModelConfig):
             namelist(self, time, forecast_period, config_dir)
 
             ##run the model and wait for results
-            self.run_process = subprocess.Popen(shell_cmd, shell=True)
-            self.run_process.wait()
+            run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
+                    nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
+                    walltime=self.walltime, **kwargs)
 
         ##checkout output files
         watch_files([output_file])

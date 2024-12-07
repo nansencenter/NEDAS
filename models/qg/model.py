@@ -1,9 +1,8 @@
-import numpy as np
 import os
-import subprocess
+import numpy as np
 from grid import Grid
-from utils.conversion import t2s, dt1h
-from utils.shell_utils import run_command
+from utils.conversion import dt1h
+from utils.shell_utils import run_command, run_job, makedir
 from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
@@ -148,7 +147,7 @@ class QGModel(ModelConfig):
         input_dir = os.path.dirname(input_file)
 
         ##just cp the prepared files to the work_dir location
-        run_command("mkdir -p "+input_dir)
+        makedir(input_dir)
         run_command("cp "+restart_file+" "+input_file)
 
     def postprocess(self, task_id=0, **kwargs):
@@ -163,7 +162,7 @@ class QGModel(ModelConfig):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        run_command("mkdir -p "+run_dir)
+        makedir(run_dir)
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -181,20 +180,12 @@ class QGModel(ModelConfig):
 
         qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
 
-        offset = task_id*task_nproc
-        job_submit_cmd = kwargs['job_submit_cmd']
-        if job_submit_cmd is not None:
-            submit_cmd = job_submit_cmd+f" {task_nproc} {offset} "
-        else:
-            submit_cmd = ""
-
         ##build the shell command line
         shell_cmd = "source "+self.model_env+"; "   ##enter the qg model env
         shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
         shell_cmd += "rm -f restart.nml; "      ##clean up before run
         shell_cmd += prep_input_cmd             ##prepare input file
-        shell_cmd += submit_cmd                 ##job_submitter
-        shell_cmd += qg_exe+" . "               ##the qg model exe
+        shell_cmd += "JOB_EXECUTE "+qg_exe+" . " ##the qg model exe
         shell_cmd += ">& run.log"               ##output to log
 
         log_file = os.path.join(run_dir, 'run.log')
@@ -203,17 +194,16 @@ class QGModel(ModelConfig):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(self, time, forecast_period, dt_ratio, run_dir)
 
-            self.run_process = subprocess.Popen(shell_cmd, shell=True)
-            self.run_process.wait()
+            run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
                 if 'Calculation done' in f.read():
                     break
-            returncode = self.run_process.returncode
-            if returncode is not None and returncode < 0:
-                ##kill signal received, exit the run func
-                return
+            # returncode = self.run_process.returncode
+            # if returncode is not None and returncode < 0:
+            #     ##kill signal received, exit the run func
+            #     return
 
         ##check output
         with open(log_file, 'rt') as f:
@@ -224,5 +214,4 @@ class QGModel(ModelConfig):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        subprocess.run(shell_cmd, shell=True)
-
+        run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, ppn=task_nproc, **kwargs)

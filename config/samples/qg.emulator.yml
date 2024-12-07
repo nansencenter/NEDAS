@@ -1,12 +1,15 @@
 work_dir: '/cluster/work/users/yingyue/qg.emulator'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
 
-nproc: 1        ##total number of processors
-nproc_mem: 1    ##number of processor groups
+job_submit:
+  host:
+  scheduler:
+  ppn: 16
+
+nproc: 1          ##total number of processors
 
 nens: 100         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
-
+run_diag: False
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
@@ -55,6 +58,8 @@ model_def:
     ens_run_type: batch
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'
+
+perturb:
 
 assim_mode: 'serial'
 filter_type: 'EAKF'
