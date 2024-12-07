@@ -1,7 +1,8 @@
 # model config parameters
 #grid definition
-##TODO: get stere proj x,y start and end directly, instead of converting from lon,lat
-grid:
+##TODO: can we get stere proj x,y start and end directly to build the grid object?
+##      instead of converting from lon,lat which I think is unnecessary
+grid_def:
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
   xstart:
   xend:
