@@ -117,6 +117,17 @@ def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: dat
                    f'forecast time: {time} to {next_time}')
     return np.arange(it0, it1 + 1), file_time
 
+def get_time_index(fname:str, time_varname:str, time_units_name:str, time:datetime) -> int:
+    """
+    Get the index of time in a netcdf file
+    """
+    with thread_lock:
+        with netCDF4.Dataset(fname, 'r') as f:
+            time_units = f[time_units_name].units
+            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
+            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
+            ind: int = int(np.rint((time - start_time) / time_step))
+    return ind
 
 def get_prev_time_from_nc(fname:str, time_varname:str, time_units_name:str, itime:int) -> datetime:
     """Get the previous time in the netcdf file before the start of the forecast cycle
@@ -256,15 +267,15 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
     forcing_file_date_format:str = forcing_file_options['datetime_format']
     # get the forcing file time
     forcing_start_date:str
-    forcing_end_state:str
-    forcing_start_date, forcing_end_state = \
+    forcing_end_date:str
+    forcing_start_date, forcing_end_date = \
         get_fname_daterange(time, forcing_file_initial_date, forcing_file_interval, forcing_file_date_format)
     fname: str
     try:
-        fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_state)
+        fname = file_format.format(i=i_ens , start=forcing_start_date, end=forcing_end_date)
     except KeyError:
         try:
-            fname = file_format.format(start=forcing_start_date, end=forcing_end_state)
+            fname = file_format.format(start=forcing_start_date, end=forcing_end_date)
         except KeyError:
             print ('Currently, we only supports keyword of 1. "start"+"end",'
                    '2. "start"+"end"+"i".'
