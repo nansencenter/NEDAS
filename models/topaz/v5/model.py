@@ -1,17 +1,14 @@
-import numpy as np
 import os
-import subprocess
 from functools import lru_cache
 from datetime import datetime, timedelta
-
-from config import parse_config
-from utils.conversion import units_convert, t2s, s2t, dt1h
+import numpy as np
+from utils.conversion import units_convert, dt1h
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.shell_utils import run_command, run_job, makedir
 from utils.progress import watch_log, find_keyword_in_file, watch_files
-
 from .namelist import namelist
-from ..time_format import dayfor, jultodate
+from .cice_utils import thickness_upper_limit
+from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
 from ...model_config import ModelConfig
@@ -39,12 +36,9 @@ class Topaz5Model(ModelConfig):
 
         self.cice_variables = {
             'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_n':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'%'},
-            'seaice_thick_n':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
-            }
-
-        self.diag_variables = {
-            'seaice_conc':  {},
+            'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'%'},
+            'seaice_volume_ncat':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
+            'snow_volume_ncat':  {'name':'vsnon', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
             }
 
         self.atmos_forcing_variables = {
@@ -59,8 +53,14 @@ class Topaz5Model(ModelConfig):
             }
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
-        self.variables = {**self.hycom_variables, **self.cice_variables, **self.atmos_forcing_variables}
-
+        self.diag_variables = {
+            'seaice_conc': {'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'%'},
+            'seaice_thick': {'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'snow_thick': {'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            }
+ 
+        self.variables = {**self.hycom_variables, **self.cice_variables, **self.atmos_forcing_variables, **self.diag_variables}
+               
         ##model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
@@ -119,7 +119,7 @@ class Topaz5Model(ModelConfig):
 
         elif name in self.cice_variables:
             if rec['is_vector']:
-                if rec['name'][0][-2:] == '_n':  ##ncat variable
+                if name[-5:] == '_ncat':  ##ncat variable
                     var1 = nc_read_var(fname, rec['name'][0])[kwargs['k'],...]
                     var2 = nc_read_var(fname, rec['name'][1])[kwargs['k'],...]
                 else:
@@ -127,7 +127,7 @@ class Topaz5Model(ModelConfig):
                     var2 = nc_read_var(fname, rec['name'][1])
                 var = np.array([var1, var2])
             else:
-                if rec['name'][-2:] == '_n':  ##ncat variable
+                if name[-5:] == '_ncat':  ##ncat variable
                     var = nc_read_var(fname, rec['name'])[kwargs['k'],...]
                 else:
                     var = nc_read_var(fname, rec['name'])
@@ -146,6 +146,9 @@ class Topaz5Model(ModelConfig):
                 f = ABFileForcing(fname+'.'+rec['name'], 'r')
                 var = f.read_field(rec['name'], dtime)
                 f.close()
+
+        elif name in self.diag_variables:
+            var = rec['operator'](**kwargs)
 
         ##convert units if necessary
         var = units_convert(kwargs['units'], rec['units'], var)
@@ -174,7 +177,7 @@ class Topaz5Model(ModelConfig):
         elif name in self.cice_variables:
             if rec['is_vector']:
                 for i in range(2):
-                    if rec['name'][i][-2:] == '_n':  ##ncat variable
+                    if rec['name'][i][-5:] == '_ncat':  ##ncat variable
                         dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = {'ncat':kwargs['k']}
                     else:
@@ -182,7 +185,7 @@ class Topaz5Model(ModelConfig):
                         recno = None
                     nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
             else:
-                if rec['name'][-2:] == '_n':  ##ncat variable
+                if rec['name'][-5:] == '_ncat':  ##ncat variable
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = {'ncat':kwargs['k']}
                 else:
@@ -226,7 +229,7 @@ class Topaz5Model(ModelConfig):
             rec['name'] = 'ocean_layer_thick'
             rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
             if self.z_units == 'm':
-                dz = - self.read_var(**rec) / self.onem ##in meters, negative relative to surface
+                dz = - self.read_var(**rec) / self.ONEM ##in meters, negative relative to surface
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
@@ -236,6 +239,60 @@ class Topaz5Model(ModelConfig):
             kwargs['k'] -= 1
             z_prev = self.z_coords(**kwargs)
             return z_prev + dz
+
+    @lru_cache(maxsize=3)
+    def get_seaice_conc(self, **kwargs):
+        """
+        Get total seaice concentration from multicategory ice concentration (aicen)
+        adapted from ReanalysisTP5/SSHFromState_HYCOMICE/mod_read_icednc by J. Xie
+        """
+        seaice_conc = np.zeros(self.grid.x.shape)
+        rec = kwargs.copy()
+        rec['name'] = 'seaice_conc_ncat'
+        rec['units'] = self.variables['seaice_conc_ncat']['units']
+        for k in range(len(self.variables['seaice_conc_ncat']['levels'])):
+            seaice_conc += self.read_var(**{**rec, 'k':k})
+        
+        seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
+        return seaice_conc
+    
+    def get_seaice_thick(self, **kwargs):
+        """
+        Get total seaice thickness from the multicategory ice volume (vicen)
+        """
+        seaice_conc = self.get_seaice_conc(**kwargs)
+        
+        seaice_volume = np.zeros(self.grid.x.shape)
+        rec = kwargs.copy()
+        rec['name'] = 'seaice_volume_ncat'
+        rec['units'] = self.variables['seaice_volume_ncat']['units']
+        for k in range(len(self.variables['seaice_volume_ncat']['levels'])):
+            seaice_volume += self.read_var(**{**rec, 'k':k})
+        
+        seaice_thick = np.zeros(self.grid.x.shape)
+        ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
+        upper_limit = thickness_upper_limit(seaice_conc[ind], 'seaice')
+        seaice_thick[ind] = np.minimum(seaice_volume[ind] / seaice_conc[ind], upper_limit)
+        return seaice_thick
+    
+    def get_snow_thick(self, **kwargs):
+        """
+        Get total snow thickness from the multi-category snow volume (vsnon)
+        """
+        seaice_conc = self.get_seaice_conc(**kwargs)
+
+        snow_volume = np.zeros(self.grid.x.shape)
+        rec = kwargs.copy()
+        rec['name'] = 'snow_volume_ncat'
+        rec['units'] = self.variables['snow_volume_ncat']['units']
+        for k in range(len(self.variables['snow_volume_ncat']['levels'])):
+            snow_volume += self.read_var(**{**rec, 'k':k})
+        
+        snow_thick = np.zeros(self.grid.x.shape)
+        ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
+        upper_limit = thickness_upper_limit(seaice_conc[ind], 'snow')
+        snow_thick[ind] = np.minimum(snow_volume[ind] / seaice_conc[ind], upper_limit)
+        return snow_thick
 
     def preprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
