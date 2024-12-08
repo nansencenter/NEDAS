@@ -201,4 +201,6 @@ jlport: [760, 2]   ##'jlport   ' = last  j-index (=jfport for north/south port)
 cice_dt: 1200.0  ##cice model time step (seconds)
 
 z_units: 'm'
-onem: 9806.
+
+ONEM: 9806.
+MIN_SEAICE_CONC: 0.05
