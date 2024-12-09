@@ -21,7 +21,7 @@ def nc_close(filename, f, comm):
     if comm is not None and not comm.parallel_io:
         comm.release_file_lock(filename)
 
-def nc_write_var(filename, dim, varname, dat, recno=None, attr=None, comm=None):
+def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None, comm=None):
     """
     Write a variable to a netcdf file
 
@@ -39,6 +39,9 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None, comm=None):
     - dat: np.array
       Data for output, number of its dimensions must match dim (excluding unlimited dims)
 
+    - dtype:
+      Data type, if not None will convert input dat to dtype
+
     - recno: dict, optional
       Dictionary {'dimension name': record_number}, each unlimited dimension defined in dim
       should have a corresponding recno entry to note which record to write to.
@@ -50,6 +53,12 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None, comm=None):
     - comm: Comm object
     """
     f = nc_open(filename, 'a', comm)
+
+    if dtype is None:
+        if isinstance(dat, np.ndarray):
+            dtype = dat.dtype
+        else:
+            dtype = type(dat)
 
     ndim = len(dim)
     s = ()  ##slice for each dimension
@@ -71,8 +80,12 @@ def nc_write_var(filename, dim, varname, dat, recno=None, attr=None, comm=None):
         else:
             f.createDimension(name, size=dim[name])
     if varname not in f.variables:
-        f.createVariable(varname, np.float32, dim.keys())
+        f.createVariable(varname, dtype, dim.keys())
 
+    if isinstance(dat, np.ndarray):
+        dat = dat.astype(dtype)
+    else:
+        dat = dtype(dat)
     f[varname][s] = dat  ##write dat to file
     if attr is not None:
         for akey in attr:
