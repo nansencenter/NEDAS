@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 import importlib.util
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
@@ -7,7 +8,7 @@ from utils.progress import timer, print_with_cache, progress_bar
 from utils.dir_def import forecast_dir, analysis_dir
 from utils.shell_utils import run_job
 
-def diag(c):
+def diagnose(c):
     task_list = bcast_by_root(c.comm)(distribute_diag_tasks)(c)
 
     c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
@@ -15,15 +16,16 @@ def diag(c):
 
     diag_id = 0
     for rec in task_list[c.pid]:
-        print(rec)
+        method_name = f"diag.{rec['method']}"
+        module = importlib.import_module(method_name)
+        module.run(c, **rec)
 
-    c.comm.Barrier()
     print_1p(' done.\n\n')
 
 def distribute_diag_tasks(c):
     task_list_full = []
     for rec in ensure_list(c.diag):
-        if rec['ensemble']:
+        if rec['is_ensemble']:
             task_list_full.append(rec)
         else:
             for mem_id in range(c.nens):
@@ -54,5 +56,4 @@ if __name__ == "__main__":
         print_1p('no diagnostic defined in config\n\n')
         exit()
 
-    timer(c)(diag)(c)
-
+    timer(c)(diagnose)(c)

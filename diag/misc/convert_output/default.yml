@@ -1,0 +1,29 @@
+variables: ['seaice_conc']
+model_src: 'topaz.v5'
+time_start: '202109060000'
+time_end: '202109060000'
+
+grid_def:
+  proj: '+proj=stere +lat_0=90 +lon_0=-45 +datum=WGS84 +units=m'
+  xmin: -3600000.
+  xmax: 3800001.
+  ymin: -4300000.
+  ymax: 2800001.
+  dx: 6250.
+  centered: False
+
+file: '/cluster/work/users/yingyue/icecap/nersc_tmp/medium-range/nersc_tmp/topaz5/latest/fc/{time:%Y%m%d}_mem-{member:03}_{var_name}_native.nc'
+
+time_name: 'time'
+time_units: 'seconds since 1970-01-01T00:00:00+00:00'
+time_calendar: 'proleptic_gregorian'
+
+k_name:
+x_name: 'xc'
+y_name: 'yc'
+lat_name: 'latitude'
+lon_name: 'longitude'
+
+var_names: ['sic']
+var_standard_names: ['sea_ice_area_fraction']
+var_units: ['1']
