@@ -11,7 +11,7 @@ nproc: 512       ##total number of processors for assimilate
 
 nens: 10          ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
-run_diag: False
+run_diag: True
 debug: True ##if true, output debug data/message
 
 time_start: '202109060000'       ##start time of the experiment, format ccyymmddHHMM
@@ -57,11 +57,11 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_conc_n'
+- name: 'seaice_conc_ncat'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_thick_n'
+- name: 'seaice_thick_ncat'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
@@ -159,3 +159,14 @@ localization:
   vtype: 'GC'
   ttype: 'GC'
 
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  variables: ['seaice_conc', 'seaice_thick']
+  model_src: 'topaz.v5'
+  time_start: '202109060000'
+  time_end: '202109130000'
+  var_names: ['sic', 'sit']
+  var_units: ['1', 'm']
+  var_standard_names: ['sea_ice_area_fraction', 'sea_ice_thickness']

@@ -73,6 +73,41 @@ type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}
 
+##map projection name in pyproj
+from pyproj import Proj
+def proj2dict(proj:Proj) -> dict:
+    proj_names = {
+        "stere": "polar_stereographic",
+        "merc": "mercator",
+        "lcc": "lambert_conformal_conic",
+        "utm": "transverse_mercator",
+        "aea": "albers_conical_equal_area",
+        "eqc": "equirectangular",
+        }
+    param_names = {
+        "proj": "projection",
+        "datum": "datum",
+        "lat_0": "central_latitude",
+        "lon_0": "central_longitude",
+        "lat_ts": "standard_parallel",
+        "x_0": "false_easting",
+        "y_0": "false_northing",
+        "a": "semi_major_axis",
+        "b": "semi_minor_axis",
+        "k": "scale_factor_at_origin",
+    }
+    proj_params = {}
+    for entry in proj.definition.split():
+        if '=' in entry:
+            key, value = entry.split('=', 1)
+            if value.replace('.','',1).isdigit():
+                value = float(value)
+        else:
+            key, value = entry, True
+        if key in param_names:
+            proj_params[param_names[key]] = value
+    return proj_params
+
 from datetime import datetime, timedelta
 
 dt1h = timedelta(hours=1)
