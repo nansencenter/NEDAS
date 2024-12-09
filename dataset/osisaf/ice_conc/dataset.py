@@ -22,6 +22,7 @@ class Dataset(DatasetConfig):
         kwargs = super().parse_kwargs(**kwargs)
         path = kwargs['path']
         time = kwargs['time']
+        name = kwargs['name']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 

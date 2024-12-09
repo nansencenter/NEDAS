@@ -22,13 +22,14 @@ class Dataset(DatasetConfig):
         kwargs = super().parse_kwargs(**kwargs)
         path = kwargs['path']
         time = kwargs['time']
+        name = kwargs['name']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
         rec = self.variables[name]
 
         if time is None:
-            search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc'
+            search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc')
             file_list = glob.glob(search)
 
         else:
@@ -41,7 +42,7 @@ class Dataset(DatasetConfig):
             for d in d_range:
                 t = time + d * timedelta(hours=1)
                 t0 = t - timedelta(days=2)  ##drift traj start time
-                search = os.path.join(path, t.strftime('%Y'), t.strftime('%m'), 'ice_drift_'+self.proj_name+'-625_multi-oi_'+t0.strftime('%Y%m%d%H%M')+'-'+t.strftime('%Y%m%d%H%M')+'.nc'
+                search = os.path.join(path, t.strftime('%Y'), t.strftime('%m'), 'ice_drift_'+self.proj_name+'-625_multi-oi_'+t0.strftime('%Y%m%d%H%M')+'-'+t.strftime('%Y%m%d%H%M')+'.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
