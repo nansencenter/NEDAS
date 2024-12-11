@@ -393,7 +393,7 @@ def state_to_obs(c, **kwargs):
         else:
             path = forecast_dir(c, time, kwargs['model_src'])
 
-        operator = obs.obs_operator[kwargs['model']]
+        operator = dataset.obs_operator[kwargs['model']]
         # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['dataset_src']+'.obs_operator for '+kwargs['model_src']
 
         ##get the obs seq from operator

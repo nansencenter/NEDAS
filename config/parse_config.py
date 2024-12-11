@@ -16,15 +16,15 @@ def convert_notation(data):
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
         ## convert "inf" to numpy.inf
-        elif data == "inf":
+        elif data.lower() == "inf":
             return numpy.inf
-        elif data == "-inf":
+        elif data.lower() == "-inf":
             return -numpy.inf
         ## convert string to bool
-        # elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
-        #     return True
-        # elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
-        #     return False
+        elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+            return True
+        elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+            return False
         else:
             return data
     else:

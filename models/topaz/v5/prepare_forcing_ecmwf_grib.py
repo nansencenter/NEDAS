@@ -13,7 +13,7 @@ from models.topaz.time_format import dayfor
 from models.topaz.v5 import Model
 model = Model()
 
-grib_path = "/cluster/work/users/yingyue/data/ACCIBEREG/EC_grib_files"
+grib_path = "/nird/projects/NS2993K/METNO_2_NERSC/ACCIBEREG/EC_grib_files"
 nens = 50  ##ensemble members in file
 dt_hours = 6  #interval hours of records in file
 variables = {
@@ -56,7 +56,7 @@ def filename_analysis(path, t, ensemble):
         day_start, day_end = int(tmp[0]), int(tmp[1])
         if t.day in [day for day in range(day_start, day_end+1)]:
             return file, t.day
-    raise RuntimeError(f"could not find file that contain time {t}")
+    raise RuntimeError(f"could not find file that contain time {t}: {search}")
 
 def filename_forecast(path, t, ensemble):
     search = os.path.join(path, f"{t:%Y}-{t:%m}", "FORECAST", f"fc_aciceberg_{t:%Y}-{t:%m}*.grb")
@@ -66,7 +66,7 @@ def filename_forecast(path, t, ensemble):
         day_start = int(file.split(".")[0].split('-')[-1])
         if t.day in range(day_start, day_start + forecast_days + 1):
             return file, day_start
-    raise RuntimeError(f"could not find file that contain time {t}")
+    raise RuntimeError(f"could not find file that contain time {t}: {search}")
 
 def get_record_id_lookup(grbs):
     lookup = {}
@@ -110,7 +110,7 @@ def fill_missing(var):
         var[j[n], i[n]] = np.nanmean(var[j[n]-d:j[n]+d, i[n]-d:i[n]+d])
     return var
 
-def output_abfile(f, filename, name, t, var):
+def output_abfile(f, filename, name, t, var, units):
     ##make sure directory exists
     os.system("mkdir -p "+os.path.dirname(filename))
     print(f"output to {filename}.a")
@@ -118,7 +118,7 @@ def output_abfile(f, filename, name, t, var):
     idm = model.grid.nx
     jdm = model.grid.ny
     cline1 = "ecmwf"
-    cline2 = f"{name} ({native_variables[name]['units']})"
+    cline2 = f"{name} ({units})"
     dtime1 = dayfor(model.yrflag, t.year, int(t.strftime('%j')), t.hour)
     rdtime = dt_hours / 24
 
@@ -166,11 +166,11 @@ def process(grbs, lookup, day_start, t, field_type, member):
         if rec['is_vector']:
             for i in range(2):
                 fill_missing(var_topaz[i,...])
-                output_abfile(f, forcing_file+'.'+rec['name'][i], rec['name'][i], t, var_topaz[i,...])
+                output_abfile(f, forcing_file+'.'+rec['name'][i], rec['name'][i], t, var_topaz[i,...], rec['units'])
                 output_ncfile(forcing_file_nc, rec['name'][i], member, t, time_start, var_topaz[i,...])
         else:
             fill_missing(var_topaz)
-            output_abfile(f, forcing_file+'.'+rec['name'], rec['name'], t, var_topaz)
+            output_abfile(f, forcing_file+'.'+rec['name'], rec['name'], t, var_topaz, rec['units'])
             output_ncfile(forcing_file_nc, rec['name'], member, t, time_start, var_topaz)
 
 if __name__ == '__main__':
@@ -220,4 +220,5 @@ if __name__ == '__main__':
         t += dt_hours * timedelta(hours=1)
 
     for name in native_variables.keys():
-        f[name].close()
+        if f[name] is not None:
+            f[name].close()
