@@ -161,7 +161,7 @@ class Topaz5Model(ModelConfig):
         rec = self.variables[name]
 
         ##convert back to old units
-        var = units_convert(kwargs['units'], rec['units'], var, inverse=True)
+        var = units_convert(rec['units'], kwargs['units'], var)
 
         if name in self.hycom_variables:
             ##open the restart file for over-writing
