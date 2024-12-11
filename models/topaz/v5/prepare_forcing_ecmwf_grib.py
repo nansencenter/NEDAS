@@ -13,7 +13,7 @@ from models.topaz.time_format import dayfor
 from models.topaz.v5 import Model
 model = Model()
 
-grib_path = "/nird/projects/NS2993K/METNO_2_NERSC/ACCIBEREG/EC_grib_files"
+grib_path = "/cluster/work/users/yingyue/data/ACCIBEREG/EC_grib_files"
 nens = 50  ##ensemble members in file
 dt_hours = 6  #interval hours of records in file
 variables = {
@@ -38,7 +38,7 @@ native_variables = {
     }
 
 ##default output path
-forcing_path = "/cluster/projects/nn2993k/yingyue/ecmwf_fcsts"
+forcing_path = "/cluster/work/users/yingyue/data/ecmwf_fcsts"
 
 def filename_analysis(path, t, ensemble):
     if ensemble:
@@ -161,7 +161,7 @@ def process(grbs, lookup, day_start, t, field_type, member):
         else:
             mem = member - 1
         forcing_file = model.filename(path=forcing_path, name=varname, member=mem, time=t)
-        forcing_file_nc = os.path.join(forcing_path, f"forcing_{field_type}.nc")
+        forcing_file_nc = os.path.join(forcing_path, f"forcing_{field_type}_mem{member:03d}.nc")
         if rec['is_vector']:
             for i in range(2):
                 fill_missing(var_topaz[i,...])

@@ -10,9 +10,8 @@ class TestUnitsConvert(unittest.TestCase):
         self.assertEqual(units_convert('h', 's', 1.), 3600.)
         self.assertEqual(units_convert('m/s', 'km/h', 1.), 3.6)
         self.assertEqual(units_convert('kg', 'g', 1.), 1000.)
-        self.assertEqual(units_convert('h', 's', 1.), 3600.)
-        self.assertEqual(units_convert('h', 's', 1.), 3600.)
-        self.assertEqual(units_convert('h', 's', 1.), 3600.)
+        self.assertEqual(units_convert('m/s', 'm/s', 1.), 1.)
+        self.assertEqual(units_convert('h', 'h', 1.), 1.)
 
     def test_units_convert_field(self):
         shape = (100, 100)
