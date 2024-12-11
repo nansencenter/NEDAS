@@ -167,6 +167,7 @@ diag:
   model_src: 'topaz.v5'
   time_start: '202109060000'
   time_end: '202109130000'
-  var_names: ['sic', 'sit']
+  var_names: ['siconc', 'sithick']
   var_units: ['1', 'm']
   var_standard_names: ['sea_ice_area_fraction', 'sea_ice_thickness']
+  file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

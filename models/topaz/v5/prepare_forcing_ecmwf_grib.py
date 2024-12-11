@@ -187,6 +187,7 @@ if __name__ == '__main__':
     field_type = args.field_type
     ensemble = args.ensemble
     member = int(args.member)
+    forcing_path = args.output
 
     grid = None
     file_list = []
