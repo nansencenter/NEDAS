@@ -1,9 +1,11 @@
+import os
 import yaml
 import cftime
 from pyproj import Proj
 from grid import Grid
 from utils.netcdf_lib import nc_write_var
 from utils.conversion import ensure_list, proj2dict, s2t, dt1h
+from utils.shell_utils import makedir
 from utils.dir_def import forecast_dir
 
 def run(c, **kwargs):
@@ -26,7 +28,7 @@ def run(c, **kwargs):
     var_units = ensure_list(kwargs['var_units'])
 
     member = kwargs['member']
-    
+
     model_name = kwargs['model_src']
     model = c.model_config[model_name]
 
@@ -43,10 +45,10 @@ def run(c, **kwargs):
     else:
         grid = model.grid
     proj_params = proj2dict(grid.proj)
-    x = grid.x[0, :]
-    y = grid.y[:, 0]
+    x = grid.x[0, :] / 1e5
+    y = grid.y[:, 0] / 1e5  ##convert to 100km units
     lon, lat = grid.proj(grid.x, grid.y, inverse=True)
-    
+
     model.grid.set_destination_grid(grid)
 
     if 'time_start' in kwargs:
@@ -56,7 +58,7 @@ def run(c, **kwargs):
     if 'time_end' in kwargs:
         time_end = s2t(kwargs['time_end'])
     else:
-        time_end = c.time_end 
+        time_end = c.time_end
     dt = c.cycle_period * dt1h
     time_units = kwargs.get('time_units', 'seconds since 1970-01-01T00:00:00+00:00')
     time_calendar = kwargs.get('time_calendar', 'standard')
@@ -67,11 +69,12 @@ def run(c, **kwargs):
 
         if c.debug:
             print(f"PID {c.pid} running misc.convert_output on variables {variables} for {model_name} member {member+1} at {t}", flush=True)
-        
+
         for v_id, vname in enumerate(variables):
             # read the variable from the model restart file
             rec = model.variables[vname]
-            file = kwargs['file'].format(time=t, var_name=var_names[v_id], member=member)
+            file = kwargs['file'].format(time=t, var_name=var_names[v_id], member=member+1)
+            makedir(os.path.dirname(file))
 
             levels = rec['levels']
             is_vector = rec['is_vector']
@@ -85,7 +88,7 @@ def run(c, **kwargs):
                 time_name = kwargs.get('time_name', 'time')
                 dims[time_name] = None  ##make time dimension unlimited in nc file
                 k_name = kwargs.get('k_name')
-                if k_name: ##add multi-level field index 
+                if k_name: ##add multi-level field index
                     dims[k_name] = len(levels)
                 x_name = kwargs.get('x_name', 'x')
                 y_name = kwargs.get('y_name', 'y')
@@ -99,7 +102,8 @@ def run(c, **kwargs):
                 attr = {'standard_name':var_standard_names[v_id],
                         'units':var_units[v_id],
                         'grid_mapping': proj_params['projection'],
-                        **proj_params, }
+                        'coordinates': f"{lon_name} {lat_name}",
+                        }
                 if is_vector:
                     for i in range(2):
                         nc_write_var(file, dims, var_names[v_id][i], fld_[i,...], recno=recno, attr=attr, comm=c.comm)
@@ -110,9 +114,11 @@ def run(c, **kwargs):
             time = cftime.date2num(t, units=time_units)
             time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
             nc_write_var(file, {time_name:None}, time_name, time, recno=recno, attr=time_attr, comm=c.comm)
-            nc_write_var(file, {x_name:grid.nx}, x_name, x)
-            nc_write_var(file, {y_name:grid.ny}, y_name, y)
+            nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'})
+            nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'})
             nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'})
             nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lat_name, lat, attr={'standard_name':'latitude', 'units':'degrees_north'})
-        
+            # output projection info
+            nc_write_var(file, {}, proj_params['projection'], 1, attr=proj_params)
+
         t += dt
