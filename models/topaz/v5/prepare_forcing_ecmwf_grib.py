@@ -92,7 +92,7 @@ def read_var(grbs, lookup, t_start, t, member, vname, units):
     grb = grbs.message(rec_id)
     var = grb.values
     ##convert units
-    var = units_convert(units, native_variables[vname]['units'], var)
+    var = units_convert(native_variables[vname]['units'], units, var)
     return var
 
 def read_grid(grb):
@@ -151,7 +151,8 @@ def process(grbs, lookup, day_start, t, field_type, member):
             if rec['name'] in ['precip', 'radflx', 'shwflx'] and t>t_start:
                 t_prev = t - dt_hours * timedelta(hours=1)
                 var -= read_var(grbs, lookup, t_start, t_prev, member, rec['name'], rec['units'])
-                var /= 3600. * dt_hours
+                var /= 3600. * dt_hours    ##the flux units are per second
+                var[np.where(var<0.)] = 0. ##ensure positive definite
 
         print("convert to topaz grid")
         var_topaz = grid.convert(var, is_vector=rec['is_vector'])
