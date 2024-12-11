@@ -111,6 +111,9 @@ def units_convert(units_from, units_to, var):
         # Add other groups here...
     }
 
+    if units_to == units_from:
+        return var
+    
     # Find the group containing the units
     for group, definitions in unit_groups.items():
         base = definitions["base"]
@@ -127,9 +130,9 @@ def units_convert(units_from, units_to, var):
         elif units_from in to_base and units_to in from_base:
             # Convert to base, then from base to target
             var_base = to_base[units_from](var)
-            return from_base[units_to](var_base)
+            return from_base[units_to](var_base)    
 
-    raise ValueError(f"Conversion of {group} unit from '{units_from}' to '{units_to}' not supported.")
+    raise ValueError(f"Conversion of unit from '{units_from}' to '{units_to}' not supported.")
 
 
 ##binary file io type conversion
