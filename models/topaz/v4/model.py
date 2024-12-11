@@ -88,7 +88,7 @@ class Model(ModelConfig):
         f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny)
 
         ##convert units back if necessary
-        var = units_convert(kwargs['units'], rec['units'], var, inverse=True)
+        var = units_convert(rec['units'], kwargs['units'], var)
 
         if rec['is_vector']:
             for i in range(2):
