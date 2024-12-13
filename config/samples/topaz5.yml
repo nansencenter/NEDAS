@@ -1,5 +1,7 @@
 work_dir: '/cluster/work/users/yingyue/TP5_test'   ##working directory for the experiment
 
+python_env: '/cluster/home/yingyue/python.src'   ##python environment source script
+
 job_submit:
   host: betzy
   project: nn2993k
@@ -18,7 +20,7 @@ time_start: '202109060000'       ##start time of the experiment, format ccyymmdd
 time_end: '202203210000'         ##end time of the experiment
 time_assim_start: '202109130000' ##start time of the first analysis cycle
 time_assim_end: '202203140000'   ##end time of the last analysis cycle
-cycle_period: 168                ##cycle period, in hours
+cycle_period: 24                ##cycle period, in hours
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -61,7 +63,7 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_thick_ncat'
+- name: 'seaice_volume_ncat'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
@@ -163,11 +165,6 @@ diag:
 - method: 'misc.convert_output'
   is_ensemble: False
   config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-  variables: ['seaice_conc', 'seaice_thick']
-  model_src: 'topaz.v5'
   time_start: '202109060000'
   time_end: '202109130000'
-  var_names: ['siconc', 'sithick']
-  var_units: ['1', 'm']
-  var_standard_names: ['sea_ice_area_fraction', 'sea_ice_thickness']
   file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

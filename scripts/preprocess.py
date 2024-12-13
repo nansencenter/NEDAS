@@ -1,8 +1,9 @@
 import os
+import sys
 from utils.progress import timer
 from utils.parallel import Scheduler
 from utils.dir_def import forecast_dir
-from utils.shell_utils import makedir
+from utils.shell_utils import makedir, run_job
 
 def preprocess(c, model_name):
     """
@@ -52,12 +53,20 @@ def preprocess(c, model_name):
     print(' done.', flush=True)
 
 def run(c):
-    for model_name, model in c.model_config.items():
-        timer(c)(preprocess)(c, model_name)
+    script_file = os.path.abspath(__file__)
+    config_file = os.path.join(c.work_dir, 'config.yml')
+    c.dump_yaml(config_file)
+
+    ##build run commands for the preprocess script
+    commands = f"source {c.python_env}; "
+    commands += f"{sys.executable} {script_file} -c {config_file}"
+
+    run_job(commands, job_name="preprocess", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
 
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
-    run(c)
+    for model_name, model in c.model_config.items():
+        timer(c)(preprocess)(c, model_name)
 

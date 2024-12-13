@@ -1,6 +1,9 @@
 ##working directory for your experiment
 work_dir: '/cluster/work/users/yingyue/qg'
 
+##python environment source script
+python_env: '/cluster/home/yingyue/python.src'
+
 job_submit:
   host: 'localhost'     ##machine name, laptop or supercomputer
   project:              ##project for resource allocation
