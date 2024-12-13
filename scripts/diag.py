@@ -36,11 +36,14 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
+    ##build run commands for the perturb script
+    commands = f"source {c.python_env}; "
+
     if importlib.util.find_spec("mpi4py") is not None:
-        commands = f"JOB_EXECUTE {sys.executable} -m mpi4py {script_file} -c {config_file}"
+        commands += f"JOB_EXECUTE {sys.executable} -m mpi4py {script_file} -c {config_file}"
     else:
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
-        commands = f"{sys.executable} {script_file} -c {config_file} --nproc=1"
+        commands += f"{sys.executable} {script_file} -c {config_file} --nproc=1"
 
     run_job(commands, job_name="diag", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
 

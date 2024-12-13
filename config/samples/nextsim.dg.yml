@@ -1,5 +1,7 @@
 work_dir: '/bettik/yumengch-ext/DATA/nextsim.dg'   ##working directory for the experiment
 
+python_env: '/bettik/yumengch-ext/NEDAS/config/samples/python_dahu.src'
+
 job_submit:
   host: gricad
   scheduler: oar
