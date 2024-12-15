@@ -1,8 +1,6 @@
 work_dir: '/tmp/vort2d_test'
 
 job_submit:
-  host:
-  scheduler:
   ppn: 16
 
 nproc: 1

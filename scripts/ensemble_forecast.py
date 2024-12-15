@@ -1,8 +1,11 @@
+import os
+import sys
+import subprocess
 from utils.progress import timer
 from utils.conversion import t2s
 from utils.parallel import Scheduler
-from utils.dir_def import forecast_dir
-from utils.shell_utils import makedir
+from utils.dir_def import forecast_dir, cycle_dir
+from utils.shell_utils import makedir, run_job
 
 def ensemble_forecast_scheduler(c, model_name):
     """
@@ -11,7 +14,7 @@ def ensemble_forecast_scheduler(c, model_name):
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
-    print(f"\n\033[1;33mRunning {model_name} ensemble forecast\033[0m in {path}", flush=True)
+    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
     if c.job_submit.get('run_separate_jobs', False):
         ##all jobs will be submitted to external scheduler's queue
@@ -50,7 +53,7 @@ def ensemble_forecast_batch(c, model_name):
     model = c.model_config[model_name]
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
-    print(f"\n\033[1;33munning {model_name} ensemble forecast\033[0m in {path}", flush=True)
+    print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
     job_opt = {
         'path': path,
@@ -63,6 +66,26 @@ def ensemble_forecast_batch(c, model_name):
     print('done.', flush=True)
 
 def run(c):
+    script_file = os.path.abspath(__file__)
+    config_file = os.path.join(c.work_dir, 'config.yml')
+    c.dump_yaml(config_file)
+
+    print(f"\033[1;33mRUNNING\033[0m {script_file}")
+
+    ##build run commands for the ensemble forecast script
+    commands = f"source {c.python_env}; "
+    commands += f"{sys.executable} {script_file} -c {config_file}"
+
+    job_submit_opts = {}
+    if c.job_submit:
+        job_submit_opts = c.job_submit
+
+    run_job(commands, job_name="ensemble_forecast", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+
+if __name__ == "__main__":
+    from config import Config
+    c = Config(parse_args=True)  ##get config from runtime args
+
     for model_name, model in c.model_config.items():
         if model.ens_run_type == 'batch':
             timer(c)(ensemble_forecast_batch)(c, model_name)
@@ -70,10 +93,3 @@ def run(c):
             timer(c)(ensemble_forecast_scheduler)(c, model_name)
         else:
             raise TypeError("unknown ensemble forecast type: '"+model.ens_run_type+"' for "+model_name)
-
-if __name__ == "__main__":
-    from config import Config
-    c = Config(parse_args=True)  ##get config from runtime args
-
-    run(c)
-
