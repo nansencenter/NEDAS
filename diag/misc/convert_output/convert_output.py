@@ -58,7 +58,7 @@ def run(c, **kwargs):
     t_steps = range(0, forecast_hours, dt_hours)
     path = forecast_dir(c, time_start, model_name)
 
-    for t_step in t_steps:
+    for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h
 
         for vname in variables:
@@ -82,7 +82,7 @@ def run(c, **kwargs):
                 dims[time_name] = None  ##make time dimension unlimited in nc file
                 k_name = kwargs.get('k_name')
                 if len(levels) > 1:
-                    dims[k_name] = None
+                    dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
                 x_name = kwargs.get('x_name', 'x')
                 y_name = kwargs.get('y_name', 'y')
                 dims[y_name] = grid.ny
@@ -91,7 +91,7 @@ def run(c, **kwargs):
                 lat_name = kwargs.get('lat_name', 'lat')
                 # output the variable
                 recno = {}
-                recno[time_name] = t_step
+                recno[time_name] = n_step
                 if len(levels) > 1:
                     recno[k_name] = k
                 # variable attr
@@ -109,7 +109,7 @@ def run(c, **kwargs):
             # output the dimension variables
             time = cftime.date2num(t, units=time_units)
             time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
-            nc_write_var(file, {time_name:None}, time_name, time, recno=recno, attr=time_attr)
+            nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr)
             nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'})
             nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'})
             nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'})
