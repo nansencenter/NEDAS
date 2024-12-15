@@ -28,13 +28,10 @@ while c.time < c.time_end:
 
     ##assimilation step
     if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
-        ##multiscale approach: loop over scale components and perform assimilation on each scale
-        for c.scale_id in range(c.nscale):
-            assimilate.run(c)
-
+        assimilate.run(c)
         postprocess.run(c)
 
-    ##forecast step
+    ##advance model state to next analysis cycle
     ensemble_forecast.run(c)
 
     ##compute diagnostics
@@ -46,4 +43,3 @@ while c.time < c.time_end:
     c.time = c.next_time
 
 print("Cycling complete.", flush=True)
-

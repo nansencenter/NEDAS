@@ -214,4 +214,4 @@ class QGModel(ModelConfig):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, ppn=task_nproc, **kwargs)
+        run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)

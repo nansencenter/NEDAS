@@ -1,9 +1,6 @@
 work_dir: '/tmp/lorenz96_test'
 
 job_submit:
-  host:
-  scheduler:
-  ppn: 1
 
 nproc: 1
 

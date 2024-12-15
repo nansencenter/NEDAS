@@ -5,7 +5,7 @@ import importlib.util
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
-from utils.dir_def import forecast_dir, analysis_dir
+from utils.dir_def import forecast_dir, analysis_dir, cycle_dir
 from utils.shell_utils import run_job
 
 def diagnose(c):
@@ -38,6 +38,11 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
+    print(f"\033[1;33mRUNNING\033[0m {script_file}")
+    if not hasattr(c, 'diag') or c.diag is None:
+        print("no diagnostic defined in config, exiting")
+        return
+
     ##build run commands for the perturb script
     commands = f"source {c.python_env}; "
 
@@ -47,16 +52,20 @@ def run(c):
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
         commands += f"{sys.executable} {script_file} -c {config_file} --nproc=1"
 
-    run_job(commands, job_name="diag", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
+    job_submit_opts = {}
+    if c.job_submit:
+        job_submit_opts = c.job_submit
+
+    run_job(commands, job_name="diag", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
     print_1p = by_rank(c.comm, 0)(print_with_cache)
-    print_1p('\n\033[1;33mRunning diagnostics \033[0m\n')
+    print_1p('\nRunning diagnostics\n')
     if not hasattr(c, 'diag') or c.diag is None:
-        print_1p('no diagnostic defined in config\n\n')
+        print_1p('no diagnostic defined in config, exiting\n\n')
         exit()
 
     timer(c)(diagnose)(c)

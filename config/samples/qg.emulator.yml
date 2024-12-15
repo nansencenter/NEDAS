@@ -1,9 +1,6 @@
 work_dir: '/cluster/work/users/yingyue/qg.emulator'   ##working directory for the experiment
 
 job_submit:
-  host:
-  scheduler:
-  ppn: 16
 
 nproc: 1          ##total number of processors
 
