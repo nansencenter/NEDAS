@@ -1,7 +1,5 @@
-variables: ['seaice_conc']
+variables: ['seaice_conc_daily']
 model_src: 'topaz.v5'
-time_start: '202109060000'
-time_end: '202109060000'
 
 grid_def:
   proj: '+proj=stere +lat_0=90 +lon_0=-45 +datum=WGS84 +units=m'
@@ -18,12 +16,8 @@ time_name: 'time'
 time_units: 'seconds since 1970-01-01T00:00:00+00:00'
 time_calendar: 'proleptic_gregorian'
 
-k_name:
+k_name: 'depth'
 x_name: 'x'
 y_name: 'y'
 lat_name: 'latitude'
 lon_name: 'longitude'
-
-var_names: ['sic']
-var_standard_names: ['sea_ice_area_fraction']
-var_units: ['1']
