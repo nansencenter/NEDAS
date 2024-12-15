@@ -9,7 +9,7 @@ from utils.progress import watch_log, find_keyword_in_file, watch_files
 from .namelist import namelist
 from .cice_utils import thickness_upper_limit
 from ..time_format import dayfor
-from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
+from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
 from ...model_config import ModelConfig
 
@@ -21,7 +21,7 @@ class Topaz5Model(ModelConfig):
         level_sfc = np.array([0])    ##some variables are only defined on surface level k=0
         level_ncat = np.arange(5)   ##some ice variables have 5 categories, treating them as levels also indexed by k
 
-        self.hycom_variables = {
+        self.restart_variables = {
             'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':'m/s'},
             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'Pa'},
             'ocean_temp':        {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'K'},
@@ -54,12 +54,23 @@ class Topaz5Model(ModelConfig):
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
         self.diag_variables = {
-            'seaice_conc': {'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'%'},
-            'seaice_thick': {'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'snow_thick': {'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'%'},
+            'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
+        
+        self.output_dt = 24  ##model output daily means to archive files
+        self.archive_variables = {
+            'seaice_conc_daily': {'name':'covice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
+            'seaice_thick_daily': {'name':'thkice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
+            'seaice_surf_temp_daily': {'name':'temice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
+        }
  
-        self.variables = {**self.hycom_variables, **self.cice_variables, **self.atmos_forcing_variables, **self.diag_variables}
+        self.variables = {**self.restart_variables,
+                          **self.cice_variables,
+                          **self.atmos_forcing_variables,
+                          **self.diag_variables,
+                          **self.archive_variables}
                
         ##model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
@@ -72,8 +83,6 @@ class Topaz5Model(ModelConfig):
         self.depth = -depth.data
         self.mask = depth.mask
 
-        self.run_status = 'pending'
-
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
 
@@ -83,7 +92,7 @@ class Topaz5Model(ModelConfig):
             mstr = ''
 
         ##filename for each model component
-        if kwargs['name'] in self.hycom_variables:
+        if kwargs['name'] in self.restart_variables:
             tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
             return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
@@ -93,6 +102,10 @@ class Topaz5Model(ModelConfig):
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'forcing')
+        
+        elif kwargs['name'] in self.archive_variables:
+            tstr = kwargs['time'].strftime('%Y_%j_12')  ##archive variables are daily means defined on 12z
+            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
     def read_grid(self, **kwargs):
         pass
@@ -107,7 +120,7 @@ class Topaz5Model(ModelConfig):
         rec = self.variables[name]
 
         ##get the variable from restart files
-        if name in self.hycom_variables:
+        if name in self.restart_variables:
             f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
             if rec['is_vector']:
                 var1 = f.read_field(rec['name'][0], level=kwargs['k'], tlevel=1, mask=None)
@@ -150,6 +163,16 @@ class Topaz5Model(ModelConfig):
         elif name in self.diag_variables:
             var = rec['operator'](**kwargs)
 
+        elif name in self.archive_variables:
+            f = ABFileArchv(fname, 'r', mask=True)
+            if rec['is_vector']:
+                var1 = f.read_field(rec['name'][0], level=kwargs['k'])
+                var2 = f.read_field(rec['name'][1], level=kwargs['k'])
+                var = np.array([var1, var2])
+            else:
+                var = f.read_field(rec['name'], level=kwargs['k'])
+            f.close()
+
         ##convert units if necessary
         var = units_convert(kwargs['units'], rec['units'], var)
         return var
@@ -163,7 +186,7 @@ class Topaz5Model(ModelConfig):
         ##convert back to old units
         var = units_convert(rec['units'], kwargs['units'], var)
 
-        if name in self.hycom_variables:
+        if name in self.restart_variables:
             ##open the restart file for over-writing
             ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
             f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
