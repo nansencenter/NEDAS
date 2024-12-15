@@ -85,7 +85,7 @@ class AFile(object) :
         #print("mask boolean:",self._mask)
         if self._mask :
             if mask is None:
-                mask = np.isnan(h)
+                mask = numpy.isnan(h)
             I=numpy.where(~mask)
             hmax=h[I].max()
             hmin=h[I].min()
@@ -594,7 +594,9 @@ class ABFileArchv(ABFile) :
             if d["field"] == fieldname and level == d["k"] :
                 record=i
         if record  is not None :
-            w = self._filea.read_record(record) 
+            r = self._filea.read_record(record)
+            w = r.data
+            w[r.mask] = numpy.nan
         else :
             w = None
         return w
@@ -1110,7 +1112,7 @@ class ABFileRelaxZ(ABFile) :
     def bminmax(self,fieldname,depth) :
         record=None
         for i,d in self._fields.items() :
-            if d["field"] == fieldname and d["depth"] == dtime1:
+            if d["field"] == fieldname and d["depth"] == depth:
                 record=i
         if record  is not None :
             ret = (self._fields[i]["min"],self._fields[i]["max"])

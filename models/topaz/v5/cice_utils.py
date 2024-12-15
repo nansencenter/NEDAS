@@ -1,7 +1,7 @@
-from typing import Literal
+import typing
 import numpy as np
 
-def thickness_upper_limit(seaice_conc: np.ndarray, target_variable: Literal['seaice','snow']) -> np.ndarray:
+def thickness_upper_limit(seaice_conc: np.ndarray, target_variable: typing.Literal['seaice','snow']) -> np.ndarray:
     """upper threshold for seaice_thick based on daily output of CICE 1993-2016"""
     upper_limit = np.full(seaice_conc.shape, 9999.)
     SIC0 = 0.55
