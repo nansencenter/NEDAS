@@ -24,7 +24,11 @@ def ensemble_forecast_scheduler(c, model_name):
         ##Scheduler will use nworkers to spawn ensemble member runs to
         ##the available nproc processors
         nworker = c.nproc // model.nproc_per_run
-    scheduler = Scheduler(nworker, model.walltime, debug=c.debug)
+    if hasattr(model, 'walltime'):
+        walltime = model.walltime
+    else:
+        walltime = None
+    scheduler = Scheduler(nworker, walltime, debug=c.debug)
 
     for mem_id in range(c.nens):
         job_name = f'forecast_{model_name}_mem{mem_id+1}'
@@ -39,8 +43,6 @@ def ensemble_forecast_scheduler(c, model_name):
         scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
 
     scheduler.start_queue() ##start the job queue
-    if scheduler.error_jobs:
-        raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
     scheduler.shutdown()
     print(' done.', flush=True)
 

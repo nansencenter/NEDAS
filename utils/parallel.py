@@ -67,6 +67,7 @@ class Comm(object):
         if filename not in self._locks:
             self._init_file_lock(filename)
         lock_mem, lock_win = self._locks[filename]
+        check_dt = 0.1  ##check file locks every 0.1 seconds, can make this configurable
         while True:
             # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
@@ -76,7 +77,7 @@ class Comm(object):
                 # print(f"pid {self.Get_rank()} acquires lock on {filename}", flush=True)
                 break
             lock_win.Unlock(0)
-            time.sleep(0.01)
+            time.sleep(check_dt)
 
     def release_file_lock(self, filename):
         if self._MPI is None:
@@ -225,10 +226,11 @@ class Scheduler(object):
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker, walltime=None, debug=False):
+    def __init__(self, nworker, walltime=None, check_dt=0.1, debug=False):
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
+        self.check_dt = check_dt
         self.debug = debug
         self.jobs = {}
         self.executor = ProcessPoolExecutor(max_workers=nworker)
@@ -236,7 +238,7 @@ class Scheduler(object):
         self.running_jobs = []
         self.pending_jobs = []
         self.completed_jobs = []
-        self.error_jobs = []
+        self.error_jobs = {}
         self.njob = 0
 
     def submit_job(self, name, job, *args, **kwargs):
@@ -260,7 +262,6 @@ class Scheduler(object):
         Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
         and move the finished jobs to completed_jobs
         """
-
         while len(self.completed_jobs) < self.njob:
 
             ##assign pending job to available workers
@@ -283,10 +284,8 @@ class Scheduler(object):
                     self.jobs[name]['future'].result()
                 except Exception as e:
                     print(f'Scheduler: Job {name} raised exception: {e}', flush=True)
-                    self.error_jobs.append(name)
-                    ###not exiting...
-                    raise e
-                    return
+                    self.error_jobs[name] = e
+                    #return  ###if exit right away and don't wait for other jobs to finish, uncomment this
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
@@ -294,20 +293,22 @@ class Scheduler(object):
                     print(f"Scheduler: Job {name} completed", flush=True)
 
             ##kill jobs that exceed walltime
-            ##TODO: the kill signal isn't handled
-            # if self.walltime is not None:
-            #     for name in self.running_jobs:
-            #         elapsed_time = time.time() - self.jobs[name]['start_time']
-            #         if elapsed_time > self.walltime:
-            #             print(f'job {name} exceeds walltime ({self.walltime}s), killed')
-            #             self.error_jobs.append(name)
-            #             return
+            if self.walltime is not None:
+                for name in self.running_jobs:
+                    elapsed_time = time.time() - self.jobs[name]['start_time']
+                    if elapsed_time > self.walltime:
+                        self.jobs[name]['future'].cancel()
+                        self.running_jobs.remove(name)
+                        self.available_workers.append(self.jobs[name]['worker_id'])
+                        e = RuntimeError(f'Scheduler: Job {name} exceeds walltime ({self.walltime}s)')
+                        self.error_jobs[name] = e
+                        self.completed_jobs.append(name)
 
             ##just show a progress bar if not output debug messages
             if not self.debug:
                 print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 
-            time.sleep(0.1)  ##don't check too frequently, will increase overhead
+            time.sleep(self.check_dt)
 
     def start_queue(self):
         """
@@ -323,5 +324,8 @@ class Scheduler(object):
             self.shutdown()
 
     def shutdown(self):
+        if self.error_jobs:
+            error_details = "\n".join([f"ERROR: Job {job}: {error}" for job, error in self.error_jobs.items()])
+            raise RuntimeError(f'Scheduler: there are jobs with errors:\n{error_details}')
         self.executor.shutdown(wait=True)
 

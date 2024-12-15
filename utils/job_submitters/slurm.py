@@ -82,7 +82,7 @@ class SLURMJobSubmitter(JobSubmitter):
         ##monitor job status
         if self.use_job_array:
             while True:
-                sleep(20)
+                sleep(self.check_dt)
                 job_finished = []
                 for i in range(self.array_size):
                     p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}_{i}'], capture_output=True, text=True)
@@ -95,7 +95,7 @@ class SLURMJobSubmitter(JobSubmitter):
                         
         else:
             while True:
-                sleep(20)
+                sleep(self.check_dt)
                 p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}'], capture_output=True, text=True)
                 if not p.stdout:
                     ##job no longer in queue

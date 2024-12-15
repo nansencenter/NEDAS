@@ -15,6 +15,7 @@ class JobSubmitter(object):
         -project: str or None, project id for allocation
         -queue: str or None, which job queue to use
         -walltime: int, maximum run time allowed (in seconds)
+        -check_dt: int, time interval (in seconds) to check job status
         -run_separate_jobs: bool, if true, submit each job separately to the scheduler, otherwise run in the same allocation as job steps.
         -use_job_array: bool, if true, use job array for ensemble members
         -array_size: int, size of the job array
@@ -29,6 +30,7 @@ class JobSubmitter(object):
         self.project = kwargs.get('project')
         self.queue = kwargs.get('queue')
         self.walltime = kwargs.get('walltime', 3600)
+        self.check_dt = kwargs.get('check_dt', 20)
         self.run_separate_jobs = kwargs.get('run_separate_jobs', False)
         self.use_job_array = kwargs.get('use_job_array', False)
         self.array_size = 1
