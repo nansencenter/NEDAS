@@ -7,6 +7,7 @@ job_submit:
   project: nn2993k
   queue: normal
   scheduler: slurm
+  ppn: 128
   run_separate_jobs: True
 
 nproc: 512       ##total number of processors for assimilate
@@ -20,7 +21,7 @@ time_start: '202109060000'       ##start time of the experiment, format ccyymmdd
 time_end: '202203210000'         ##end time of the experiment
 time_assim_start: '202109130000' ##start time of the first analysis cycle
 time_assim_end: '202203140000'   ##end time of the last analysis cycle
-cycle_period: 24                ##cycle period, in hours
+cycle_period: 168                ##cycle period, in hours
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -165,6 +166,14 @@ diag:
 - method: 'misc.convert_output'
   is_ensemble: False
   config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-  time_start: '202109060000'
-  time_end: '202109130000'
+  model_src: 'topaz.v5'
+  variables: ['seaice_conc_daily']
+  time: '202109060000'
+  dt_hours: 24
+  forecast_hours: 168
   file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+# - method: 'plot.seaice'
+#   is_ensemble: False
+#   config_file: '/cluster/home/yingyue/code/NEDAS/diag/plot/seaice/default.yml'
+#   model_src: 'topaz.v5'
+#   file: '/cluster/work/users/yingyue/plots/seaice/{time:%Y-%m-%d}T{time:%H}_mem{member:03d}.png'
