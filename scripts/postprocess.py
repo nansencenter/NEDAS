@@ -35,8 +35,6 @@ def postprocess(c, model_name):
         scheduler.submit_job(job_name, model.postprocess, **job_opt)  ##add job to the queue
 
     scheduler.start_queue() ##start the job queue
-    if scheduler.error_jobs:
-        raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
     scheduler.shutdown()
     print(' done.', flush=True)
 

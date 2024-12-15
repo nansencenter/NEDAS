@@ -54,7 +54,6 @@ model_def:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
     model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'
-    walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'

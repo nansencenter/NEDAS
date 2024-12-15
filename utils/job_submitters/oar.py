@@ -108,7 +108,7 @@ class OARJobSubmitter(JobSubmitter):
         if self.use_job_array:
             self.job_id = int(s.split('OAR_ARRAY_ID=')[-1])
             while True:
-                sleep(20)
+                sleep(self.check_dt)
                 p = subprocess.run(['ssh', self.job_submit_node,
                                     'oarstat', '-f', f'--array {self.job_id}',
                                     '| grep "state = "'], capture_output=True)
