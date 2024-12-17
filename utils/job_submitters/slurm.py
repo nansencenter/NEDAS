@@ -40,7 +40,10 @@ class SLURMJobSubmitter(JobSubmitter):
         return '$SLURM_ARRAY_TASK_ID'
 
     def submit_job_and_monitor(self, commands):
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.sh') as job_script:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False,
+                                         dir=self.run_dir,
+                                         prefix=self.job_name+'.',
+                                         suffix='.sh') as job_script:
             job_script.write("#!/bin/bash\n")
 
             ##slurm job header
@@ -69,7 +72,7 @@ class SLURMJobSubmitter(JobSubmitter):
             job_script.write('\n')
 
             self.job_script = job_script.name
-
+        
         ##submit the job script
         p = subprocess.run(['sbatch', self.job_script], capture_output=True, text=True)
         if p.returncode != 0:
@@ -101,9 +104,6 @@ class SLURMJobSubmitter(JobSubmitter):
                 if job_status not in ['R', 'PD', 'CG']:
                     ##job not running, pending, or cleaning up
                     raise RuntimeError(f"job {self.job_name} failed with status {job_status}")
-
-        ##clean up
-        os.remove(self.job_script)
 
         ##check log file and report errors
         if self.use_job_array:

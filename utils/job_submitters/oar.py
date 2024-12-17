@@ -13,16 +13,20 @@ class OARJobSubmitter(JobSubmitter):
 
         ##temporary node file
         if not self.run_separate_jobs:
-            with tempfile.NamedTemporaryFile(delete=False) as file:
+            with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
 
         ##host specific settings
         if self.host == 'gricad':
-            ##job submit node based on queue type
-            if self.queue == 'devel':
-                self.job_submit_node = 'oar-dahu3'
+            p = subprocess.run("hostname", capture_output=True, text=True)
+            if 'dahu' in p.stdout: ##TODO: what is the typical hostname for compute nodes? change the statement here accordingly.
+                self.job_submit_node = None  ##don't need ssh for oarsub on compute nodes
             else:
-                self.job_submit_node = 'f-dahu'
+                ##job submit node based on queue type
+                if self.queue == 'devel':
+                    self.job_submit_node = 'oar-dahu3'
+                else:
+                    self.job_submit_node = 'f-dahu'
 
     @property
     def nproc_avail(self):
@@ -73,7 +77,10 @@ class OARJobSubmitter(JobSubmitter):
 
     def submit_job_and_monitor(self, commands):
         ##build the job script
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.sh') as job_script:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False,
+                                         dir=self.run_dir,
+                                         prefix=self.job_name+'.',
+                                         suffix='.sh') as job_script:
             job_script.write("#!/bin/bash\n")
 
             ##OAR headers
@@ -96,9 +103,13 @@ class OARJobSubmitter(JobSubmitter):
             self.job_script = job_script.name
 
         ##submit the job script
-        process = subprocess.run(['ssh', self.job_submit_node,
-                                  f"oarsub -S {self.job_script}"],
-                                  capture_output=True)
+        if self.job_submit_node:
+            submit_cmd = ['ssh', self.job_submit_node,  f"'oarsub -S {self.job_script}'"]
+            ##TODO: maybe the ssh command need a '' wrap around the oarsub command
+            # (sending it to ssh server to be run), check if it works
+        else:
+            submit_cmd = ["oarsub", "-S", f"{self.job_script}"]
+        process = subprocess.run(submit_cmd, capture_output=True)
         s = process.stderr.decode('utf-8')
         print(s, flush=True)
         s = process.stdout.decode('utf-8')
