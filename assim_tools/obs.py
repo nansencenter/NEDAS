@@ -430,10 +430,12 @@ def state_to_obs(c, **kwargs):
                     model.read_grid(path=path, **kwargs)
                     model.grid.set_destination_grid(c.grid)
 
-                z_ = model.grid.convert(model.z_coords(path=path, k=levels[k], **kwargs))
+                model_z = model.z_coords(path=path, member=kwargs['member'], time=kwargs['time'], k=levels[k])
+                z_ = model.grid.convert(model_z)
                 z = np.array([z_, z_]) if is_vector else z_
 
-                fld = model.grid.convert(model.read_var(path=path, k=levels[k], **kwargs), is_vector=is_vector)
+                model_fld = model.read_var(path=path, name=kwargs['name'], member=kwargs['member'], time=kwargs['time'], k=levels[k])
+                fld = model.grid.convert(model_fld, is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:

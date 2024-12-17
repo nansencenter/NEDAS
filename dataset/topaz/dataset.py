@@ -56,7 +56,15 @@ class Dataset(DatasetConfig):
         is_vector = self.variables[name]['is_vector']
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
-        for file in self.filename(**kwargs):
+        try:
+            fname = self.filename(**kwargs)
+        except AssertionError:
+            ##just return empty obs_seq if no matching files found
+            for key in obs_seq.keys():
+                obs_seq[key] = np.array([])
+            return obs_seq
+        
+        for file in fname:
             data = read_uf_data(file)
 
             if is_vector:
