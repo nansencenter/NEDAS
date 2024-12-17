@@ -7,6 +7,7 @@ from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.shell_utils import run_command, run_job, makedir
 from utils.progress import watch_log, find_keyword_in_file, watch_files
 from .namelist import namelist
+from .postproc import adjust_dp
 from .cice_utils import thickness_upper_limit
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileForcing
@@ -59,7 +60,6 @@ class Topaz5Model(ModelConfig):
             'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
         
-        self.output_dt = 24  ##model output daily means to archive files
         self.archive_variables = {
             'seaice_conc_daily': {'name':'covice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
             'seaice_thick_daily': {'name':'thkice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
@@ -408,8 +408,49 @@ class Topaz5Model(ModelConfig):
         run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
 
     def postprocess(self, task_id=0, **kwargs):
-        ##TODO: run fixhycom_cice here
-        pass
+        """Post processing the restart variables for next forecast"""
+        ## routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
+        kwargs = super().parse_kwargs(**kwargs)
+
+        ##adjust ocean layer thickness dp
+        rec = kwargs.copy()
+        rec['name'] = 'ocean_layer_thick'
+        rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+        levels = list(self.variables['ocean_layer_thick']['levels'])
+        dp = np.zeros((len(levels), self.grid.ny, self.grid.nx))
+        for ilev, k in enumerate(levels):
+            dp[ilev, ...] = self.read_var(**{**rec, 'k':k})
+        dp = adjust_dp(dp, self.depth, self.ONEM)
+        for ilev, k in enumerate(levels):
+            self.write_var(dp[ilev,...], **{**rec, 'k':k})
+
+        ##loop over fields in restart file
+        restart_file = self.filename(**{**kwargs, 'name':'ocean_temp'})
+        f = ABFileRestart(restart_file, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
+        for i, rec in f.fields.items():
+            name = rec['field']
+            tlevel = rec['tlevel']
+            k = rec['k']
+            fld = f.read_field(name, tlevel=tlevel, level=k)
+
+            ##reset variables out of their normal range
+            if name == 'temp':
+                saln = f.read_field('saln', tlevel=tlevel, level=k)
+                temp_min = -0.057 * saln
+                ind = np.where(fld < temp_min)
+                fld[ind] = temp_min[ind]
+                fld[np.where(fld > self.MAX_OCEAN_TEMP)] = self.MAX_OCEAN_TEMP
+            elif name == 'saln':
+                fld[np.where(fld > self.MAX_OCEAN_SALN)] = self.MAX_OCEAN_SALN
+                fld[np.where(fld < self.MIN_OCEAN_SALN)] = self.MIN_OCEAN_SALN
+            elif name == 'dp':
+                fld = dp[levels.index(k), ...]  ##set dp to the adjusted value
+
+            ##write the field back
+            f.overwrite_field(fld, None, name, tlevel=tlevel, level=k)
+        f.close()
+
+        ##TODO: other postprocessing in fixhycom to be added (ice variables, etc.)
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

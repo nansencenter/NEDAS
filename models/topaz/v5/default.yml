@@ -10,7 +10,8 @@ nproc: 511
 
 nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
 nproc_per_util: 32
-restart_dt: 24
+restart_dt: 168
+output_dt: 24
 forcing_dt: 6
 
 ###model specific settings (blkdat)
@@ -204,3 +205,6 @@ z_units: 'm'
 
 ONEM: 9806.
 MIN_SEAICE_CONC: 0.05
+MAX_OCEAN_TEMP: 35.
+MIN_OCEAN_SALN: 5.
+MAX_OCEAN_SALN: 40.
