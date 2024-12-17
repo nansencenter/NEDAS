@@ -6,8 +6,8 @@ job_submit:
 nproc: 5        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: True   ##if true, run the assimilation steps
-run_diag: False
+run_assim: False ##if true, run the assimilation steps
+run_diag: True
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
@@ -89,3 +89,10 @@ localization:
   ttype: 'GC'
 
 diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  model_src: 'qg'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
