@@ -5,20 +5,27 @@ import importlib.util
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
-from utils.dir_def import forecast_dir, analysis_dir, cycle_dir
+from utils.dir_def import cycle_dir
 from utils.shell_utils import run_job
 
 def diagnose(c):
+    assert c.nproc==c.comm.Get_size(), f"Error: nproc {c.nproc} not equal to mpi size {c.comm.Get_size()}"
+
     task_list = bcast_by_root(c.comm)(distribute_diag_tasks)(c)
 
     c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
-    diag_id = 0
-    for rec in task_list[c.pid]:
+    ntask = len(task_list[c.pid])
+    for task_id, rec in enumerate(task_list[c.pid]):
+        if c.debug:
+            print(f"PID {c.pid} running diagnostics '{rec['method']}'", flush=True)
+        else:
+            print_1p(progress_bar(task_id, ntask))
+
         method_name = f"diag.{rec['method']}"
         module = importlib.import_module(method_name)
-        module.run(c, **rec)
+        module.run(c, **rec)        
 
     print_1p(' done.\n\n')
 
