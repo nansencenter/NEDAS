@@ -26,30 +26,24 @@ class Dataset(DatasetConfig):
         self.z_units = 'm'
 
     def filename(self, **kwargs):
-        kwargs = super().filename(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
+        name = kwargs['name']
+        time = kwargs['time']
+        path = kwargs['path']
 
-        vname = self.variables[self.name]['name']
+        vname = self.variables[name]['name']
         dirname = vname
-        if self.name == 'seaice_drift':
+        native_name = vname
+        if name == 'seaice_drift':
             native_name += '1'   ##i=1, 2, 3, 4, 5: 2day drift in km with starting day = current day -i-1
 
         file_list = []
-        if self.time is not None:
-            if 'obs_window_min' in kwargs and 'obs_window_max' in kwargs:
-                d_range = np.arange(kwargs['obs_window_min'], kwargs['obs_window_max'])
-            else:
-                d_range = [0]
-            for d in d_range:
-                t = kwargs['time'] + d * dt1h
-                time_str = "{:5d}".format(int(datetojul(t)))
-                search = os.path.join(self.path, dirname, 'obs_'+native_name+'_'+time_str+'.uf')
-                for result in glob.glob(search):
-                    if result not in file_list:
-                        file_list.append(result)
+        if time is not None:
+            time_str = "{:5d}".format(int(datetojul(time)))
         else:
             time_str = '?????'
-            search = os.path.join(self.path, dirname, 'obs_'+native_name+'_'+time_str+'.uf')
-            file_list = glob.glob(search)
+        search = os.path.join(path, dirname, 'obs_'+native_name+'_'+time_str+'.uf')
+        file_list = glob.glob(search)
 
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list

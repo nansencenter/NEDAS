@@ -26,8 +26,6 @@ class Dataset(DatasetConfig):
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
-        rec = self.variables[name]
-
         if time is None:
             search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc')
             file_list = glob.glob(search)

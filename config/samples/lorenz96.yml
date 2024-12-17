@@ -46,6 +46,9 @@ obs_def:
 
 use_synthetic_obs: True
 
+dataset_def:
+  lorenz96:
+
 model_def:
   lorenz96:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/lorenz96/default.yml'

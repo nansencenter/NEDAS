@@ -26,10 +26,8 @@ class Dataset(DatasetConfig):
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
-        rec = self.variables[name]
-
         if time is None:
-            search = os.path.join(path, '????_'+self.proj_name, rec['name']+'_'+self.proj_name+'-100_multi_????????????.nc')
+            search = os.path.join(path, '????_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_????????????.nc')
             file_list = glob.glob(search)
 
         else:
@@ -42,7 +40,7 @@ class Dataset(DatasetConfig):
             for d in d_range:
                 t = time + d * timedelta(hours=1)
                 tstr = t.strftime('%Y%m%d%H%M')
-                search = os.path.join(path, t.strftime('%Y')+'_'+self.proj_name, rec['name']+'_'+self.proj_name+'-100_multi_'+tstr+'.nc')
+                search = os.path.join(path, t.strftime('%Y')+'_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_'+tstr+'.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
