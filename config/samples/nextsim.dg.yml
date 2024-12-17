@@ -42,7 +42,6 @@ state_def:
 obs_def:
 - name: 'seaice_conc'
   dataset_src: 'osisaf.ice_conc'
-  dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
   model_src: 'nextsim.dg'
   obs_window_min: -6
   obs_window_max: 0
@@ -56,6 +55,10 @@ obs_def:
     seaice_conc: 1.0
 
 use_synthetic_obs: False
+
+dataset_def:
+  osisaf.ice_conc:
+    dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
 
 model_def:
   nextsim.dg:
@@ -84,3 +87,4 @@ localization:
   vtype: 'GC'
   ttype: 'GC'
 
+diag:

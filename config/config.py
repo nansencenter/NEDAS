@@ -95,16 +95,19 @@ class Config(object):
         for model_name, kwargs in self.model_def.items():
             ##load model class instance
             module = importlib.import_module('models.'+model_name)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
 
     def set_dataset_config(self):
         ##initialize dataset config dict
         self.dataset_config = {}
-        for rec in self.obs_def:
+        for dataset_name, kwargs in self.dataset_def.items():
             ##load dataset module
-            dataset_name = rec['dataset_src']
             module = importlib.import_module('dataset.'+dataset_name)
-            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **rec)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **kwargs)
 
     def show_summary(self):
         ##print a summary

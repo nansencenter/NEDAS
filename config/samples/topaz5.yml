@@ -60,6 +60,10 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
+- name: 'seaice_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
 - name: 'seaice_conc_ncat'
   model_src: 'topaz.v5'
   var_type: 'field'
@@ -72,34 +76,79 @@ state_def:
 obs_def:
 - name: 'ocean_temp'
   dataset_src: 'topaz'
-  dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
   model_src: 'topaz.v5'
-  obs_window_min: -168
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.2
   hroi: 2e5
-  vroi: 2
-  troi: 24
-  impact_on_state:
-    ocean_temp: 1.0
-- name: 'seaice_conc'
-  dataset_src: 'osisaf.ice_conc'
-  dataset_dir: '/cluster/projects/nn2993k/sim/data/OSISAF_ice_conc/polstere'
+  vroi: inf
+  troi: 240
+- name: 'ocean_saln'
+  dataset_src: 'topaz'
   model_src: 'topaz.v5'
-  obs_window_min: -6
-  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 5.
+  hroi: 2e5
+  vroi: inf
+  troi: 240
+  impact_on_state:
+- name: 'ocean_surf_temp'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
   err:
     type: 'normal'
     std: 0.2
-  hroi: 100
-  vroi: 2
-  troi: 24
+  hroi: 2e5
+  vroi: inf
+  troi: 240
   impact_on_state:
-    ocean_temp: 1.0
+- name: 'ocean_surf_height'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  err:
+    type: 'normal'
+    std: 1.
+  hroi: 2e5
+  vroi: inf
+  troi: 240
+  impact_on_state:
+- name: 'seaice_conc'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  err:
+    type: 'normal'
+    std: 0.1
+  hroi: 2e5
+  vroi: 10
+  troi: 240
+  impact_on_state:
+- name: 'seaice_thick'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  err:
+    type: 'normal'
+    std: 1.
+  hroi: 2e5
+  vroi: 10
+  troi: 240
+  impact_on_state:
+- name: 'seaice_drift'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  err:
+    type: 'normal'
+    std: 0.01
+  hroi: 2e5
+  vroi: 10
+  troi: 240
 
 use_synthetic_obs: False
+
+dataset_def:
+  topaz:
+    config_file: '/cluster/home/yingyue/code/NEDAS/dataset/topaz/default.yml'
+    dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
 
 model_def:
   topaz.v5:
@@ -151,6 +200,8 @@ perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
+covariance:
+  type: 'ensemble-based'
 
 inflation:
   type: ''
@@ -158,9 +209,10 @@ inflation:
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  htype: 'GC,NICE'
+  vtype: 'NICE'
+  ttype: 'NICE'
+  lookup_table: ''
 
 diag:
 - method: 'misc.convert_output'

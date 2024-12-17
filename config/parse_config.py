@@ -99,6 +99,9 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
         with open(args.config_file, 'r') as f:
             config_dict = {**config_dict, **yaml.safe_load(f)}
 
+    if not isinstance(config_dict, dict):
+        config_dict = {}
+
     ##append new config variables defined in kwargs
     config_dict = {**config_dict, **kwargs}
 

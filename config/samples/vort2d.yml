@@ -33,7 +33,6 @@ state_def:
 obs_def:
 - name: 'velocity'
   dataset_src: 'vort2d'
-  dataset_dir: ''
   model_src: 'vort2d'
   nobs: 1000
   obs_window_min: -3
@@ -48,6 +47,9 @@ obs_def:
      velocity: 1.0
 
 use_synthetic_obs: True
+
+dataset_def:
+  vor2d:
 
 model_def:
   vort2d:
