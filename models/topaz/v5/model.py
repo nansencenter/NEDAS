@@ -7,11 +7,11 @@ from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.shell_utils import run_command, run_job, makedir
 from utils.progress import watch_log, find_keyword_in_file, watch_files
 from .namelist import namelist
-from .postproc import adjust_dp
+from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
 from .cice_utils import thickness_upper_limit
 from ..time_format import dayfor
-from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileForcing
-from ..model_grid import get_topaz_grid, stagger, destagger
+from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
+from ..model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
 from ...model_config import ModelConfig
 
 class Topaz5Model(ModelConfig):
@@ -32,7 +32,7 @@ class Topaz5Model(ModelConfig):
             'ocean_mixl_depth':  {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
             'ocean_bot_press':   {'name':'pbot', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
             'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
-            'ocean_bot_montg_pot': {'name':'psik', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
+            'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
             }
 
         self.cice_variables = {
@@ -55,12 +55,16 @@ class Topaz5Model(ModelConfig):
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
         self.diag_variables = {
+            'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'K'},
             'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'%'},
             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
         
         self.archive_variables = {
+            'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             'seaice_conc_daily': {'name':'covice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
             'seaice_thick_daily': {'name':'thkice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             'seaice_surf_temp_daily': {'name':'temice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
@@ -77,11 +81,13 @@ class Topaz5Model(ModelConfig):
         self.grid = get_topaz_grid(grid_info_file)
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        f = ABFileBathy(self.depthfile, 'r', idm=self.grid.nx, jdm=self.grid.ny)
-        depth = f.read_field('depth')
-        f.close()
-        self.depth = -depth.data
-        self.mask = depth.mask
+        self.depth, self.mask = get_depth(self.depthfile, self.grid)
+
+        self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
+        if os.path.exists(self.meanssh_file):
+            self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
+        else:
+            self.meanssh = None
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -263,6 +269,59 @@ class Topaz5Model(ModelConfig):
             z_prev = self.z_coords(**kwargs)
             return z_prev + dz
 
+    def get_ocean_surf_height(self, **kwargs):
+        """Get ocean surface height from restart variables
+        Adapted from p_ssh_from_state.F90 in ReanalysisTP5/SSHFromState_HYCOMICE"""
+        tbaric = (self.kapref == self.thflag)
+
+        restart_file = self.filename(**{**kwargs, 'name':'ocean_bot_montg_pot'})
+        f = ABFileRestart(restart_file, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
+        psikk = f.read_field('psikk', level=0, tlevel=1)
+        thkk = f.read_field('thkk', level=0, tlevel=1)
+        pbavg = f.read_field('pbavg', level=0, tlevel=1)
+
+        ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  ##valid points to calculate ssh on
+
+        levels = list(self.variables['ocean_layer_thick']['levels'])
+        idm, jdm, kdm = self.grid.nx, self.grid.ny, len(levels)
+        pres = np.zeros((kdm+1, jdm, idm))     # cumulative pressure
+        thstar = np.zeros((kdm, jdm, idm))
+        montg = np.zeros((jdm, idm))
+        oneta = np.zeros((jdm, idm))
+        ssh = np.zeros((jdm, idm))
+
+        for k in range(kdm):
+            saln = f.read_field('saln', level=levels[k], tlevel=1)
+            temp = f.read_field('temp', level=levels[k], tlevel=1)
+            dp = f.read_field('dp', level=levels[k], tlevel=1)
+            # use upper interface pressure in converting sigma to sigma-star
+            # this is to avoid density variations in layers intersected by bottom
+            th = stmt_fns_sigma(self.thflag, temp, saln)
+            kapf = stmt_fns_kappaf(self.thflag, temp, saln, pres[k, ...], self.thref)
+            if tbaric:
+                thstar[k, ...][ind] = th[ind] + kapf[ind]
+            else:
+                thstar[k, ...][ind] = th[ind]
+            pres[k+1, ...][ind] = pres[k, ...][ind] + dp[ind]
+        oneta[ind] = 1. + pbavg[ind] / pres[-1, ...][ind]
+        # m_prime in lowest layer
+        montg[ind] = psikk[ind] + (pres[-1, ...][ind] * (thkk[ind] + self.thbase - thstar[-1, ...][ind]) - pbavg[ind] * (thstar[-1, ...][ind])) * self.thref**2
+        # m_prime in remaining layers
+        for k in range(kdm-2, -1, -1):
+            montg[ind] += pres[k+1, ...][ind] * oneta[ind] * (thstar[k+1, ...][ind] - thstar[k, ...][ind]) * self.thref**2
+        ssh[ind] = (montg[ind] / self.thref + pbavg[ind]) / self.ONEM
+        return ssh
+
+    def get_ocean_surf_height_anomaly(self, **kwargs):
+        assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
+        ssh = self.get_ocean_surf_height(**kwargs)
+        sla = ssh - self.meanssh
+        return sla
+    
+    def get_ocean_surf_temp(self, **kwargs):
+        #just return first level ocean_temp
+        return self.read_var(**{**kwargs, 'name':'ocean_temp', 'k':1})
+
     @lru_cache(maxsize=3)
     def get_seaice_conc(self, **kwargs):
         """
@@ -278,7 +337,7 @@ class Topaz5Model(ModelConfig):
         
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
         return seaice_conc
-    
+
     def get_seaice_thick(self, **kwargs):
         """
         Get total seaice thickness from the multicategory ice volume (vicen)
@@ -297,7 +356,7 @@ class Topaz5Model(ModelConfig):
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'seaice')
         seaice_thick[ind] = np.minimum(seaice_volume[ind] / seaice_conc[ind], upper_limit)
         return seaice_thick
-    
+
     def get_snow_thick(self, **kwargs):
         """
         Get total snow thickness from the multi-category snow volume (vsnon)
@@ -420,7 +479,7 @@ class Topaz5Model(ModelConfig):
         dp = np.zeros((len(levels), self.grid.ny, self.grid.nx))
         for ilev, k in enumerate(levels):
             dp[ilev, ...] = self.read_var(**{**rec, 'k':k})
-        dp = adjust_dp(dp, self.depth, self.ONEM)
+        dp = adjust_dp(dp, -self.depth, self.ONEM)
         for ilev, k in enumerate(levels):
             self.write_var(dp[ilev,...], **{**rec, 'k':k})
 
@@ -558,4 +617,4 @@ class Topaz5Model(ModelConfig):
             file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
             file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
             run_command(f"mv {file1} {file2}")
-        
+

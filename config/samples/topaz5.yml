@@ -103,12 +103,12 @@ obs_def:
   vroi: inf
   troi: 240
   impact_on_state:
-- name: 'ocean_surf_height'
+- name: 'ocean_surf_height_anomaly'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   err:
     type: 'normal'
-    std: 1.
+    std: 0.03
   hroi: 2e5
   vroi: inf
   troi: 240
@@ -209,9 +209,9 @@ inflation:
   coef: 1.0
 
 localization:
-  htype: 'GC,NICE'
-  vtype: 'NICE'
-  ttype: 'NICE'
+  htype: 'GC'
+  vtype: 'GC'
+  ttype: 'GC'
   lookup_table: ''
 
 diag:

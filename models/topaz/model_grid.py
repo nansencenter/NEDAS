@@ -1,6 +1,7 @@
+import struct
 import numpy as np
 from grid import Grid
-
+from .abfile import ABFileBathy
 from .confmap import ConformalMapping
 
 def get_topaz_grid(grid_info_file):
@@ -12,6 +13,28 @@ def get_topaz_grid(grid_info_file):
     y = jj * proj._dy
 
     return Grid(proj, x, y)
+
+def get_depth(depthfile, grid):
+    f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
+    depth = f.read_field('depth')
+    f.close()
+
+    d = -depth.data  ##depth is negative for ocean variables
+    
+    mask = depth.mask
+    d[mask] = np.nan
+    
+    return d, mask
+
+def get_mean_ssh(meansshfile, grid):
+    with open(meansshfile, 'rb') as f:
+        f.seek(4)
+        data = f.read(8 * grid.nx * grid.ny)
+        data = struct.unpack('>'+'d'*grid.nx*grid.ny, data)
+    
+        meanssh = np.array(data).reshape(grid.ny, grid.nx)
+    
+    return meanssh
 
 ##some variables will need (de)staggering in topaz grid:
 ##---                *--*--*

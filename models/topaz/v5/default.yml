@@ -33,7 +33,7 @@ isotop: 6.0   ## shallowest depth for isopycnal layers (m, <0 from file)
 saln0: 35.0   ##initial salinity value (psu), only used for iniflg<2
 locsig: 0   ## locally-referenced pot. density for stability (0=F,1=T)
 kapref: 0   ## thermobaric ref. state (-1=input,0=none,1,2,3=constant)
-thflag: 0   ## reference pressure flag (0=Sigma-0, 2=Sigma-2)
+thflag: 0   ## reference pressure flag (0=Sigma-0, 2=Sigma-2, 4=Sigma-4)
 thbase: 25.0   ## reference density (sigma units)
 vsigma: 0   ## spacially varying isopycnal target densities (0=F,1=T)
 sigma: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 24.05, 25.72, 26.40, 26.90, 27.13, 27.19, 27.25, 27.29, 27.34, 27.42, 27.50, 27.56, 27.63, 27.66, 27.69, 27.72, 27.74, 27.76, 27.78, 27.80, 27.82, 27.85, 27.87, 27.90, 27.93, 27.95, 27.97, 27.99, 28.01, 28.02, 28.03, 28.04, 28.05, 28.06, 28.07, 28.08, 28.09, 28.10, 28.11, 28.12]  ##density (sigma units) for each layer 1-kdm
@@ -208,3 +208,5 @@ MIN_SEAICE_CONC: 0.05
 MAX_OCEAN_TEMP: 35.
 MIN_OCEAN_SALN: 5.
 MAX_OCEAN_SALN: 40.
+
+thref: 1.e-3
