@@ -93,6 +93,12 @@ def s2t(s):
     """convert a time string 'ccyymmddHHMM' to a datetime obj"""
     return datetime.strptime(s, '%Y%m%d%H%M')
 
+def seconds_to_timestr(seconds):
+    """convert from seconds to time duration string"""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 def ensure_list(v):
     if isinstance(v, list):

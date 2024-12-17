@@ -21,10 +21,10 @@ def convert_notation(data):
         elif data == "-inf":
             return -numpy.inf
         ## convert string to bool
-        # elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
-        #     return True
-        # elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
-        #     return False
+        elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.']:
+            return True
+        elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.']:
+            return False
         else:
             return data
     else:

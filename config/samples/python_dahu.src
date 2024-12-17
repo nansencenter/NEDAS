@@ -1,0 +1,5 @@
+source $HOME/.bashrc
+source /applis/environments/conda.sh
+
+conda activate NEDAS
+export PYTHONPATH=$PYTHONPATH:/bettik/yumengch-ext/NEDAS

@@ -1,11 +1,18 @@
 ##working directory for your experiment
 work_dir: '/cluster/work/users/yingyue/qg'
 
-##"job_submit_cmd nproc offset executable" will run 'executable' on your computer
-##using 'nproc' processors (starting from the 'offset'-th in the available processor list)
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+##python environment source script
+python_env: '/cluster/home/yingyue/python.src'
 
-##total number of available processors
+job_submit:
+  host: 'localhost'     ##machine name, laptop or supercomputer
+  project:              ##project for resource allocation
+  queue:                ##job queue name
+  scheduler:            ##which scheduler is used on the machine
+  run_separate_jobs: False  ##if true, submit each job separately to the scheduler
+                            ##otherwise jobs will be run as steps in a shared job allocation
+
+##number of processors to use for assimilation
 nproc: 16
 
 ##some experiment design parameters
@@ -81,8 +88,10 @@ model_def:
     restart_dt: 12      ## restart file interval in hours
     forcing_dt: 12      ## boundary forcing interval
     ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
+    use_job_array: False       ##if true, use job array in scheduler for ensemble runs
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'   ##path to the initial ensemble restart files
     truth_dir: '/cluster/work/users/yingyue/qg/truth'         ##path to the truth files (for synthetic obs)
+    
 
 ##perturbatio scheme (a list of individual perturbation methods can be set here)
 perturb:
