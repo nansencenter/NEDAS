@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from datetime import datetime, timedelta
 import numpy as np
-from utils.conversion import units_convert, dt1h
+from utils.conversion import units_convert, t2s, dt1h
 from utils.netcdf_lib import nc_read_var, nc_write_var
 from utils.shell_utils import run_command, run_job, makedir
 from utils.progress import watch_log, find_keyword_in_file, watch_files
@@ -113,22 +113,42 @@ class Topaz5Model(ModelConfig):
         ##filename for each model component
         if kwargs['name'] in self.restart_variables:
             tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
-            return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
+            file = 'restart.'+tstr+mstr+'.a'
+            #return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
         elif kwargs['name'] in self.iced_variables:
             tstr = kwargs['time'].strftime('%Y-%m-%d-00000')
-            return os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
+            file = 'iced.'+tstr+mstr+'.nc'
 
         elif kwargs['name'] in self.iceh_variables:
             tstr = kwargs['time'].strftime('%Y-%m-%d')
-            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'cice', 'iceh.'+tstr+'.nc')
+            file = os.path.join(mstr[1:], 'SCRATCH', 'cice', 'iceh.'+tstr+'.nc')
 
         elif kwargs['name'] in self.atmos_forcing_variables:
-            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'forcing')
+            file = os.path.join(mstr[1:], 'SCRATCH', 'forcing')
         
         elif kwargs['name'] in self.archive_variables:
             tstr = kwargs['time'].strftime('%Y_%j_12')  ##archive variables are daily means defined on 12z
-            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
+            file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
+        
+        else:
+            raise ValueError(f"filename: ERROR: unknown variable name '{kwargs['name']}'")
+
+        path = kwargs['path']
+        fname = os.path.join(path, file)
+        if os.path.exists(fname):
+            return fname
+        
+        ##if no corresponding files found under the given path
+        ##try to find two layers above for the other cycle time
+        dirs = path.split(os.sep)
+        if dirs[-1] == 'topaz.v5' and len(dirs[-2])==12:
+            root = os.sep.join(dirs[:-2])
+            for tdir in os.listdir(root):
+                fname = os.path.join(root, tdir, 'topaz.v5', file)
+                if os.path.exists(fname):
+                    return fname
+        raise FileNotFoundError(f"filename: ERROR: could not find {file} in {path} or its parent directories")
 
     def read_grid(self, **kwargs):
         pass
