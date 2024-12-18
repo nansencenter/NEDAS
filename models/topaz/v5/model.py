@@ -25,7 +25,7 @@ class Topaz5Model(ModelConfig):
         self.restart_variables = {
             'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':'m/s'},
             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'Pa'},
-            'ocean_temp':        {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'K'},
+            'ocean_temp':        {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'C'},
             'ocean_saln':        {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'psu'},
             'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
             'ocean_b_press':     {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
@@ -35,11 +35,30 @@ class Topaz5Model(ModelConfig):
             'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
             }
 
-        self.cice_variables = {
+        self.archive_variables = {
+            'ocean_velocity_daily': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':levels, 'units':'m/s'},
+            'ocean_layer_thick_daily': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'Pa'},
+            'ocean_temp_daily': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'C'},
+            'ocean_saln_daily': {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
+            'ocean_mixl_depth_daily': {'name':'mix_dpth', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'Pa'},
+            'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'?'},
+            'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
+            }
+
+        self.iced_variables = {
             'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
             'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'%'},
             'seaice_volume_ncat':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
             'snow_volume_ncat':  {'name':'vsnon', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
+            }
+
+        self.iceh_variables = {
+            'seaice_velocity_daily': {'name':('uvel_d', 'vvel_d'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m/s'},
+            'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'%'},
+            'seaice_thick_daily': {'name':'hi_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
+            'seaice_surf_temp_daily': {'name':'Tsfc_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
+            'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'ppt'},
+            'snow_thick_daily': {'name':'hs_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             }
 
         self.atmos_forcing_variables = {
@@ -62,16 +81,10 @@ class Topaz5Model(ModelConfig):
             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
-        
-        self.archive_variables = {
-            'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            'seaice_conc_daily': {'name':'covice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick_daily': {'name':'thkice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            'seaice_surf_temp_daily': {'name':'temice', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
-        }
  
         self.variables = {**self.restart_variables,
-                          **self.cice_variables,
+                          **self.iced_variables,
+                          **self.iceh_variables,
                           **self.atmos_forcing_variables,
                           **self.diag_variables,
                           **self.archive_variables}
@@ -102,9 +115,13 @@ class Topaz5Model(ModelConfig):
             tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
             return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
-        elif kwargs['name'] in self.cice_variables:
+        elif kwargs['name'] in self.iced_variables:
             tstr = kwargs['time'].strftime('%Y-%m-%d-00000')
             return os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
+
+        elif kwargs['name'] in self.iceh_variables:
+            tstr = kwargs['time'].strftime('%Y-%m-%d')
+            return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'cice', 'iceh.'+tstr+'.nc')
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr[1:], 'SCRATCH', 'forcing')
@@ -136,7 +153,7 @@ class Topaz5Model(ModelConfig):
                 var = f.read_field(rec['name'], level=kwargs['k'], tlevel=1, mask=None)
             f.close()
 
-        elif name in self.cice_variables:
+        elif name in self.iced_variables:
             if rec['is_vector']:
                 if name[-5:] == '_ncat':  ##ncat variable
                     var1 = nc_read_var(fname, rec['name'][0])[kwargs['k'],...]
@@ -150,6 +167,14 @@ class Topaz5Model(ModelConfig):
                     var = nc_read_var(fname, rec['name'])[kwargs['k'],...]
                 else:
                     var = nc_read_var(fname, rec['name'])
+
+        elif name in self.iceh_variables:
+            if rec['is_vector']:
+                var1 = nc_read_var(fname, rec['name'][0])[0, ...]
+                var2 = nc_read_var(fname, rec['name'][1])[0, ...]
+                var = np.array([var1, var2])
+            else:
+                var = nc_read_var(fname, rec['name'])[0, ...]
 
         elif name in self.atmos_forcing_variables:
             dtime = (kwargs['time'] - datetime(1900,12,31)) / (24*dt1h)
@@ -203,7 +228,7 @@ class Topaz5Model(ModelConfig):
                 f.overwrite_field(var, None, rec['name'], level=kwargs['k'], tlevel=1)
             f.close()
 
-        elif name in self.cice_variables:
+        elif name in self.iced_variables:
             if rec['is_vector']:
                 for i in range(2):
                     if rec['name'][i][-5:] == '_ncat':  ##ncat variable
@@ -310,6 +335,7 @@ class Topaz5Model(ModelConfig):
         for k in range(kdm-2, -1, -1):
             montg[ind] += pres[k+1, ...][ind] * oneta[ind] * (thstar[k+1, ...][ind] - thstar[k, ...][ind]) * self.thref**2
         ssh[ind] = (montg[ind] / self.thref + pbavg[ind]) / self.ONEM
+        ssh[~ind] = np.nan
         return ssh
 
     def get_ocean_surf_height_anomaly(self, **kwargs):
