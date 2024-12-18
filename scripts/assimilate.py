@@ -1,7 +1,6 @@
 import os
 import sys
 import importlib.util
-from utils.conversion import dt1h
 from utils.parallel import bcast_by_root
 from utils.progress import timer
 from utils.shell_utils import run_job, makedir
