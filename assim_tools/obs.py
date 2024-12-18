@@ -385,19 +385,18 @@ def state_to_obs(c, **kwargs):
     ##model source module
     model = c.model_config[kwargs['model_src']]
 
-    ##option 1  TODO: update README
+    ##option 1  TODO: update README and comments
     ## if dataset module provides an obs_operator, use it to compute obs
-    if hasattr(dataset, 'obs_operator') and kwargs['model_src'] in dataset.obs_operator and kwargs['name'] in dataset.obs_operator[kwargs['model_src']]:
+    if hasattr(dataset, 'obs_operator') and kwargs['name'] in dataset.obs_operator:
         if synthetic:
             path = model.truth_dir
         else:
             path = forecast_dir(c, time, kwargs['model_src'])
 
-        operator = dataset.obs_operator[kwargs['model']]
-        # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['dataset_src']+'.obs_operator for '+kwargs['model_src']
+        operator = dataset.obs_operator[kwargs['name']]
 
         ##get the obs seq from operator
-        seq = operator[kwargs['name']](path=path, grid=c.grid, mask=c.mask, **kwargs)
+        seq = operator(path=path, model=model, grid=c.grid, mask=c.mask, **kwargs)
 
     ##option 2:
     ## if obs variable is one of the state variable, or can be computed by the model,
@@ -528,13 +527,15 @@ def prepare_obs(c):
         dataset = c.dataset_config[obs_rec['dataset_src']]
         assert obs_rec['name'] in dataset.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
-        ##read ens-mean z coords from z_file for this obs network
-        z = read_mean_z_coords(c, obs_rec['time'])
-
         model = c.model_config[obs_rec['model_src']]
+        ##read ens-mean z coords from z_file for this obs network
+        ##typically model.z_coords can compute the z coords as well, but it is more efficient
+        ##to just store the ensemble mean z here
+        model.z = read_mean_z_coords(c, obs_rec['time'])
+
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            seq = dataset.random_network(grid=model.grid, mask=model.mask, z=z, truth_dir=model.truth_dir, **obs_rec)
+            seq = dataset.random_network(model=model, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -544,8 +545,7 @@ def prepare_obs(c):
 
         else:
             ##read dataset files and obtain obs sequence
-            seq = dataset.read_obs(grid=model.grid, mask=model.mask, z=z, **obs_rec)
-        del z
+            seq = dataset.read_obs(model=model, **obs_rec)
 
         by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 

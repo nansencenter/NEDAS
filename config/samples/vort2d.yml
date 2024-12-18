@@ -49,7 +49,7 @@ obs_def:
 use_synthetic_obs: True
 
 dataset_def:
-  vor2d:
+  vort2d:
 
 model_def:
   vort2d:
