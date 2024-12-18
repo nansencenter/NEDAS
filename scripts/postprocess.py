@@ -15,6 +15,9 @@ def postprocess(c, model_name):
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
 
+    if not c.job_submit:
+        c.job_submit = {}
+        
     if c.job_submit.get('run_separate_jobs', False):
         nproc_avail = os.cpu_count()
         nworker = min(c.nens, nproc_avail)

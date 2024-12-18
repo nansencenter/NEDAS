@@ -20,6 +20,9 @@ def preprocess(c, model_name):
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
 
+    if not c.job_submit:
+        c.job_submit = {}
+        
     if c.job_submit.get('run_separate_jobs', False):
         ##ideally, if in preprocess method jobs are submitted through run_job, then
         ##here nworker should be c.nens
