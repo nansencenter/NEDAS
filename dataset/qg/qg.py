@@ -23,8 +23,8 @@ class Dataset(DatasetConfig):
         else:
             nobs = kwargs['nobs']
 
-        assert isinstance(kwargs['model'], Model), 'random_network: ERROR: cannot get model.grid, model must be an instance of models.qg.Model'
-        grid = kwargs['model'].grid
+        grid = kwargs['grid']
+
         obs_y = np.random.uniform(grid.ymin, grid.ymax, nobs)
         obs_x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 

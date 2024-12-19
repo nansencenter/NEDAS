@@ -14,7 +14,7 @@ class Dataset(DatasetConfig):
     def random_network(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         assert isinstance(kwargs['model'], Model), 'random_network: ERROR: model must be an instance of models.lorenz96.Model'
-        grid = kwargs['model'].grid
+        grid = kwargs['grid']
 
         nobs = kwargs['nobs']
         obs_x = np.random.uniform(grid.xmin, grid.xmax, nobs)

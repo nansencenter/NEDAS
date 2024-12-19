@@ -535,7 +535,7 @@ def prepare_obs(c):
 
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            seq = dataset.random_network(model=model, **obs_rec)
+            seq = dataset.random_network(model=model, grid=c.grid, mask=c.mask, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -545,7 +545,7 @@ def prepare_obs(c):
 
         else:
             ##read dataset files and obtain obs sequence
-            seq = dataset.read_obs(model=model, **obs_rec)
+            seq = dataset.read_obs(model=model, grid=c.grid, mask=c.mask, **obs_rec)
 
         by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 
