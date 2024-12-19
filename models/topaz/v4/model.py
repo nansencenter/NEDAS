@@ -74,7 +74,7 @@ class Model(ModelConfig):
             var = f.read_field(rec[name]['name'], level=kwargs['k'], tlevel=1, mask=None)
         f.close()
 
-        var = units_convert(kwargs['units'], rec[name]['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
@@ -88,7 +88,7 @@ class Model(ModelConfig):
         f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny)
 
         ##convert units back if necessary
-        var = units_convert(rec['units'], kwargs['units'], var)
+        var = units_convert(kwargs['units'], rec['units'], var)
 
         if rec['is_vector']:
             for i in range(2):

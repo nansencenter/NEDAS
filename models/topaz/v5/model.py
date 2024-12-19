@@ -57,7 +57,7 @@ class Topaz5Model(ModelConfig):
             'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'%'},
             'seaice_thick_daily': {'name':'hi_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             'seaice_surf_temp_daily': {'name':'Tsfc_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'ppt'},
+            'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'psu'},
             'snow_thick_daily': {'name':'hs_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             }
 
@@ -225,7 +225,7 @@ class Topaz5Model(ModelConfig):
             f.close()
 
         ##convert units if necessary
-        var = units_convert(kwargs['units'], rec['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
@@ -235,7 +235,7 @@ class Topaz5Model(ModelConfig):
         rec = self.variables[name]
 
         ##convert back to old units
-        var = units_convert(rec['units'], kwargs['units'], var)
+        var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.restart_variables:
             ##open the restart file for over-writing

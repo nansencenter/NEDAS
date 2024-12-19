@@ -111,7 +111,7 @@ class Model(ModelConfig):
             else:
                 var = forcing.read_var(fname, [rec[name],], itime)[0,...].data
     
-        var = units_convert(kwargs['units'], rec['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
@@ -119,6 +119,8 @@ class Model(ModelConfig):
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name]
+
+        var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.seaice_variables:
             if rec['is_vector']:

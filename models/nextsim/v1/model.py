@@ -174,7 +174,7 @@ class NextsimModel(ModelConfig):
                 var = nc_read_var(fname, rec['name'])[nt_in_file, ...]
 
         ##convert units if native unit is not the same as required by kwargs
-        var = units_convert(kwargs['units'], rec['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
@@ -185,7 +185,7 @@ class NextsimModel(ModelConfig):
         rec = self.variables[name]
 
         ##convert units back if necessary
-        var = units_convert(rec['units'], kwargs['units'], var)
+        var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.native_variables:
             ##nextsim restart file concatenates u,v component, so flatten if is_vector
