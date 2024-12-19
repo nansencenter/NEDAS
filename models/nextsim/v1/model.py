@@ -59,11 +59,6 @@ class NextsimModel(ModelConfig):
 
         self.grid_bank = {}
 
-        self.perturb_history = {}
-
-        self.run_process = None
-        self.run_status = 'pending'
-
     def filename(self, **kwargs):
         """
         Get the filename with specified variable name, time, member, etc. 
@@ -88,6 +83,9 @@ class NextsimModel(ModelConfig):
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
+        
+        ##TODO: search in parent directory for specified time if needed
+        
 
     def read_grid_from_mshfile(self, mshfile):
         """
