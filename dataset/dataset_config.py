@@ -41,7 +41,7 @@ class DatasetConfig(object):
             kwargs['units'] = self.variables[kwargs['name']]['units']
 
         ##other args used in random_network
-        for key in ['model', 'nobs', 'obs_window_min', 'obs_window_max']:
+        for key in ['model', 'grid', 'mask', 'nobs', 'obs_window_min', 'obs_window_max']:
             if key not in kwargs:
                 kwargs[key] = None
 
