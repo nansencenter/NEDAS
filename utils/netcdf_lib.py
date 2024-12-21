@@ -76,7 +76,8 @@ def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None,
             if dim[name] is not None:
                 assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size ({}) mismatch with file ({})".format(dim[name], f.dimensions[name].size)
             else:
-                assert(f.dimensions[name].isunlimited())
+                if f.dimensions[name].isunlimited():
+                    assert(recno[name] < f.dimensions[name].size), "recno for dimension "+name+" exceeds file size"
         else:
             f.createDimension(name, size=dim[name])
     if varname not in f.variables:
