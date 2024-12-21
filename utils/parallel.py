@@ -49,45 +49,52 @@ class Comm(object):
             return getattr(self._comm, attr)
         raise AttributeError
 
-    def _init_file_lock(self, filename):
+    def init_file_lock(self, filename):
         if self._MPI is None:
             return
+        if not filename:
+            return
         if filename not in self._locks:
-            lock_win = self._MPI.Win.Allocate_shared(1, 1, comm=self._comm)
-            lock_mem, _ = lock_win.Shared_query(0)
-            lock_mem = np.frombuffer(lock_mem, dtype='B')
+            ##create the lock memory
             if self.Get_rank() == 0:
-                lock_mem[0] = 0
-            # print(f"Rank {self.Get_rank()} initialized lock on {filename} lock_mem: {lock_mem[0]}", flush=True)
-            self._locks[filename] = (lock_mem, lock_win)
+                lock_mem = np.zeros(1, dtype='B')
+            else:
+                lock_mem = None
+            lock_win = self._MPI.Win.Create(lock_mem, comm=self._comm)
+            self._locks[filename] = lock_win
+
+    def cleanup_file_locks(self):
+        for file, lock_win in self._locks.items():
+            lock_win.Free()
 
     def acquire_file_lock(self, filename):
         if self._MPI is None:
             return
-        if filename not in self._locks:
-            self._init_file_lock(filename)
-        lock_mem, lock_win = self._locks[filename]
+        assert filename in self._locks, f"Comm: file lock for {filename} not initialized"
+        lock_win = self._locks[filename]
         check_dt = 0.1  ##check file locks every 0.1 seconds, can make this configurable
         while True:
             # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
+            lock_mem = np.zeros(1, dtype='B')
+            one = np.array([1], dtype='B')
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
+            lock_win.Fetch_and_op(one, lock_mem, 0, 0, self._MPI.REPLACE)
+            lock_win.Unlock(0)
             if lock_mem[0] == 0:
-                lock_mem[0] = 1
-                lock_win.Unlock(0)
                 # print(f"pid {self.Get_rank()} acquires lock on {filename}", flush=True)
                 break
-            lock_win.Unlock(0)
             time.sleep(check_dt)
 
     def release_file_lock(self, filename):
         if self._MPI is None:
             return
         if filename in self._locks:
-            lock_mem, lock_win = self._locks[filename]
+            zero = np.array([0], dtype='B')
+            lock_win = self._locks[filename]
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
-            lock_mem[0] = 0
+            lock_win.Put(zero, 0, 0)
             lock_win.Unlock(0)
-            # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
+            print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""
