@@ -53,7 +53,7 @@ def update_restart(c, fields_prior, fields_post):
             
             if pid_active:                
                 if c.debug:
-                    print(f"PID {c.pid}: update_restart mem{mem_id+1:03d} '{rec['name']}' {rec['time']} k={rec['k']}", flush=True)
+                    print(f"PID {c.pid:4}: update_restart mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
                 else:
                     print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
 

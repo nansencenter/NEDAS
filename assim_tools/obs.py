@@ -598,13 +598,13 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     nm = len(c.mem_list[c.pid_mem])
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
-            if c.debug:
-                print(f"PID {c.pid}: obs_prior mem{mem_id+1:03d} {c.obs_info['records'][obs_rec_id]}", flush=True)
-            else:
-                print_1p(progress_bar(m*nr+r, nr*nm))
-
             ##this is the obs record to process
             obs_rec = c.obs_info['records'][obs_rec_id]
+
+            if c.debug:
+                print(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec['name']:20}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nr*nm))
 
             seq = state_to_obs(c, member=mem_id,
                                model_fld=fields, model_z=z_fields,

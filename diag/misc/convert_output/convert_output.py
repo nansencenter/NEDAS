@@ -63,7 +63,7 @@ def run(c, **kwargs):
 
         for vname in variables:
             if c.debug:
-                print(f"PID {c.pid} convert_output on variable '{vname}' for {model_name} member {member+1} at {t}", flush=True)
+                print(f"PID {c.pid:4} convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}", flush=True)
             # read the variable from the model restart file
             rec = model.variables[vname]
             file = kwargs['file'].format(time=time_start, member=member+1)

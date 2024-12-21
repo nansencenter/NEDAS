@@ -94,7 +94,7 @@ class Comm(object):
             lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
             lock_win.Put(zero, 0, 0)
             lock_win.Unlock(0)
-            print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
+            # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
 class DummyComm(object):
     """Dummy communicator for python without mpi"""

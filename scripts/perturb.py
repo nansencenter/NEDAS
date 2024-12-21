@@ -67,7 +67,7 @@ def perturb(c):
             for k in model.variables[vname]['levels']:
                 fld_id += 1
                 if c.debug:
-                    print(f"PID {c.pid}: perturbing mem{mem_id+1} {variable_list} at {t} level {k}", flush=True)
+                    print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
                 else:
                     print_1p(progress_bar(fld_id, nfld+1))
 
