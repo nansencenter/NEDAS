@@ -377,7 +377,8 @@ def output_state(c, fields, state_file):
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
             if c.debug:
-                print(f"PID {c.pid}: saving field: mem{mem_id+1:03d} {c.state_info['fields'][rec_id]}", flush=True)
+                rec = c.state_info['fields'][rec_id]
+                print(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
             else:
                 print_1p(progress_bar(m*nr+r, nm*nr))
 
@@ -412,7 +413,7 @@ def output_ens_mean(c, fields, mean_file):
 
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
         if c.debug:
-            print(f"PID {c.pid}: saving mean field {c.state_info['fields'][rec_id]}", flush=True)
+            print(f"PID {c.pid:4}: saving mean field '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
         else:
             print_1p(progress_bar(r, len(c.rec_list[c.pid_rec])))
 
@@ -470,7 +471,7 @@ def prepare_state(c):
             rec = c.state_info['fields'][rec_id]
 
             if c.debug:
-                print(f"PID {c.pid}: prepare_state mem{mem_id+1:03d} {rec}", flush=True)
+                print(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
             else:
                 print_1p(progress_bar(m*nr+r, nm*nr))
 

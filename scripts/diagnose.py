@@ -19,7 +19,7 @@ def diagnose(c):
     ntask = len(task_list[c.pid])
     for task_id, rec in enumerate(task_list[c.pid]):
         if c.debug:
-            print(f"PID {c.pid} running diagnostics '{rec['method']}'", flush=True)
+            print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
         else:
             print_1p(progress_bar(task_id, ntask))
 

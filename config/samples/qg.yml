@@ -6,7 +6,7 @@ job_submit:
 nproc: 5        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: False ##if true, run the assimilation steps
+run_assim: True  ##if true, run the assimilation steps
 run_diag: True
 debug: False      ##if true, output debug data/message
 
