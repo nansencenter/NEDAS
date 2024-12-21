@@ -111,7 +111,7 @@ class Topaz5Model(ModelConfig):
             mstr = ''
 
         ##filename for each model component
-        if kwargs['name'] in self.restart_variables:
+        if kwargs['name'] in self.restart_variables or kwargs['name'] in self.diag_variables:
             tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
             file = 'restart.'+tstr+mstr+'.a'
             #return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
@@ -249,9 +249,10 @@ class Topaz5Model(ModelConfig):
             f.close()
 
         elif name in self.iced_variables:
+            is_ncat = (name[-5:] == '_ncat')  ##if name is a multicategory variable (categories indexed by k)
             if rec['is_vector']:
                 for i in range(2):
-                    if rec['name'][i][-5:] == '_ncat':  ##ncat variable
+                    if is_ncat:
                         dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = {'ncat':kwargs['k']}
                     else:
@@ -259,7 +260,7 @@ class Topaz5Model(ModelConfig):
                         recno = None
                     nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
             else:
-                if rec['name'][-5:] == '_ncat':  ##ncat variable
+                if is_ncat:
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = {'ncat':kwargs['k']}
                 else:
