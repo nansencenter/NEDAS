@@ -11,9 +11,12 @@ from utils.netcdf_lib import nc_write_var
 from models.topaz.abfile import ABFileForcing
 from models.topaz.time_format import dayfor
 from models.topaz.v5 import Model
-model = Model()
+topaz = Model()
+from dataset.ecmwf.era5 import Dataset
+era5 = Dataset()
 
-grib_path = "/nird/projects/NS2993K/METNO_2_NERSC/ACCIBEREG/EC_grib_files"
+# grib_path = "/nird/projects/NS2993K/METNO_2_NERSC/ACCIBEREG/EC_grib_files"
+grib_path = "/cluster/work/users/yingyue/data/ACCIBEREG/EC_grib_files"
 nens = 50  ##ensemble members in file
 dt_hours = 6  #interval hours of records in file
 variables = {
@@ -25,7 +28,7 @@ variables = {
     'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
     'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
     }
-native_variables = {
+grib_variables = {
     'airtmp': {'name':"2 metre temperature", 'units':'K'},
     'dewpt':  {'name':"2 metre dewpoint temperature", 'units':'K'},
     'mslprs': {'name':"Mean sea level pressure", 'units':'Pa'},
@@ -40,7 +43,7 @@ native_variables = {
 ##default output path
 forcing_path = "/cluster/work/users/yingyue/data/ecmwf_fcsts"
 
-def filename_analysis(path, t, ensemble):
+def filename_grib_analysis(path, t, tstart, ensemble):
     if ensemble:
         ##probablistic forecasts
         search = os.path.join(path, f"{t:%Y}-{t:%m}", f"aciceberg_pf_{t:%Y}_{t:%m}*.grb")
@@ -58,8 +61,8 @@ def filename_analysis(path, t, ensemble):
             return file, t.day
     raise RuntimeError(f"could not find file that contain time {t}: {search}")
 
-def filename_forecast(path, t, ensemble):
-    search = os.path.join(path, f"{t:%Y}-{t:%m}", "FORECAST", f"fc_aciceberg_{t:%Y}-{t:%m}*.grb")
+def filename_grib_forecast(path, t, tstart, ensemble):
+    search = os.path.join(path, f"{tstart:%Y-%m}", "FORECAST", f"fc_aciceberg_{tstart:%Y-%m-%d}.grb")
     forecast_days = 10
     file_list = glob.glob(search)
     for file in file_list:
@@ -83,7 +86,7 @@ def get_record_id_lookup(grbs):
 def read_var(grbs, lookup, t_start, t, member, vname, units):
     ##get search key
     forecast_hours = int((t - t_start) / timedelta(hours=1))
-    key = (native_variables[vname]['name'], t_start, forecast_hours, member)
+    key = (grib_variables[vname]['name'], t_start, forecast_hours, member)
     assert key in lookup, f"failed to search for record {key} in grib file {grbs.name}"
 
     ##look up the message id
@@ -92,13 +95,13 @@ def read_var(grbs, lookup, t_start, t, member, vname, units):
     grb = grbs.message(rec_id)
     var = grb.values
     ##convert units
-    var = units_convert(native_variables[vname]['units'], units, var)
+    var = units_convert(grib_variables[vname]['units'], units, var)
     return var
 
 def read_grid(grb):
     lat, lon = grb.latlons()
     grid = Grid(Proj("+proj=longlat"), lon, lat, cyclic_dim='x', pole_dim='y', pole_index=(0,))
-    grid.set_destination_grid(model.grid)
+    grid.set_destination_grid(topaz.grid)
     return grid
 
 def fill_missing(var):
@@ -115,11 +118,11 @@ def output_abfile(f, filename, name, t, var, units):
     os.system("mkdir -p "+os.path.dirname(filename))
     print(f"output to {filename}.a")
 
-    idm = model.grid.nx
-    jdm = model.grid.ny
+    idm = topaz.grid.nx
+    jdm = topaz.grid.ny
     cline1 = "ecmwf"
     cline2 = f"{name} ({units})"
-    dtime1 = dayfor(model.yrflag, t.year, int(t.strftime('%j')), t.hour)
+    dtime1 = dayfor(topaz.yrflag, t.year, int(t.strftime('%j')), t.hour)
     rdtime = dt_hours / 24
 
     ##open the file handle
@@ -133,7 +136,7 @@ def output_ncfile(filename, name, member, t, tstart, var):
     print("output to "+filename)
     ny, nx = var.shape
     t_step = int((t - tstart) / (dt_hours*timedelta(hours=1)))
-    nc_write_var(filename, {'time':None, 'member':None, 'y':ny, 'x':nx}, name, var, recno={'time':t_step, 'member':member})
+    nc_write_var(filename, {'time':None, 'y':ny, 'x':nx}, name, var, recno={'time':t_step})
 
 def process(grbs, lookup, day_start, t, field_type, member):
     t_start = datetime(t.year, t.month, day_start)
@@ -148,11 +151,19 @@ def process(grbs, lookup, day_start, t, field_type, member):
         else:
             var = read_var(grbs, lookup, t_start, t, member, rec['name'], rec['units'])
             ##convert accumulative variables to flux
-            if rec['name'] in ['precip', 'radflx', 'shwflx'] and t>t_start:
-                t_prev = t - dt_hours * timedelta(hours=1)
-                var -= read_var(grbs, lookup, t_start, t_prev, member, rec['name'], rec['units'])
-                var /= 3600. * dt_hours    ##the flux units are per second
-                var[np.where(var<0.)] = 0. ##ensure positive definite
+            if rec['name'] in ['precip', 'radflx', 'shwflx']:
+                if t == t_start:
+                    ##need to get ERA5 for the start date (all flux are zero in the forecasts)
+                    era5.read_grid(name=varname, time=t)
+                    tmp = era5.read_var(name=varname, time=t)
+                    #conver to grid
+                    era5.grid.set_destination_grid(grid)
+                    var = era5.grid.convert(tmp)
+                else:
+                    t_prev = t - dt_hours * timedelta(hours=1)
+                    var -= read_var(grbs, lookup, t_start, t_prev, member, rec['name'], rec['units'])
+                    var /= 3600. * dt_hours    ##the flux units are per second
+                    var[np.where(var<0.)] = 0. ##ensure positive definite
 
         print("convert to topaz grid")
         var_topaz = grid.convert(var, is_vector=rec['is_vector'])
@@ -161,8 +172,10 @@ def process(grbs, lookup, day_start, t, field_type, member):
             mem = None
         else:
             mem = member - 1
-        forcing_file = model.filename(path=forcing_path, name=varname, member=mem, time=t)
-        forcing_file_nc = os.path.join(forcing_path, f"forcing_{field_type}_mem{member:03d}.nc")
+
+        path = os.path.join(forcing_path, f"{t_start:%Y%m%d%H%M}")
+        forcing_file = topaz.filename(path=path, name=varname, member=mem, time=t)
+        forcing_file_nc = os.path.join(path, f"forcing_{field_type}_mem{member:03d}.nc")
         if rec['is_vector']:
             for i in range(2):
                 fill_missing(var_topaz[i,...])
@@ -193,17 +206,17 @@ if __name__ == '__main__':
     grid = None
     file_list = []
     f = {}
-    for name in native_variables.keys():
+    for name in grib_variables.keys():
         f[name] = None
 
     t = time_start
     while t <= time_end:
 
         if field_type == 'analysis':
-            filename = filename_analysis
+            filename = filename_grib_analysis
         elif field_type == 'forecast':
-            filename = filename_forecast
-        file, day_start = filename(grib_path, t, ensemble)
+            filename = filename_grib_forecast
+        file, day_start = filename(grib_path, t, time_start, ensemble)
 
         if file not in file_list:
             print(f"\n\nopening {file}")
@@ -219,6 +232,6 @@ if __name__ == '__main__':
 
         t += dt_hours * timedelta(hours=1)
 
-    for name in native_variables.keys():
+    for name in grib_variables.keys():
         if f[name] is not None:
             f[name].close()
