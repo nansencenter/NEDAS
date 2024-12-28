@@ -412,13 +412,13 @@ def output_ens_mean(c, fields, mean_file):
     c.comm.Barrier()
 
     for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
+        rec = c.state_info['fields'][rec_id]
         if c.debug:
             print(f"PID {c.pid:4}: saving mean field '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
         else:
             print_1p(progress_bar(r, len(c.rec_list[c.pid_rec])))
 
         ##initialize a zero field with right dimensions for rec_id
-        rec = c.state_info['fields'][rec_id]
         fld_shape = (2,)+c.state_info['shape'] if rec['is_vector'] else c.state_info['shape']
         sum_fld_pid = np.zeros(fld_shape)
 

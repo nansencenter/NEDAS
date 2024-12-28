@@ -247,6 +247,27 @@ def distribute_partitions(c):
 
     return par_list
 
+def global_obs_list(c):
+    ##form the global list of obs (in serial mode the main loop is over this list)
+    n_obs_rec = len(c.obs_info['records'])
+
+    i = {}  ##location in full obs vector on owner pid
+    for owner_pid in range(c.nproc_mem):
+        i[owner_pid] = 0
+
+    obs_list = []
+    for obs_rec_id in range(n_obs_rec):
+        obs_rec = c.obs_info['records'][obs_rec_id]
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+        for owner_pid in c.obs_inds[obs_rec_id].keys():
+            for _ in c.obs_inds[obs_rec_id][owner_pid]:
+                for v in v_list:
+                    obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
+                    i[owner_pid] += 1
+
+    np.random.shuffle(obs_list)  ##randomize the order of obs (this is optional)
+    return obs_list
+
 ##TODO: some of these funcs are not ready
 ##write obs_info to a .dat file accompanying the obs_seq bin file
 def write_obs_info(binfile, info):

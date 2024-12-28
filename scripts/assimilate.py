@@ -8,7 +8,6 @@ from utils.dir_def import analysis_dir, cycle_dir
 from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
 from assim_tools.transpose import transpose_forward, transpose_backward
-from assim_tools.analysis import analysis
 from assim_tools.inflation import inflation
 from assim_tools.update import update_restart
 
@@ -45,7 +44,13 @@ def assimilate(c):
 
     state_prior, z_state, lobs, lobs_prior = timer(c)(transpose_forward)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
 
-    state_post, lobs_post = timer(c)(analysis)(c, state_prior, z_state, lobs, lobs_prior)
+    if c.assim_mode == 'batch':
+        from assim_tools.batch_assim import batch_assim as assim
+    elif c.assim_mode == 'serial':
+        from assim_tools.serial_assim import serial_assim as assim
+    else:
+        raise ValueError(f"Error: assimilation mode {c.assim_mode} not recognized")
+    state_post, lobs_post = timer(c)(assim)(c, state_prior, z_state, lobs, lobs_prior)
 
     fields_post, obs_post_seq = timer(c)(transpose_backward)(c, state_post, lobs_post)
 

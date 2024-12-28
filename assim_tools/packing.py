@@ -64,7 +64,7 @@ def pack_obs_data(c, par_id, lobs, lobs_prior):
     n_obs_rec = len(c.obs_info['records'])        ##number of obs records
     n_state_var = len(c.state_info['variables'])  ##number of state variable names
 
-    data['obs_rec_id'] = np.full(nlobs, np.nan)
+    data['obs_rec_id'] = np.zeros(nlobs, dtype=int)
     data['obs'] = np.full(nlobs, np.nan)
     data['x'] = np.full(nlobs, np.nan)
     data['y'] = np.full(nlobs, np.nan)
@@ -93,7 +93,7 @@ def pack_obs_data(c, par_id, lobs, lobs_prior):
         d = len(local_inds)
         v_list = [0, 1] if obs_rec['is_vector'] else [None]
         for v in v_list:
-            data['obs_rec_id'][i:i+d] = np.full(d, obs_rec_id)
+            data['obs_rec_id'][i:i+d] = obs_rec_id
             data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, :])
             data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x']
             data['y'][i:i+d] = lobs[obs_rec_id][par_id]['y']
