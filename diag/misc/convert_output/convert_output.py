@@ -8,10 +8,8 @@ from utils.conversion import ensure_list, proj2dict, s2t, dt1h
 from utils.shell_utils import makedir
 from utils.dir_def import forecast_dir
 
-def run(c, **kwargs):
-    """
-    Run diagnostics: convert model restart variables into netcdf files, given formatting options in kwargs
-    """
+def get_task_list(c, **kwargs):
+    """get a list of tasks to be done, as unique kwargs to be passed to run()"""
     # parse kwargs
     # load the default config first
     kwargs_from_config_file = {}
@@ -21,10 +19,33 @@ def run(c, **kwargs):
     # overwrite with kwargs
     kwargs = {**kwargs_from_config_file, **kwargs}
 
-    variables = ensure_list(kwargs['variables'])
+    ##generate task list
+    tasks = []
+    for member in range(c.nens):
+        for vname in ensure_list(kwargs['variables']):
+            tasks.append({**kwargs, 'variable': vname, 'member': member})
+    return tasks
 
+def get_file_list(c, **kwargs):
+    """Return a list of files to be opened for collective i/o"""
+    if 'time' in kwargs:
+        time_start = s2t(kwargs['time'])
+    else:
+        time_start = c.time
+    
+    files = []
+    for member in range(c.nens):
+        file = kwargs['file'].format(time=time_start, member=member+1)
+        if file not in files:
+            files.append(file)
+    return files
+
+def run(c, **kwargs):
+    """
+    Run diagnostics: convert model restart variables into netcdf files, given formatting options in kwargs
+    """
+    vname = kwargs['variable']
     member = kwargs['member']
-
     model_name = kwargs['model_src']
     model = c.model_config[model_name]
 
@@ -61,58 +82,57 @@ def run(c, **kwargs):
     for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h
 
-        for vname in variables:
-            if c.debug:
-                print(f"PID {c.pid:4} convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}", flush=True)
-            # read the variable from the model restart file
-            rec = model.variables[vname]
-            file = kwargs['file'].format(time=time_start, member=member+1)
-            makedir(os.path.dirname(file))
+        if c.debug:
+            print(f"PID {c.pid:4} convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}", flush=True)
+        # read the variable from the model restart file
+        rec = model.variables[vname]
+        file = kwargs['file'].format(time=time_start, member=member+1)
+        makedir(os.path.dirname(file))
 
-            levels = rec['levels']
-            is_vector = rec['is_vector']
-            for k in levels:
-                # read the field from model restart file
-                fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
-                # convert to output grid
-                fld_ = model.grid.convert(fld, is_vector=is_vector)
-                # build dimension records
-                dims = {}
-                time_name = kwargs.get('time_name', 'time')
-                dims[time_name] = None  ##make time dimension unlimited in nc file
-                k_name = kwargs.get('k_name')
-                if len(levels) > 1:
-                    dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
-                x_name = kwargs.get('x_name', 'x')
-                y_name = kwargs.get('y_name', 'y')
-                dims[y_name] = grid.ny
-                dims[x_name] = grid.nx
-                lon_name = kwargs.get('lon_name', 'lon')
-                lat_name = kwargs.get('lat_name', 'lat')
-                # output the variable
-                recno = {}
-                recno[time_name] = n_step
-                if len(levels) > 1:
-                    recno[k_name] = k
-                # variable attr
-                attr = {'standard_name':vname,
-                        'units':rec['units'],
-                        'grid_mapping': proj_params['projection'],
-                        'coordinates': f"{lon_name} {lat_name}",
-                        }
-                if is_vector:
-                    for i in range(2):
-                        nc_write_var(file, dims, rec['name'][i], fld_[i,...], recno=recno, attr=attr)
-                else:
-                    nc_write_var(file, dims, rec['name'], fld_, recno=recno, attr=attr)
+        levels = rec['levels']
+        is_vector = rec['is_vector']
+        for k in levels:
+            # read the field from model restart file
+            fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
+            # convert to output grid
+            fld_ = model.grid.convert(fld, is_vector=is_vector)
+            # build dimension records
+            dims = {}
+            time_name = kwargs.get('time_name', 'time')
+            dims[time_name] = None  ##make time dimension unlimited in nc file
+            k_name = kwargs.get('k_name')
+            if len(levels) > 1:
+                dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
+            x_name = kwargs.get('x_name', 'x')
+            y_name = kwargs.get('y_name', 'y')
+            dims[y_name] = grid.ny
+            dims[x_name] = grid.nx
+            lon_name = kwargs.get('lon_name', 'lon')
+            lat_name = kwargs.get('lat_name', 'lat')
+            # output the variable
+            recno = {}
+            recno[time_name] = n_step
+            if len(levels) > 1:
+                recno[k_name] = k
+            # variable attr
+            attr = {'standard_name':vname,
+                    'units':rec['units'],
+                    'grid_mapping': proj_params['projection'],
+                    'coordinates': f"{lon_name} {lat_name}",
+                    }
+            if is_vector:
+                for i in range(2):
+                    nc_write_var(file, dims, rec['name'][i], fld_[i,...], recno=recno, attr=attr, comm=c.comm)
+            else:
+                nc_write_var(file, dims, rec['name'], fld_, recno=recno, attr=attr, comm=c.comm)
 
-            # output the dimension variables
-            time = cftime.date2num(t, units=time_units)
-            time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
-            nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr)
-            nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'})
-            nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'})
-            nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'})
-            nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lat_name, lat, attr={'standard_name':'latitude', 'units':'degrees_north'})
-            # output projection info
-            nc_write_var(file, {}, proj_params['projection'], 1, attr=proj_params)
+        # output the dimension variables
+        time = cftime.date2num(t, units=time_units)
+        time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
+        nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr, comm=c.comm)
+        nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'}, comm=c.comm)
+        nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'}, comm=c.comm)
+        nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'}, comm=c.comm)
+        nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lat_name, lat, attr={'standard_name':'latitude', 'units':'degrees_north'}, comm=c.comm)
+        # output projection info
+        nc_write_var(file, {}, proj_params['projection'], 1, attr=proj_params, comm=c.comm)
