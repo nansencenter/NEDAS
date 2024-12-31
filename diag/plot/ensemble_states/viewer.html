@@ -42,17 +42,19 @@
         </div>
         <div class="dropdown-container">
             <label for="variable">variable:</label>
-            <select id="variable" onchange="updateLevels()">
-            </select>
-            <label for="level">level:</label>
-            <select id="level" onchange="updateImage()">
-            </select>
-            <label for="time">time:</label>
-            <select id="time" onchange="updateImage()">
-            </select>
-            <label for="member">member:</label>
-            <select id="member" onchange="updateImage()">
-            </select>
+            <select id="variable" onchange="updateLevels()"></select>
+            <span title="Scroll through, or use PageUp, PageDown to change level">
+                <label for="level">level:</label>
+                <select id="level" onchange="updateImage()"></select>
+            </span>
+            <span title="Scroll through, or use &larr;, &rarr; to change time">
+                <label for="time">time:</label>
+                <select id="time" onchange="updateImage()"></select>
+            </span>
+            <span title="Scroll through, or use &uarr;, &darr; to change member">
+                <label for="member">member:</label>
+                <select id="member" onchange="updateImage()"></select>
+            </span>
         </div>
     </div>
 

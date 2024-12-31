@@ -14,18 +14,13 @@ def get_task_list(c, **kwargs) -> list:
     vmin = ensure_list(kwargs['vmin'])
     vmax = ensure_list(kwargs['vmax'])
     cmap = ensure_list(kwargs['cmap'])
+    model_src = kwargs['model_src']
 
     c.next_time = c.time + c.cycle_period * dt1h
 
     tasks = []
     for member in range(c.nens):
         for i, vname in enumerate(variables):
-            model_src = None
-            for vrec in c.state_def:
-                if vrec['name'] == vname:
-                    model_src = vrec['model_src']
-                    break
-            assert model_src is not None, f"Error: model source not found for variable {vname}"
             model = c.model_config[model_src]
             levels = model.variables[vname]['levels']
             for k in levels:
@@ -57,6 +52,7 @@ def run(c, **kwargs) -> None:
     member = kwargs['member']
     k = kwargs['k']
     time = kwargs['time']
+    model_src = kwargs['model_src']
 
     if c.debug:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
@@ -64,7 +60,7 @@ def run(c, **kwargs) -> None:
     ##if the viewer html file does not exist, generate it
     viewer = os.path.join(plot_dir, 'viewer.html')
     if not os.path.exists(viewer):
-        generate_viewer_html(c, plot_dir, variables)
+        generate_viewer_html(c, plot_dir, model_src, variables)
 
     ##plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
@@ -81,33 +77,23 @@ def run(c, **kwargs) -> None:
     #     raise ValueError("Error: record id not found for variable {vname} in {binfile}")
     # var = read_field(binfile, info, c.mask, member, rec_id)
     # grid = c.grid
-    # mask = c.mask
 
     ##read the field from model restart files
-    model_src = None
-    for vrec in c.state_def:
-        if vrec['name'] == vname:
-            model_src = vrec['model_src']
-            break
-    assert model_src is not None, f"Error: model source not found for variable {vname}"
     model = c.model_config[model_src]
     path = forecast_dir(c, c.time, model_src)
     var = model.read_var(path=path, name=vname, k=k, member=member, time=time)
     grid = model.grid
-    mask = model.mask
     
     rec = model.variables[vname]
 
     ##plot the field
     fig, ax = plt.subplots(1, 1, figsize=figsize)
     if rec['is_vector']:
-        grid.plot_vectors(ax, var, V=vmax, showref=True, ref_xy=(6e6, 6e6))
-        ax.text(6e6, 5.7e6, f"{vmax} {rec['units']}", fontsize=12, color='k', ha='center', va='center', zorder=10)
+        grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec['units'])
     else:
-        var[mask] = np.nan
         im = grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
-        cbar = plt.colorbar(im, fraction=0.025, pad=0.015)
-        cbar.ax.set_title(rec['units'], fontsize=12, loc='center', pad=10)
+        cbar = plt.colorbar(im, fraction=0.025, pad=0.02)
+        cbar.ax.set_title(rec['units'], loc='center', pad=10)
     grid.plot_land(ax, color=landcolor)
     plt.title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=15)
     plt.xlabel('x (m)', fontsize=12)
@@ -115,7 +101,7 @@ def run(c, **kwargs) -> None:
     plt.savefig(figfile)
     plt.close()
 
-def generate_viewer_html(c, plot_dir, variables) -> None:
+def generate_viewer_html(c, plot_dir, model_src, variables) -> None:
     """Generating a html page to help viewing the ensemble state variables"""
     if c.debug:
         print(f"Generating viewer.html page in {plot_dir}")
@@ -127,12 +113,6 @@ def generate_viewer_html(c, plot_dir, variables) -> None:
     levels_by_variable = ""
     for vname in variables:
         levels_by_variable += f"{vname}: ["
-        model_src = None
-        for vrec in c.state_def:
-            if vrec['name'] == vname:
-                model_src = vrec['model_src']
-                break
-        assert model_src is not None, f"Error: model source not found for variable {vname}"
         model = c.model_config[model_src]
         for level in model.variables[vname]['levels']:
             levels_by_variable += f"{level}, "

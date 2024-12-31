@@ -1156,7 +1156,7 @@ class Grid(object):
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
-                     showref=False, ref_xy=(0, 0), refcolor='w',
+                     showref=False, ref_xy=(0.9, 0.9), refcolor='w', ref_units='',
                      showhead=True, headwidth=0.1, headlength=0.3):
         """
         Plot vector fields (improved version of matplotlib quiver)
@@ -1198,10 +1198,13 @@ class Grid(object):
           If True, show a legend box with a reference vector (size L) inside. Default is False.
 
         - ref_xy: tuple (x,y) float, optional
-          The x,y coordinates for the reference vector box
+          The x,y relative coordinates (0-1) for the reference vector box, default is upper right corner.
 
         - ref_color: matplotlib color, optional
           Background color for the reference vector box, default is 'w' (white).
+
+        - ref_units: str
+          Units to be included in the reference vector box, default is ''.
 
         - showhead: bool, optional
           If True (default), show the arrow head of the vectors
@@ -1287,7 +1290,7 @@ class Grid(object):
 
         ##add reference vector
         if showref:
-            xr, yr = ref_xy
+            xr, yr = ref_xy[0]*self.Lx+self.xmin, ref_xy[1]*self.Ly+self.ymin
             ##find the length scale at the ref point
             Lr = L
             mfxr = self.interp(self.mfx, xr, yr)
@@ -1301,6 +1304,7 @@ class Grid(object):
             ##draw the reference vector
             ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
             ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
+            ax.text(xr, yr-Lr/2, f"{V} {ref_units}", color='k', ha='center', va='center', zorder=8)
 
         self.set_xylim(ax)
 

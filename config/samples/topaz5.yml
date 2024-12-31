@@ -223,16 +223,17 @@ localization:
   lookup_table: ''
 
 diag:
-# - method: 'misc.convert_output'
-#   config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-#   model_src: 'topaz.v5'
-#   variables: ['seaice_conc_daily', 'seaice_thick_daily', 'seaice_velocity_daily', 'ocean_temp_daily']
-#   file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+- method: 'misc.convert_output'
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  model_src: 'topaz.v5'
+  variables: ['seaice_conc_daily', 'seaice_thick_daily', 'seaice_velocity_daily', 'ocean_temp_daily']
+  file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
 - method: 'plot.ensemble_states'
-  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_mixl_depth', 'seaice_velocity', 'seaice_conc_ncat', 'seaice_volume_ncat']
-  vmin: [-9,  3.5, -0.1,      0, -0.1, 0, 0]
-  vmax: [20, 37.5,  0.1, 800000,  0.1, 1, 3]
-  cmap: ['cmocean.thermal', 'cmocean.haline', 'cmocean.balance', 'cmocean.dense', 'bwr', 'cmocean.ice', 'cmocean.deep']
+  model_src: 'topaz.v5'
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'ocean_surf_height', 'seaice_velocity', 'seaice_conc', 'seaice_thick', 'atmos_surf_velocity', 'atmos_surf_temp', 'atmos_surf_press', 'atmos_precip']
+  vmin: [-9,  3.5, -0.1,   0, -1, -0.1, 0, 0, -10, -20,  98000,    0]
+  vmax: [20, 37.5,  0.1, 1e7,  1,  0.1, 1, 5,  10,  35, 104500, 2e-6]
+  cmap: ['cmocean.thermal', 'cmocean.haline', 'bwr', 'cmocean.dense', 'cmocean.balance', 'bwr', 'cmocean.ice', 'viridis', 'bwr', 'cmocean.thermal', 'cmocean.dense', 'cmocean.rain']
   fig_size_x: 8
   fig_size_y: 8
   land_color: 'gray'
