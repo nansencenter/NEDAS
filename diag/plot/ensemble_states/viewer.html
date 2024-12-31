@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ensemble States Viewer</title>
+    <style>
+        body {
+            background-color: #fff;
+        }
+        .container {
+            width: 100%;
+            overflow: hidden;
+            text-align: center;
+        }
+        .image-container {
+            height: 600px;
+            width: 800px;
+            overflow: hidden;
+            margin: 0 auto 20px auto;
+            display: flex;
+            border: 1px solid #ccc;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+            margin: auto;
+        }
+        .dropdown-container {
+            width: 100%;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        .dropdown-container select {
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="image-container">
+            <img name="plot" src="" alt="plot shown here" />
+        </div>
+        <div class="dropdown-container">
+            <label for="variable">variable:</label>
+            <select id="variable" onchange="updateLevels()">
+            </select>
+            <label for="level">level:</label>
+            <select id="level" onchange="updateImage()">
+            </select>
+            <label for="time">time:</label>
+            <select id="time" onchange="updateImage()">
+            </select>
+            <label for="member">member:</label>
+            <select id="member" onchange="updateImage()">
+            </select>
+        </div>
+    </div>
+
+    <script>
+        // Mapping of variables to available levels
+        const levelsByVariable = { LEVELS_BY_VARIABLE };
+        const members = MEMBERS;
+        const times = TIMES;
+
+        function updateVariables() {
+            const variableDropdown = document.getElementById("variable");
+
+            // Clear existing options
+            variableDropdown.innerHTML = "";
+
+            // Populate dropdown with new options
+            Object.keys(levelsByVariable).forEach(variable => {
+                const option = document.createElement("option");
+                option.value = variable;
+                option.textContent = variable;
+                variableDropdown.appendChild(option);
+            });
+            updateLevels();
+        }
+
+        function updateLevels() {
+            const variable = document.getElementById("variable").value;
+            const levelDropdown = document.getElementById("level");
+            const levels = levelsByVariable[variable] || [];
+
+            // Clear existing options
+            levelDropdown.innerHTML = "";
+
+            // Populate dropdown with new options
+            levels.forEach(level => {
+                const option = document.createElement("option");
+                option.value = level;
+                option.textContent = level;
+                levelDropdown.appendChild(option);
+            });
+            updateImage();
+        }
+
+        function updateTimes() {
+            const timeSelect = document.getElementById("time");
+
+            // Clear existing options
+            timeSelect.innerHTML = '';
+
+            // Populate new options
+            times.forEach(time => {
+                const option = document.createElement("option");
+                option.value = time;
+                option.text = time;
+                timeSelect.appendChild(option);
+            });
+
+            // Select the first option by default
+            timeSelect.selectedIndex = 0;
+            updateImage();
+        }
+
+        function updateMembers() {
+            const memberSelect = document.getElementById("member");
+
+            // Clear existing options
+            memberSelect.innerHTML = '';
+
+            // Populate new options
+            members.forEach(member => {
+                const option = document.createElement("option");
+                option.value = member;
+                option.text = member;
+                memberSelect.appendChild(option);
+            });
+
+            // Select the first option by default
+            memberSelect.selectedIndex = 0;
+            updateImage();
+        }
+
+        // Function to update the image dynamically (stub for now)
+        function updateImage() {
+            const variable = document.getElementById("variable").value;
+            const level = document.getElementById("level").value;
+            const time = document.getElementById("time").value;
+            const member = document.getElementById("member").value;
+            const file = variable+"_k"+level+"_"+time+"_mem"+member+".png";
+            document.getElementsByName("plot")[0].src = file;
+            document.getElementsByName("plot")[0].alt = file;
+        }
+
+        // Function to handle shortcuts (optional)
+        function handleKeyShortcut(event) {
+            const key = event.key;
+
+            // w/s keys go through levels
+            const variable = document.getElementById("variable").value;
+            const levels = levelsByVariable[variable];
+            const currentLevel = parseInt(document.getElementById("level").value);
+            const currentLevelIndex = levels.indexOf(currentLevel);
+            if (key === 'PageUp') {
+                if(currentLevelIndex < levels.length - 1) {
+                    document.getElementById("level").value = levels[currentLevelIndex + 1];
+                }
+                else {
+                    document.getElementById("level").value = levels[0];
+                }
+            }
+            if (key === 'PageDown') {
+                if (currentLevelIndex > 0) {
+                    document.getElementById("level").value = levels[currentLevelIndex - 1];
+                }
+                else {
+                    document.getElementById("level").value = levels[levels.length - 1];
+                }
+            }
+
+            // a/d keys go through time
+            const currentTime = document.getElementById("time").value;
+            const currentTimeIndex = times.indexOf(currentTime);
+            if (key === 'ArrowRight') {
+                if (currentTimeIndex < times.length - 1) {
+                    document.getElementById("time").value = times[currentTimeIndex + 1];
+                }
+                else {
+                    document.getElementById("time").value = times[0];
+                }
+            }
+            if (key === 'ArrowLeft') {
+                if (currentTimeIndex > 0) {
+                    document.getElementById("time").value = times[currentTimeIndex - 1];
+                }
+                else {
+                    document.getElementById("time").value = times[times.length - 1];
+                }
+            }
+
+            // q/e keys go through members
+            const currentMember = document.getElementById("member").value;
+            const currentMemberIndex = members.indexOf(currentMember);
+            if (key === 'ArrowUp') {
+                if (currentMemberIndex < members.length - 1) {
+                    document.getElementById("member").value = members[currentMemberIndex + 1];
+                }
+                else {
+                    document.getElementById("member").value = members[0];
+                }
+            }
+            if (key === 'ArrowDown') {
+                if (currentMemberIndex > 0) {
+                    document.getElementById("member").value = members[currentMemberIndex - 1];
+                }
+                else {
+                    document.getElementById("member").value = members[members.length - 1];
+                }
+            }
+            updateImage();
+        }
+
+        // Function to handle scroll on dropdown menus
+        function handleScroll(event) {
+            const selectElement = event.target;
+            const options = Array.from(selectElement.options);
+            const currentIndex = selectElement.selectedIndex;
+
+            if (event.deltaY < 0 && currentIndex > 0) {
+                // Scroll up
+                selectElement.selectedIndex = currentIndex - 1;
+                selectElement.dispatchEvent(new Event('change'));
+            } else if (event.deltaY > 0 && currentIndex < options.length - 1) {
+                // Scroll down
+                selectElement.selectedIndex = currentIndex + 1;
+                selectElement.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Function to blur dropdown menus after selection
+        function blurOnChange(event) {
+            event.target.blur();
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            updateVariables(); // Set initial variables
+            updateLevels(); // Set initial levels based on the first variable
+            updateTimes(); // Set initial times
+            updateMembers(); // Set initial members
+
+            document.body.onkeydown = handleKeyShortcut;
+
+            // Add scroll event listeners to dropdown menus
+            document.getElementById("variable").addEventListener("wheel", handleScroll);
+            document.getElementById("level").addEventListener("wheel", handleScroll);
+            document.getElementById("time").addEventListener("wheel", handleScroll);
+            document.getElementById("member").addEventListener("wheel", handleScroll);
+
+            // Add change event listeners to blur dropdown menus after selection
+            document.getElementById("variable").addEventListener("change", blurOnChange);
+            document.getElementById("level").addEventListener("change", blurOnChange);
+            document.getElementById("time").addEventListener("change", blurOnChange);
+            document.getElementById("member").addEventListener("change", blurOnChange);
+
+        });
+    </script>
+</body>
+</html>
