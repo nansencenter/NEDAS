@@ -758,6 +758,9 @@ class ABFileForcing(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
+        ##tolerance for max dist is 1 day
+        if numpy.min(numpy.abs(dist)) > 1.0 :
+            raise RuntimeError("forcing field %s not found at dtime1=%f"%(field,dtime1))
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 
@@ -1103,6 +1106,9 @@ class ABFileRelaxZ(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
+        ##tolerance for max dist is 1 day
+        if numpy.min(numpy.abs(dist)) > 1.0 :
+            raise RuntimeError("relax field %s not found at dtime1=%f"%(field,dtime1))
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 
