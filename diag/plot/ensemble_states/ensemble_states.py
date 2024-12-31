@@ -47,7 +47,12 @@ def run(c, **kwargs) -> None:
     vname = kwargs['vname']
     vmin = kwargs['vmin']
     vmax = kwargs['vmax']
-    cmap = kwargs['cmap']
+
+    if kwargs['cmap'].split('.')[0] == 'cmocean':
+        import cmocean
+        cmap = getattr(cmocean.cm, kwargs['cmap'].split('.')[-1])
+    else:
+        cmap = kwargs['cmap']
 
     member = kwargs['member']
     k = kwargs['k']
@@ -76,6 +81,7 @@ def run(c, **kwargs) -> None:
     #     raise ValueError("Error: record id not found for variable {vname} in {binfile}")
     # var = read_field(binfile, info, c.mask, member, rec_id)
     # grid = c.grid
+    # mask = c.mask
 
     ##read the field from model restart files
     model_src = None
@@ -88,16 +94,24 @@ def run(c, **kwargs) -> None:
     path = forecast_dir(c, c.time, model_src)
     var = model.read_var(path=path, name=vname, k=k, member=member, time=time)
     grid = model.grid
+    mask = model.mask
+    
+    rec = model.variables[vname]
 
     ##plot the field
     fig, ax = plt.subplots(1, 1, figsize=figsize)
-    if model.variables[vname]['is_vector']:
-        grid.plot_vectors(ax, var)
+    if rec['is_vector']:
+        grid.plot_vectors(ax, var, V=vmax, showref=True, ref_xy=(6e6, 6e6))
+        ax.text(6e6, 5.7e6, f"{vmax} {rec['units']}", fontsize=12, color='k', ha='center', va='center', zorder=10)
     else:
+        var[mask] = np.nan
         im = grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
-        plt.colorbar(im, fraction=0.025, pad=0.015)
+        cbar = plt.colorbar(im, fraction=0.025, pad=0.015)
+        cbar.ax.set_title(rec['units'], fontsize=12, loc='center', pad=10)
     grid.plot_land(ax, color=landcolor)
-    plt.title(f"{vname}, level {k}, {time}, member {member+1}")
+    plt.title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=15)
+    plt.xlabel('x (m)', fontsize=12)
+    plt.ylabel('y (m)', fontsize=12)
     plt.savefig(figfile)
     plt.close()
 
