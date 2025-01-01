@@ -367,7 +367,7 @@ class Topaz5Model(ModelConfig):
         sla = ssh - self.meanssh
         sla[self.mask] = np.nan
         return sla
-    
+
     def get_ocean_surf_temp(self, **kwargs):
         #just return first level ocean_temp
         return self.read_var(**{**kwargs, 'name':'ocean_temp', 'k':1})
@@ -601,12 +601,20 @@ class Topaz5Model(ModelConfig):
         shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
         shell_cmd += "cd "+run_dir+"; "             ##enter run directory
         shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
-        run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                walltime=self.walltime, **kwargs)
 
-        ##check output
-        watch_log(log_file, 'Exiting hycom_cice')
+        ##give it 3 tries
+        run_success = False
+        for i in range(3):
+            run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
+                    nproc=self.nproc, offset=task_id*self.nproc_per_run,
+                    walltime=self.walltime, **kwargs)
+
+            ##check output
+            if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
+                run_success = True
+                break
+
+        assert run_success, f"model run failed in {run_dir}"
 
         ##move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_0000')
