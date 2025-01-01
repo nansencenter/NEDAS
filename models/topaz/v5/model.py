@@ -605,16 +605,17 @@ class Topaz5Model(ModelConfig):
         ##give it 3 tries
         run_success = False
         for i in range(3):
-            run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                    nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                    walltime=self.walltime, **kwargs)
-
+            try:
+                run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
+                        nproc=self.nproc, offset=task_id*self.nproc_per_run,
+                        walltime=self.walltime, **kwargs)
+            except RuntimeError as e:
+                continue
             ##check output
             if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
                 run_success = True
                 break
-
-        assert run_success, f"model run failed in {run_dir}"
+        assert run_success, f"model run failed after 3 tries, check in {run_dir}"
 
         ##move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_0000')
