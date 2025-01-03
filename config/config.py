@@ -6,7 +6,7 @@ import importlib
 from pyproj import Proj
 from grid import Grid
 from utils.parallel import Comm
-from utils.conversion import s2t, t2s
+from utils.conversion import s2t, t2s, dt1h
 from .parse_config import parse_config
 
 class Config(object):
@@ -44,6 +44,11 @@ class Config(object):
         ##convert string to datetime obj
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
             setattr(self, key, s2t(getattr(self, key)))
+
+        ##make sure prev and next time is correct
+        if self.time > self.time_start:
+            self.prev_time = self.time - self.cycle_period * dt1h
+        self.next_time = self.time + self.cycle_period * dt1h
 
     def set_comm(self):
         ##initialize mpi communicator
