@@ -8,17 +8,6 @@ from models.topaz.time_format import dayfor
 from models.topaz.v5 import Model
 from dataset.ecmwf.forecast import Dataset
 
-variables = {
-    'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'is_vector':True, 'units':'m/s'},
-    'atmos_surf_temp':     {'name':'airtmp', 'is_vector':False, 'units':'C'},
-    'atmos_surf_dewpoint': {'name':'dewpt', 'is_vector':False, 'units':'K'},
-    'atmos_surf_press':    {'name':'mslprs', 'is_vector':False, 'units':'Pa'},
-    'atmos_precip':        {'name':'precip', 'is_vector':False, 'units':'m/s'},
-    'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
-    'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
-    'atmos_surf_vapor_mix': {'name':'vapmix', 'is_vector':False, 'units':'kg/kg'},
-    }
-
 ##default output path
 forcing_path = "/cluster/work/users/yingyue/data/ecmwf_fcsts"
 
@@ -72,10 +61,11 @@ if __name__ == '__main__':
     ecmwf = Dataset(time_start=time_start)
     dt = ecmwf.dt_hours
     topaz = Model()
+    variables = topaz.atmos_forcing_variables
 
     file_list = []
     f = {}
-    for name in [name for r in variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]:
+    for name in topaz.force_synoptic_names:
         f[name] = None
 
     t = time_start
@@ -85,7 +75,7 @@ if __name__ == '__main__':
             print(f"\nprocess forcing variable '{varname}' at {t} for member {member}")
 
             ecmwf.read_grid(name=varname, time=t)
-            var = ecmwf.read_var(name=varname, member=member, time=t)
+            var = ecmwf.read_var(name=varname, member=member, time=t, units=rec['units'])
 
             print("convert to topaz grid")
             ecmwf.grid.set_destination_grid(topaz.grid)
@@ -106,6 +96,6 @@ if __name__ == '__main__':
 
         t += dt * timedelta(hours=1)
 
-    for name in [name for r in variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]:
+    for name in topaz.force_synoptic_names:
         if f[name] is not None:
             f[name].close()
