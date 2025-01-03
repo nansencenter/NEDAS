@@ -9,13 +9,14 @@ from models.topaz.v5 import Model
 from dataset.ecmwf.forecast import Dataset
 
 variables = {
-    'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'is_vector':True, 'units':'m/s'},
-    'atmos_surf_temp':     {'name':'airtmp', 'is_vector':False, 'units':'C'},
-    'atmos_surf_dewpoint': {'name':'dewpt', 'is_vector':False, 'units':'K'},
-    'atmos_surf_press':    {'name':'mslprs', 'is_vector':False, 'units':'Pa'},
-    'atmos_precip':        {'name':'precip', 'is_vector':False, 'units':'m/s'},
-    'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
-    'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
+    # 'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'is_vector':True, 'units':'m/s'},
+    # 'atmos_surf_temp':     {'name':'airtmp', 'is_vector':False, 'units':'C'},
+    # 'atmos_surf_dewpoint': {'name':'dewpt', 'is_vector':False, 'units':'K'},
+    # 'atmos_surf_press':    {'name':'mslprs', 'is_vector':False, 'units':'Pa'},
+    # 'atmos_precip':        {'name':'precip', 'is_vector':False, 'units':'m/s'},
+    # 'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
+    # 'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
+    'atmos_surf_vapor_mix': {'name':'vapmix', 'is_vector':False, 'units':'kg/kg'},
     }
 
 ##default output path
@@ -105,6 +106,6 @@ if __name__ == '__main__':
 
         t += dt * timedelta(hours=1)
 
-    for name in variables.keys():
+    for name in [name for r in variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]:
         if f[name] is not None:
             f[name].close()

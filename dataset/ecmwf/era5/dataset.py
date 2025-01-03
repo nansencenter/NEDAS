@@ -7,6 +7,7 @@ import netCDF4
 from grid import Grid
 from pyproj import Proj
 from utils.conversion import units_convert
+from .. import atmos_utils
 from ...dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
@@ -22,8 +23,9 @@ class Dataset(DatasetConfig):
             'atmos_precip':        {'name':'TP', 'is_vector':False, 'units':'m/s'},
             'atmos_down_longwave': {'name':'STRD', 'is_vector':False, 'units':'W/m2'},
             'atmos_down_shortwave': {'name':'SSRD', 'is_vector':False, 'units':'W/m2'},
+            'atmos_surf_vapor_mix': {'getter':self.get_vapmix, 'is_vector':False, 'units':'kg/kg'},
             }
-        
+
         self.grid = None
 
     ###format filename
@@ -72,30 +74,40 @@ class Dataset(DatasetConfig):
         if time is None:
             t_index = 0
 
-        files = self.filename(**kwargs)
-        if rec['is_vector']:
-            var = []
-            for i,file in enumerate(files):
-                with netCDF4.Dataset(file) as f:
+        if 'name' in rec:
+            files = self.filename(**kwargs)
+            if rec['is_vector']:
+                var = []
+                for i,file in enumerate(files):
+                    with netCDF4.Dataset(file) as f:
+                        t_in_file = f['time'][:].data
+                        t_index = self.find_time_index(t_in_file, time)
+                        dat = f.variables[rec['name'][i]][t_index, ...]
+                        tmp = dat.data
+                        tmp[dat.mask] = np.nan
+                        var.append(tmp)
+                var = np.array(var)
+            else:
+                with netCDF4.Dataset(files[0]) as f:
                     t_in_file = f['time'][:].data
                     t_index = self.find_time_index(t_in_file, time)
-                    dat = f.variables[rec['name'][i]][t_index, ...]
-                    tmp = dat.data
-                    tmp[dat.mask] = np.nan
-                    var.append(tmp)
-            var = np.array(var)
+                    dat = f.variables[rec['name']][t_index, ...]
+                    var = dat.data
+                    var[dat.mask] = np.nan
+            ##convert units if necessary
+            if rec['name'] in ('TP', 'STRD', 'SSRD'):
+                ##need to convert the fluxes to per second units (they are per 6 hours in the dataset)
+                var /= 3600. * 6
+
         else:
-            with netCDF4.Dataset(files[0]) as f:
-                t_in_file = f['time'][:].data
-                t_index = self.find_time_index(t_in_file, time)
-                dat = f.variables[rec['name']][t_index, ...]
-                var = dat.data
-                var[dat.mask] = np.nan
-        ##convert units if necessary
-        if rec['name'] in ('TP', 'STRD', 'SSRD'):
-            ##need to convert the fluxes to per second units (they are per 6 hours in the dataset)
-            var /= 3600. * 6
+            var = rec['getter'](**kwargs)
+
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
-
+    def get_vapmix(self, **kwargs):
+        dewpoint = self.read_var(**{**kwargs, 'name':'atmos_surf_dewpoint', 'units':'K'})
+        e_sat = atmos_utils.satvap(dewpoint)
+        press = self.read_var(**{**kwargs, 'name':'atmos_surf_press', 'units':'Pa'})
+        vapmix = atmos_utils.vapmix(e_sat, press)
+        return vapmix
