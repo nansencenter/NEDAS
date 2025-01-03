@@ -18,7 +18,7 @@ def ensemble_forecast_scheduler(c, model_name):
 
     if not c.job_submit:
         c.job_submit = {}
-        
+
     if c.job_submit.get('run_separate_jobs', False):
         ##all jobs will be submitted to external scheduler's queue
         ##just assign a worker to each ensemble member
