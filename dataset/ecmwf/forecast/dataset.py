@@ -124,5 +124,6 @@ class Dataset(DatasetConfig):
     def get_vapmix(self, **kwargs):
         dewpoint = self.read_var(**{**kwargs, 'name':'atmos_surf_dewpoint', 'units':'K'})
         press = self.read_var(**{**kwargs, 'name':'atmos_surf_press', 'units':'Pa'})
-        vapmix = atmos_utils.vapmix(dewpoint, press)
+        e = atmos_utils.satvap(dewpoint)
+        vapmix = atmos_utils.vapmix(e, press)
         return vapmix
