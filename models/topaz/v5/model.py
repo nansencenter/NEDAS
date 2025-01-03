@@ -627,7 +627,7 @@ class Topaz5Model(ModelConfig):
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             run_command(f"mv {file1} {file2}")
-        tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
+        tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"mv {file1} {file2}")

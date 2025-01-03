@@ -120,7 +120,7 @@ def generate_viewer_html(c, plot_dir, model_src, variables) -> None:
     html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_by_variable)
 
     times = "["
-    for t in np.arange(t2h(c.time_start), t2h(c.time_end), c.cycle_period):
+    for t in np.arange(t2h(c.time_start), t2h(c.time_end), model.output_dt):
         times += f"'{h2t(t):%Y%m%dT%H%M%S}', "
     times += "]"
     html_page = html_page.replace("TIMES", times)

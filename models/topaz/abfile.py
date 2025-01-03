@@ -760,7 +760,7 @@ class ABFileForcing(ABFile) :
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
         ##tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
-            raise RuntimeError("forcing field %s not found at dtime1=%f"%(field,dtime1))
+            raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 
@@ -1108,7 +1108,7 @@ class ABFileRelaxZ(ABFile) :
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
         ##tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
-            raise RuntimeError("relax field %s not found at dtime1=%f"%(field,dtime1))
+            raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 

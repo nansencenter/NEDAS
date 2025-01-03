@@ -9,13 +9,13 @@ from models.topaz.v5 import Model
 from dataset.ecmwf.forecast import Dataset
 
 variables = {
-    # 'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'is_vector':True, 'units':'m/s'},
-    # 'atmos_surf_temp':     {'name':'airtmp', 'is_vector':False, 'units':'C'},
-    # 'atmos_surf_dewpoint': {'name':'dewpt', 'is_vector':False, 'units':'K'},
-    # 'atmos_surf_press':    {'name':'mslprs', 'is_vector':False, 'units':'Pa'},
-    # 'atmos_precip':        {'name':'precip', 'is_vector':False, 'units':'m/s'},
-    # 'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
-    # 'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
+    'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'is_vector':True, 'units':'m/s'},
+    'atmos_surf_temp':     {'name':'airtmp', 'is_vector':False, 'units':'C'},
+    'atmos_surf_dewpoint': {'name':'dewpt', 'is_vector':False, 'units':'K'},
+    'atmos_surf_press':    {'name':'mslprs', 'is_vector':False, 'units':'Pa'},
+    'atmos_precip':        {'name':'precip', 'is_vector':False, 'units':'m/s'},
+    'atmos_down_longwave': {'name':'radflx', 'is_vector':False, 'units':'W/m2'},
+    'atmos_down_shortwave': {'name':'shwflx', 'is_vector':False, 'units':'W/m2'},
     'atmos_surf_vapor_mix': {'name':'vapmix', 'is_vector':False, 'units':'kg/kg'},
     }
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
             var_topaz = ecmwf.grid.convert(var, is_vector=rec['is_vector'])
 
             path = os.path.join(forcing_path, f"{ecmwf.time_start:%Y%m%d%H%M}")
-            forcing_file = topaz.filename(path=path, name=varname, member=member, time=t)
+            forcing_file = topaz.filename(path=path, name=varname, member=member-1, time=t)
             forcing_file_nc = os.path.join(path, f"forcing_mem{member:03d}.nc")
             if rec['is_vector']:
                 for i in range(2):
