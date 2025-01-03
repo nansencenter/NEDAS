@@ -69,7 +69,7 @@ class Topaz5Model(ModelConfig):
             'atmos_precip':        {'name':'precip', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
             'atmos_down_longwave': {'name':'radflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
             'atmos_down_shortwave': {'name':'shwflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
-            'atmos_vapor_mix_ratio': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
+            'atmos_surf_vapor_mix': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
             }
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
@@ -81,14 +81,14 @@ class Topaz5Model(ModelConfig):
             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
- 
+
         self.variables = {**self.restart_variables,
                           **self.iced_variables,
                           **self.iceh_variables,
                           **self.atmos_forcing_variables,
                           **self.diag_variables,
                           **self.archive_variables}
-               
+
         ##model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
@@ -117,7 +117,8 @@ class Topaz5Model(ModelConfig):
             #return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
         elif kwargs['name'] in self.iced_variables:
-            tstr = kwargs['time'].strftime('%Y-%m-%d-00000')
+            t = kwargs['time']
+            tstr = f"{t:%Y-%m-%d}-{t.hour*3600:05}"
             file = 'iced.'+tstr+mstr+'.nc'
 
         elif kwargs['name'] in self.iceh_variables:
@@ -127,11 +128,11 @@ class Topaz5Model(ModelConfig):
         elif kwargs['name'] in self.atmos_forcing_variables:
             file = os.path.join(mstr[1:], 'SCRATCH', 'forcing')
             return os.path.join(kwargs['path'], file)
-        
+
         elif kwargs['name'] in self.archive_variables:
             tstr = kwargs['time'].strftime('%Y_%j_12')  ##archive variables are daily means defined on 12z
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
-        
+
         else:
             raise ValueError(f"filename: ERROR: unknown variable name '{kwargs['name']}'")
 
@@ -139,7 +140,7 @@ class Topaz5Model(ModelConfig):
         fname = os.path.join(path, file)
         if os.path.exists(fname):
             return fname
-        
+
         ##if no corresponding files found under the given path
         ##try to find two layers above for the other cycle time
         dirs = path.split(os.sep)
@@ -449,7 +450,10 @@ class Topaz5Model(ModelConfig):
 
         ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
         for varname in self.force_synoptic_names:
-            forcing_file = os.path.join(self.basedir, 'force', 'synoptic', self.E, varname)
+            # forcing_file = os.path.join(self.basedir, 'force', 'synoptic', self.E, varname)
+            forcing_dir = self.forcing_dir.format(member=kwargs['member']+1)
+            forcing_file = os.path.join(forcing_dir, 'forcing.'+varname)
+
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
             f = ABFileForcing(forcing_file, 'r')
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
@@ -511,7 +515,7 @@ class Topaz5Model(ModelConfig):
             run_command(f"cp -fL {file} {file1}")
             run_command(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
         makedir(os.path.join(run_dir, 'cice'))
-        tstr = time.strftime('%Y-%m-%d-00000')
+        tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
         file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"cp -fL {file} {file1}")
@@ -586,7 +590,7 @@ class Topaz5Model(ModelConfig):
         tstr = time.strftime('%Y_%j_%H_0000')
         for ext in ['.a', '.b']:
             input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
-        tstr = time.strftime('%Y-%m-%d-00000')
+        tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
         for file in input_files:
             if not os.path.exists(file):
@@ -623,7 +627,7 @@ class Topaz5Model(ModelConfig):
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             run_command(f"mv {file1} {file2}")
-        tstr = next_time.strftime('%Y-%m-%d-00000')
+        tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         run_command(f"mv {file1} {file2}")
@@ -649,7 +653,7 @@ class Topaz5Model(ModelConfig):
             tstr = time.strftime('%Y_%j_%H_0000')
             for ext in ['.a', '.b']:
                 input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
-            tstr = time.strftime('%Y-%m-%d-00000')
+            tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
             input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
             for file in input_files:
                 if not os.path.exists(file):
@@ -665,7 +669,6 @@ class Topaz5Model(ModelConfig):
 
         ##check output
         for member in range(nens):
-            
             watch_log(log_file, 'Exiting hycom_cice')
 
             ##move the output restart files to forecast_dir
@@ -674,7 +677,7 @@ class Topaz5Model(ModelConfig):
                 file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
                 file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
                 run_command(f"mv {file1} {file2}")
-            tstr = next_time.strftime('%Y-%m-%d-00000')
+            tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
             file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
             file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
             run_command(f"mv {file1} {file2}")

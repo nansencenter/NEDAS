@@ -4,6 +4,7 @@ import numpy as np
 from grid import Grid
 from pyproj import Proj
 from utils.conversion import units_convert, s2t, dt1h
+from .. import atmos_utils
 from ...dataset_config import DatasetConfig
 
 from dataset.ecmwf.era5 import Dataset
@@ -21,13 +22,14 @@ class Dataset(DatasetConfig):
             'atmos_precip': {'name':"Total precipitation", 'is_vector':False, 'units':'m/s'},
             'atmos_down_longwave': {'name':"Surface long-wave (thermal) radiation downwards", 'is_vector':False, 'units':'W/m2'},
             'atmos_down_shortwave': {'name':"Surface short-wave (solar) radiation downwards", 'is_vector':False, 'units':'W/m2'},
-            }        
+            'atmos_surf_vapor_mix': {'getter':self.get_vapmix, 'is_vector':False, 'units':'kg/kg'},
+            }
         self.files = {}
         self.lookup = {}
         self.grid = None
         if isinstance(self.time_start, str):
             self.time_start = s2t(self.time_start)
-    
+
     ###format filename
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -41,7 +43,7 @@ class Dataset(DatasetConfig):
             print(f"opening file {fname}")
             self.files[fname] = pygrib.open(fname)
             self.get_record_id_lookup(fname)
-            
+
     def close_file(self, fname):
         self.files[fname].close()
 
@@ -63,7 +65,7 @@ class Dataset(DatasetConfig):
             member = grb.perturbationNumber
             key = (variable_name, start_date, forecast_hours, member)
             self.lookup[fname][key] = i+1
-    
+
     def read_data_from_grb(self, fname, time, member, vname, units):
         forecast_hours = int((time - self.time_start) / dt1h)
         ##build search key
@@ -74,7 +76,7 @@ class Dataset(DatasetConfig):
         grb = self.files[fname].message(rec_id)
         var = grb.values
         return var
-    
+
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         name = kwargs['name']
@@ -85,33 +87,42 @@ class Dataset(DatasetConfig):
         assert member is not None, 'please specify which member (member=?) to get'
         rec = self.variables[name]
 
-        fname = self.filename(**kwargs)
-        self.open_file(fname)
+        if 'name' in rec:
+            fname = self.filename(**kwargs)
+            self.open_file(fname)
 
-        if rec['is_vector']:
-            var1 = self.read_data_from_grb(fname, time, member, rec['name'][0], rec['units'])
-            var2 = self.read_data_from_grb(fname, time, member, rec['name'][1], rec['units'])
-            var = np.array([var1, var2])
+            if rec['is_vector']:
+                var1 = self.read_data_from_grb(fname, time, member, rec['name'][0], rec['units'])
+                var2 = self.read_data_from_grb(fname, time, member, rec['name'][1], rec['units'])
+                var = np.array([var1, var2])
+            else:
+                var = self.read_data_from_grb(fname, time, member, rec['name'], rec['units'])
+
+            ##some variables are accumulated over the dt_hours, convert them to fluxes
+            if name in ('atmos_precip', 'atmos_down_shortwave', 'atmos_down_longwave'):
+                if time == self.time_start:
+                    ##first time step is zeros for these variables
+                    ##to ensure continuity in time, get the variable snapshot from ERA5 instead
+                    era5.read_grid(name=name, time=time)
+                    tmp = era5.read_var(name=name, time=time)
+                    ##convert to grid
+                    era5.grid.set_destination_grid(self.grid)
+                    var = era5.grid.convert(tmp)
+                else:
+                    prev_time = time - dt1h * self.dt_hours
+                    var -= self.read_data_from_grb(fname, prev_time, member, rec['name'], rec['units'])
+                    ##need to convert the fluxes to per second units
+                    var /= 3600. * self.dt_hours
+                var[np.where(var<0.)] = 0. ##ensure positive definite
         else:
-            var = self.read_data_from_grb(fname, time, member, rec['name'], rec['units'])
+            var = rec['getter'](**kwargs)
 
         ##convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)
-
-        ##some variables are accumulated over the dt_hours, convert them to fluxes
-        if name in ('atmos_precip', 'atmos_down_shortwave', 'atmos_down_longwave'):
-            if time == self.time_start:
-                ##first time step is zeros for these variables
-                ##to ensure continuity in time, get the variable snapshot from ERA5 instead
-                era5.read_grid(name=name, time=time)
-                tmp = era5.read_var(name=name, time=time)
-                ##convert to grid
-                era5.grid.set_destination_grid(self.grid)
-                var = era5.grid.convert(tmp)
-            else:
-                prev_time = time - dt1h * self.dt_hours
-                var -= self.read_data_from_grb(fname, prev_time, member, name, rec['units'])
-                ##need to convert the fluxes to per second units
-                var /= 3600. * self.dt_hours
-        var[np.where(var<0.)] = 0. ##ensure positive definite
         return var
+
+    def get_vapmix(self, **kwargs):
+        dewpoint = self.read_var(**{**kwargs, 'name':'atmos_surf_dewpoint', 'units':'K'})
+        press = self.read_var(**{**kwargs, 'name':'atmos_surf_press', 'units':'Pa'})
+        vapmix = atmos_utils.vapmix(dewpoint, press)
+        return vapmix
