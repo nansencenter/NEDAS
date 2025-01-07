@@ -350,7 +350,7 @@ class ABFileBathy(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record) 
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def bminmax(self,fieldname) :
@@ -437,7 +437,7 @@ class ABFileRmu(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record)
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def bminmax(self,fieldname) :
@@ -506,7 +506,7 @@ class ABFileGrid(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record) 
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def write_field(self,field,mask,fieldname,fmt="%16.8g") :
@@ -598,7 +598,7 @@ class ABFileArchv(ABFile) :
             w = r.data
             w[r.mask] = numpy.nan
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def write_header(self) :
@@ -904,7 +904,7 @@ class ABFileRestart(ABFile) :
             else:
                 fld[mask] = numpy.nan
         else :
-            fld = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return fld
 
     def overwrite_field(self, field, mask, fieldname, level, tlevel=1) :
@@ -1029,7 +1029,7 @@ class ABFileRelax(ABFile) :
             w = self._filea.read_record(record) 
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} at level {level} month {month} in file {self.basename}")
         return w
 
 class ABFileRelaxZ(ABFile) :
