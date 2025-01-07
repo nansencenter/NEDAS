@@ -32,7 +32,10 @@ def run(c, **kwargs) -> None:
     """
     Run diagnostics: plot the ensemble states
     """
-    plot_dir = os.path.join(c.work_dir, 'plots', 'ensemble_states')
+    if 'plot_dir' in kwargs:
+        plot_dir = kwargs['plot_dir']
+    else:
+        plot_dir = os.path.join(c.work_dir, 'plots', 'ensemble_states')
     makedir(plot_dir)
 
     figsize = (kwargs.get('fig_size_x', 10), kwargs.get('fig_size_y', 10))
@@ -80,26 +83,33 @@ def run(c, **kwargs) -> None:
 
     ##read the field from model restart files
     model = c.model_config[model_src]
-    path = forecast_dir(c, c.time, model_src)
-    var = model.read_var(path=path, name=vname, k=k, member=member, time=time)
+    if 'forecast_dir' in kwargs:
+        fdir = kwargs['forecast_dir'].format(time=c.time)
+    else:
+        fdir = forecast_dir(c, c.time, model_src)
+    var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
     
     rec = model.variables[vname]
 
     ##plot the field
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    if rec['is_vector']:
-        grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec['units'])
-    else:
-        im = grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
-        cbar = plt.colorbar(im, fraction=0.025, pad=0.02)
-        cbar.ax.set_title(rec['units'], loc='center', pad=10)
-    grid.plot_land(ax, color=landcolor)
-    plt.title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=15)
-    plt.xlabel('x (m)', fontsize=12)
-    plt.ylabel('y (m)', fontsize=12)
-    plt.savefig(figfile)
-    plt.close()
+    try:
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        if rec['is_vector']:
+            grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec['units'])
+        else:
+            im = grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
+            cbar = plt.colorbar(im, fraction=0.025, pad=0.02)
+            cbar.ax.set_title(rec['units'], loc='center', pad=10)
+        grid.plot_land(ax, color=landcolor)
+        plt.title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=15)
+        plt.xlabel('x (m)', fontsize=12)
+        plt.ylabel('y (m)', fontsize=12)
+        plt.savefig(figfile)
+        plt.close()
+    except Exception as e:
+        print(f"ERROR: Failed to plot {vname} at level {k} and time {time} for member {member+1}")
+        raise e
 
 def generate_viewer_html(c, plot_dir, model_src, variables) -> None:
     """Generating a html page to help viewing the ensemble state variables"""
