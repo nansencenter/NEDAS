@@ -34,7 +34,7 @@ class Dataset(DatasetConfig):
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         t = self.time_start
-        file = os.path.join(kwargs['path'], f"{t:%Y-%m}", "FORECAST", f"fc_aciceberg_{t:%Y-%m-%d}.grb")
+        file = os.path.join(kwargs['path'], f"{t:%Y-%m}", f"fc_{t:%Y-%m-%d}.grb")
         assert os.path.exists(file), f"file {file} does not exist"
         return file
 

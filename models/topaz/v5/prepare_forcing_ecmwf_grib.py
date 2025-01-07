@@ -48,13 +48,13 @@ def output_ncfile(filename, name, member, t, dt, tstart, var):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('time_start', help="Start time: format 'ccyymmddHHMM'")
-    parser.add_argument('time_end', help="End time: format 'ccyymmddHHMM'")
+    parser.add_argument('forecast_hours', help="Forecast hours")
     parser.add_argument('-m', '--member', default=0, help=f"Ensemble member to be processed (default: 0)")
     parser.add_argument('-o', '--output', default=forcing_path, help=f"Output directory (default: {forcing_path})")
     args = parser.parse_args()
 
     time_start = datetime.strptime(args.time_start, '%Y%m%d%H%M')
-    time_end = datetime.strptime(args.time_end, '%Y%m%d%H%M')
+    time_end = time_start + int(args.forecast_hours) * timedelta(hours=1)
     member = int(args.member)
     forcing_path = args.output
 
@@ -82,8 +82,12 @@ if __name__ == '__main__':
             var_topaz = ecmwf.grid.convert(var, is_vector=rec['is_vector'])
 
             path = os.path.join(forcing_path, f"{ecmwf.time_start:%Y%m%d%H%M}")
-            forcing_file = topaz.filename(path=path, name=varname, member=member-1, time=t)
-            forcing_file_nc = os.path.join(path, f"forcing_mem{member:03d}.nc")
+            if member == 0:
+                forcing_file = topaz.filename(path=path, name=varname, time=t)
+                forcing_file_nc = os.path.join(path, "forcing.nc")
+            else:
+                forcing_file = topaz.filename(path=path, name=varname, member=member-1, time=t)
+                forcing_file_nc = os.path.join(path, f"forcing_mem{member:03d}.nc")
             if rec['is_vector']:
                 for i in range(2):
                     fill_missing(var_topaz[i,...])
