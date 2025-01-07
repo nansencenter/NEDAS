@@ -1,4 +1,5 @@
 import os
+import glob
 from functools import lru_cache
 from datetime import datetime, timedelta
 import numpy as np
@@ -39,7 +40,7 @@ class Topaz5Model(ModelConfig):
             'ocean_velocity_daily': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':levels, 'units':'m/s'},
             'ocean_layer_thick_daily': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'Pa'},
             'ocean_temp_daily': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'C'},
-            'ocean_saln_daily': {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
+            'ocean_saln_daily': {'name':'salin', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
             'ocean_mixl_depth_daily': {'name':'mix_dpth', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'Pa'},
             'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':''},
             'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
@@ -130,7 +131,7 @@ class Topaz5Model(ModelConfig):
             return os.path.join(kwargs['path'], file)
 
         elif kwargs['name'] in self.archive_variables:
-            tstr = kwargs['time'].strftime('%Y_%j_12')  ##archive variables are daily means defined on 12z
+            tstr = kwargs['time'].strftime('%Y_%j_??')  ##archive variables are daily means
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
         else:
@@ -138,8 +139,9 @@ class Topaz5Model(ModelConfig):
 
         path = kwargs['path']
         fname = os.path.join(path, file)
-        if os.path.exists(fname):
-            return fname
+        files = glob.glob(fname)
+        if len(files) > 0:
+            return files[0]
 
         ##if no corresponding files found under the given path
         ##try to find two layers above for the other cycle time
@@ -148,8 +150,9 @@ class Topaz5Model(ModelConfig):
             root = os.sep.join(dirs[:-2])
             for tdir in os.listdir(root):
                 fname = os.path.join(root, tdir, 'topaz.v5', file)
-                if os.path.exists(fname):
-                    return fname
+                files = glob.glob(fname)
+                if len(files) > 0:
+                    return files[0]
         raise FileNotFoundError(f"filename: ERROR: could not find {file} in {path} or its parent directories")
 
     def read_grid(self, **kwargs):
@@ -450,10 +453,7 @@ class Topaz5Model(ModelConfig):
 
         ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
         for varname in self.force_synoptic_names:
-            # forcing_file = os.path.join(self.basedir, 'force', 'synoptic', self.E, varname)
-            forcing_dir = self.forcing_dir.format(member=kwargs['member']+1)
-            forcing_file = os.path.join(forcing_dir, 'forcing.'+varname)
-
+            forcing_file = self.forcing_file.format(member=kwargs['member']+1, time=time, name=varname)
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
             f = ABFileForcing(forcing_file, 'r')
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
