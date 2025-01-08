@@ -12,7 +12,7 @@ class Dataset(DatasetConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'%'}, }
+        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1}, }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))

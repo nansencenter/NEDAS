@@ -14,11 +14,11 @@ class Dataset(DatasetConfig):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.variables = {
-            'ocean_temp': {'name':'TEM', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'ocean_temp': {'name':'TEM', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'C'},
             'ocean_saln': {'name':'SAL', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'psu'},
-            'ocean_surf_temp': {'name':'SST', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'ocean_surf_temp': {'name':'SST', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'C'},
             'ocean_surf_height_anomaly': {'name':'TSLA', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
-            'seaice_conc': {'name':'ICEC', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'%'},
+            'seaice_conc': {'name':'ICEC', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1},
             'seaice_thick': {'name':'HICE', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
             'seaice_drift': {'name':'IDRFT', 'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km'},
             }
