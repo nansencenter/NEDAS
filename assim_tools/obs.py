@@ -495,6 +495,7 @@ def state_to_obs(c, **kwargs):
                 inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
                                                obs_z <= np.maximum(z_vp, z_vc)) )
                 ##there can be collapsed layers if z_vc=z_vp
+                ##TODO: still got some warnings here
                 with np.errstate(divide='ignore'):
                     vi = np.where(z_vp==z_vc,
                                   vp,   ##for collapsed layers just use previous value
@@ -583,6 +584,9 @@ def prepare_obs(c):
     ##additional output for debugging
     if c.debug:
         if c.pid == 0:
+            np.save(os.path.join(c.analysis_dir, 'rec_list.npy'), c.rec_list)
+            np.save(os.path.join(c.analysis_dir, 'mem_list.npy'), c.mem_list)
+            np.save(os.path.join(c.analysis_dir, 'obs_rec_list.npy'), c.obs_rec_list)
             np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
             np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
             np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)

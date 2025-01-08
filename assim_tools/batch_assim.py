@@ -4,14 +4,23 @@ import numpy as np
 from utils.parallel import by_rank, bcast_by_root
 from utils.njit import njit
 from utils.progress import print_with_cache, progress_bar
-from .obs import global_obs_list
-# from .covariance import covariance_model
 from .packing import pack_state_data, unpack_state_data, pack_obs_data, unpack_obs_data
-from .localization import local_factor
+from .covariance import ensemble_covariance
+from .localization import local_factor_distance_based
 
-###functions for the batch assimilation mode:
 def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
-    """batch assimilation solves the matrix version EnKF analysis for each local state, the local states in each partition are processed in parallel"""
+    """Batch assimilation solves the matrix version EnKF analysis for each local state,
+    the local states in each partition are processed in parallel
+    Parameters:
+    - c: config object
+    - state_prior: np.array[nens, nfld, nloc]
+    - z_state: np.array[nfld, nloc]
+    - lobs: list of obs objects
+    - lobs_prior: list of obs objects
+    Returns:
+    - state_post: np.array[nens, nfld, nloc], updated version of state_prior
+    - lobs_post: list of obs objects, updated version of lobs_prior
+    """
     ##pid with the most obs in its task list with show progress message
     obs_count = np.array([np.sum([len(c.obs_inds[r][p])
                                   for r in c.obs_info['records'].keys()
@@ -44,72 +53,112 @@ def batch_assim(c, state_prior, z_state, lobs, lobs_prior):
 
         obs_data = pack_obs_data(c, par_id, lobs, lobs_prior)
         nlobs = obs_data['x'].size
-        ##if there is no obs to assimilate, update progress message and skip
+        ##if there is no obs to assimilate, update progress message and skip that partition
         if nlobs == 0:
             task += nloc
             if c.debug:
-                print(f"PID {c.pid:4} processed partition {par_id:7} (empty)", flush=True)
+                print(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)", flush=True)
             else:
                 print_1p(progress_bar(task-1, ntask))
             continue
 
         ##loop through the unmasked grid points in the partition
         for loc_id in range(nloc):
+            ##state variable metadata for this location
+            state_var_id = state_data['var_id']  ##variable id for each field (nfld)
+            state_x = state_data['x'][loc_id]
+            state_y = state_data['y'][loc_id]
+            state_z = state_data['z'][:, loc_id]
+            state_t = state_data['t'][:]
+
+            ##filter out obs outside the hroi in each direction first (using L1 norm to speed up)
+            obs_rec_id = obs_data['obs_rec_id']
+            hroi = obs_data['hroi'][obs_rec_id]
+            hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
+            ind = np.where(hdist<=hroi)[0]
+
+            ##compute horizontal localization factor (using L2 norm for distance)
+            obs_rec_id = obs_data['obs_rec_id'][ind]
+            hroi = obs_data['hroi'][obs_rec_id]
+            hdist = c.grid.distance(state_x, obs_data['x'][ind], state_y, obs_data['y'][ind], p=2)
+            hlfactor = local_factor_distance_based(hdist, hroi, c.localization['htype'])
+            ind1 = np.where(hlfactor>0)[0]
+            ind = ind[ind1]
+            hlfactor = hlfactor[ind1]
+
+            if len(ind1) == 0:
+                if c.debug:
+                    print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
+                else:
+                    print_1p(progress_bar(task, ntask))
+                continue ##if all obs has no impact on state, just skip to next location
+            
+            ##vertical, time and cross-variable (impact_on_state) localization
+            obs = obs_data['obs'][ind]
+            obs_err = obs_data['err_std'][ind]
+            obs_z = obs_data['z'][ind]
+            obs_t = obs_data['t'][ind]
+            obs_rec_id = obs_data['obs_rec_id'][ind]
+            vroi = obs_data['vroi'][obs_rec_id]
+            troi = obs_data['troi'][obs_rec_id]
+            impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
+
+            ##covariance between state and obs
+            # stateV, obsV, corr = covariance(c.covariance, state_prior, obs_prior, state_var_id, obs_rec_id, h_dist, v_dist, t_dist)
+
+            local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+                           obs, obs_err, hlfactor,
+                           state_z, obs_z, vroi, c.localization['vtype'],
+                           state_t, obs_t, troi, c.localization['ttype'],
+                           impact_on_state, c.filter_type)
+
+            ##add progress message
             if c.debug:
                 print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
             else:
                 print_1p(progress_bar(task, ntask))
             task += 1
 
-            local_analysis(c, loc_id, state_data, obs_data)
-
         unpack_state_data(c, par_id, state_prior, state_data)
     print_1p(' done.\n')
     return state_prior, lobs_prior
 
-def local_analysis(c, loc_id, state_data, obs_data):
+@njit(cache=True)
+def local_analysis(state_prior, obs_prior, obs, obs_err, hlfactor,
+                   state_z, obs_z, vroi, localize_vtype,
+                   state_t, obs_t, troi, localize_ttype,
+                   impact_on_state, filter_type) ->None:
     """perform local analysis for one location in the analysis grid partition"""
-    nens, nfld = state_data['state_prior'][..., loc_id].shape
+    nens, nfld = state_prior.shape
+    nens_obs, nlobs = obs_prior.shape
+    if nens_obs != nens:
+        raise ValueError('Error: number of ensemble members in state and obs do not match!')
 
-    obs_rec_id = obs_data['obs_rec_id']
-
-    ##horizontal localization
-    h_dist = c.grid.distance(state_data['x'][loc_id], obs_data['x'], state_data['y'][loc_id], obs_data['y'], p=1)
-    hroi_ = obs_data['hroi'][obs_rec_id]
-    h_lfactor = local_factor(h_dist, hroi_, c.localization['htype'])
-    if (h_lfactor==0).all():
-        return  ##if the state is outside of hroi of all local obs, skip
-
-    lfactor_old = np.zeros(obs_data['x'].size)
+    lfactor_old = np.zeros(nlobs)
     weights_old = np.eye(nens)
 
     ##loop through the field records
     for n in range(nfld):
 
         ##vertical localization
-        v_dist = np.abs(obs_data['z'] - state_data['z'][n, loc_id])
-        vroi_ = obs_data['vroi'][obs_rec_id]
-        v_lfactor = local_factor(v_dist, vroi_, c.localization['vtype'])
-        if (v_lfactor==0).all():
+        vdist = np.abs(obs_z - state_z[n])
+        vlfactor = local_factor_distance_based(vdist, vroi, localize_vtype)
+        if (vlfactor==0).all():
             continue  ##the state is outside of vroi of all obs, skip
 
         ##temporal localization
-        t_dist = np.abs(obs_data['t'] - state_data['t'][n])
-        troi_ = obs_data['troi'][obs_rec_id]
-        t_lfactor = local_factor(t_dist, troi_, c.localization['ttype'])
-        if (t_lfactor==0).all():
+        tdist = np.abs(obs_t - state_t[n])
+        tlfactor = local_factor_distance_based(tdist, troi, localize_ttype)
+        if (tlfactor==0).all():
             continue  ##the state is outside of troi of all obs, skip
 
-        var_id = state_data['var_id'][n]
-        impact_on_state = obs_data['impact_on_state'][:,var_id][obs_rec_id]
-
         ##total lfactor
-        lfactor = h_lfactor * v_lfactor * t_lfactor * impact_on_state
+        lfactor =  hlfactor * vlfactor * tlfactor * impact_on_state[:, n]
         if (lfactor==0).all():
             continue
 
         ##if prior spread is zero, don't update
-        if np.std(state_data['state_prior'][:, n]) == 0:
+        if np.std(state_prior[:, n]) == 0:
             continue
 
         ##only need to assimilate obs with lfactor>0
@@ -125,19 +174,17 @@ def local_analysis(c, loc_id, state_data, obs_data):
 
         ##limit number of local obs if needed
         ###e.g. topaz only keep the first 3000 obs with highest lfactor
-        nlobs_max = None  ##3000
+        nlobs_max = 3000
         ind = ind[:nlobs_max]
 
         ##use cached weight if no localization is applied, to avoid repeated computation
         if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
             weights = weights_old
         else:
-            weights = ensemble_transform_weights(obs_data['obs'][ind], obs_data['err_std'][ind],
-                                                 obs_data['obs_prior'][:, ind],
-                                                 c.filter_type, lfactor[ind])
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], filter_type, lfactor[ind])
 
         ##perform local analysis and update the ensemble state
-        state_data['state_prior'][:, n, loc_id] = apply_ensemble_transform(state_data['state_prior'][:, n, loc_id], weights)
+        state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
 
         lfactor_old = lfactor[ind]
         weights_old = weights
