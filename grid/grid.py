@@ -1107,13 +1107,16 @@ class Grid(object):
           The minimum and maximum value range for the colormap, if not specified (None)
           the np.min, np.max of the input fld will be used.
 
-        - cmap: matplotlib colormap, optional
+        - cmap: matplotlib colormap, or str, optional
           Colormap used in the plot, default is 'viridis'
         """
         if vmin is None:
             vmin = np.nanmin(fld)
         if vmax is None:
             vmax = np.nanmax(fld)
+
+        if isinstance(cmap, str):
+            cmap = colormaps[cmap]
 
         if self.regular:
             x = self.x
@@ -1147,7 +1150,9 @@ class Grid(object):
         v = np.array(fld)
         vbound = np.maximum(np.minimum(v, vmax), vmin)
 
-        cmap = np.array([colormaps[cmap](x)[0:3] for x in np.linspace(0, 1, nlevel+1)])
+        if isinstance(cmap, str):
+            cmap = colormaps[cmap]
+        cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevel+1)])
         cind = ((vbound - vmin) / dv).astype(int)
 
         ax.scatter(self.x, self.y, markersize, color=cmap[cind], **kwargs)
