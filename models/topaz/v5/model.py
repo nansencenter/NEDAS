@@ -32,8 +32,8 @@ class Topaz5Model(ModelConfig):
             'ocean_b_press':     {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
             'ocean_mixl_depth':  {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
             'ocean_bot_press':   {'name':'pbot', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':''},
-            'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':''},
+            'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
+            'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
             }
 
         self.archive_variables = {
@@ -42,20 +42,20 @@ class Topaz5Model(ModelConfig):
             'ocean_temp_daily': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'C'},
             'ocean_saln_daily': {'name':'salin', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
             'ocean_mixl_depth_daily': {'name':'mix_dpth', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':''},
+            'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'?'},
             'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             }
 
         self.iced_variables = {
             'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':''},
+            'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':1},
             'seaice_volume_ncat':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
             'snow_volume_ncat':  {'name':'vsnon', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
             }
 
         self.iceh_variables = {
             'seaice_velocity_daily': {'name':('uvel_d', 'vvel_d'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':''},
+            'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
             'seaice_thick_daily': {'name':'hi_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
             'seaice_surf_temp_daily': {'name':'Tsfc_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
             'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'psu'},
@@ -77,8 +77,8 @@ class Topaz5Model(ModelConfig):
         self.diag_variables = {
             'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'K'},
-            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':''},
+            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'C'},
+            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':1},
             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }

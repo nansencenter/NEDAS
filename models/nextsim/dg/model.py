@@ -14,7 +14,7 @@ class Model(ModelConfig):
 
         level_sfc = np.array([0])
         self.seaice_variables = {  ##TODO: check units here and any missing variables
-             'seaice_conc': {'name':'cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'%'},
+             'seaice_conc': {'name':'cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
              'seaice_thick': {'name':'hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'snow_thick': {'name':'hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'seaice_temp': {'name':'tice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'K'},

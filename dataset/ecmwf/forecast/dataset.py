@@ -18,7 +18,7 @@ class Dataset(DatasetConfig):
             'atmos_surf_temp': {'name':"2 metre temperature", 'is_vector':False, 'units':'K'},
             'atmos_surf_dewpoint':  {'name':"2 metre dewpoint temperature", 'is_vector':False, 'units':'K'},
             'atmos_surf_press': {'name':"Mean sea level pressure", 'is_vector':False, 'units':'Pa'},
-            'atmos_cloud_cover':  {'name':"Total cloud cover", 'is_vector':False, 'units':'%'},
+            'atmos_cloud_cover':  {'name':"Total cloud cover", 'is_vector':False, 'units':1},
             'atmos_precip': {'name':"Total precipitation", 'is_vector':False, 'units':'m/s'},
             'atmos_down_longwave': {'name':"Surface long-wave (thermal) radiation downwards", 'is_vector':False, 'units':'W/m2'},
             'atmos_down_shortwave': {'name':"Surface short-wave (solar) radiation downwards", 'is_vector':False, 'units':'W/m2'},
