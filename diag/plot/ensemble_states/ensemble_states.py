@@ -23,8 +23,9 @@ def get_task_list(c, **kwargs) -> list:
         for i, vname in enumerate(variables):
             model = c.model_config[model_src]
             levels = model.variables[vname]['levels']
+            dt = model.variables[vname]['dt']
             for k in levels:
-                for t in np.arange(t2h(c.time), t2h(c.next_time), model.output_dt):
+                for t in np.arange(t2h(c.time), t2h(c.next_time), dt):
                     tasks.append({**kwargs, 'time':h2t(t), 'member':member, 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'cmap':cmap[i]})
     return tasks
 
@@ -89,7 +90,7 @@ def run(c, **kwargs) -> None:
         fdir = forecast_dir(c, c.time, model_src)
     var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
-    
+
     rec = model.variables[vname]
 
     ##plot the field
@@ -121,19 +122,19 @@ def generate_viewer_html(c, plot_dir, model_src, variables) -> None:
 
     ##replace the placeholder with the list of variables,levels,times,members
     levels_by_variable = ""
+    times_by_variable = ""
     for vname in variables:
         levels_by_variable += f"{vname}: ["
         model = c.model_config[model_src]
         for level in model.variables[vname]['levels']:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
+        times_by_variable += f"{vname}: ["
+        for t in np.arange(t2h(c.time), t2h(c.next_time), model.variables[vname]['dt']):
+            times_by_variable += f"'{h2t(t):%Y%m%dT%H%M%S}', "
+        times_by_variable += "], \n"
     html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_by_variable)
-
-    times = "["
-    for t in np.arange(t2h(c.time_start), t2h(c.time_end), model.output_dt):
-        times += f"'{h2t(t):%Y%m%dT%H%M%S}', "
-    times += "]"
-    html_page = html_page.replace("TIMES", times)
+    html_page = html_page.replace("TIMES_BY_VARIABLE", times_by_variable)
 
     members = "["
     for m in range(c.nens):

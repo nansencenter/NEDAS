@@ -42,7 +42,7 @@
         </div>
         <div class="dropdown-container">
             <label for="variable">variable:</label>
-            <select id="variable" onchange="updateLevels()"></select>
+            <select id="variable" onchange="updateLevels(); updateTimes(); updateImage()"></select>
             <span title="Scroll through, or use PageUp, PageDown to change level">
                 <label for="level">level:</label>
                 <select id="level" onchange="updateImage()"></select>
@@ -61,45 +61,47 @@
     <script>
         // Mapping of variables to available levels
         const levelsByVariable = { LEVELS_BY_VARIABLE };
+        const timesByVariable = { TIMES_BY_VARIABLE };
         const members = MEMBERS;
-        const times = TIMES;
 
         function updateVariables() {
-            const variableDropdown = document.getElementById("variable");
+            const variableSelect = document.getElementById("variable");
 
             // Clear existing options
-            variableDropdown.innerHTML = "";
+            variableSelect.innerHTML = "";
 
             // Populate dropdown with new options
             Object.keys(levelsByVariable).forEach(variable => {
                 const option = document.createElement("option");
                 option.value = variable;
                 option.textContent = variable;
-                variableDropdown.appendChild(option);
+                variableSelect.appendChild(option);
             });
-            updateLevels();
+            variableSelect.selectedIndex = 0;
         }
 
         function updateLevels() {
             const variable = document.getElementById("variable").value;
-            const levelDropdown = document.getElementById("level");
+            const levelSelect = document.getElementById("level");
             const levels = levelsByVariable[variable] || [];
 
             // Clear existing options
-            levelDropdown.innerHTML = "";
+            levelSelect.innerHTML = "";
 
             // Populate dropdown with new options
             levels.forEach(level => {
                 const option = document.createElement("option");
                 option.value = level;
                 option.textContent = level;
-                levelDropdown.appendChild(option);
+                levelSelect.appendChild(option);
             });
-            updateImage();
+            levelSelect.selectedIndex = 0;
         }
 
         function updateTimes() {
+            const variable = document.getElementById("variable").value;
             const timeSelect = document.getElementById("time");
+            const times = timesByVariable[variable] || [];
 
             // Clear existing options
             timeSelect.innerHTML = '';
@@ -111,10 +113,7 @@
                 option.text = time;
                 timeSelect.appendChild(option);
             });
-
-            // Select the first option by default
             timeSelect.selectedIndex = 0;
-            updateImage();
         }
 
         function updateMembers() {
@@ -130,10 +129,7 @@
                 option.text = member;
                 memberSelect.appendChild(option);
             });
-
-            // Select the first option by default
             memberSelect.selectedIndex = 0;
-            updateImage();
         }
 
         // Function to update the image dynamically (stub for now)
@@ -151,7 +147,7 @@
         function handleKeyShortcut(event) {
             const key = event.key;
 
-            // w/s keys go through levels
+            // PageUp PageDown keys go through levels
             const variable = document.getElementById("variable").value;
             const levels = levelsByVariable[variable];
             const currentLevel = parseInt(document.getElementById("level").value);
@@ -173,7 +169,8 @@
                 }
             }
 
-            // a/d keys go through time
+            // Left Right arrow keys go through time
+            const times = timesByVariable[variable];
             const currentTime = document.getElementById("time").value;
             const currentTimeIndex = times.indexOf(currentTime);
             if (key === 'ArrowRight') {
@@ -193,7 +190,7 @@
                 }
             }
 
-            // q/e keys go through members
+            // Up Down arrow keys go through members
             const currentMember = document.getElementById("member").value;
             const currentMemberIndex = members.indexOf(currentMember);
             if (key === 'ArrowUp') {
@@ -231,7 +228,7 @@
                 selectElement.dispatchEvent(new Event('change'));
             }
         }
-        
+
         // Function to blur dropdown menus after selection
         function blurOnChange(event) {
             event.target.blur();
@@ -242,6 +239,7 @@
             updateLevels(); // Set initial levels based on the first variable
             updateTimes(); // Set initial times
             updateMembers(); // Set initial members
+            updateImage();
 
             document.body.onkeydown = handleKeyShortcut;
 
