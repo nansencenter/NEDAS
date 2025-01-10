@@ -485,7 +485,7 @@ def prepare_state(c):
             model.grid.set_destination_grid(c.grid)
 
             ##read field from restart file
-            var = model.read_var(path=path, member=mem_id, comm=c.comm, **rec)
+            var = model.read_var(path=path, member=mem_id, **rec)
             fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
 
             ##misc. transform can be added here
