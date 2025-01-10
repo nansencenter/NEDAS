@@ -89,8 +89,9 @@ def local_factor_distance_based(dist, roi, localize_type='GC'):
     elif 'exp' in ltype:  ##exponential decay
         lfactor = np.exp(-dist/roi)
 
-    ##otherwise set lfactor to 1
-    lfactor[...] = 1.0
+    else:
+        ##otherwise set lfactor to 1
+        lfactor[...] = 1.0
     return lfactor.reshape(shape)
 
 @njit(cache=True)
