@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 from time import sleep
 from utils.conversion import seconds_to_timestr
-from utils.progress import find_keyword_in_file
+from utils.progress import find_keyword_in_file, count_lines_in_file
 from .base import JobSubmitter
 
 class SLURMJobSubmitter(JobSubmitter):
@@ -15,6 +15,9 @@ class SLURMJobSubmitter(JobSubmitter):
         if self.host == 'betzy':
             self.ppn = kwargs.get('ppn', 128)
         self.mem_per_cpu = kwargs.get('mem_per_cpu')
+
+        self.log_file = kwargs.get('log_file', None)
+        self.stagnant_log_timeout = kwargs.get('stagnant_log_timeout', 600)
 
     @property
     def nproc_avail(self):
@@ -94,6 +97,8 @@ class SLURMJobSubmitter(JobSubmitter):
                     break
                         
         else:
+            elapsed_time = 0
+            n0 = 0
             while True:
                 sleep(self.check_dt)
                 p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}'], capture_output=True, text=True)
@@ -104,6 +109,20 @@ class SLURMJobSubmitter(JobSubmitter):
                 if job_status not in ['R', 'PD', 'CG']:
                     ##job not running, pending, or cleaning up
                     raise RuntimeError(f"job {self.job_name} failed with status {job_status}")
+                
+                ##if self.log_file is specified
+                ##monitor it, if it becomes stagnant, kill the job and raise error
+                if self.log_file is None:
+                    continue
+                elapsed_time += self.check_dt
+                n1 = count_lines_in_file(self.log_file)
+                if n1 > n0:
+                    elapsed_time = 0
+                    n0 = n1
+                if elapsed_time > self.stagnant_log_timeout:
+                    subprocess.run(['scancel', str(self.job_id)])
+                    print(self.job_name, 'stagnant', elapsed_time)
+                    raise RuntimeError(f"job {self.job_name} killed: {self.log_file} remain stagnent for {self.stagnant_log_timeout} seconds")
 
         ##check log file and report errors
         if self.use_job_array:
