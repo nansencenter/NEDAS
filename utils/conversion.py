@@ -167,6 +167,8 @@ def proj2dict(proj:Proj) -> dict:
         "k": {'name':"scale_factor_at_projection_origin", 'type':float},
     }
     proj_params = {}
+    if not hasattr(proj, 'definition'):
+        return {'projection':'customized'}
     for entry in proj.definition.split():
         if '=' in entry:
             key, value = entry.split('=', 1)
