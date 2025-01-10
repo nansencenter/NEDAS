@@ -565,7 +565,8 @@ class Topaz5Model(ModelConfig):
             f.overwrite_field(fld, None, name, tlevel=tlevel, level=k)
         f.close()
 
-        ##TODO: other postprocessing in fixhycom to be added (ice variables, etc.)
+        ##fix sea ice variables
+
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -600,6 +601,9 @@ class Topaz5Model(ModelConfig):
         if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
             return
 
+        ##clean up some files from previous runs
+        run_command(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
+
         ##build the shell command line
         model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
         shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
@@ -612,8 +616,10 @@ class Topaz5Model(ModelConfig):
             try:
                 run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
                         nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                        walltime=self.walltime, **kwargs)
+                        walltime=self.walltime, log_file=log_file, **kwargs)
             except RuntimeError as e:
+                print(f"{e}, retrying ({2-i} attempts remain)")
+                run_command(f"cp {log_file} {log_file}.attempt{i}")
                 continue
             ##check output
             if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
