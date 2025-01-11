@@ -7,12 +7,14 @@ from utils.conversion import ensure_list, t2h, h2t, dt1h
 from utils.dir_def import analysis_dir, forecast_dir
 from utils.shell_utils import makedir
 from assim_tools.state import read_field, read_state_info
+from ..colorbar import add_colorbar, adjust_ax_size
 
 def get_task_list(c, **kwargs) -> list:
 
     variables = ensure_list(kwargs['variables'])
     vmin = ensure_list(kwargs['vmin'])
     vmax = ensure_list(kwargs['vmax'])
+    nlevels = ensure_list(kwargs['nlevels'])
     cmap = ensure_list(kwargs['cmap'])
     model_src = kwargs['model_src']
 
@@ -26,7 +28,7 @@ def get_task_list(c, **kwargs) -> list:
             dt = model.variables[vname]['dt']
             for k in levels:
                 for t in np.arange(t2h(c.time), t2h(c.next_time), dt):
-                    tasks.append({**kwargs, 'time':h2t(t), 'member':member, 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'cmap':cmap[i]})
+                    tasks.append({**kwargs, 'time':h2t(t), 'member':member, 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i]})
     return tasks
 
 def run(c, **kwargs) -> None:
@@ -46,6 +48,7 @@ def run(c, **kwargs) -> None:
     vname = kwargs['vname']
     vmin = kwargs['vmin']
     vmax = kwargs['vmax']
+    nlevels = kwargs['nlevels']
 
     if kwargs['cmap'].split('.')[0] == 'cmocean':
         import cmocean
@@ -98,14 +101,14 @@ def run(c, **kwargs) -> None:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         if rec['is_vector']:
             grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec['units'])
+            adjust_ax_size(ax)
         else:
-            im = grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
-            cbar = plt.colorbar(im, fraction=0.025, pad=0.02)
-            cbar.ax.set_title(rec['units'], loc='center', pad=10)
+            grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
+            add_colorbar(fig, ax, cmap, vmin, vmax, nlevels, units=rec['units'])
         grid.plot_land(ax, color=landcolor)
-        plt.title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=15)
-        plt.xlabel('x (m)', fontsize=12)
-        plt.ylabel('y (m)', fontsize=12)
+        ax.set_title(f"{vname}, level {k}, {time}, member {member+1}", fontsize=16)
+        ax.set_xlabel('x (m)', fontsize=14)
+        ax.set_ylabel('y (m)', fontsize=14)
         plt.savefig(figfile)
         plt.close()
     except Exception as e:

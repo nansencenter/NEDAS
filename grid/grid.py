@@ -1136,7 +1136,7 @@ class Grid(object):
         self.set_xylim(ax)
         return im
 
-    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevel=20, cmap='viridis', markersize=10, **kwargs):
+    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, **kwargs):
         """
         Same as plot_field, but showing individual scattered points instead
         This is more suitable for plotting observations in space
@@ -1145,14 +1145,14 @@ class Grid(object):
             vmin = np.nanmin(fld)
         if vmax is None:
             vmax = np.nanmax(fld)
-        dv = (vmax - vmin) / nlevel
+        dv = (vmax - vmin) / nlevels
 
         v = np.array(fld)
         vbound = np.maximum(np.minimum(v, vmax), vmin)
 
         if isinstance(cmap, str):
             cmap = colormaps[cmap]
-        cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevel+1)])
+        cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
         cind = ((vbound - vmin) / dv).astype(int)
 
         ax.scatter(self.x, self.y, markersize, color=cmap[cind], **kwargs)
