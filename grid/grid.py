@@ -4,11 +4,10 @@ import inspect
 import copy
 from functools import cached_property
 from matplotlib import colormaps
-from matplotlib.path import Path
-from matplotlib.patches import PathPatch
 from matplotlib.tri import Triangulation
 from pyproj import Proj, Geod
 import shapefile
+from utils.graphics import draw_line, draw_patch, arrowhead_xy
 
 class Grid(object):
     """
@@ -1136,7 +1135,7 @@ class Grid(object):
         self.set_xylim(ax)
         return im
 
-    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, **kwargs):
+    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, x=None, y=None, is_vector=False, **kwargs):
         """
         Same as plot_field, but showing individual scattered points instead
         This is more suitable for plotting observations in space
@@ -1153,10 +1152,16 @@ class Grid(object):
         if isinstance(cmap, str):
             cmap = colormaps[cmap]
         cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
+
+        if x is None:
+            x = self.x
+        if y is None:
+            y = self.y
+        assert x.shape == fld.shape, "input field shape mismatch with coordinate x"
+        assert y.shape == fld.shape, "input field shape mismatch with coordinate y"
+
         cind = ((vbound - vmin) / dv).astype(int)
-
-        ax.scatter(self.x, self.y, markersize, color=cmap[cind], **kwargs)
-
+        ax.scatter(x, y, markersize, color=cmap[cind], **kwargs)
         self.set_xylim(ax)
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
@@ -1268,30 +1273,13 @@ class Grid(object):
         ##plot the vector lines
         hl = headlength * L
         hw = headwidth * L
-
-        def arrowhead_xy(x1, x2, y1, y2):
-            np.seterr(invalid='ignore')
-            ll = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-            sinA = (y2 - y1)/ll
-            cosA = (x2 - x1)/ll
-            h1x = x1 - 0.2*hl*cosA
-            h1y = y1 - 0.2*hl*sinA
-            h2x = x1 + 0.8*hl*cosA - 0.5*hw*sinA
-            h2y = y1 + 0.8*hl*sinA + 0.5*hw*cosA
-            h3x = x1 + 0.5*hl*cosA
-            h3y = y1 + 0.5*hl*sinA
-            h4x = x1 + 0.8*hl*cosA + 0.5*hw*sinA
-            h4y = y1 + 0.8*hl*sinA - 0.5*hw*cosA
-            return [h1x, h2x, h3x, h4x, h1x], [h1y, h2y, h3y, h4y, h1y]
-
         for i in range(xtraj.shape[0]):
             ##plot trajectory at one output location
             ax.plot(xtraj[i, :], ytraj[i, :], color=linecolor, linewidth=linewidth, zorder=4)
-
             ##add vector head if traj is long and straight enough
             dist = np.sqrt((xtraj[i,0]-xtraj[i,-1])**2 + (ytraj[i,0]-ytraj[i,-1])**2)
             if showhead and hl < leng[i] < 1.6*dist:
-                ax.fill(*arrowhead_xy(xtraj[i,-1], xtraj[i,-2], ytraj[i,-1],ytraj[i,-2]), color=linecolor, zorder=5)
+                ax.fill(*arrowhead_xy(xtraj[i,-1], xtraj[i,-2], ytraj[i,-1],ytraj[i,-2], hw, hl), color=linecolor, zorder=5)
 
         ##add reference vector
         if showref:
@@ -1340,28 +1328,10 @@ class Grid(object):
 
         - showgrid: bool, optional
           If True (default), show the reference lat/lon grid.
-
+                  
         - dlon, dlat: float, optional
           The interval of lon,lat lines in the reference grid. Default is 20,5 degrees.
         """
-
-        def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
-            xy = data['xy']
-            parts = data['parts']
-            for i in range(len(xy)):
-                for j in range(len(parts[i])-1): ##plot separate segments if multi-parts
-                    ax.plot(*zip(*xy[i][parts[i][j]:parts[i][j+1]]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
-                ax.plot(*zip(*xy[i][parts[i][-1]:]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
-
-        def draw_patch(ax, data, color, zorder):
-            xy = data['xy']
-            parts = data['parts']
-            for i in range(len(xy)):
-                code = [Path.LINETO] * len(xy[i])
-                for j in parts[i]:  ##make discontinuous patch if multi-parts
-                    code[j] = Path.MOVETO
-                ax.add_patch(PathPatch(Path(xy[i], code), facecolor=color, edgecolor=color, linewidth=0.1, zorder=zorder))
-
         ###plot the coastline to indicate land area
         if color is not None:
             draw_patch(ax, self.land_data, color=color, zorder=0)
@@ -1382,4 +1352,3 @@ class Grid(object):
         ##set the correct extent of plot
         ax.set_xlim(self.xmin, self.xmax)
         ax.set_ylim(self.ymin, self.ymax)
-
