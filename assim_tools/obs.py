@@ -40,12 +40,18 @@ def parse_obs_info(c):
       A dictionary with some dimensions and list of unique obs records
     """
     obs_info = {'size':0, 'records':{}}
+    obs_variables = set()
+    obs_err_types = set()
     obs_rec_id = 0  ##record id for an obs sequence
     pos = 0         ##seek position for rec
 
     ##loop through obs variables defined in obs_def
     for vrec in ensure_list(c.obs_def):
         vname = vrec['name']
+        if 'err' not in vrec or vrec['err'] is None:
+            vrec['err'] = {}
+        assert isinstance(vrec.get('err'), dict), f"obs_def: {vname}: expect 'err' to be a dictionary"
+        obs_err_type = vrec['err'].get('type', 'normal')
 
         ##some properties of the variable is defined in its source module
         dataset = c.dataset_config[vrec['dataset_src']]
@@ -66,8 +72,8 @@ def parse_obs_info(c):
                        'dataset_src': vrec['dataset_src'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
-                       'obs_window_min': vrec.get('obs_window_min'),
-                       'obs_window_max': vrec.get('obs_window_max'),
+                       'obs_window_min': vrec.get('obs_window_min', 0),
+                       'obs_window_max': vrec.get('obs_window_max', 0),
                        'dtype': variables[vname]['dtype'],
                        'is_vector': variables[vname]['is_vector'],
                        'units': variables[vname]['units'],
@@ -75,8 +81,8 @@ def parse_obs_info(c):
                        'time': time,
                        'dt': 0,
                        'pos': pos,
-                       'err':{'type': vrec['err']['type'],
-                              'std': vrec['err']['std'],
+                       'err':{'type': obs_err_type,
+                              'std': vrec['err'].get('std', 1.),  ##for synthetic obs perturb, real obs will have std from dataset
                               'hcorr': vrec['err'].get('hcorr',0.),
                               'vcorr': vrec['err'].get('vcorr',0.),
                               'tcorr': vrec['err'].get('tcorr',0.),
@@ -87,6 +93,8 @@ def parse_obs_info(c):
                        'troi': vrec['troi'],
                        'impact_on_state': impact_on_state,
                        }
+            obs_variables.add(vname)
+            obs_err_types.add(obs_err_type)
             obs_info['records'][obs_rec_id] = obs_rec
 
             ##update obs_rec_id
@@ -94,6 +102,21 @@ def parse_obs_info(c):
 
             ##we don't know the size of obs_seq yet
             ##will wait for prepare_obs to update the seek position
+        
+    obs_info['variables'] = list(obs_variables)
+    obs_info['err_types'] = list(obs_err_types)
+
+    ##go through the obs_rec again to fill in the default err.cross_corr
+    for obs_rec_id, obs_rec in obs_info['records'].items():
+        assert isinstance(obs_rec['err']['cross_corr'], dict), f"obs_def: {obs_rec['name']} has err.cross_corr defined as {obs_rec['err']['cross_corr']}, expecting a dictionary"
+        for vname in obs_info['variables']:
+            if vname not in obs_rec['err']['cross_corr']:
+                if vname == obs_rec['name']:
+                    obs_rec['err']['cross_corr'][vname] = 1.0
+                else:
+                    obs_rec['err']['cross_corr'][vname] = 0.0
+            else:
+                assert isinstance(obs_rec['err']['cross_corr'][vname], float), f"obs_def: {obs_rec['name']} has err.cross_corr.{vname} defined as {obs_rec['err']['cross_corr'][vname]}, expecting a float"
 
     return obs_info
 
@@ -338,9 +361,6 @@ def read_obs_seq(binfile, info, obs_seq, member=None):
             obs_seq_out.append(rec)
     return obs_seq_out
 
-def output_obs(obs_seq):
-    pass
-
 def state_to_obs(c, **kwargs):
     """
     Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
@@ -583,15 +603,18 @@ def prepare_obs(c):
 
     ##additional output for debugging
     if c.debug:
-        if c.pid == 0:
-            np.save(os.path.join(c.analysis_dir, 'rec_list.npy'), c.rec_list)
-            np.save(os.path.join(c.analysis_dir, 'mem_list.npy'), c.mem_list)
-            np.save(os.path.join(c.analysis_dir, 'obs_rec_list.npy'), c.obs_rec_list)
-            np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
-            np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
-            np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
+        # if c.pid == 0:
+        #     np.save(os.path.join(c.analysis_dir, 'rec_list.npy'), c.rec_list)
+        #     np.save(os.path.join(c.analysis_dir, 'mem_list.npy'), c.mem_list)
+        #     np.save(os.path.join(c.analysis_dir, 'obs_rec_list.npy'), c.obs_rec_list)
+        #     np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
+        #     np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
+        #     np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
         if c.pid_mem == 0:
-            np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
+            #np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
+            for obs_rec_id, rec in obs_seq.items():
+                file = os.path.join(c.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy')
+                np.save(file, rec)
 
     return c.obs_info, obs_seq
 
@@ -647,7 +670,11 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
 
     ##additional output for debugging
     if c.debug:
-        np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
+        #np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
+        for key, seq in obs_prior_seq.items():
+            mem_id, obs_rec_id = key
+            file = os.path.join(c.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
+            np.save(file, seq)
 
     return obs_prior_seq
 
