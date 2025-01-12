@@ -4,10 +4,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import analysis_dir, forecast_dir
+from utils.dir_def import forecast_dir
 from utils.shell_utils import makedir
-from assim_tools.state import read_field, read_state_info
-from ..colorbar import add_colorbar, adjust_ax_size
+from utils.graphics import add_colorbar, adjust_ax_size
 
 def get_task_list(c, **kwargs) -> list:
 
@@ -71,19 +70,6 @@ def run(c, **kwargs) -> None:
 
     ##plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
-
-    ##read the field from binary file in analysis directory
-    # binfile = os.path.join(analysis_dir(c, c.time), "prior_state.bin")
-    # info = read_state_info(binfile)
-    # rec_id = None
-    # for i, rec in info['fields'].items():
-    #     if rec['name'] == vname and rec['k'] == k:
-    #         rec_id = i
-    #         break
-    # if rec_id is None:
-    #     raise ValueError("Error: record id not found for variable {vname} in {binfile}")
-    # var = read_field(binfile, info, c.mask, member, rec_id)
-    # grid = c.grid
 
     ##read the field from model restart files
     model = c.model_config[model_src]
