@@ -111,8 +111,13 @@ perturb:
   tcorr: 12                ## temporal correlation length (in hours)
 
 ##more details in assimilation algorithm
-assim_mode: 'batch'          ##assimilation mode (batch or serial)
-filter_type: 'ETKF'          ##filter type for the update (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+assim_mode: 'batch'        ##assimilation mode (batch or serial)
+filter_type: 'ETKF'        ##filter type for the update (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+
+##filter parameters
+rfactor: 2                 ## inflation factor for observation error when updating ensemble perturbations
+kfactor: 2                 ## inflation factor for observation error if innovation is too large
+nlobs_max:                 ## maximum number of local observations to be assimilated (leave blank if using all obs)
 
 ##multiscale approach in assimilation
 nscale: 1                    ## number of scale components
