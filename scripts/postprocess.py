@@ -9,15 +9,20 @@ def postprocess(c, model_name):
     """
     This function prepares the necessary files for an ensemble forecast
     """
-    ##copy the necessary files for each model
     print(f"\nPostprocessing files for {model_name} ensemble", flush=True)
     model = c.model_config[model_name]
+    if c.time==c.time_start:
+        restart_dir = model.ens_init_dir
+    else:
+        restart_dir = forecast_dir(c, c.prev_time, model_name)
+    print(f"previous cycle restart files in {restart_dir}", flush=True)
+
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
 
     if not c.job_submit:
         c.job_submit = {}
-        
+
     if c.job_submit.get('run_separate_jobs', False):
         nproc_avail = os.cpu_count()
         nworker = min(c.nens, nproc_avail)
@@ -28,6 +33,7 @@ def postprocess(c, model_name):
     for mem_id in range(c.nens):
         job_name = f'postproc_{model_name}_mem{mem_id+1}'
         job_opt = {
+            'restart_dir': restart_dir,
             'path': path,
             'member': mem_id,
             'time': c.time,
