@@ -9,7 +9,7 @@ from utils.shell_utils import run_command, run_job, makedir
 from utils.progress import watch_log, find_keyword_in_file, watch_files
 from .namelist import namelist
 from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
-from .cice_utils import thickness_upper_limit
+from .cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
 from ..model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
@@ -75,12 +75,12 @@ class Topaz5Model(ModelConfig):
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
         self.diag_variables = {
-            'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'C'},
+            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':1},
+            'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
             }
 
         self.variables = {**self.restart_variables,
@@ -112,10 +112,9 @@ class Topaz5Model(ModelConfig):
             mstr = ''
 
         ##filename for each model component
-        if kwargs['name'] in self.restart_variables or kwargs['name'] in self.diag_variables:
-            tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
+        if kwargs['name'] in self.restart_variables:
+            tstr = kwargs['time'].strftime('%Y_%j_%H_%M%S')
             file = 'restart.'+tstr+mstr+'.a'
-            #return os.path.join(kwargs['path'], 'restart.'+tstr+mstr+'.a')
 
         elif kwargs['name'] in self.iced_variables:
             t = kwargs['time']
@@ -134,6 +133,11 @@ class Topaz5Model(ModelConfig):
             tstr = kwargs['time'].strftime('%Y_%j_??')  ##archive variables are daily means
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
+        elif kwargs['name'] in self.diag_variables:
+            kstr = f"_k{kwargs['k']}_"
+            tstr = t2s(kwargs['time'])
+            return os.path.join(kwargs['path'], kwargs['name']+kstr+tstr+mstr+'.npy')
+        
         else:
             raise ValueError(f"filename: ERROR: unknown variable name '{kwargs['name']}'")
 
@@ -217,7 +221,11 @@ class Topaz5Model(ModelConfig):
                 f.close()
 
         elif name in self.diag_variables:
-            var = rec['operator'](**kwargs)
+            if os.path.exists(fname):
+                var = np.load(fname)
+            else:
+                var = rec['operator'](**kwargs)
+                np.save(fname, var)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -284,6 +292,9 @@ class Topaz5Model(ModelConfig):
                 f = ABFileForcing(fname+'.'+rec['name'], 'r+')
                 f.overwrite_field(var, None, rec['name'], dtime)
                 f.close()
+
+        elif name in self.diag_variables:
+            np.save(fname, var)
 
     @lru_cache(maxsize=3)
     def z_coords(self, **kwargs):
@@ -508,7 +519,7 @@ class Topaz5Model(ModelConfig):
         ##copy restart files from restart_dir
         restart_dir = kwargs['restart_dir']
         ##job_submit_cmd = kwargs['job_submit_cmd']
-        tstr = time.strftime('%Y_%j_%H_0000')
+        tstr = time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
             file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
@@ -565,8 +576,15 @@ class Topaz5Model(ModelConfig):
             f.overwrite_field(fld, None, name, tlevel=tlevel, level=k)
         f.close()
 
-        ##fix sea ice variables
-
+        ##fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
+        restart_dir = kwargs['restart_dir']
+        prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_ncat'})
+        post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_ncat'})
+        fice = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
+        hice = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
+        zSin, Tmlt = fix_zsin_profile(self.Nilayer+1, self.saltmax, self.depressT, self.nsal, self.msal)
+        adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.mask,
+                             self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -588,7 +606,7 @@ class Topaz5Model(ModelConfig):
 
         ##check if input file exists
         input_files = []
-        tstr = time.strftime('%Y_%j_%H_0000')
+        tstr = time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
         tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
@@ -628,7 +646,7 @@ class Topaz5Model(ModelConfig):
         assert run_success, f"model run failed after 3 tries, check in {run_dir}"
 
         ##move the output restart files to forecast_dir
-        tstr = next_time.strftime('%Y_%j_%H_0000')
+        tstr = next_time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
@@ -656,7 +674,7 @@ class Topaz5Model(ModelConfig):
 
             ##check if input file exists
             input_files = []
-            tstr = time.strftime('%Y_%j_%H_0000')
+            tstr = time.strftime('%Y_%j_%H_%M%S')
             for ext in ['.a', '.b']:
                 input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
             tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
@@ -678,7 +696,7 @@ class Topaz5Model(ModelConfig):
             watch_log(log_file, 'Exiting hycom_cice')
 
             ##move the output restart files to forecast_dir
-            tstr = next_time.strftime('%Y_%j_%H_0000')
+            tstr = next_time.strftime('%Y_%j_%H_%M%S')
             for ext in ['.a', '.b']:
                 file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
                 file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
