@@ -7,7 +7,7 @@ from utils.shell_utils import makedir, run_job
 
 def postprocess(c, model_name):
     """
-    This function prepares the necessary files for an ensemble forecast
+    This function postpares the necessary files for an ensemble forecast
     """
     print(f"\nPostprocessing files for {model_name} ensemble", flush=True)
     model = c.model_config[model_name]
@@ -53,7 +53,7 @@ def run(c):
 
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
 
-    ##build run commands for the preprocess script
+    ##build run commands for the postprocess script
     commands = f"source {c.python_env}; "
     commands += f"{sys.executable} {script_file} -c {config_file}"
 
@@ -61,7 +61,7 @@ def run(c):
     if c.job_submit:
         job_submit_opts = c.job_submit
 
-    run_job(commands, job_name="preprocess", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+    run_job(commands, job_name="postprocess", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == "__main__":
     from config import Config

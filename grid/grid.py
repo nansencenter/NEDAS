@@ -7,7 +7,7 @@ from matplotlib import colormaps
 from matplotlib.tri import Triangulation
 from pyproj import Proj, Geod
 import shapefile
-from utils.graphics import draw_line, draw_patch, arrowhead_xy
+from utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_reference_vector_legend
 
 class Grid(object):
     """
@@ -36,37 +36,27 @@ class Grid(object):
 
         Parameters:
         - proj: pyproj.Proj
-          Projection from lon,lat to x,y.
-
+        Projection from lon,lat to x,y.
         - x, y: np.array(field.shape)
-          x, y coordinates for each element in the field.
-
+        x, y coordinates for each element in the field.
         - bounds: list[float], optional
-          [xmin, xmax, ymin, ymax] boundary limits
-
+        [xmin, xmax, ymin, ymax] boundary limits
         - regular: bool, optional
-          Whether grid is regular or unstructured. Default is True (regular).
-
+        Whether grid is regular or unstructured. Default is True (regular).
         - cyclic_dim: str, optional
-          Cyclic dimension(s): 'x', 'y', or 'xy'.
-
+        Cyclic dimension(s): 'x', 'y', or 'xy'.
         - pole_dim: str, optional
-          Dimension with poles: 'x' or 'y'.
-
+        Dimension with poles: 'x' or 'y'.
         - pole_index: tuple, optional
-          Tuple for the pole index(s) in pole_dim.
-
+        Tuple for the pole index(s) in pole_dim.
         - triangles: np.array, optional
-          Triangle indices for an unstructured mesh.
-
+        Triangle indices for an unstructured mesh.
         - neighbors: np.array[2, 4, field.shape], optional
-          Neighbor indices to handle special grid geometry
-          first dim: j and i component; second dim: east, north, west, south
-
+        Neighbor indices to handle special grid geometry
+        first dim: j and i component; second dim: east, north, west, south
         - dst_grid: Grid, optional
-          Grid object to convert a field towards.
+        Grid object to convert a field towards.
         """
-
         assert x.shape == y.shape, "x, y shape does not match"
 
         if proj is None:
@@ -169,27 +159,20 @@ class Grid(object):
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
         """
         Create a regular grid within specified boundaries.
-
         Parameters:
         - proj: pyproj.Proj
-          Projection from lon,lat to x,y.
-
+        Projection from lon,lat to x,y.
         - xstart, xend, ystart, yend: float
-          Boundaries of the grid in the x and y directions.
-
+        Boundaries of the grid in the x and y directions.
         - dx: float
-          Resolution of the grid.
-
+        Resolution of the grid.
         - centered: bool, optional
-          Toggle for grid points to be on vertices (False) or in the middle of each grid box (True).
-          Default is False.
-
+        Toggle for grid points to be on vertices (False) or in the middle of each grid box (True).
+        Default is False.
         - **kwargs:
           Additional keyword arguments.
-
         Returns:
-        - Grid:
-          A Grid object representing the regular grid.
+        - Grid: A Grid object representing the regular grid.
         """
         self = cls.__new__(cls)
         dx = float(dx)
@@ -206,26 +189,19 @@ class Grid(object):
     def random_grid(cls, proj, xstart, xend, ystart, yend, npoints, min_dist=None, **kwargs):
         """
         Create a grid with randomly positioned points within specified boundaries.
-
         Parameters:
         - proj: pyproj.Proj
-          Projection from lon,lat to x,y.
-
+        Projection from lon,lat to x,y.
         - xstart, xend, ystart, yend: float
-          Boundaries of the grid in the x and y directions.
-
+        Boundaries of the grid in the x and y directions.
         - npoints: int
-          Number of grid points.
-
+        Number of grid points.
         - min_dist: float, optional
-          Minimal distance allowed between each pair of grid points.
-
+        Minimal distance allowed between each pair of grid points.
         - **kwargs:
-          Additional keyword arguments.
-
+        Additional keyword arguments.
         Returns:
-        - Grid:
-          A Grid object representing the randomly positioned grid.
+        - Grid: A Grid object representing the randomly positioned grid.
         """
         self = cls.__new__(cls)
         points = []
@@ -254,11 +230,11 @@ class Grid(object):
         """
         Generate a new grid with changed resolution
         Input:
-         - nlevel: int
-           positive: downsample grid |nlevel| times, each time doubling the grid spacing
-           negative: upsample grid |nlevel| times, each time halving the grid spacing
+        - nlevel: int
+        positive: downsample grid |nlevel| times, each time doubling the grid spacing
+        negative: upsample grid |nlevel| times, each time halving the grid spacing
         Return:
-         - new_grid: Grid object
+        - new_grid: Grid object
         """
         if not self.regular:
             raise NotImplementedError("change_resolution only works for regular grid now")
@@ -280,9 +256,9 @@ class Grid(object):
         computes averaged edge length for irregular mesh, used in self.dx, dy
         """
         t = self.tri.triangles
-        s1 = np.sqrt((self.x[t][:,0]-self.x[t][:,1])**2+(self.y[t][:,0]-self.y[t][:,1])**2)
-        s2 = np.sqrt((self.x[t][:,0]-self.x[t][:,2])**2+(self.y[t][:,0]-self.y[t][:,2])**2)
-        s3 = np.sqrt((self.x[t][:,2]-self.x[t][:,1])**2+(self.y[t][:,2]-self.y[t][:,1])**2)
+        s1 = np.hypot(self.x[t][:,0]-self.x[t][:,1], self.y[t][:,0]-self.y[t][:,1])
+        s2 = np.hypot(self.x[t][:,0]-self.x[t][:,2], self.y[t][:,0]-self.y[t][:,2])
+        s3 = np.hypot(self.x[t][:,2]-self.x[t][:,1], self.y[t][:,2]-self.y[t][:,1])
         sa = (s1 + s2 + s3)/3
 
         ##try to remove very elongated triangles, so that mesh dx is more accurate
@@ -394,14 +370,12 @@ class Grid(object):
         """
         When interpolating for point x_,y_, if the coordinates falls outside of the domain,
         we wrap around and make then inside again, if the boundary condition is cyclic (self.cyclic_dim)
-
         Inputs:
         - x_, y_: np.array
-          x, y coordinates of a grid
-
+        x, y coordinates of a grid
         Returns:
         - x_, y_: np.array
-          Same as input but x, y values are wrapped to be within the boundaries again.
+        Same as input but x, y values are wrapped to be within the boundaries again.
         """
         if self.cyclic_dim is not None:
             for d in self.cyclic_dim:
@@ -448,33 +422,27 @@ class Grid(object):
     def find_index(self, x_, y_):
         """
         Finding indices of self.x,y corresponding to the given x_,y_
-
         Inputs:
         - x_, y_: float or np.array
-          x, y coordinates of target point(s)
-
+        x, y coordinates of target point(s)
         Returns:
         - inside: bool, np.array with x_.flatten().size
-          Whether x_,y_ points are inside the grid.
-          Note that the following returned properties only have the inside points
-
+        Whether x_,y_ points are inside the grid.
+        Note that the following returned properties only have the inside points
         - indices: int, np.array with inside_size
-          Indices of the grid elements that x_,y_ falls in.
-          For regular grid, it is None since vertices can pinpoint the grid box already.
-          For irregular mesh, it is the index for tri.triangles from tri_finder.
-
+        Indices of the grid elements that x_,y_ falls in.
+        For regular grid, it is None since vertices can pinpoint the grid box already.
+        For irregular mesh, it is the index for tri.triangles from tri_finder.
         - vertices: int, np.array with shape (inside_size, n),
-          n = 4 for regular grid boxes, or 3 for mesh elements
-          The grid indices in self.x,y (flattened) for the nodes of each
-          grid element that x_,y_ falls in.
-
+        n = 4 for regular grid boxes, or 3 for mesh elements
+        The grid indices in self.x,y (flattened) for the nodes of each
+        grid element that x_,y_ falls in.
         - in_coords: float, np.array with shape (inside_size, n),
-          n = 2 for regular grid boxes, or 3 for mesh elements
-          The internal coordinates for x_,y_ within the grid box/element,
-          used in computing interp_weights, see illustration below.
-
+        n = 2 for regular grid boxes, or 3 for mesh elements
+        The internal coordinates for x_,y_ within the grid box/element,
+        used in computing interp_weights, see illustration below.
         - nearest: int, np.array with inside_size
-          The indices for the nodes in self.x,y that are closest to x_,y_
+        The indices for the nodes in self.x,y that are closest to x_,y_
         """
         x_ = np.array(x_).flatten()
         y_ = np.array(y_).flatten()
@@ -715,14 +683,12 @@ class Grid(object):
     def rotate_vectors(self, vec_fld):
         """
         Apply the rotate_matrix to a vector field
-
         Inputs:
         - vec_fld: float, np.array with shape (2, self.x.shape)
-          The input vector field defined on self.
-
+        The input vector field defined on self.
         Returns:
         - vec_fld: float, same shape as the input vec_fld
-          The vector field rotated to the dst_grid, still defined on self.
+        The vector field rotated to the dst_grid, still defined on self.
         """
         u = vec_fld[0, :]
         v = vec_fld[1, :]
@@ -766,10 +732,8 @@ class Grid(object):
         Compute interpolation weights from the outputs of find_index
         the interp_weights are the weights (sums to 1) given to each grid vertex in self.x,y
         based on their distance to the x_,y_ points (as specified by the in_coords)
-
         Inputs:
         - inside, vertices, in_coords: from the output of self.find_index
-
         Output:
         - interp_weights: float, np.array with vertices.shape
         """
@@ -790,23 +754,19 @@ class Grid(object):
         Interpolation of 2D field data (fld) from one grid (self or given x,y) to another (dst_grid).
         This can be used for grid refining (low->high resolution) or grid thinning (high->low resolution).
         This also converts between different grid geometries.
-
         Inputs:
         - fld: np.array
-          Input field defined on self, should have same shape as self.x,y
-
+        Input field defined on self, should have same shape as self.x,y
         - x,y: float or np.array, optional
-          If x,y are specified, the function computes the weights and apply them to fld
-          If x,y are None, the self.dst_grid.x,y are used.
-          Since their interp_weights are precalculated by dst_grid.setter it will be efficient
-          to run interp for many different input flds quickly.
-
+        If x,y are specified, the function computes the weights and apply them to fld
+        If x,y are None, the self.dst_grid.x,y are used.
+        Since their interp_weights are precalculated by dst_grid.setter it will be efficient
+        to run interp for many different input flds quickly.
         - method: str
-          Interpolation method, can be 'nearest' or 'linear'
-
+        Interpolation method, can be 'nearest' or 'linear'
         Returns:
         - fld_interp: float, np.array
-          The interpolated field defined on the destination grid
+        The interpolated field defined on the destination grid
         """
         if x is None or y is None:
             ##use precalculated weights for self.dst_grid
@@ -846,16 +806,13 @@ class Grid(object):
         Since many points of self.x,y falls in one dst_grid box/element, it is better to
         average them to represent the field on the low-res grid, instead of interpolating
         only from the nearest points that will cause representation errors.
-
         Inputs:
         - fld: float, np.array
-          Input field to perform coarse-graining on, it is defined on self.
-
+        Input field to perform coarse-graining on, it is defined on self.
         Outputs:
         - fld_coarse: float, np.array
-          The coarse-grained field defined on self.dst_grid.
+        The coarse-grained field defined on self.dst_grid.
         """
-
         ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
@@ -887,24 +844,19 @@ class Grid(object):
         Steps: 1. if projection changes and is_vector, rotate vectors from self.proj to dst_grid.proj
                2.1 interpolate fld components from self.x,y to dst_grid.x,y
                2.2 if dst_grid is low-res, coarse_grain=True will perform coarse-graining
-
         Inputs:
         - fld: float, np.array
-          Input field to perform convertion on.
-
+        Input field to perform convertion on.
         - is_vector: bool, optional
-          If False (default) the input fld is a scalar field,
-          otherwise the input fld is a vector field.
-
+        If False (default) the input fld is a scalar field,
+        otherwise the input fld is a vector field.
         - method: str, optional
-          Interpolation method, 'linear' (default) or 'nearest'
-
+        Interpolation method, 'linear' (default) or 'nearest' 
         - coarse_grain: bool, optional
-          If True, the coarse-graining will be applied using self.coarsen(). The default is False.
-
+        If True, the coarse-graining will be applied using self.coarsen(). The default is False.
         Outputs:
         - fld_out: float, np.array
-          The converted field defined on the destination grid self.dst_grid.
+        The converted field defined on the destination grid self.dst_grid.
         """
         if self.dst_grid != self:
             if is_vector:
@@ -953,11 +905,11 @@ class Grid(object):
         Compute distance for points (x,y) to the reference point
         Input:
         - ref_x, ref_y: float
-          reference point coordinates
+        reference point coordinates
         - x, y: np.array(float)
-          points whose distance to the reference points will be computed
+        points whose distance to the reference points will be computed
         - p: int
-          Minkowski p-norm order, default is 2
+        Minkowski p-norm order, default is 2
         Output:
         - dist: np.array(float)
         """
@@ -1094,20 +1046,16 @@ class Grid(object):
     def plot_field(self, ax, fld,  vmin=None, vmax=None, cmap='viridis', **kwargs):
         """
         Plot a scalar field using pcolor/tripcolor
-
         Inputs:
         - ax: matplotlib.pyplot.Axes
-          Handle for plotting
-
+        Handle for plotting
         - fld: float, np.array
-          The scalar field for plotting
-
+        The scalar field for plotting
         - vmin, vmax: float, optional
-          The minimum and maximum value range for the colormap, if not specified (None)
-          the np.min, np.max of the input fld will be used.
-
+        The minimum and maximum value range for the colormap, if not specified (None)
+        the np.min, np.max of the input fld will be used.
         - cmap: matplotlib colormap, or str, optional
-          Colormap used in the plot, default is 'viridis'
+        Colormap used in the plot, default is 'viridis'
         """
         if vmin is None:
             vmin = np.nanmin(fld)
@@ -1135,95 +1083,51 @@ class Grid(object):
         self.set_xylim(ax)
         return im
 
-    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, x=None, y=None, is_vector=False, **kwargs):
-        """
-        Same as plot_field, but showing individual scattered points instead
-        This is more suitable for plotting observations in space
-        """
-        if vmin is None:
-            vmin = np.nanmin(fld)
-        if vmax is None:
-            vmax = np.nanmax(fld)
-        dv = (vmax - vmin) / nlevels
-
-        v = np.array(fld)
-        vbound = np.maximum(np.minimum(v, vmax), vmin)
-
-        if isinstance(cmap, str):
-            cmap = colormaps[cmap]
-        cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
-
-        if x is None:
-            x = self.x
-        if y is None:
-            y = self.y
-        assert x.shape == fld.shape, "input field shape mismatch with coordinate x"
-        assert y.shape == fld.shape, "input field shape mismatch with coordinate y"
-
-        cind = ((vbound - vmin) / dv).astype(int)
-        ax.scatter(x, y, markersize, color=cmap[cind], **kwargs)
-        self.set_xylim(ax)
-
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
                      showref=False, ref_xy=(0.9, 0.9), refcolor='w', ref_units='',
                      showhead=True, headwidth=0.1, headlength=0.3):
         """
         Plot vector fields (improved version of matplotlib quiver)
-
         Inputs:
         - ax: matplotlib.pyplot.Axes
-          Handle for plotting
-
+        Handle for plotting
         - vec_fld: float, np.array
-          The vector field for plotting
-
+        The vector field for plotting
         - V: float, optional
-          Velocity scale, typical velocity value in vec_fld units. If not specified (None)
-          a typical value 0.33*max(abs(vec_fld[0,:])) will be used.
-
+        Velocity scale, typical velocity value in vec_fld units. If not specified (None)
+        a typical value 0.33*max(abs(vec_fld[0,:])) will be used.
         - L: float, optional
-          Length scale, how long in x,y units do vectors with velocity V show in the plot
-          If not specified (None), a typical value 0.05*self.Lx will be used.
-
+        Length scale, how long in x,y units do vectors with velocity V show in the plot
+        If not specified (None), a typical value 0.05*self.Lx will be used.
         - spacing: float, optional
-          Distance between vectors in both directions is given by spacing*L. Default is 0.5.
-          This controls the density of vectors in the plot.
-          You can provide a tuple (float, float) for spacings in (x, y) if you want them
-          to be set differently.
-
+        Distance between vectors in both directions is given by spacing*L. Default is 0.5.
+        This controls the density of vectors in the plot.
+        You can provide a tuple (float, float) for spacings in (x, y) if you want them
+        to be set differently.
         - num_steps: int, optional
-          Default is 10. If num_steps=1, straight vectors (as in quiver) will be displayed.
-          num_steps>1 lets you display curved trajectories, at each sub-step the velocity is
-          re-interpolated at the new position along the trajectories. As num_steps get larger
-          the trajectories are more detailed.
-
+        Default is 10. If num_steps=1, straight vectors (as in quiver) will be displayed.
+        num_steps>1 lets you display curved trajectories, at each sub-step the velocity is
+        re-interpolated at the new position along the trajectories. As num_steps get larger
+        the trajectories are more detailed.
         - linecolor: matplotlib color, optional
-          Line color for the vector lines, default is 'k'
-
+        Line color for the vector lines, default is 'k'
         - linewidth: float, optional
-          Line width for the vector lines, default is 1.
-
+        Line width for the vector lines, default is 1.
         - showref: bool, optional
-          If True, show a legend box with a reference vector (size L) inside. Default is False.
-
+        If True, show a legend box with a reference vector (size L) inside. Default is False.
         - ref_xy: tuple (x,y) float, optional
-          The x,y relative coordinates (0-1) for the reference vector box, default is upper right corner.
-
+        The x,y relative coordinates (0-1) for the reference vector box, default is upper right corner.
         - ref_color: matplotlib color, optional
-          Background color for the reference vector box, default is 'w' (white).
-
+        Background color for the reference vector box, default is 'w' (white).
         - ref_units: str
-          Units to be included in the reference vector box, default is ''.
-
+        Units to be included in the reference vector box, default is ''.
         - showhead: bool, optional
-          If True (default), show the arrow head of the vectors
-
+        If True (default), show the arrow head of the vectors
         - headwidth: float, optional
-          Width of arrow heads relative to L, default is 0.1.
-
+        Width of arrow heads relative to L, default is 0.1.
         - headlength: float, optional
-          Length of arrow heads relative to L, default is 0.3.
+        Length of arrow heads relative to L, default is 0.3.
         """
         assert vec_fld.shape == (2,)+self.x.shape, "vector field shape mismatch with x,y"
         x = self.x
@@ -1268,7 +1172,7 @@ class Grid(object):
             ytraj[:, t+1] = ytraj[:, t] + vt * dt
 
             ##update length
-            leng = leng + np.sqrt(ut**2 + vt**2) * dt
+            leng = leng + np.hypot(ut, vt) * dt
 
         ##plot the vector lines
         hl = headlength * L
@@ -1277,27 +1181,64 @@ class Grid(object):
             ##plot trajectory at one output location
             ax.plot(xtraj[i, :], ytraj[i, :], color=linecolor, linewidth=linewidth, zorder=4)
             ##add vector head if traj is long and straight enough
-            dist = np.sqrt((xtraj[i,0]-xtraj[i,-1])**2 + (ytraj[i,0]-ytraj[i,-1])**2)
+            dist = np.hypot(xtraj[i,0]-xtraj[i,-1], ytraj[i,0]-ytraj[i,-1])
             if showhead and hl < leng[i] < 1.6*dist:
                 ax.fill(*arrowhead_xy(xtraj[i,-1], xtraj[i,-2], ytraj[i,-1],ytraj[i,-2], hw, hl), color=linecolor, zorder=5)
 
         ##add reference vector
         if showref:
             xr, yr = ref_xy[0]*self.Lx+self.xmin, ref_xy[1]*self.Ly+self.ymin
-            ##find the length scale at the ref point
-            Lr = L
-            mfxr = self.interp(self.mfx, xr, yr)
-            if not np.isnan(mfxr):
-                Lr = L * mfxr
-            ##draw a box
-            xb = [xr-Lr*1.3, xr-Lr*1.3, xr+Lr*1.3, xr+Lr*1.3, xr-Lr*1.3]
-            yb = [yr+Lr/2, yr-Lr, yr-Lr, yr+Lr/2, yr+Lr/2]
-            ax.fill(xb, yb, color=refcolor, zorder=6)
-            ax.plot(xb, yb, color='k', zorder=6)
-            ##draw the reference vector
-            ax.plot([xr-Lr/2, xr+Lr/2], [yr, yr], color=linecolor, zorder=7)
-            ax.fill(*arrowhead_xy(xr+Lr/2, xr-Lr/2, yr, yr), color=linecolor, zorder=8)
-            ax.text(xr, yr-Lr/2, f"{V} {ref_units}", color='k', ha='center', va='center', zorder=8)
+            draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, ref_units)
+
+        self.set_xylim(ax)
+
+    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, x=None, y=None, is_vector=False, **kwargs):
+        """
+        Same as plot_field/vectors, but showing individual scattered points instead
+        This is more suitable for plotting observations in space
+        """
+        if x is None:
+            x = self.x
+        if y is None:
+            y = self.y
+
+        if vmin is None:
+            vmin = np.nanmin(fld)
+        if vmax is None:
+            vmax = np.nanmax(fld)
+        dv = (vmax - vmin) / nlevels
+
+        if is_vector:
+            assert fld.shape[0] == 2
+            assert fld.shape[1:] == x.shape
+            V = vmax
+            L = 0.05 * self.Lx
+            hl, hw = 0.3 * L, 0.15 * L
+            ref_x, ref_y = 0.9 * self.Lx + self.xmin, 0.9 * self.Ly + self.ymin
+            refcolor = kwargs.get('refcolor', 'w')
+            ref_units = kwargs.get('units', '')
+            fld *= L / V 
+            xtraj, ytraj = np.array([x, x + fld[0,...]]), np.array([y, y + fld[1,...]])
+            linecolor = kwargs.get('linecolor', 'k')
+            linewidth = kwargs.get('linewidth', 1)
+            for i in np.ndindex(x.shape):
+                ax.plot(xtraj[:,i], ytraj[:,i], color=linecolor, linewidth=linewidth, zorder=5)
+                dist = np.hypot(xtraj[0,i]-xtraj[1,i], ytraj[0,i]-ytraj[1,i])
+                if hl < 1.6*dist:
+                    ax.fill(*arrowhead_xy(xtraj[1,i], xtraj[0,i], ytraj[1,i], ytraj[0,i], hw, hl), color=linecolor, zorder=5)
+            draw_reference_vector_legend(ax, ref_x, ref_y, V, L, hw, hl, refcolor, linecolor, ref_units)
+
+        else:
+            assert fld.shape == x.shape
+            v = np.array(fld)
+            vbound = np.maximum(np.minimum(v, vmax), vmin)
+
+            if isinstance(cmap, str):
+                cmap = colormaps[cmap]
+            cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
+
+            cind = ((vbound - vmin) / dv).astype(int)
+            ax.scatter(x, y, markersize, color=cmap[cind], **kwargs)
 
         self.set_xylim(ax)
 
@@ -1306,31 +1247,23 @@ class Grid(object):
                   showgrid=True, dlon=20, dlat=5):
         """
         Shows the map (coastline, rivers, lakes) and lon/lat grid for reference
-
         Parameters:
         - ax: matplotlib.pyplot.Axes object
-          Handle for plotting
-
+        Handle for plotting
         - color: matplotlib color, optional
-          Face color of the landmass polygon, default is None (transparent).
-
+        Face color of the landmass polygon, default is None (transparent).
         - linecolor: matplotlib color, optional
-          Line color of the coastline, default is 'k' (black).
-
+        Line color of the coastline, default is 'k' (black).
         - linewidth: float, optional
-          Line width of the coastline, default is 1.
-
+        Line width of the coastline, default is 1.
         - showriver: bool, optional
-          If True, show the rivers and lakes over the landmass. Default is False.
-
+        If True, show the rivers and lakes over the landmass. Default is False.
         - rivercolor: matplotlib color, optional
-          Color of the rivers and lakes, default is 'c' (cyan).
-
+        Color of the rivers and lakes, default is 'c' (cyan).
         - showgrid: bool, optional
-          If True (default), show the reference lat/lon grid.
-                  
+        If True (default), show the reference lat/lon grid.
         - dlon, dlat: float, optional
-          The interval of lon,lat lines in the reference grid. Default is 20,5 degrees.
+        The interval of lon,lat lines in the reference grid. Default is 20,5 degrees.
         """
         ###plot the coastline to indicate land area
         if color is not None:

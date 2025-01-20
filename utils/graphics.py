@@ -23,13 +23,13 @@ def add_colorbar(fig, ax, cmap, vmin, vmax, nlevels=10, fontsize=12, units=None)
     - ax: matplotlib.pyplot axes object
     - cmap: matplotlib colormap object
     - vmin, vmax: float
-      Min and Max value bound
+    Min and Max value bound
     - nlevels: int (default 10)
-      Number of color levels
+    Number of color levels
     - fontsize: int (default 12)
-      Font size for the ticklabel and units label
+    Font size for the ticklabel and units label
     - units: str (optional)
-      Unit string to be shwon on colorbar title
+    Unit string to be shwon on colorbar title
     """
     dv = (vmax - vmin) / nlevels
     bounds = np.arange(vmin, vmax+dv, dv)
@@ -64,6 +64,19 @@ def arrowhead_xy(x1, x2, y1, y2, hw, hl):
     h4x = x1 + 0.8*hl*cosA + 0.5*hw*sinA
     h4y = y1 + 0.8*hl*sinA - 0.5*hw*cosA
     return [h1x, h2x, h3x, h4x, h1x], [h1y, h2y, h3y, h4y, h1y]
+
+def draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, ref_units=''):
+    """Draw a legend box with reference vector and units string"""
+    ##draw a box
+    xb = [xr-L*1.3, xr-L*1.3, xr+L*1.3, xr+L*1.3, xr-L*1.3]
+    yb = [yr+L/2, yr-L, yr-L, yr+L/2, yr+L/2]
+    ax.fill(xb, yb, color=refcolor, zorder=6)
+    ax.plot(xb, yb, color='k', zorder=6)
+    ##draw the reference vector
+    ax.plot([xr-L/2, xr+L/2], [yr, yr], color=linecolor, zorder=8)
+    ax.fill(*arrowhead_xy(xr+L/2, xr-L/2, yr, yr, hw, hl), color=linecolor, zorder=8)
+    ##add unit string annotation below the vector
+    ax.text(xr, yr-L/2, f"{V} {ref_units}", color='k', ha='center', va='center', zorder=8)
 
 def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
     xy = data['xy']
