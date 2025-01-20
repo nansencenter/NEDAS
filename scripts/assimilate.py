@@ -85,6 +85,9 @@ def run(c):
     if c.job_submit:
         job_submit_opts = c.job_submit
 
+    if hasattr(c, 'ppn'):
+        job_submit_opts['ppn'] = c.ppn
+
     run_job(commands, job_name='assimilate', run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == '__main__':
