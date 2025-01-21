@@ -1217,8 +1217,8 @@ class Grid(object):
             ref_x, ref_y = 0.9 * self.Lx + self.xmin, 0.9 * self.Ly + self.ymin
             refcolor = kwargs.get('refcolor', 'w')
             ref_units = kwargs.get('units', '')
-            fld *= L / V 
-            xtraj, ytraj = np.array([x, x + fld[0,...]]), np.array([y, y + fld[1,...]])
+            d = fld * L / V 
+            xtraj, ytraj = np.array([x, x + d[0,...]]), np.array([y, y + d[1,...]])
             linecolor = kwargs.get('linecolor', 'k')
             linewidth = kwargs.get('linewidth', 1)
             for i in np.ndindex(x.shape):

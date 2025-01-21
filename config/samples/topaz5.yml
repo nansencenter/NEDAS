@@ -17,16 +17,13 @@ run_assim: False ##if true, run the assimilation steps
 run_diag: True
 debug: False     ##if true, output debug data/message
 
-time_start: '202107010600'       ##start time of the experiment, format ccyymmddHHMM
+time_start: '202107010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202107100000'         ##end time of the experiment
 time_assim_start: '202107010000' ##start time of the first analysis cycle
 time_assim_end: '202107100000'   ##end time of the last analysis cycle
-cycle_period: 234                 ##cycle period, in hours
+cycle_period: 168                 ##cycle period, in hours
 
-# forecast_period: 240              ##forecast period, in hours
-# forecast_start_interval: 168      ##forecast start time interval, in hours
-
-time: '202107010600'
+time: '202107010000'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -134,13 +131,13 @@ use_synthetic_obs: False
 dataset_def:
   topaz:
     config_file: '/cluster/home/yingyue/code/NEDAS/dataset/topaz/default.yml'
-    dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
 
 model_def:
   topaz.v5:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v5/default.yml'
     basedir: '/cluster/work/users/yingyue/TP5a0.06'
     model_env: '/cluster/home/yingyue/code/NEDAS/models/topaz/env/setup.src'
+    nproc: 511
     nproc_per_run: 512  ##nproc for model.run
     nproc_per_util: 50  ##nproc for other utility funcs, model.preprocess etc.
     walltime: 3600     ##walltime in seconds
@@ -209,18 +206,44 @@ localization:
   #NICE_lookup_table: '/cluster/work/users/yingyue/NICE/lookup.{nens}.mat'
 
 diag:
+##convert seaice conc output to nc files for ICECAP diagnostics
 - method: 'misc.convert_output'
   config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
   model_src: 'topaz.v5'
-  variables: ['seaice_conc_daily', 'seaice_thick_daily', 'seaice_velocity_daily', 'ocean_velocity_daily', 'ocean_temp_daily', 'ocean_surf_height_daily', 'atmos_surf_velocity', 'atmos_surf_temp']
+  dt_hours: 24
+  variables: ['seaice_conc_daily']
   file: '/cluster/work/users/yingyue/TP5/output/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+
+##plot state variables for ensemble viewer
 - method: 'plot.ensemble_states'
-  model_src: 'topaz.v5'
-  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'ocean_surf_height', 'seaice_velocity_daily', 'seaice_conc_daily', 'seaice_thick_daily', 'seaice_conc_ncat',               'seaice_volume_ncat', 'atmos_surf_velocity', 'atmos_surf_temp', 'atmos_surf_press', 'atmos_precip']
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'ocean_surf_height', 'seaice_velocity_daily', 'seaice_conc_daily', 'seaice_thick_daily', 'seaice_conc_ncat', 'seaice_volume_ncat', 'atmos_surf_velocity', 'atmos_surf_temp', 'atmos_surf_press', 'atmos_precip']
+  model_src: ['topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5', 'topaz.v5']
   vmin: [-10,  4, -0.1,   0, -1, -0.1, 0, 0, 0, 0, -10, -20,  98000,    0]
   vmax: [ 20, 38,  0.1, 1e7,  1,  0.1, 1, 5, 1, 3,  10,  35, 104500, 2e-6]
   nlevels: [15, 17, 10,  20, 20,  10, 10, 10,10,15, 10,  11,     10,   10]
   cmap: ['cmocean.thermal', 'cmocean.haline', 'bwr', 'cmocean.dense', 'cmocean.balance', 'bwr', 'cmocean.ice', 'viridis', 'Reds', 'Reds', 'bwr', 'cmocean.thermal', 'cmocean.dense', 'cmocean.rain']
-  fig_size_x: 8
-  fig_size_y: 8
-  land_color: 'gray'
+
+- method: 'plot.observations'
+  obs_window_min: -168
+  obs_window_max: 0
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_surf_temp', 'seaice_conc', 'seaice_thick', 'seaice_drift']
+  dataset_src: ['topaz', 'topaz', 'topaz', 'topaz', 'topaz', 'topaz']
+  obs_dt: [168, 168, 168, 168, 168, 24]
+  obs_kmin: [ 1,  1,  0, 0, 0, 0]
+  obs_kmax: [50, 50,  0, 0, 0, 0]
+  vmin: [-10,  4, -10,  0, 0, -50]
+  vmax: [ 20, 38,  20,  1, 5,  50]
+  nlevels: [15,17, 15, 10,10,  10]
+  cmap: ['cmocean.thermal', 'cmocean.haline', 'cmocean.thermal', 'cmocean.ice', 'viridis', 'bwr']
+  vmin_diff: [-5, -10, -5, -0.5, -2, -50]
+  vmax_diff: [ 5,  10,  5,  0.5,  2,  50]
+  nlevels_diff: [10, 10, 10, 10, 10, 10]
+  cmap_diff: ['cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance']
+
+- method: 'plot.analysis_increments'
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'seaice_conc_ncat', 'seaice_volume_ncat']
+  vmin_diff: [-5, -10, -0.1, -1e5, -0.5, -2]
+  vmax_diff: [ 5,  10,  0.1,  1e5,  0.5,  2]
+  nlevels_diff: [10, 10, 10, 10, 10, 10]
+  cmap_diff: ['cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance']
+

@@ -102,7 +102,7 @@ def parse_obs_info(c):
 
             ##we don't know the size of obs_seq yet
             ##will wait for prepare_obs to update the seek position
-        
+
     obs_info['variables'] = list(obs_variables)
     obs_info['err_types'] = list(obs_err_types)
 

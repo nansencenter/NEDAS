@@ -2,9 +2,18 @@
 
 import numpy as np
 from matplotlib import cm
+from matplotlib import colormaps
 from matplotlib.colors import BoundaryNorm
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
+
+def get_cmap(cmap_name):
+    if cmap_name.split('.')[0] == 'cmocean':
+        import cmocean
+        cmap = getattr(cmocean.cm, cmap_name.split('.')[-1])
+    else:
+        cmap = colormaps[cmap_name]
+    return cmap
 
 def adjust_ax_size(ax):
     """
