@@ -39,7 +39,13 @@ class Model(ModelConfig):
         self.z_units = 'm'
 
         # construct grid obj based on config
-        self.grid = Grid.regular_grid(Proj(self.proj), self.xstart, self.xend, self.ystart, self.yend, self.dx)
+        self.grid = Grid.regular_grid(
+            Proj(self.grid_def['proj']),
+            float(self.grid_def['xstart']),
+            float(self.grid_def['xend']),
+            float(self.grid_def['ystart']),
+            float(self.grid_def['yend']),
+            float(self.grid_def['dx']))
         self.mask = np.full(self.grid.x.shape, False)  ##model grid points that are masked (land?)
 
     def filename(self, **kwargs):
@@ -159,9 +165,20 @@ class Model(ModelConfig):
                 ensemble member id
             - time : datetime
                 start time of the forecast
+            - time_start: datetime
+                initial time of the forecast cycles
             - path : str
                 path to the working directory of the ensemble member
-        These are defined in the configuration file model_def:nextsim.dg section,
+            - forecast_period : int
+                number of hours being forecasted by model
+            - restart_dir : str
+                the saved restart directory from the previous cycle,
+                which is the model run directory from
+                the previous cycle. In the initial cycle, this
+                directory is given as `ens_init_dir` defined in
+                `nextsim.dg`` section of the `model_def` section
+                in nedas config file.
+        These are defined in the `config_file` entry of model_def:nextsim.dg section,
         and parse_config will bring them in this class as
             - self.files : dict
                 This section contains the filenames for the restart file.
@@ -185,10 +202,7 @@ class Model(ModelConfig):
         # directory where files are being collected to, and where the model will be run
         run_dir = os.path.join(kwargs['path'], ens_mem_dir)
         makedir(run_dir)
-        # kwargs['restart_dir'] is where to obtain the files, see scripts/preprocess.py how it's defined
-        # at time_start files are from model_def:nextsim.dg:ens_init_dir 
-        # during cycling, the files come from work_dir/cycle/prev_time/model_name
-        
+
         # get all required filenames for the initial ensemble
         # 1. get current and next time
         time = kwargs['time']
@@ -197,43 +211,25 @@ class Model(ModelConfig):
 
         # 2. get the restart and forcing filename
         file_options_restart = self.files['restart']
-        fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
-        # the restart file needs to be obtained from prev_time instead during cycling,
-        # not just copying from files:restart:format path again
-        # TODO: also, get_restart_filename doesn't seem to need ens_mem_id input, format doesn't involve {i}
-        fname_restart_src = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart))
-        # TODO: at time_start this is pointing to ens_init_dir/ens_mem/fname; but it seems ens_init_dir only contain a single copy, not an ensemble
-        # temporary fix, if cannot find ens_init_dir/ens_mem/fname, use fname instead:
-        if not os.path.exists(fname_restart_src):
-            fname_restart_src = fname_restart
+        # obtain restart file at initial cycling
+        fname_restart_init:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
+        fname_restart:str = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
+        if not os.path.exists(fname_restart):
+            fname_restart = fname_restart_init
 
-        file_options_forcing:dict[str, str] = self.files['forcing']
+        file_options_forcing:dict[str, dict] = self.files['forcing']
         fname_forcing:dict[str, str] = dict()
         for forcing_name in file_options_forcing:
             fname_forcing[forcing_name] = forcing.get_forcing_filename(file_options_forcing[forcing_name], ens_mem_id, time)
-        # note: it is okay to always copy forcing files from original directory over to the run_dir
-        # there is no need to cycle these forcing variables
 
         # no need for perturbation if not specified in yaml file
         if not hasattr(self, 'perturb'):
-            print ('We do no perturbations as perturb section is not specified in the model configuration.', flush=True)
+            print('We do no perturbations as perturb section '
+                  'is not specified in the model configuration.',
+                  flush=True)
             # we we do not perturb the restart file
             # simply link the restart files
-            os.system(f'ln -s {fname_restart_src} {run_dir}')
-            # we we do not perturb the forcing file
-            # simply link the forcing files
-            for forcing_name in file_options_forcing:
-                os.system(f'ln -s {fname_forcing[forcing_name]} {run_dir}')
-            return
-
-        # here, if 'restart section is not under perturb section
-        # we only link the restart file to each ensemble directory
-        if 'restart' not in self.perturb:
-            # we we do not perturb the restart file
-            # simply link the restart files
-            os.system(f'ln -s {fname_restart_src} {run_dir}')
-            return
-        if 'forcing' not in self.perturb:
+            os.system(f'ln -s {fname_restart} {run_dir}')
             # we we do not perturb the forcing file
             # simply link the forcing files
             for forcing_name in file_options_forcing:
@@ -241,33 +237,43 @@ class Model(ModelConfig):
             return
 
         # 3. add perturbations
-        restart_options = self.perturb['restart']
-        # copy restart files to the ensemble member directory
-        fname = os.path.join(run_dir, os.path.basename(fname_restart))
-        subprocess.run(['cp', '-v', fname_restart_src, fname])
-        # prepare the restart file options for the perturbation
-        file_options = {'fname': fname,
-                        'lon_name':file_options_restart['lon_name'],
-                        'lat_name':file_options_restart['lat_name']}
-        # perturb the restart file
-        restart.perturb_restart(restart_options, file_options)
+        # here, if 'restart section is not under perturb section
+        # we only link the restart file to each ensemble directory
+        if 'restart' not in self.perturb or kwargs['time'] != kwargs['time_start']:
+            # we we do not perturb the restart file
+            # simply link the restart files
+            os.system(f'ln -s {fname_restart} {run_dir}')
+        else:
+            restart_options = self.perturb['restart']
+            # copy restart files to the ensemble member directory
+            fname = os.path.join(run_dir, os.path.basename(fname_restart))
+            subprocess.run(['cp', '-v', fname_restart, fname])
+            # prepare the restart file options for the perturbation
+            file_options_rst = {'fname': fname,
+                            'lon_name':file_options_restart['lon_name'],
+                            'lat_name':file_options_restart['lat_name']}
+            # perturb the restart file
+            restart.perturb_restart(restart_options, file_options_rst)
 
-        forcing_options = self.perturb['forcing']
-        # construct file options for forcing
-        file_options:dict = dict()
-        for forcing_name in forcing_options:
-            # we ignore entries that are not in the files options
-            # e.g., path
-            if forcing_name not in fname_forcing: continue
-            fname = os.path.join(run_dir,
-                                os.path.basename(fname_forcing[forcing_name])
-                                )
-            # the forcing file options for the perturbation
-            file_options[forcing_name] = {'fname_src': fname_forcing[forcing_name],
-                                           'fname': fname,
-                                           **file_options_forcing[forcing_name]}
-        # add forcing perturbations
-        forcing.perturb_forcing(forcing_options, file_options, ens_mem_id, time, next_time)
+        if 'forcing' not in self.perturb:
+            # we we do not perturb the forcing file
+            # simply link the forcing files
+            for forcing_name in file_options_forcing:
+                os.system(f'ln -s {fname_forcing[forcing_name]} {run_dir}')
+        else:
+            forcing_options = self.perturb['forcing']
+            for forcing_name in forcing_options:
+                # we ignore entries that are not in the files options
+                # e.g., path
+                if forcing_name not in fname_forcing: continue
+                fname = os.path.join(run_dir,
+                                    os.path.basename(fname_forcing[forcing_name])
+                                    )
+                # the forcing file options for the perturbation
+                file_options_forcing[forcing_name]['fname_src'] = fname_forcing[forcing_name]
+                file_options_forcing[forcing_name]['fname'] = fname
+            # add forcing perturbations
+            forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time)
 
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
@@ -286,7 +292,7 @@ class Model(ModelConfig):
         else:
             run_dir = kwargs['path']
         makedir(run_dir)
-        namelist.make_namelist(run_dir, **kwargs)
+        namelist.make_namelist(self.files, run_dir, **kwargs)
 
         ##build shell commands for running the model
         shell_cmd = "echo starting the script...; "
@@ -313,7 +319,8 @@ class Model(ModelConfig):
     def run_batch(self, task_id=0, **kwargs):
         """Run nextsim.dg model ensemble forecast, use job array to spawn the member runs"""
         kwargs = super().parse_kwargs(**kwargs)
-        assert kwargs['use_job_array'], "use_job_array shall be True if running ensemble in batch mode."
+        assert self.use_job_array, \
+            "use_job_array shall be True if running ensemble in batch mode."
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -325,8 +332,10 @@ class Model(ModelConfig):
             ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
             makedir(ens_dir)
 
+            kwargs['member'] = member
             ##this creates run_dir/ens_??/nextsim.cfg
-            namelist.make_namelist(ens_dir, member=member, **kwargs)
+            namelist.make_namelist(self.files, self.model_config_file,
+                                   ens_dir, **kwargs)
 
         ##build shell commands for running the model using job array
         shell_cmd = "echo starting the script...; "
@@ -344,7 +353,7 @@ class Model(ModelConfig):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, job_name='nextsim.dg.ens_run', nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
 
         ##check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)

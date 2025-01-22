@@ -41,6 +41,7 @@ def preprocess(c, model_name):
             'path': path,
             'member': mem_id,
             'time': c.time,
+            'time_start': c.time_start,
             'forecast_period': c.cycle_period,
             **c.job_submit,
             }

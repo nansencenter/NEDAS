@@ -31,7 +31,7 @@ class JobSubmitter(object):
         self.walltime = kwargs.get('walltime', 3600)
         self.run_separate_jobs = kwargs.get('run_separate_jobs', False)
         self.use_job_array = kwargs.get('use_job_array', False)
-        self.array_size = 1
+        self.array_size = kwargs.get('array_size', 1)
 
     @property
     def nproc(self):
