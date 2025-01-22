@@ -292,7 +292,7 @@ class Model(ModelConfig):
         else:
             run_dir = kwargs['path']
         makedir(run_dir)
-        namelist.make_namelist(self.files, run_dir, **kwargs)
+        namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
         shell_cmd = "echo starting the script...; "
