@@ -137,7 +137,7 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
     members += "]"
     html_page = html_page.replace("MEMBERS", members)
 
-    html_page = html_page.replace("TITLE", "Ensemble States")
+    html_page = html_page.replace("TITLE", "Analysis Increments in Ensemble States")
     html_page = html_page.replace("IMAGE_WIDTH", f"{figsize[0]*60}")
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
