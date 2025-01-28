@@ -109,7 +109,10 @@ class SLURMJobSubmitter(JobSubmitter):
                 if job_status not in ['R', 'PD', 'CG']:
                     ##job not running, pending, or cleaning up
                     raise RuntimeError(f"job {self.job_name} failed with status {job_status}")
-                
+
+                if job_status == 'PD':  ##if job is pending in queue, keep waiting
+                    continue
+
                 ##if self.log_file is specified
                 ##monitor it, if it becomes stagnant, kill the job and raise error
                 if self.log_file is None:
