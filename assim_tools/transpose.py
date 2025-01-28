@@ -59,6 +59,7 @@ def transpose_field_to_state(c, fields):
     - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
       The locally stored ensemble-complete field chunks on partitions.
     """
+    c.comm.Barrier()
 
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
     print_1p('transpose field-complete to ensemble-complete\n')
@@ -131,6 +132,7 @@ def transpose_state_to_field(c, state):
     - fields: dict[(mem_id, rec_id), fld]
       the locally stored field-complete fields for subset of mem_id,rec_id.
     """
+    c.comm.Barrier()
 
     print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
     print_1p('transpose ensemble-complete to field-complete\n')
@@ -223,6 +225,7 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
       output_obs: dict[obs_rec_id, dict[par_id, dict[key, np.array]]]
       is the local observation sequence, key = 'obs','x','y','z','t'...
     """
+    c.comm.Barrier()
 
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
@@ -345,6 +348,7 @@ def transpose_lobs_to_obs(c, lobs):
     - obs_post_seq:
       dict[(mem_id, obs_rec_id), np.array]
     """
+    c.comm.Barrier()
 
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
