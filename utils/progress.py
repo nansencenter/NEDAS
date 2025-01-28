@@ -4,7 +4,7 @@ import subprocess
 import time
 from functools import wraps
 
-def timer(c):
+def timer(c=None):
     """
     Decorator to show the time spent on a function
     Input: -c: config object
@@ -14,11 +14,12 @@ def timer(c):
         @wraps(func)
         def wrapper(*args, **kwargs):
             t0 = time.time()
-            result = func(*args, **kwargs)
-            t1 = time.time()
-            if c.comm.Get_rank() == c.pid_show:
-                print(f"timer: {func.__name__} took {t1 - t0} seconds\n", flush=True)
-            return result
+            try:
+                return func(*args, **kwargs)
+            finally:
+                t1 = time.time()
+                if c is None or (hasattr(c, 'comm') and c.comm.Get_rank() == getattr(c, 'pid_show', 0)):
+                    print(f"timer: {func.__name__} took {t1 - t0} seconds\n", flush=True)
         return wrapper
     return decorator
 
