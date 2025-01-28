@@ -22,7 +22,7 @@ def preprocess(c, model_name):
 
     if not c.job_submit:
         c.job_submit = {}
-        
+
     if c.job_submit.get('run_separate_jobs', False):
         ##ideally, if in preprocess method jobs are submitted through run_job, then
         ##here nworker should be c.nens
@@ -45,6 +45,7 @@ def preprocess(c, model_name):
             'member': mem_id,
             'time': c.time,
             'forecast_period': c.cycle_period,
+            'time_start': c.time_start,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.preprocess, **job_opt)  ##add job to the queue
