@@ -6,54 +6,8 @@ from utils.spatial_operation import gradx, grady, warp
 from utils.fft_lib import fft2, ifft2, get_wn, fftwn
 from grid import Grid
 
-##top-level function
-def random_perturb(field, grid, perturb_type, amp, hcorr, tcorr=1.0, powerlaw=-3, prev_perturb=None):
-    """
-    Add random perturbation to the given 2D field
-    Input:
-        - field: np.array
-        - grid: Grid object for the 2d field
-        - perturb_type: 'gaussian', 'powerlaw', 'empirical', or 'displace'
-        - amp: float
-        - hcorr: float
-        - tcorr: float (optional)
-        - perturb_prev; dict(str, np.array), previous perturbation data
-    """
-    ##generate perturbation according to prescribed parameters
-    if perturb_type == 'gaussian':
-        perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
-
-    elif perturb_type == 'powerlaw':
-        perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
-
-    elif perturb_type == 'empirical':
-        ##TODO: allow user to specify empirical spectrum for the perturbation
-        raise NotImplementedError
-
-    elif perturb_type == 'displace':
-        mask = np.full(grid.x.shape, False)
-        du, dv = random_displacement(grid, mask, amp, hcorr)
-        perturb = np.array([du, dv])
-
-    else:
-        raise TypeError('unknown perturbation type: '+perturb_type)
-
-    ##create perturbations that are correlated in time
-    autocorr = np.exp(-1.0)
-    alpha = autocorr**(1.0/tcorr)
-    if prev_perturb is not None:
-        perturb = np.sqrt(1-alpha**2) * perturb + alpha * prev_perturb
-
-    ##apply the perturbation
-    if perturb_type == 'displace':
-        field = warp(field, perturb[0,...], perturb[1,...])
-    else:
-        field += perturb
-
-    return field, perturb
-
 def gen_perturb(grid: Grid,
-                   perturb_type: typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen'],
+                   perturb_type: typing.Literal['gaussian_evensen'],
                    amp: float,
                    hcorr : int,
                    powerlaw:float=-3.) -> np.ndarray:
@@ -79,21 +33,7 @@ def gen_perturb(grid: Grid,
         random perturbation field
     """
     ##generate perturbation according to prescribed parameters
-    if perturb_type == 'gaussian':
-        perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
-
-    elif perturb_type == 'powerlaw':
-        perturb = random_field_powerlaw(grid.nx, grid.ny, amp, powerlaw)
-
-    elif perturb_type == 'empirical':
-        ##TODO: allow user to specify empirical spectrum for the perturbation
-        raise NotImplementedError
-
-    elif perturb_type == 'displace':
-        mask = np.full(grid.x.shape, False)
-        du, dv = random_displacement(grid, mask, amp, hcorr)
-        perturb = np.array([du, dv])
-    elif perturb_type == 'gaussian_evensen':
+    if perturb_type == 'gaussian_evensen':
         perturb = random_field_gaussian_evensen(grid.nx, grid.ny, amp, hcorr)
         perturb = perturb - perturb.mean()
     else:
@@ -255,14 +195,11 @@ def pres_adjusted_wind_perturb(grid: Grid, ampl_pres:float, ampl_wind:float,
     # the sign function is used to distinguish the coriolis parameter for different hemisphere
     fcor:np.ndarray = np.sign(plat)*(2*np.sin(rlat/r2d)*2*np.pi/86400)
 
-    # minimum spatial resolution
-    dx_min: float = grid.dx.min()
     # ratio between the wind speed amplitude and a typical wind speed from pressure gradient
     wprsfac:float =1.
     if with_wind_speed_limit:
         # typical pressure gradient
-        wprsfac=np.sqrt(ampl_pres)/(scorr*dx_min)
-        wprsfac=wprsfac/fcor.max()
+        wprsfac=np.sqrt(ampl_pres)/scorr/fcor
         wprsfac=np.sqrt(ampl_wind)/wprsfac
 
     # calc u,v from pres according to pres-wind relation
