@@ -1,0 +1,93 @@
+work_dir: '/cluster/work/users/yingyue/nextsimdg/test'   ##working directory for the experiment
+
+job_submit:
+  host: betzy
+  scheduler: slurm
+  ppn: 32
+  project: nn2993k
+  queue: devel
+  run_separate_jobs: True
+
+nproc: 32       ##total number of processors
+
+nens: 20         ##ensemble size
+run_assim: True  ##if true, run the assimilation steps
+run_diag: True
+debug: True       ##if true, output debug data/message
+
+time_start: '201001010000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '201001040000'         ##end time of the experiment
+time_assim_start: '201010300000' ##start time of the first analysis cycle
+time_assim_end: '201001040000'   ##end time of the last analysis cycle
+cycle_period: 24                 ##cycle period, in hours
+
+#time: '201001010000'
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'nextsim.dg'
+
+state_def:
+- name: 'seaice_conc'
+  model_src: 'nextsim.dg'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_thick'
+  model_src: 'nextsim.dg'
+  var_type: 'field'
+  err_type: 'normal'
+
+obs_def:
+- name: 'seaice_conc'
+  dataset_src: 'osisaf.ice_conc'
+  model_src: 'nextsim.dg'
+  obs_window_min: -24
+  obs_window_max: 0
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 1e5
+  vroi: 1e10
+  troi: 24
+  impact_on_state:
+
+use_synthetic_obs: False
+
+dataset_def:
+  osisaf.ice_conc:
+    dataset_dir: '/cluster/projects/nn2993k/sim/data/OSISAF_ice_conc/polstere'
+
+model_def:
+  nextsim.dg:
+    config_file: '/cluster/work/users/yingyue/nextsimdg/NEDAS/models/nextsim/dg/config-betzy.yml'
+    model_env: '/cluster/work/users/yingyue/nextsimdg/NEDAS/models/nextsim/dg/setup-betzy.src'
+    model_config_file: '/cluster/work/users/yingyue/nextsimdg/NEDAS/models/nextsim/dg/template.cfg'
+    nproc_per_run: 128    ##number of processors to run a forecast
+    nproc_per_util: 1
+    parallel_mode: openmp
+    walltime: 10000     ##walltime in seconds
+    ens_run_type: batch
+    use_job_array: True
+    ens_init_dir: '/cluster/work/users/yingyue/nextsimdg/data'
+    truth_dir: ''
+
+perturb:  ##leave blank, use nextsim.dg specific perturb settings
+
+assim_mode: 'batch'
+filter_type: 'ETKF'
+
+inflation:
+  type: 'posterior,relax'
+  adaptive: True
+  coef: 1.0
+
+localization:
+  htype: 'GC'
+  vtype: 'GC'
+  ttype: 'GC'
+
+diag:
