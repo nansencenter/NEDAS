@@ -237,6 +237,7 @@ class Model(ModelConfig):
             return
 
         # 3. add perturbations
+        np.random.seed(time.second+ens_mem_id)
         # here, if 'restart section is not under perturb section
         # we only link the restart file to each ensemble directory
         if 'restart' not in self.perturb or kwargs['time'] != kwargs['time_start']:
