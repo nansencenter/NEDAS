@@ -143,14 +143,14 @@ perturb:
         # when press_wind_relate is True,
         # we need explicit specification of atmospehre wind and pressure variables
         # varname of u-component wind in forcing file
-        u_name: 'u'
+        u_name: 'data/u'
         # varname of v-component wind in forcing file
-        v_name: 'v'
+        v_name: 'data/v'
         # varname of pressure in forcing file
-        pres_name: 'pair'
+        pres_name: 'data/pair'
         # varname of ||u|| wind in forcing file
         # if not such variable, set to None
-        wind_amp_name: 'wind_speed'
+        wind_amp_name: 'data/wind_speed'
         # perturbation amplitude for wind (sqrt(3))
         wind_pert_amp: 1.732050808
         type: 'gaussian_evensen'
@@ -187,20 +187,20 @@ perturb:
     ocean:
       variables:
         # the lists have 1-1 correspondence with other lists in this section
-        names: ['data/mld', 'data/sss', 'data/sst', 'data/u;data/v']
+        names: ['data/mld', 'data/sss', 'data/sst', 'data/u', 'data/v']
         # type of perturbation:
         # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
         # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
         # displace: generate a random wavenumber-1 displacement for the whole domain
         # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
-        amp: [0.001, 0.001, 0.001, 0.001]
+        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        amp: [0.001, 0.001, 0.001, 0.001, 0.001]
         # horizontal correlation length scale in meters
-        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5]
+        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
         # time decorrelation scale in hours
-        tcorr: [48, 48, 48, 48]
+        tcorr: [48, 48, 48, 48, 48]
         # lower bounds of the data
-        lower_bounds: [None, 0., None, None]
+        lower_bounds: [None, 0., None, None, None]
         # upper bounds of the data
-        upper_bounds: [None, None, None, None]
+        upper_bounds: [None, None, None, None, None]
 
