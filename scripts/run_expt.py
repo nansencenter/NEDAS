@@ -4,15 +4,9 @@
 import os
 from config import Config
 from utils.progress import timer
-from utils.shell_utils import run_script
 from utils.conversion import t2s, s2t, dt1h
 from utils.dir_def import cycle_dir
-from scripts.preprocess import preprocess
-from scripts.postprocess import postprocess
-from scripts.perturb import perturb_script_path
-from scripts.assimilate import assimilate_script_path
-from scripts.ensemble_forecast import ensemble_forecast
-from scripts.diag import diag_script_path
+from scripts import preprocess, postprocess,perturb, assimilate, diag, ensemble_forecast
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -29,24 +23,24 @@ while c.time < c.time_end:
 
     os.system("mkdir -p "+cycle_dir(c, c.time))
 
-    preprocess(c)
+    preprocess.run(c)
 
-    run_script(perturb_script_path, c)
+    perturb.run(c)
 
     ##assimilation step
     if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         for c.scale_id in range(c.nscale):
-            run_script(assimilate_script_path, c)
+            assimilate.run(c)
 
-        postprocess(c)
+        postprocess.run(c)
 
     ##forecast step
-    ensemble_forecast(c)
+    ensemble_forecast.run(c)
 
     ##compute diagnostics
     if c.run_diag:
-        run_script(diag_script_path, c)
+        diag.run(c)
 
     ##advance to next cycle
     c.prev_time = c.time
