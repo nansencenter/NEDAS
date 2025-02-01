@@ -28,7 +28,7 @@ files:
     # 3. otherwise, change the way we obtain filenames in
     #    function get_restart_filename
     #    in models/nextsim/dg/model/restart.py
-    format: '/cluster/work/users/yingyue/nextsimdg/data/restart{time}.nc'
+    format: '/cluster/work/users/yingyue/nextsimdg/icbc/restart{time}.nc'
     # this is the time_format used to derive the time string in restart filename
     # this follows the strftime format
     # See `https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes`_
@@ -53,7 +53,7 @@ files:
       # 3. otherwise, change the way we obtain filenames in
       #    function get_forcing_filename
       #    in models/nextsim/dg/model/forcing.py
-      format: '/cluster/work/users/yingyue/nextsimdg/data/25km_NH.ERA5_{start}_{end}.nc'
+      format: '/cluster/work/users/yingyue/nextsimdg/icbc/25km_NH.ERA5_{start}_{end}.nc'
       # datetime format to fill start and end date of the forcing file format
       datetime_format: '%Y-%m-%d'
       # initial start date of all the forcing file
@@ -84,7 +84,7 @@ files:
       # 3. otherwise, change the way we obtain filenames in
       #    function get_forcing_filename
       #    in models/nextsim/dg/model/forcing.py
-      format: '/cluster/work/users/yingyue/nextsimdg/data/25km_NH.TOPAZ4_{start}_{end}.nc'
+      format: '/cluster/work/users/yingyue/nextsimdg/icbc/25km_NH.TOPAZ4_{start}_{end}.nc'
       # datetime format to fill start and end date of the forcing file format
       datetime_format: '%Y-%m-%d'
       # initial start date of all the forcing file
@@ -102,7 +102,8 @@ files:
 perturb:
   forcing:
     # this is used to save the perturbation files (.npy format)
-    path: '/cluster/work/users/yingyue/nextsimdg/test/perturb'
+    # remember to remove them when running a new experiment
+    path: '/cluster/work/users/yingyue/nextsimdg/perturb'
     # section names must correspond to section names under files
     # e.g., atmosphere, ocean
     # atmosphere perturbation settings

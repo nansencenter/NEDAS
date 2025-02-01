@@ -210,6 +210,7 @@ class Model(ModelConfig):
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
         time_start = kwargs['time_start']
+        debug = kwargs['debug']
 
         # 2. get the restart and forcing filename
         file_options_restart = self.files['restart']
@@ -250,13 +251,13 @@ class Model(ModelConfig):
             restart_options = self.perturb['restart']
             # copy restart files to the ensemble member directory
             fname = os.path.join(run_dir, os.path.basename(fname_restart))
-            subprocess.run(['cp', '-v', fname_restart, fname])
+            subprocess.run(['cp', fname_restart, fname])
             # prepare the restart file options for the perturbation
             file_options_rst = {'fname': fname,
                             'lon_name':file_options_restart['lon_name'],
                             'lat_name':file_options_restart['lat_name']}
             # perturb the restart file
-            restart.perturb_restart(restart_options, file_options_rst)
+            restart.perturb_restart(restart_options, file_options_rst, debug)
 
         if 'forcing' not in self.perturb:
             # we we do not perturb the forcing file
@@ -276,12 +277,13 @@ class Model(ModelConfig):
                 file_options_forcing[forcing_name]['fname_src'] = fname_forcing[forcing_name]
                 file_options_forcing[forcing_name]['fname'] = fname
             # add forcing perturbations
-            forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time)
+            forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time, debug)
 
-        ##link the init_file from cycle at time_start
-        fname_restart_init = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
-        fname = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
-        os.system(f'ln -s {fname} {run_dir}')
+        if time > time_start:
+            ##link the init_file from cycle at time_start
+            fname_restart_init = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
+            fname = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
+            os.system(f'ln -s {fname} {run_dir}')
 
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
@@ -303,10 +305,8 @@ class Model(ModelConfig):
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
-        shell_cmd = "echo starting the script...; "
-        shell_cmd += f"source {self.model_env}; "
+        shell_cmd = f"source {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
-        shell_cmd += f"echo {run_dir}; "
         shell_cmd += "ln -fs $NDG_BLD_DIR/nextsim .; "
         shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
 
