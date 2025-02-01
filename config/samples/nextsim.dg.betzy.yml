@@ -3,25 +3,23 @@ work_dir: '/cluster/work/users/yingyue/nextsimdg/test'   ##working directory for
 job_submit:
   host: betzy
   scheduler: slurm
-  ppn: 32
+  ppn: 128
   project: nn2993k
-  queue: devel
-  run_separate_jobs: True
+  queue: normal
+  run_separate_jobs: False
 
-nproc: 32       ##total number of processors
+nproc: 1024  ##total number of processors
 
-nens: 20         ##ensemble size
+nens: 8          ##ensemble size
 run_assim: True  ##if true, run the assimilation steps
-run_diag: True
-debug: True       ##if true, output debug data/message
+run_diag: False
+debug: False     ##if true, output debug data/message
 
 time_start: '201001010000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '201001040000'         ##end time of the experiment
+time_end: '201001120000'         ##end time of the experiment
 time_assim_start: '201010300000' ##start time of the first analysis cycle
-time_assim_end: '201001040000'   ##end time of the last analysis cycle
+time_assim_end: '201001110000'   ##end time of the last analysis cycle
 cycle_period: 24                 ##cycle period, in hours
-
-#time: '201001010000'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -70,7 +68,7 @@ model_def:
     nproc_per_util: 1
     parallel_mode: openmp
     walltime: 10000     ##walltime in seconds
-    ens_run_type: batch
+    ens_run_type: scheduler
     use_job_array: True
     ens_init_dir: '/cluster/work/users/yingyue/nextsimdg/data'
     truth_dir: ''

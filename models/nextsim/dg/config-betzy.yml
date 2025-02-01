@@ -1,7 +1,4 @@
 # model config parameters
-#grid definition
-##TODO: can we get stere proj x,y start and end directly to build the grid object?
-##      instead of converting from lon,lat which I think is unnecessary
 grid_def:
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
   xstart: -2.5e6
@@ -103,32 +100,6 @@ files:
       lon_name: 'data/longitude'
       lat_name: 'data/latitude'
 perturb:
-  restart:
-    variables:
-        # the lists have 1-1 correspondence with other lists in this section
-        # if geostrophic_wind_adjust is true, pressure field must be in names
-        # and it should not have wind fields here (it will be useless anyway as the wind perturbation is from pressure perturbations)
-        # if the variable is in the netCDF group of 'data', we need to provide the full path
-        names: ['data/cice', 'data/hice', 'data/hsnow', 'data/tice', 'data/sss', 'data/sst', ]
-        # type of perturbation:
-        # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
-        # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
-        # displace: generate a random wavenumber-1 displacement for the whole domain
-        # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
-        # amplitude of the perturbation
-        # sqrt(10), sqrt(50),
-        amp: [0.05, 0.3, 0.1, 0.1, 0.001, 0.001]
-        # horizontal correlation length scale in meters
-        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
-        # time decorrelation scale in hours
-        tcorr: [48, 48, 48, 48, 48, 48]
-        # the content of the bound list can either be a float or None
-        # if it is None, the bound is not set
-        # lower bounds of the data
-        lower_bounds: [0., 0., 0., None, None, None]
-        # upper bounds of the data
-        upper_bounds: [None, None, None, None, None, None]
   forcing:
     # this is used to save the perturbation files (.npy format)
     path: '/cluster/work/users/yingyue/nextsimdg/test/perturb'
