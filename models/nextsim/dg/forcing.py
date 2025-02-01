@@ -312,7 +312,7 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
     os.makedirs(os.path.join(pert_path, f'ensemble_{i_ens}'), exist_ok=True)
     # time index and time array
     time_index: np.ndarray[typing.Any, np.dtype[np.int64]]
-    time_array: np.ndarray[typing.Any, np.dtype[np.float64]]
+    time_array: list[datetime]
 
     for forcing_name in forcing_options:
         if forcing_name not in file_options: continue
