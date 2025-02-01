@@ -71,7 +71,7 @@ def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
     return fname
 
 
-def perturb_restart(restart_options:dict, file_options:dict) -> None:
+def perturb_restart(restart_options:dict, file_options:dict, debug=False) -> None:
     """perturb the initial conditions in restart files
 
     Parameters

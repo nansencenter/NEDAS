@@ -27,9 +27,11 @@ def postprocess(c, model_name):
         job_opt = {
             'path': path,
             'member': mem_id,
+            'time': c.time,
+            'forecast_period': c.cycle_period,
             'time_start': c.time_start,
             'time_end': c.time_end,
-            'cycle_period': c.cycle_period,
+            'debug': c.debug,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.postprocess, **job_opt)  ##add job to the queue
