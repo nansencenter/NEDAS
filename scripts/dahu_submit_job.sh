@@ -7,7 +7,7 @@
 #OAR --project pr-sasip
 #OAR -t devel
 
-USER=yumengch-ext
+DFLT_USER=yumengch-ext
 WD=/bettik/${USER}
 CD=${WD}/NEDAS
 
@@ -17,12 +17,13 @@ model=nextsim.dg
 
 source $HOME/.bashrc
 source /applis/environments/conda.sh
-#source /bettik/aydogdu-ext/pkgs/nedas-venv/nds/bin/activate
 conda activate nedas
 export PYTHONPATH=$PYTHONPATH:$WD/NEDAS
 
+sed "s;${DFLT_USER};${USER};g" $CD/config/samples/$model.yml > $CD/config/samples/${model}_${USER}.yml
+
 python $CD/scripts/run_expt.py \
-    --config_file=$CD/config/samples/$model.yml \
+    --config_file=$CD/config/samples/${model}_${USER}.yml \
     --nens $nens \
     --nproc $nproc \
     --work_dir $WD/DATA/$model/ndg_$(printf "%02d" $nens)

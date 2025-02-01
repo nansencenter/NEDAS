@@ -4,11 +4,11 @@
 ##      instead of converting from lon,lat which I think is unnecessary
 grid_def:
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
-  xstart:
-  xend:
-  ystart:
-  yend:
-  dx:
+  xstart: -2.5e6
+  xend: 2.498e6
+  ystart: -2e6
+  yend: 2.5e6
+  dx: 3e3
 
 restart_dt: 24  ##model restart interval (hours)
 ##physical parameters
