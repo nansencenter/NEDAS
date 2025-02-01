@@ -11,6 +11,8 @@ class SLURMJobSubmitter(JobSubmitter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        self.parallel_mode = kwargs.get('parallel_mode', 'mpi')
+
         ##additional slurm options
         if self.host == 'betzy':
             self.ppn = kwargs.get('ppn', 128)
@@ -33,7 +35,12 @@ class SLURMJobSubmitter(JobSubmitter):
         if self.run_separate_jobs:
             return f"srun -n {self.nproc} --unbuffered"
         else:
-            return f"srun -n {self.nproc} -N {self.nnode} -r {self.offset_node} --exact --unbuffered"
+            if self.parallel_mode == 'mpi':
+                return f"srun -n {self.nproc} -N {self.nnode} -r {self.offset_node} --exact --unbuffered"
+            elif self.parallel_mode == 'openmp':
+                return f"export OMP_NUM_THREADS={self.nproc}; srun -N 1 -r {self.offset_node} -n 1 --cpus-per-task={self.nproc} --unbuffered"
+            else:
+                raise ValueError(f"unknown parallel_mode '{self.parallel_mode}'")
 
     @property
     def job_array_index_name(self):

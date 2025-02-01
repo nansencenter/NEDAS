@@ -12,3 +12,4 @@ ml load Eigen/3.4.0-GCCcore-13.2.0
 . $HOME/conda.src
 conda activate nextsimdg
 
+export NDG_BLD_DIR=/cluster/home/${USER}/code/nextsimdg/build
