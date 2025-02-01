@@ -3,7 +3,7 @@ import os
 import subprocess
 from pyproj import Proj
 from grid import Grid
-from utils.conversion import units_convert, dt1h
+from utils.conversion import units_convert, t2s, dt1h
 from utils.shell_utils import run_job, makedir
 from . import restart, forcing, namelist
 from ...model_config import ModelConfig
@@ -12,8 +12,9 @@ class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        level_sfc = np.array([0])
-        self.seaice_variables = {  ##TODO: check units here and any missing variables
+        # level_sfc = np.array([0])
+        # level_dg_comp = np.arange(self.dg_order)
+        self.seaice_variables = {
              'seaice_conc': {'name':'cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'%'},
              'seaice_thick': {'name':'hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'snow_thick': {'name':'hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
@@ -76,7 +77,7 @@ class Model(ModelConfig):
         ##the source file is copied to path (cycle directory) in preprocess
         ##this filename function will return the copy, not the original location defined by fname
         return os.path.join(kwargs['path'], ens_mem_dir, os.path.basename(fname))
-            
+
     def read_grid(self, **kwargs):
         ## the nextsim dg grid is fixed, no need to update the grid at runtime
         pass
@@ -208,6 +209,7 @@ class Model(ModelConfig):
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
+        time_start = kwargs['time_start']
 
         # 2. get the restart and forcing filename
         file_options_restart = self.files['restart']
@@ -242,8 +244,8 @@ class Model(ModelConfig):
         # we only link the restart file to each ensemble directory
         if 'restart' not in self.perturb or kwargs['time'] != kwargs['time_start']:
             # we we do not perturb the restart file
-            # simply link the restart files
-            os.system(f'ln -s {fname_restart} {run_dir}')
+            # simply copy over the restart files
+            os.system(f'cp -L {fname_restart} {run_dir}')
         else:
             restart_options = self.perturb['restart']
             # copy restart files to the ensemble member directory
@@ -276,6 +278,11 @@ class Model(ModelConfig):
             # add forcing perturbations
             forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time)
 
+        ##link the init_file from cycle at time_start
+        fname_restart_init = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
+        fname = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
+        os.system(f'ln -s {fname} {run_dir}')
+
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
         kwargs = super().parse_kwargs(**kwargs)
@@ -300,16 +307,10 @@ class Model(ModelConfig):
         shell_cmd += f"source {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += f"echo {run_dir}; "
-        shell_cmd += "cp $NDG_BLD_DIR/nextsim .; "
-        if self.parallel_mode == 'openmp':
-            shell_cmd += f"export OMP_NUM_THREADS={nproc}; "
-            shell_cmd += "./nextsim --config-file nextsim.cfg > time.step"
-        elif self.parallel_mode == 'mpi':
-            shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
-        else:
-            raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
+        shell_cmd += "ln -fs $NDG_BLD_DIR/nextsim .; "
+        shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
 
-        run_job(shell_cmd, job_name='nextsim.dg.run', nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
         ##check if the restart file at next_time is produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
@@ -354,7 +355,7 @@ class Model(ModelConfig):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, array_size=nens, run_dir=run_dir, **kwargs)
+        run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
 
         ##check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
