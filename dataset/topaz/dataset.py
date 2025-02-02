@@ -22,7 +22,7 @@ class Dataset(DatasetConfig):
             'seaice_thick': {'name':'HICE', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
             'seaice_drift': {'name':'IDRFT', 'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km'},
             }
-        
+
         self.obs_operator = {
             'seaice_drift': self.get_seaice_drift,
             }
@@ -59,6 +59,12 @@ class Dataset(DatasetConfig):
         time = kwargs['time']
         grid = kwargs['grid']
 
+        obs_thin = False
+        model = kwargs.get('model')
+        if model is not None and hasattr(model, 'z') and model.z is not None:
+            ##model vertical layers are defined, perform vertical thinning on profiler obs
+            obs_thin = True
+
         is_vector = self.variables[name]['is_vector']
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
@@ -69,7 +75,7 @@ class Dataset(DatasetConfig):
             for key in obs_seq.keys():
                 obs_seq[key] = np.array([])
             return obs_seq
-        
+
         for file in fname:
             data = read_uf_data(file)
 
