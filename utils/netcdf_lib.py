@@ -115,8 +115,10 @@ def nc_read_var(filename, varname, comm=None):
     """
     f = nc_open(filename, 'r', comm)
 
-    assert varname in f.variables, 'variable '+varname+' is not defined in '+filename
-    dat = f[varname][...]
+    try:
+        dat = f[varname][...]
+    except IndexError:
+        raise RuntimeError(f"variable '{varname}' is not defined in {filename}")
     dat_out = dat.data
     dat_out[dat.mask] = np.nan
 
