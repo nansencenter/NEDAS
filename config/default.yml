@@ -57,8 +57,8 @@ state_def:
 obs_def:
 - name: 'streamfunc'      ## name of the variable
   dataset_src: 'qg'       ## which dataset module it comes from
-  dataset_dir: ''         ## path to where the dataset is stored
   model_src: 'qg'         ## which model to use to compute observation priors
+  ##the following is specific to the observation 'streamfunc' in the dataset
   nobs: 3000              ## number of observations (if generating synthetic obs)
   obs_window_min: -6      ## observation within the window (in hours) will be considered valid at cycle time
   obs_window_max: 0
@@ -73,6 +73,14 @@ obs_def:
                           ## this can help removing the analysis increment only on certain variables
 
 use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
+
+##dataset configuration dict(dataset_name, opts)
+##will use config_file as starting point, additional variables will overwrite config_file settings
+##if new variables introduced here, they will be appended to the configuration
+dataset_def:
+  qg:
+    config_file: '/cluster/home/yingyue/code/NEDAS/dataset/qg/default.yml'  ##configuration file (empty for now)
+    dataset_dir: '.'  ##path to the dataset files, for qg we use synthethic obs so no need to specify
 
 ##model configuration dict(model_name, opts)
 ##will use config_file as starting point, additional variables will overwrite config_file settings
@@ -103,8 +111,13 @@ perturb:
   tcorr: 12                ## temporal correlation length (in hours)
 
 ##more details in assimilation algorithm
-assim_mode: 'batch'          ##assimilation mode (batch or serial)
-filter_type: 'ETKF'          ##filter type for the update (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+assim_mode: 'batch'        ##assimilation mode (batch or serial)
+filter_type: 'ETKF'        ##filter type for the update (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+
+##filter parameters
+rfactor: 2                 ## inflation factor for observation error when updating ensemble perturbations
+kfactor: 2                 ## inflation factor for observation error if innovation is too large
+nlobs_max:                 ## maximum number of local observations to be assimilated (leave blank if using all obs)
 
 ##multiscale approach in assimilation
 nscale: 1                    ## number of scale components
@@ -136,3 +149,12 @@ localization:
   vtype: 'GC'
   ttype: 'GC'
 
+##diagnostic methods configuration
+diag:
+- method: 'misc.convert_output'  ## method name
+  is_ensemble: False             ## if True, the method is applied to ensemble members
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'  ## configuration file
+  model_src: 'qg'                ## which model the method is applied to
+  variables: ['vorticity']       ## which variables the method is applied to
+  grid_def:                      ## output grid definition, leave blank to use default.yml settings
+  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_{time:%Y-%m-%dT%H}.nc'  ## output file format

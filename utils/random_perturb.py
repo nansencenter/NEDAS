@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from functools import lru_cache
 from scipy.optimize import fsolve
@@ -6,7 +7,7 @@ from .conversion import ensure_list
 from .spatial_operation import gradx, grady, warp
 from .fft_lib import fft2, ifft2, get_wn
 
-def random_perturb(grid, fields, prev_perturb, dt=1, n=0, **kwargs):
+def random_perturb(grid, fields, prev_perturb, dt=1, n=0, seed=None, **kwargs):
     """
     Add random perturbation to the given 2D field
     Input:
@@ -22,6 +23,13 @@ def random_perturb(grid, fields, prev_perturb, dt=1, n=0, **kwargs):
             hcorr: float, or list of float, horizontal corr length (meters)
             tcorr: float, or list of float, time corr length (hours)
     """
+    if seed is None:
+        ##try to randomize using system entropy
+        seed = int.from_bytes(os.urandom(4), 'little')
+    else:
+        assert isinstance(seed, int)
+    np.random.seed(seed)
+
     perturb = {}
     perturb_type, other_opts, params = parse_perturb_opts(**kwargs)
 

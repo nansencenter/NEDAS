@@ -6,7 +6,7 @@ import importlib
 from pyproj import Proj
 from grid import Grid
 from utils.parallel import Comm
-from utils.conversion import s2t, t2s
+from utils.conversion import s2t, t2s, dt1h
 from .parse_config import parse_config
 
 class Config(object):
@@ -44,6 +44,11 @@ class Config(object):
         ##convert string to datetime obj
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
             setattr(self, key, s2t(getattr(self, key)))
+
+        ##make sure prev and next time is correct
+        if self.time > self.time_start:
+            self.prev_time = self.time - self.cycle_period * dt1h
+        self.next_time = self.time + self.cycle_period * dt1h
 
     def set_comm(self):
         ##initialize mpi communicator
@@ -95,16 +100,19 @@ class Config(object):
         for model_name, kwargs in self.model_def.items():
             ##load model class instance
             module = importlib.import_module('models.'+model_name)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
 
     def set_dataset_config(self):
         ##initialize dataset config dict
         self.dataset_config = {}
-        for rec in self.obs_def:
+        for dataset_name, kwargs in self.dataset_def.items():
             ##load dataset module
-            dataset_name = rec['dataset_src']
             module = importlib.import_module('dataset.'+dataset_name)
-            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **rec)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **kwargs)
 
     def show_summary(self):
         ##print a summary

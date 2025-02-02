@@ -6,7 +6,7 @@ from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
 from utils.shell_utils import run_command, run_job
-from utils.dir_def import forecast_dir
+from utils.dir_def import forecast_dir, cycle_dir
 from utils.random_perturb import random_perturb
 
 def perturb(c):
@@ -67,7 +67,7 @@ def perturb(c):
             for k in model.variables[vname]['levels']:
                 fld_id += 1
                 if c.debug:
-                    print(f"PID {c.pid}: perturbing mem{mem_id+1} {variable_list} at {t} level {k}", flush=True)
+                    print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
                 else:
                     print_1p(progress_bar(fld_id, nfld+1))
 
@@ -118,6 +118,14 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
+<<<<<<< HEAD
+=======
+    print(f"\033[1;33mRUNNING\033[0m {script_file}")
+    if not hasattr(c, 'perturb') or c.perturb is None:
+        print('no perturbation defined in config, exiting\n\n')
+        return
+
+>>>>>>> other_features
     ##build run commands for the perturb script
     commands = f"source {c.python_env}; "
 
@@ -126,17 +134,26 @@ def run(c):
     else:
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
         commands += f"{sys.executable} {script_file} -c {config_file} --nproc=1"
+<<<<<<< HEAD
         
     run_job(commands, job_name="perturb", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
+=======
+
+    job_submit_opts = {}
+    if c.job_submit:
+        job_submit_opts = c.job_submit
+        
+    run_job(commands, job_name="perturb", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+>>>>>>> other_features
 
 if __name__ == "__main__":
     from config import Config
     c = Config(parse_args=True)  ##get config from runtime args
 
     print_1p = by_rank(c.comm, 0)(print_with_cache)
-    print_1p("\n\033[1;33mPerturbing the ensemble model state and forcing\033[0m\n")
+    print_1p("\nPerturbing the ensemble model state and forcing\n")
     if not hasattr(c, 'perturb') or c.perturb is None:
-        print_1p('no perturbation defined in config\n\n')
+        print_1p('no perturbation defined in config, exiting\n\n')
         exit()
 
     timer(c)(perturb)(c)
