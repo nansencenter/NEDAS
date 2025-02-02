@@ -1,11 +1,13 @@
 work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
+job_submit:
+  ppn: 16
 
 nproc: 5        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: True   ##if true, run the assimilation steps
-
+run_assim: True  ##if true, run the assimilation steps
+run_diag: True
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
@@ -31,11 +33,10 @@ state_def:
 obs_def:
 - name: 'streamfunc'
   dataset_src: 'qg'
-  dataset_dir: '.'
   model_src: 'qg'
-  nobs: 3000
   obs_window_min: -6
   obs_window_max: 0
+  nobs: 3000
   err:
     type: 'normal'
     std: 0.2
@@ -47,12 +48,14 @@ obs_def:
 
 use_synthetic_obs: True
 
+dataset_def:
+  qg:
+
 model_def:
   qg:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
     model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
     model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'
-    walltime: 10000     ##walltime in seconds
     ens_run_type: scheduler
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'
@@ -87,3 +90,11 @@ localization:
   vtype: 'GC'
   ttype: 'GC'
 
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  model_src: 'qg'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

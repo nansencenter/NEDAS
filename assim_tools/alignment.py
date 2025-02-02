@@ -2,7 +2,6 @@ import numpy as np
 import os
 from utils.parallel import by_rank
 from utils.njit import njit
-from utils.conversion import t2s, s2t
 from utils.progress import print_with_cache, progress_bar
 import utils.spatial_operation as sop
 
@@ -28,6 +27,7 @@ def optical_flow(grid, mask, fld1, fld2, nlevel=5, niter_max=100, smoothness_wei
         gridc, fld1c = sop.coarsen(grid, fld1w, lev)
         _,     fld2c = sop.coarsen(grid, fld2,  lev)
         maskc = np.full(fld1c.shape, False, dtype=bool)
+        ##TODO: maskc should be coarsened from mask
         dx = gridc.dx / gridc.mfx
         dy = gridc.dy / gridc.mfy
         du_, dv_ = get_HS80_optical_flow(fld1c, fld2c, maskc, dx, dy, gridc.cyclic_dim, niter_max, smoothness_weight)

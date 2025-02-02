@@ -1,11 +1,9 @@
-import numpy as np
 import os
 import subprocess
-
+import numpy as np
 from config import parse_config
 from grid import Grid
 from utils.conversion import t2s, dt1h
-
 from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from ..util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 from ..model import QGModel
@@ -22,7 +20,7 @@ class QGModelEmulator(QGModel):
         self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
         self.unet_model.load_weights(self.weightfile)
 
-    def run(self, nens=1, task_id=0, **kwargs):
+    def run_batch(self, nens=1, task_id=0, **kwargs):
         kwargs = super().super().parse_kwargs(**kwargs)
         self.run_status = 'running'
         if nens>1:
@@ -65,12 +63,3 @@ class QGModelEmulator(QGModel):
             for k in range(self.nz):
                 fld = state_out[m,...,k]
                 self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
-
-            ##make a copy of output file to the output_dir
-            if 'output_dir' in kwargs:
-                output_dir = kwargs['output_dir']
-                if output_dir != path:
-                    kwargs_out_cp = {**kwargs, 'path':output_dir, 'member':members[m], 'time':next_time}
-                    output_file_cp = self.filename(**kwargs_out_cp)
-                    subprocess.run("mkdir -p "+os.path.dirname(output_file_cp)+"; cp "+output_file+" "+output_file_cp, shell=True)
-

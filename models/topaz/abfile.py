@@ -85,7 +85,7 @@ class AFile(object) :
         #print("mask boolean:",self._mask)
         if self._mask :
             if mask is None:
-                mask = np.isnan(h)
+                mask = numpy.isnan(h)
             I=numpy.where(~mask)
             hmax=h[I].max()
             hmin=h[I].min()
@@ -350,7 +350,7 @@ class ABFileBathy(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record) 
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def bminmax(self,fieldname) :
@@ -437,7 +437,7 @@ class ABFileRmu(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record)
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def bminmax(self,fieldname) :
@@ -506,7 +506,7 @@ class ABFileGrid(ABFile) :
         if record  is not None :
             w = self._filea.read_record(record) 
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def write_field(self,field,mask,fieldname,fmt="%16.8g") :
@@ -594,9 +594,11 @@ class ABFileArchv(ABFile) :
             if d["field"] == fieldname and level == d["k"] :
                 record=i
         if record  is not None :
-            w = self._filea.read_record(record) 
+            r = self._filea.read_record(record)
+            w = r.data
+            w[r.mask] = numpy.nan
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
 
     def write_header(self) :
@@ -756,6 +758,9 @@ class ABFileForcing(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
+        ##tolerance for max dist is 1 day
+        if numpy.min(numpy.abs(dist)) > 1.0 :
+            raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 
@@ -899,7 +904,7 @@ class ABFileRestart(ABFile) :
             else:
                 fld[mask] = numpy.nan
         else :
-            fld = None
+            raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return fld
 
     def overwrite_field(self, field, mask, fieldname, level, tlevel=1) :
@@ -1024,7 +1029,7 @@ class ABFileRelax(ABFile) :
             w = self._filea.read_record(record) 
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
         else :
-            w = None
+            raise RuntimeError(f"cannot find field {fieldname} at level {level} month {month} in file {self.basename}")
         return w
 
 class ABFileRelaxZ(ABFile) :
@@ -1101,6 +1106,9 @@ class ABFileRelaxZ(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
+        ##tolerance for max dist is 1 day
+        if numpy.min(numpy.abs(dist)) > 1.0 :
+            raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         w = self._filea.read_record(i) 
@@ -1110,7 +1118,7 @@ class ABFileRelaxZ(ABFile) :
     def bminmax(self,fieldname,depth) :
         record=None
         for i,d in self._fields.items() :
-            if d["field"] == fieldname and d["depth"] == dtime1:
+            if d["field"] == fieldname and d["depth"] == depth:
                 record=i
         if record  is not None :
             ret = (self._fields[i]["min"],self._fields[i]["max"])
