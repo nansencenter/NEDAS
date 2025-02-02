@@ -196,14 +196,9 @@ def blkdat(m):
     return nmlstr
 
 def limits(m, time, forecast_period):
-    refyear = time.year
-    day1 = int(time.strftime('%j'))
-    hour1 = int(time.strftime('%H'))
-    day2 = day1 + int(forecast_period / 24)
-    hour2 = (hour1 + forecast_period) % 24
-
-    fdtime = dayfor(m.yrflag, refyear, day1, hour1)
-    ldtime = dayfor(m.yrflag, refyear, day2, hour2)
+    next_time = time + forecast_period * timedelta(hours=1)
+    fdtime = dayfor(m.yrflag, time.year, time.timetuple().tm_yday, time.hour)
+    ldtime = dayfor(m.yrflag, next_time.year, next_time.timetuple().tm_yday, next_time.hour)
     nmlstr = "{:14.5f} {:14.5f}".format(fdtime, ldtime)
     return nmlstr
 

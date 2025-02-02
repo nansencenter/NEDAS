@@ -1,30 +1,24 @@
 import numpy as np
 import os
 import subprocess
-import inspect
-import signal
 from datetime import datetime
 from functools import lru_cache
 
 from utils.conversion import units_convert, t2s, s2t, dt1h
+from utils.shell_utils import run_job
 from config import parse_config
 from .namelist import namelist
 from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from ..model_grid import get_topaz_grid, stagger, destagger
-from . import forcing
+from ...model_config import ModelConfig
 
-class Model(object):
+class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
-
-        ##parse config file and obtain a list of attributes
-        code_dir = os.path.dirname(inspect.getfile(self.__class__))
-        config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
-        for key, value in config_dict.items():
-            setattr(self, key, value)
+        super().__init__(config_file, parse_args, **kwargs)
 
         levels = np.arange(1, 51, 1)
         level_sfc = np.array([0])
-        self.native_variables = {
+        self.variables = {
             'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
             'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
             'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
@@ -35,147 +29,116 @@ class Model(object):
             'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
             'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
             }
-        self.forcing_variables = forcing.variables
-        self.variables = {**self.native_variables, **self.atmos_forcing_variables}
 
         self.z_units = 'm'
-        self.read_grid()
-
-        self.run_process = None
-         self.run_status = 'pending'
-
-    def filename(self, **kwargs):
-
-        if 'path' in kwargs:
-            path = kwargs['path']
-        else:
-            path = '.'
-        if 'time' in kwargs and kwargs['time'] is not None:
-            assert isinstance(kwargs['time'], datetime), 'time shall be a datetime object'
-            tstr = kwargs['time'].strftime('%Y_%j_%H')
-        else:
-            tstr = '????_???_??'
-        if 'member' in kwargs and kwargs['member'] is not None:
-            assert kwargs['member'] >= 0, 'member index shall be >= 0'
-            mstr = '_mem{:03d}'.format(kwargs['member']+1)
-            mdir = '{:03d}'.format(kwargs['member']+1)
-        else:
-            mstr = ''
-            mdir = ''
-        return os.path.join(path, mdir, 'TP4restart'+tstr+mstr+'.a')
-
-    def read_grid(self, **kwargs):
+        
+        ##model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
 
-    def read_mask(self):
-        depthfile = path+'/topo/depth.a'
-        f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)
-        mask = f.read_field('depth').mask
+        self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
+        f = ABFileBathy(self.depthfile, 'r', idm=self.grid.nx, jdm=self.grid.ny)
+        depth = f.read_field('depth')
         f.close()
-        self.mask = mask
+        self.depth = -depth.data
+        self.mask = depth.mask
+        
+    def filename(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+
+        if kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        tstr = kwargs['time'].strftime('%Y_%j_%H_0000')
+        return os.path.join(kwargs['path'], mstr[1:], 'TP4restart'+tstr+mstr+'.a')
+
+    def read_grid(self, **kwargs):
+        pass
+
+    def read_mask(self):
+        pass
 
     def read_var(self, **kwargs):
-        ##check name in kwargs and read the variables from file
-        assert 'name' in kwargs, 'please specify which variable to get, name=?'
+        kwargs = super().parse_kwargs(**kwargs)
+        fname = self.filename(**kwargs)
         name = kwargs['name']
-        assert name in variables, 'variable name '+name+' not listed in variables'
-        fname = filename(path, **kwargs)
+        rec = self.variables[name]
 
-        if 'k' in kwargs:
-            ##Note: ocean level indices are negative in assim_tools.state
-            ##      but in abfiles, they are defined as positive indices
-            k = -kwargs['k']
-        else:
-            k = -variables[name]['levels'][-1]  ##get the first level if not specified
-        if 'mask' in kwargs:
-            mask = kwargs['mask']
-        else:
-            mask = None
-
-        if 'is_vector' in kwargs:
-            is_vector = kwargs['is_vector']
-        else:
-            is_vector = variables[name]['is_vector']
-
-        if 'units' in kwargs:
-            units = kwargs['units']
-        else:
-            units = variables[name]['units']
-
-        f = ABFileRestart(fname, 'r', idm=grid.nx, jdm=grid.ny)
-        if is_vector:
-            var1 = f.read_field(variables[name]['name'][0], level=k, tlevel=1, mask=mask)
-            var2 = f.read_field(variables[name]['name'][1], level=k, tlevel=1, mask=mask)
+        f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
+        if rec['is_vector']:
+            var1 = f.read_field(rec[name]['name'][0], level=kwargs['k'], tlevel=1, mask=None)
+            var2 = f.read_field(rec[name]['name'][1], level=kwargs['k'], tlevel=1, mask=None)
             var = np.array([var1, var2])
         else:
-            var = f.read_field(variables[name]['name'], level=k, tlevel=1, mask=mask)
+            var = f.read_field(rec[name]['name'], level=kwargs['k'], tlevel=1, mask=None)
         f.close()
 
-        var = units_convert(units, variables[name]['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
-    def write_var(path, grid, var, **kwargs):
-        ##check name in kwargs
-        assert 'name' in kwargs, 'please specify which variable to write, name=?'
+    def write_var(self, var, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+        fname = self.filename(**kwargs)
         name = kwargs['name']
-        assert name in variables, 'variable name '+name+' not listed in variables'
-        fname = filename(path, **kwargs)
-
-        ##same logic for setting level indices as in read_var()
-        if 'k' in kwargs:
-            k = -kwargs['k']
-        else:
-            k = -variables[name]['levels'][-1]
-        if 'mask' in kwargs:
-            mask = kwargs['mask']
-        else:
-            mask = None
+        rec = self.variables[name]
 
         ##open the restart file for over-writing
         ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
-        f = ABFileRestart(fname, 'r+', idm=grid.nx, jdm=grid.ny, mask=True)
+        f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny)
 
         ##convert units back if necessary
-        var = units_convert(kwargs['units'], variables[name]['units'], var, inverse=True)
+        var = units_convert(kwargs['units'], rec['units'], var)
 
-        if kwargs['is_vector']:
+        if rec['is_vector']:
             for i in range(2):
-                f.overwrite_field(var[i,...], mask, variables[name]['name'][i], level=k, tlevel=1)
+                f.overwrite_field(var[i,...], None, rec['name'][i], level=kwargs['k'], tlevel=1)
         else:
-            f.overwrite_field(var, mask, variables[name]['name'], level=k, tlevel=1)
+            f.overwrite_field(var, None, rec['name'], level=kwargs['k'], tlevel=1)
         f.close()
 
     @lru_cache(maxsize=3)
     def z_coords(self, **kwargs):
         """calculate vertical coordinates given the 3D model state
         """
-        ##check if level is provided
-        assert 'k' in kwargs, 'missing level index in kwargs for z_coords calc, level=?'
+        """
+        Calculate vertical coordinates given the 3D model state
+        Return:
+        - z: np.array
+        The corresponding z field
+        """
+        ##some defaults if not set in kwargs
+        if 'k' not in kwargs:
+            kwargs['k'] = 0
 
-        z = np.zeros(grid.x.shape)
+        z = np.zeros(self.grid.x.shape)
+
         if kwargs['k'] == 0:
             ##if level index is 0, this is the surface, so just return zeros
             return z
+
         else:
-            ##get layer thickness above level k, convert to z_units, and integrate to total depth
-            for k in [k for k in levels if k>=kwargs['k']]:
-                rec = kwargs.copy()
-                rec['name'] = 'ocean_layer_thick'
-                rec['units'] = variables['ocean_layer_thick']['units']
-                rec['k'] = k
-                d = read_var(path, grid, **rec)
-                if kwargs['units'] == 'm':
-                    onem = 9806.
-                    z -= d/onem  ##accumulate depth in meters, negative relative to surface
-                else:
-                    raise ValueError('do not know how to calculate z_coords for z_units = '+kwargs['units'])
-            return z
+            ##get layer thickness and convert to units
+            rec = kwargs.copy()
+            rec['name'] = 'ocean_layer_thick'
+            rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+            if self.z_units == 'm':
+                dz = - self.read_var(**rec) / self.onem ##in meters, negative relative to surface
+            elif self.z_units == 'Pa':
+                dz = self.read_var(**rec)
+            else:
+                raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
+
+            ##use recursive func, get previous layer z and add dz
+            kwargs['k'] -= 1
+            z_prev = self.z_coords(**kwargs)
+            return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):
-        kwargs_init = {**kwargs, 'path':self.ens_init_dir}
-        init_file = self.filename(**kwargs_init)
-        input_file = self.filename(**kwargs)
+        kwargs = super().parse_kwargs(**kwargs)
+
+        init_file = self.self.filename(**{**kwargs, 'path':self.ens_init_dir})
+        input_file = self.self.filename(**kwargs)
         os.system("mkdir -p "+os.path.dirname(input_file))
         os.system("cp "+init_file+" "+input_file)
         os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
@@ -184,12 +147,14 @@ class Model(object):
         pass
 
     def run(self, task_id=0, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
-        job_submit_cmd = kwargs['job_submit_cmd']
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
 
-        path = kwargs['path']
-        input_file = self.filename(**kwargs)
+        input_file = self.self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
         os.system("mkdir -p "+run_dir)
         os.chdir(run_dir)
@@ -201,13 +166,13 @@ class Model(object):
         next_time = time + forecast_period * dt1h
 
         kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.filename(**kwargs_out)
+        output_file = self.self.filename(**kwargs_out)
 
         ##create namelist config files
         namelist(self, time, forecast_period, run_dir)
 
         ##link files
-        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{task_nproc:04d}')
+        partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
         os.system("cp "+partit_file+" patch.input")
 
         for ext in ['.a', '.b']:
@@ -240,14 +205,11 @@ class Model(object):
 
         model_src = os.path.join(self.basedir, 'setup.src')
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
-        offset = worker_id*task_nproc
 
         ##build the shell command line
         shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
         shell_cmd += "cd "+run_dir+"; "          ##enter run directory
-        shell_cmd += job_submit_cmd+f" {task_nproc} {offset} "
-        shell_cmd += model_exe+f" {kwargs['member']+1} "
-        shell_cmd += ">& run.log"
+        shell_cmd += f"JOB_EXECUTE {model_exe} {kwargs['member']+1} >& run.log"
 
         for tr in range(2):  ##number of tries
             with open(log_file, 'rt') as f:
@@ -255,19 +217,12 @@ class Model(object):
                     break
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
+            run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
+                    nproc=self.nproc, offset=task_id*self.nproc_per_run,
+                    walltime=self.walltime, **kwargs)
 
         with open(log_file, 'rt') as f:
             if '(normal)' not in f.read():
                 raise RuntimeError('errors in '+log_file)
         if not os.path.exists(output_file):
             raise RuntimeError('output file not found: '+output_file)
-
-        if 'output_dir' in kwargs:
-            output_dir = kwargs['output_dir']
-            if output_dir != path:
-                kwargs_out_cp = {**kwargs, 'path':output_dir, 'time':next_time}
-                output_file_cp = self.filename(**kwargs_out_cp)
-                os.system("mkdir -p "+os.path.dirname(output_file_cp))
-                os.system("cp "+output_file+" "+output_file_cp)
-                os.system("cp "+output_file.replace('.a', '.b')+" "+output_file_cp.replace('.a', '.b'))
-

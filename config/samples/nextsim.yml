@@ -1,5 +1,12 @@
 work_dir: '/cluster/work/users/yingyue/nextsim_test'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'  ##job submit command wrapper
+job_submit:
+  host: betzy
+  scheduler: slurm
+  ppn: 128
+  project: nn2993k
+  queue: normal
+  run_separate_jobs: False
+  use_job_array: False
 
 nproc: 128        ##total number of processors
 

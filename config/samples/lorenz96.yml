@@ -1,12 +1,12 @@
 work_dir: '/tmp/lorenz96_test'
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_local.sh'
+
+job_submit:
 
 nproc: 1
 
 nens: 20
 run_assim: True
 run_diag: False
-
 debug: False      ##if true, output debug data/message
 
 time_start: '200101010000'       ##start time of the experiment, format ccyymmddHHMM
@@ -45,6 +45,9 @@ obs_def:
   impact_on_state:
 
 use_synthetic_obs: True
+
+dataset_def:
+  lorenz96:
 
 model_def:
   lorenz96:
