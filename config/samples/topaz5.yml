@@ -66,11 +66,11 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_conc_ncat'
+- name: 'seaice_conc'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
-- name: 'seaice_volume_ncat'
+- name: 'seaice_thick'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
@@ -139,15 +139,15 @@ model_def:
     model_env: '/cluster/home/yingyue/code/NEDAS/models/topaz/env/setup.src'
     nproc: 511
     nproc_per_run: 512  ##nproc for model.run
-    nproc_per_util: 50  ##nproc for other utility funcs, model.preprocess etc.
+    nproc_per_util: 1   ##nproc for other utility funcs, model.preprocess etc.
     walltime: 3600     ##walltime in seconds
-    restart_dt: 24
+    restart_dt: 168
     forcing_dt: 6
     ens_run_type: scheduler
     use_job_array: False
     stagnant_log_timeout: 100
-    ens_init_dir: '/cluster/work/users/yingyue/TP5/cycle/202106210000/topaz.v5'
-    forcing_file: '/cluster/work/users/yingyue/data/ecmwf_fcsts/{time:%Y%m%d%H%M}/mem{member:03}/SCRATCH/forcing.{name}'
+    ens_init_dir: '/cluster/work/users/yingyue/26111/FORECAST'
+    forcing_file: '/cluster/work/users/yingyue/TP5a0.06/force/synoptic/041/{name}'
     truth_dir: ''
 
 perturb:

@@ -137,7 +137,7 @@ class Topaz5Model(ModelConfig):
             kstr = f"_k{kwargs['k']}_"
             tstr = t2s(kwargs['time'])
             return os.path.join(kwargs['path'], kwargs['name']+kstr+tstr+mstr+'.npy')
-        
+
         else:
             raise ValueError(f"filename: ERROR: unknown variable name '{kwargs['name']}'")
 
@@ -221,11 +221,8 @@ class Topaz5Model(ModelConfig):
                 f.close()
 
         elif name in self.diag_variables:
-            if os.path.exists(fname):
-                var = np.load(fname)
-            else:
-                var = rec['operator'](**kwargs)
-                np.save(fname, var)
+            var = rec['operator'](**kwargs)
+            np.save(fname, var)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -586,6 +583,10 @@ class Topaz5Model(ModelConfig):
         adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.mask,
                              self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
 
+        ##update the diagnostic ice variables
+        self.write_var(fice, **{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
+        self.write_var(hice, **{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
+
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
@@ -604,57 +605,65 @@ class Topaz5Model(ModelConfig):
         log_file = os.path.join(run_dir, "run.log")
         run_command("touch "+log_file)
 
-        ##check if input file exists
-        input_files = []
-        tstr = time.strftime('%Y_%j_%H_%M%S')
-        for ext in ['.a', '.b']:
-            input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
-        tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
-        input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
-        for file in input_files:
-            if not os.path.exists(file):
-                raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
-
+        run_success = False
         ##early exit if the run is already finished
         if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
-            return
+            run_success = True
 
-        ##clean up some files from previous runs
-        run_command(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
+        else:
+            ##check if input file exists
+            input_files = []
+            tstr = time.strftime('%Y_%j_%H_%M%S')
+            for ext in ['.a', '.b']:
+                input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
+            tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
+            input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
+            for file in input_files:
+                if not os.path.exists(file):
+                    raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
-        ##build the shell command line
-        model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
-        shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
-        shell_cmd += "cd "+run_dir+"; "             ##enter run directory
-        shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
+            ##clean up some files from previous runs
+            run_command(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
+            run_command(f"echo > {log_file}")
 
-        ##give it 3 tries
-        run_success = False
-        for i in range(3):
-            try:
-                run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                        nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                        walltime=self.walltime, log_file=log_file, **kwargs)
-            except RuntimeError as e:
-                print(f"{e}, retrying ({2-i} attempts remain)")
-                run_command(f"cp {log_file} {log_file}.attempt{i}")
-                continue
-            ##check output
-            if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
-                run_success = True
-                break
-        assert run_success, f"model run failed after 3 tries, check in {run_dir}"
+            ##build the shell command line
+            model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
+            shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
+            shell_cmd += "cd "+run_dir+"; "             ##enter run directory
+            shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
+
+            ##run the model, give it 3 attempts
+            for i in range(3):
+                try:
+                    run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
+                            nproc=self.nproc, offset=task_id*self.nproc_per_run,
+                            walltime=self.walltime, log_file=log_file, **kwargs)
+                except RuntimeError as e:
+                    print(f"{e}, retrying ({2-i} attempts remain)")
+                    run_command(f"cp {log_file} {log_file}.attempt{i}")
+                    continue
+                ##check output
+                if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
+                    run_success = True
+                    break
+        assert run_success, f"model run failed after 3 attempts, check in {run_dir}"
 
         ##move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
-            run_command(f"mv {file1} {file2}")
+            if os.path.exists(file1):
+                run_command(f"mv {file1} {file2}")
+            else:
+                assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
         tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
-        run_command(f"mv {file1} {file2}")
+        if os.path.exists(file1):
+            run_command(f"mv {file1} {file2}")
+        else:
+            assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
 
     def run_batch(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
