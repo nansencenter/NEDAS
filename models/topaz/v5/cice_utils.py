@@ -153,7 +153,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
         ind1 = np.where(np.logical_and(aicen_f[k,...][ind] > 0, aicen[k,...][ind] > 0))
         vicen[k,...][ind][ind1] *= aicen[k,...][ind][ind1] / aicen_f[k,...][ind][ind1]
         #vsnon[k,...][ind][ind1] *= aicen[k,...][ind][ind1] / aicen_f[k,...][ind][ind1]
-    
+
     ##when ice pack area assimilating hice
     ind1 = np.where(ficem[ind] > 0.75)
     sum_vice = np.sum(vicen, axis=0)[ind][ind1]
@@ -206,7 +206,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
         var = nc_read_var(post_ice_file, vname)
         var[ind] = 0.0
         nc_write_var(post_ice_file, dims2, vname, var, dtype=np.float64)
-    
+
     ##other affected 3D variables
     varlist_3d = ['iage', 'FY', 'alvl', 'vlvl', 'apnd', 'hpnd', 'ipnd', 'dhs', 'ffrac', 'Tsfcn']
     for i in range(7):
@@ -222,7 +222,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
                 var[k,...][mask] = 0.0
             else:
                 var[k,...][ind] = 0.0
-            
+
             ind = np.where(aicen[k,...] > 0)
             if vname[:4] == 'sice':
                 l = int(vname[-3:])
@@ -237,3 +237,4 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
             #    var[k,...][ind] = -rhoi * (cp_ice*(Tmaz-Ti) + Lfresh*(1-Tmz/Ti) - cp_ocn*Tmz) / 7
 
         nc_write_var(post_ice_file, dims3, vname, var, dtype=np.float64)
+
