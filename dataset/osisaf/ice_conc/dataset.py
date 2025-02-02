@@ -12,7 +12,7 @@ class Dataset(DatasetConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'%'}, }
+        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1}, }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
@@ -22,13 +22,12 @@ class Dataset(DatasetConfig):
         kwargs = super().parse_kwargs(**kwargs)
         path = kwargs['path']
         time = kwargs['time']
+        name = kwargs['name']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
-        rec = self.variables[name]
-
         if time is None:
-            search = os.path.join(path, '????_'+self.proj_name, rec['name']+'_'+self.proj_name+'-100_multi_????????????.nc')
+            search = os.path.join(path, '????_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_????????????.nc')
             file_list = glob.glob(search)
 
         else:
@@ -41,7 +40,7 @@ class Dataset(DatasetConfig):
             for d in d_range:
                 t = time + d * timedelta(hours=1)
                 tstr = t.strftime('%Y%m%d%H%M')
-                search = os.path.join(path, t.strftime('%Y')+'_'+self.proj_name, rec['name']+'_'+self.proj_name+'-100_multi_'+tstr+'.nc')
+                search = os.path.join(path, t.strftime('%Y')+'_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_'+tstr+'.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
@@ -51,10 +50,8 @@ class Dataset(DatasetConfig):
 
     def read_obs(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        time = kwargs['time']
-        model_z = kwargs['z']
-        model_grid = kwargs['grid']
-        model_mask = kwargs['mask']
+        grid = kwargs['grid']
+        mask = kwargs['mask']
 
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
@@ -65,8 +62,8 @@ class Dataset(DatasetConfig):
 
             lat = f['lat'][...].data.flatten()
             lon = f['lon'][...].data.flatten()
-            x_, y_ = model_grid.proj(lon, lat)
-            mask_ = model_grid.interp(model_mask.astype(int), x_, y_)
+            x_, y_ = grid.proj(lon, lat)
+            mask_ = grid.interp(mask.astype(int), x_, y_)
 
             ntime = f.dimensions['time'].size
             for n in range(ntime):
@@ -84,7 +81,7 @@ class Dataset(DatasetConfig):
                     if obs_err[p] <= 0:
                         continue
 
-                    if x_[p] < model_grid.xmin or x_[p] > model_grid.xmax or y_[p] < model_grid.ymin or y_[p] > model_grid.ymax:
+                    if x_[p] < grid.xmin or x_[p] > grid.xmax or y_[p] < grid.ymin or y_[p] > grid.ymax:
                         continue
 
                     if mask_[p] > 0:

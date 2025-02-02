@@ -22,13 +22,12 @@ class Dataset(DatasetConfig):
         kwargs = super().parse_kwargs(**kwargs)
         path = kwargs['path']
         time = kwargs['time']
+        name = kwargs['name']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
-        rec = self.variables[name]
-
         if time is None:
-            search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc'
+            search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc')
             file_list = glob.glob(search)
 
         else:
@@ -41,7 +40,7 @@ class Dataset(DatasetConfig):
             for d in d_range:
                 t = time + d * timedelta(hours=1)
                 t0 = t - timedelta(days=2)  ##drift traj start time
-                search = os.path.join(path, t.strftime('%Y'), t.strftime('%m'), 'ice_drift_'+self.proj_name+'-625_multi-oi_'+t0.strftime('%Y%m%d%H%M')+'-'+t.strftime('%Y%m%d%H%M')+'.nc'
+                search = os.path.join(path, t.strftime('%Y'), t.strftime('%m'), 'ice_drift_'+self.proj_name+'-625_multi-oi_'+t0.strftime('%Y%m%d%H%M')+'-'+t.strftime('%Y%m%d%H%M')+'.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
@@ -51,12 +50,10 @@ class Dataset(DatasetConfig):
 
     def read_obs(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        time = kwargs['time']
-        model_z = kwargs['z']
-        model_grid = kwargs['grid']
-        model_mask = kwargs['mask']
+        grid = kwargs['grid']
+        mask = kwargs['mask']
 
-        self.grid.set_destination_grid(model_grid)  ##for vector rotation
+        self.grid.set_destination_grid(grid)  ##for vector rotation
 
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
@@ -67,8 +64,8 @@ class Dataset(DatasetConfig):
 
             lat = f['lat'][...].data.flatten()
             lon = f['lon'][...].data.flatten()
-            x_, y_ = model_grid.proj(lon, lat)
-            mask_ = model_grid.interp(model_mask.astype(int), x_, y_)
+            x_, y_ = grid.proj(lon, lat)
+            mask_ = grid.interp(mask.astype(int), x_, y_)
 
             ntime = f.dimensions['time'].size
             for n in range(ntime):
@@ -95,7 +92,7 @@ class Dataset(DatasetConfig):
                     if obs_err[p] <= 0:
                         continue
 
-                    if x_[p] < model_grid.xmin or x_[p] > model_grid.xmax or y_[p] < model_grid.ymin or y_[p] > model_grid.ymax:
+                    if x_[p] < grid.xmin or x_[p] > grid.xmax or y_[p] < grid.ymin or y_[p] > grid.ymax:
                         continue
 
                     if mask_[p] > 0:

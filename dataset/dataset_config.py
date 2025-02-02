@@ -15,6 +15,9 @@ class DatasetConfig(object):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
+        if not hasattr(self, 'dataset_dir'):
+            self.dataset_dir = '.'
+
         self.variables = {}
 
     def parse_kwargs(self, **kwargs):
@@ -37,10 +40,13 @@ class DatasetConfig(object):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']]['units']
 
-        ##other args used in random_network
-        for key in ['grid', 'mask', 'z', 'truth_dir', 'nobs', 'obs_window_min', 'obs_window_max']:
+        ##other args, set default values if not specified
+        for key in ['model', 'grid', 'mask']:
             if key not in kwargs:
                 kwargs[key] = None
+        for key in ['nobs', 'obs_window_min', 'obs_window_max']:
+            if key not in kwargs:
+                kwargs[key] = 0
 
         return kwargs
 
