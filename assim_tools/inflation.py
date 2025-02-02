@@ -53,7 +53,7 @@ def inflate_state(c, fields, mean_file):
         fields_mean = read_field(mean_file, c.state_info, c.mask, 0, rec_id)
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
-                print(f"PID {c.pid}: inflate_state mem{mem_id+1:03d}", flush=True)
+                print(f"PID {c.pid:4}: inflate_state mem{mem_id+1:03}", flush=True)
             else:
                 print_1p(progress_bar(m*nr+r, nm*nr))
 
@@ -85,7 +85,7 @@ def relax_to_prior_perturb(c, fields_prior, fields_post, prior_mean_file, post_m
 
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if c.debug:
-                print(f"PID {c.pid}: relax_to_prior_perturb mem{mem_id+1:03d}", flush=True)
+                print(f"PID {c.pid:4}: relax_to_prior_perturb mem{mem_id+1:03}", flush=True)
             else:
                 print_1p(progress_bar(m*nr+r, nm*nr))
             ##inflate the ensemble perturbations by relaxing to prior perturbations

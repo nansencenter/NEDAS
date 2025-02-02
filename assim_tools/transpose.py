@@ -59,9 +59,10 @@ def transpose_field_to_state(c, fields):
     - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
       The locally stored ensemble-complete field chunks on partitions.
     """
+    c.comm.Barrier()
 
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print('transpose field-complete to ensemble-complete\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('transpose field-complete to ensemble-complete\n')
     state = {}
 
     nr = len(c.rec_list[c.pid_rec])
@@ -70,7 +71,14 @@ def transpose_field_to_state(c, fields):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            # print(progress_bar(r*nm_max+m, nr*nm_max))
+            if c.debug:
+                if m < len(c.mem_list[c.pid_mem]):
+                    mem_id = c.mem_list[c.pid_mem][m]
+                    print(f"PID {c.pid:4}: transposing field: mem{mem_id+1:03} rec{rec_id}")
+                else:
+                    print(f"PID {c.pid:4}: transposing field: waiting")
+            else:
+                print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare the fld for sending if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -108,7 +116,7 @@ def transpose_field_to_state(c, fields):
                 if m < len(c.mem_list[src_pid]):
                     src_mem_id = c.mem_list[src_pid][m]
                     state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-    # print(' done.\n')
+    print_1p(' done.\n')
     return state
 
 def transpose_state_to_field(c, state):
@@ -124,9 +132,10 @@ def transpose_state_to_field(c, state):
     - fields: dict[(mem_id, rec_id), fld]
       the locally stored field-complete fields for subset of mem_id,rec_id.
     """
+    c.comm.Barrier()
 
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print('transpose ensemble-complete to field-complete\n')
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p('transpose ensemble-complete to field-complete\n')
     fields = {}
 
     ##all pid goes through their own task list simultaneously
@@ -137,7 +146,15 @@ def transpose_state_to_field(c, state):
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
 
         for m in range(nm_max):
-            # print(progress_bar(r*nm_max+m, nr*nm_max))
+            if c.debug:
+                if m < len(c.mem_list[c.pid_mem]):
+                    mem_id = c.mem_list[c.pid_mem][m]
+                    print(f"PID {c.pid:4}: transposing field: mem{mem_id+1:03} rec{rec_id}")
+                else:
+                    print(f"PID {c.pid:4}: transposing field: waiting")
+            else:
+                print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+
 
             ##prepare an empty fld for receiving if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -180,7 +197,7 @@ def transpose_state_to_field(c, state):
                     dst_mem_id = c.mem_list[dst_pid][m]
                     c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                     del state[dst_mem_id, rec_id]   ##free up memory
-    # print(' done.\n')
+    print_1p(' done.\n')
     return fields
 
 def transpose_obs_to_lobs(c, input_obs, ensemble=False):
@@ -208,17 +225,18 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
       output_obs: dict[obs_rec_id, dict[par_id, dict[key, np.array]]]
       is the local observation sequence, key = 'obs','x','y','z','t'...
     """
+    c.comm.Barrier()
 
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     if ensemble:
-        print('obs prior sequences: ')
+        print_1p('obs prior sequences: ')
     else:
-        print('obs sequences: ')
-    print('transpose obs to local obs\n')
+        print_1p('obs sequences: ')
+    print_1p('transpose obs to local obs\n')
 
     ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
     ##        input_obs -> tmp_obs
@@ -230,7 +248,14 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            # print(progress_bar(r*nm_max+m, nr*nm_max))
+            if c.debug:
+                if m < len(c.mem_list[c.pid_mem]):
+                    mem_id = c.mem_list[c.pid_mem][m]
+                    print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
+                else:
+                    print(f"PID {c.pid:4}: transposing obs: waiting")
+            else:
+                print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare the obs seq for sending if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -300,7 +325,7 @@ def transpose_obs_to_lobs(c, input_obs, ensemble=False):
                     else:
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-    # print(' done.\n')
+    print_1p(' done.\n')
 
     ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
     ##        tmp_obs -> output_obs
@@ -323,14 +348,15 @@ def transpose_lobs_to_obs(c, lobs):
     - obs_post_seq:
       dict[(mem_id, obs_rec_id), np.array]
     """
+    c.comm.Barrier()
 
     pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
     pid_rec_show = [p for p,lst in c.obs_rec_list.items() if len(lst)>0][0]
     c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
+    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
-    print('obs post sequences: ')
-    print('transpose local obs to obs\n')
+    print_1p('obs post sequences: ')
+    print_1p('transpose local obs to obs\n')
 
     obs_seq = {}
     nr = len(c.obs_rec_list[c.pid_rec])
@@ -339,7 +365,14 @@ def transpose_lobs_to_obs(c, lobs):
         ##all pid goes through their own mem_list simultaneously
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         for m in range(nm_max):
-            # print(progress_bar(r*nm_max+m, nr*nm_max))
+            if c.debug:
+                if m < len(c.mem_list[c.pid_mem]):
+                    mem_id = c.mem_list[c.pid_mem][m]
+                    print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
+                else:
+                    print(f"PID {c.pid:4}: transposing obs: waiting")
+            else:
+                print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
             ##prepare an empty obs_seq for receiving if not at the end of mem_list
             if m < len(c.mem_list[c.pid_mem]):
@@ -384,7 +417,7 @@ def transpose_lobs_to_obs(c, lobs):
                 if m < len(c.mem_list[dst_pid]):
                     dst_mem_id = c.mem_list[dst_pid][m]
                     c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
-    # print(' done.\n')
+    print_1p(' done.\n')
     return obs_seq
 
 def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
