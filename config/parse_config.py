@@ -16,9 +16,9 @@ def convert_notation(data):
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
         ## convert "inf" to numpy.inf
-        elif data == "inf":
+        elif data.lower() == "inf":
             return numpy.inf
-        elif data == "-inf":
+        elif data.lower() == "-inf":
             return -numpy.inf
         ## convert string to bool
         elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.']:
@@ -98,6 +98,9 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     if args.config_file is not None:
         with open(args.config_file, 'r') as f:
             config_dict = {**config_dict, **yaml.safe_load(f)}
+
+    if not isinstance(config_dict, dict):
+        config_dict = {}
 
     ##append new config variables defined in kwargs
     config_dict = {**config_dict, **kwargs}

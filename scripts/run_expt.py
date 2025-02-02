@@ -3,10 +3,9 @@
 
 import os
 from config import Config
-from utils.progress import timer
-from utils.conversion import t2s, s2t, dt1h
+from utils.conversion import dt1h
 from utils.dir_def import cycle_dir
-from scripts import preprocess, postprocess,perturb, assimilate, diag, ensemble_forecast
+from scripts import preprocess, postprocess,perturb, assimilate, ensemble_forecast, diagnose
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -29,22 +28,24 @@ while c.time < c.time_end:
 
     ##assimilation step
     if c.run_assim and c.time >= c.time_assim_start and c.time <= c.time_assim_end:
-        ##multiscale approach: loop over scale components and perform assimilation on each scale
-        for c.scale_id in range(c.nscale):
-            assimilate.run(c)
+        assimilate.run(c)
+        postprocess.run(c)
 
+<<<<<<< HEAD
         postprocess.run(c)
 
     ##forecast step
+=======
+    ##advance model state to next analysis cycle
+>>>>>>> other_features
     ensemble_forecast.run(c)
 
     ##compute diagnostics
     if c.run_diag:
-        diag.run(c)
+        diagnose.run(c)
 
     ##advance to next cycle
     c.prev_time = c.time
     c.time = c.next_time
 
 print("Cycling complete.", flush=True)
-

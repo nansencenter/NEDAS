@@ -40,12 +40,18 @@ def parse_obs_info(c):
       A dictionary with some dimensions and list of unique obs records
     """
     obs_info = {'size':0, 'records':{}}
+    obs_variables = set()
+    obs_err_types = set()
     obs_rec_id = 0  ##record id for an obs sequence
     pos = 0         ##seek position for rec
 
     ##loop through obs variables defined in obs_def
     for vrec in ensure_list(c.obs_def):
         vname = vrec['name']
+        if 'err' not in vrec or vrec['err'] is None:
+            vrec['err'] = {}
+        assert isinstance(vrec.get('err'), dict), f"obs_def: {vname}: expect 'err' to be a dictionary"
+        obs_err_type = vrec['err'].get('type', 'normal')
 
         ##some properties of the variable is defined in its source module
         dataset = c.dataset_config[vrec['dataset_src']]
@@ -66,8 +72,8 @@ def parse_obs_info(c):
                        'dataset_src': vrec['dataset_src'],
                        'model_src': vrec['model_src'],
                        'nobs': vrec.get('nobs', 0),
-                       'obs_window_min': vrec.get('obs_window_min'),
-                       'obs_window_max': vrec.get('obs_window_max'),
+                       'obs_window_min': vrec.get('obs_window_min', dataset.obs_window_min),
+                       'obs_window_max': vrec.get('obs_window_max', dataset.obs_window_max),
                        'dtype': variables[vname]['dtype'],
                        'is_vector': variables[vname]['is_vector'],
                        'units': variables[vname]['units'],
@@ -75,8 +81,8 @@ def parse_obs_info(c):
                        'time': time,
                        'dt': 0,
                        'pos': pos,
-                       'err':{'type': vrec['err']['type'],
-                              'std': vrec['err']['std'],
+                       'err':{'type': obs_err_type,
+                              'std': vrec['err'].get('std', 1.),  ##for synthetic obs perturb, real obs will have std from dataset
                               'hcorr': vrec['err'].get('hcorr',0.),
                               'vcorr': vrec['err'].get('vcorr',0.),
                               'tcorr': vrec['err'].get('tcorr',0.),
@@ -87,6 +93,8 @@ def parse_obs_info(c):
                        'troi': vrec['troi'],
                        'impact_on_state': impact_on_state,
                        }
+            obs_variables.add(vname)
+            obs_err_types.add(obs_err_type)
             obs_info['records'][obs_rec_id] = obs_rec
 
             ##update obs_rec_id
@@ -94,6 +102,21 @@ def parse_obs_info(c):
 
             ##we don't know the size of obs_seq yet
             ##will wait for prepare_obs to update the seek position
+
+    obs_info['variables'] = list(obs_variables)
+    obs_info['err_types'] = list(obs_err_types)
+
+    ##go through the obs_rec again to fill in the default err.cross_corr
+    for obs_rec_id, obs_rec in obs_info['records'].items():
+        assert isinstance(obs_rec['err']['cross_corr'], dict), f"obs_def: {obs_rec['name']} has err.cross_corr defined as {obs_rec['err']['cross_corr']}, expecting a dictionary"
+        for vname in obs_info['variables']:
+            if vname not in obs_rec['err']['cross_corr']:
+                if vname == obs_rec['name']:
+                    obs_rec['err']['cross_corr'][vname] = 1.0
+                else:
+                    obs_rec['err']['cross_corr'][vname] = 0.0
+            else:
+                assert isinstance(obs_rec['err']['cross_corr'][vname], float), f"obs_def: {obs_rec['name']} has err.cross_corr.{vname} defined as {obs_rec['err']['cross_corr'][vname]}, expecting a float"
 
     return obs_info
 
@@ -247,6 +270,27 @@ def distribute_partitions(c):
 
     return par_list
 
+def global_obs_list(c):
+    ##form the global list of obs (in serial mode the main loop is over this list)
+    n_obs_rec = len(c.obs_info['records'])
+
+    i = {}  ##location in full obs vector on owner pid
+    for owner_pid in range(c.nproc_mem):
+        i[owner_pid] = 0
+
+    obs_list = []
+    for obs_rec_id in range(n_obs_rec):
+        obs_rec = c.obs_info['records'][obs_rec_id]
+        v_list = [0, 1] if obs_rec['is_vector'] else [None]
+        for owner_pid in c.obs_inds[obs_rec_id].keys():
+            for _ in c.obs_inds[obs_rec_id][owner_pid]:
+                for v in v_list:
+                    obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
+                    i[owner_pid] += 1
+
+    np.random.shuffle(obs_list)  ##randomize the order of obs (this is optional)
+    return obs_list
+
 ##TODO: some of these funcs are not ready
 ##write obs_info to a .dat file accompanying the obs_seq bin file
 def write_obs_info(binfile, info):
@@ -317,9 +361,6 @@ def read_obs_seq(binfile, info, obs_seq, member=None):
             obs_seq_out.append(rec)
     return obs_seq_out
 
-def output_obs(obs_seq):
-    pass
-
 def state_to_obs(c, **kwargs):
     """
     Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
@@ -385,19 +426,18 @@ def state_to_obs(c, **kwargs):
     ##model source module
     model = c.model_config[kwargs['model_src']]
 
-    ##option 1  TODO: update README
+    ##option 1  TODO: update README and comments
     ## if dataset module provides an obs_operator, use it to compute obs
-    if hasattr(dataset, 'obs_operator') and kwargs['model_src'] in dataset.obs_operator and kwargs['name'] in dataset.obs_operator[kwargs['model_src']]:
+    if hasattr(dataset, 'obs_operator') and kwargs['name'] in dataset.obs_operator:
         if synthetic:
             path = model.truth_dir
         else:
             path = forecast_dir(c, time, kwargs['model_src'])
 
-        operator = obs.obs_operator[kwargs['model']]
-        # assert kwargs['name'] in operator, 'obs variable '+kwargs['name']+' not provided by dataset '+kwargs['dataset_src']+'.obs_operator for '+kwargs['model_src']
+        operator = dataset.obs_operator[kwargs['name']]
 
         ##get the obs seq from operator
-        seq = operator[kwargs['name']](path=path, grid=c.grid, mask=c.mask, **kwargs)
+        seq = operator(path=path, model=model, grid=c.grid, mask=c.mask, **kwargs)
 
     ##option 2:
     ## if obs variable is one of the state variable, or can be computed by the model,
@@ -430,10 +470,12 @@ def state_to_obs(c, **kwargs):
                     model.read_grid(path=path, **kwargs)
                     model.grid.set_destination_grid(c.grid)
 
-                z_ = model.grid.convert(model.z_coords(path=path, k=levels[k], **kwargs))
+                model_z = model.z_coords(path=path, member=kwargs['member'], time=kwargs['time'], k=levels[k])
+                z_ = model.grid.convert(model_z)
                 z = np.array([z_, z_]) if is_vector else z_
 
-                fld = model.grid.convert(model.read_var(path=path, k=levels[k], **kwargs), is_vector=is_vector)
+                model_fld = model.read_var(path=path, name=kwargs['name'], member=kwargs['member'], time=kwargs['time'], k=levels[k])
+                fld = model.grid.convert(model_fld, is_vector=is_vector)
 
             ##horizontal interp field to obs_x,y, for current layer k
             if is_vector:
@@ -473,6 +515,7 @@ def state_to_obs(c, **kwargs):
                 inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
                                                obs_z <= np.maximum(z_vp, z_vc)) )
                 ##there can be collapsed layers if z_vc=z_vp
+                ##TODO: still got some warnings here
                 with np.errstate(divide='ignore'):
                     vi = np.where(z_vp==z_vc,
                                   vp,   ##for collapsed layers just use previous value
@@ -526,13 +569,15 @@ def prepare_obs(c):
         dataset = c.dataset_config[obs_rec['dataset_src']]
         assert obs_rec['name'] in dataset.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
-        ##read ens-mean z coords from z_file for this obs network
-        z = read_mean_z_coords(c, obs_rec['time'])
-
         model = c.model_config[obs_rec['model_src']]
+        ##read ens-mean z coords from z_file for this obs network
+        ##typically model.z_coords can compute the z coords as well, but it is more efficient
+        ##to just store the ensemble mean z here
+        model.z = read_mean_z_coords(c, obs_rec['time'])
+
         if c.use_synthetic_obs:
             ##generate synthetic obs network
-            seq = dataset.random_network(grid=model.grid, mask=model.mask, z=z, truth_dir=model.truth_dir, **obs_rec)
+            seq = dataset.random_network(model=model, grid=c.grid, mask=c.mask, **obs_rec)
 
             ##compute obs values
             seq['obs'] = state_to_obs(c, member=None, **obs_rec, **seq)
@@ -542,8 +587,7 @@ def prepare_obs(c):
 
         else:
             ##read dataset files and obtain obs sequence
-            seq = dataset.read_obs(grid=model.grid, mask=model.mask, z=z, **obs_rec)
-        del z
+            seq = dataset.read_obs(model=model, grid=c.grid, mask=c.mask, **obs_rec)
 
         by_rank(c.comm_rec, c.pid_rec)(print_with_cache)('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}\n'.format(seq['obs'].shape[-1]))
 
@@ -559,12 +603,18 @@ def prepare_obs(c):
 
     ##additional output for debugging
     if c.debug:
-        if c.pid == 0:
-            np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
-            np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
-            np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
+        # if c.pid == 0:
+        #     np.save(os.path.join(c.analysis_dir, 'rec_list.npy'), c.rec_list)
+        #     np.save(os.path.join(c.analysis_dir, 'mem_list.npy'), c.mem_list)
+        #     np.save(os.path.join(c.analysis_dir, 'obs_rec_list.npy'), c.obs_rec_list)
+        #     np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
+        #     np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
+        #     np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
         if c.pid_mem == 0:
-            np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
+            #np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
+            for obs_rec_id, rec in obs_seq.items():
+                file = os.path.join(c.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy')
+                np.save(file, rec)
 
     return c.obs_info, obs_seq
 
@@ -596,13 +646,13 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     nm = len(c.mem_list[c.pid_mem])
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
         for r, obs_rec_id in enumerate(c.obs_rec_list[c.pid_rec]):
-            if c.debug:
-                print(f"PID {c.pid}: obs_prior mem{mem_id+1:03d} {c.obs_info['records'][obs_rec_id]}", flush=True)
-            else:
-                print_1p(progress_bar(m*nr+r, nr*nm))
-
             ##this is the obs record to process
             obs_rec = c.obs_info['records'][obs_rec_id]
+
+            if c.debug:
+                print(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec['name']:20}", flush=True)
+            else:
+                print_1p(progress_bar(m*nr+r, nr*nm))
 
             seq = state_to_obs(c, member=mem_id,
                                model_fld=fields, model_z=z_fields,
@@ -620,7 +670,11 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
 
     ##additional output for debugging
     if c.debug:
-        np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
+        #np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
+        for key, seq in obs_prior_seq.items():
+            mem_id, obs_rec_id = key
+            file = os.path.join(c.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
+            np.save(file, seq)
 
     return obs_prior_seq
 
