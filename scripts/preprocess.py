@@ -2,11 +2,7 @@ import os
 import sys
 from utils.progress import timer
 from utils.parallel import Scheduler
-<<<<<<< HEAD
-from utils.dir_def import forecast_dir
-=======
 from utils.dir_def import forecast_dir, cycle_dir
->>>>>>> other_features
 from utils.shell_utils import makedir, run_job
 
 def preprocess(c, model_name):

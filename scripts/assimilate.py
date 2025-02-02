@@ -70,11 +70,8 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
-<<<<<<< HEAD
-=======
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
 
->>>>>>> other_features
     ##build run commands for the perturb script
     commands = f"source {c.python_env}; "
 
