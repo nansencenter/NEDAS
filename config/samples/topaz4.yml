@@ -1,12 +1,17 @@
 work_dir: '/cluster/work/users/yingyue/topaz4_reanalysis'   ##working directory for the experiment
-job_submit_cmd: '/cluster/home/yingyue/code/NEDAS/config/samples/job_submit_betzy.sh'
+
+job_submit:
+  host: betzy
+  project: nn2993k
+  queue: normal
+  scheduler: slurm
+  run_separate_jobs: True
 
 nproc: 512        ##total number of processors
-nproc_mem: 512    ##number of processor groups
 
 nens: 10         ##ensemble size
 run_assim: True   ##if true, run the assimilation steps
-
+run_diag: False
 debug: False      ##if true, output debug data/message
 
 time_start: '202212200000'       ##start time of the experiment, format ccyymmddHHMM
@@ -14,10 +19,6 @@ time_end: '202212270000'         ##end time of the experiment
 time_assim_start: '202212200000' ##start time of the first analysis cycle
 time_assim_end: '202212270000'   ##end time of the last analysis cycle
 cycle_period: 168                 ##cycle period, in hours
-
-time: '202212200000'
-prev_time: '202212200000'
-next_time: '202212200000'
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -75,8 +76,7 @@ state_def:
 
 obs_def:
 - name: 'seaice_conc'
-  dataset_src: 'osisaf'
-  dataset_dir: '/cluster/work/users/yingyue/data/OSISAF'
+  dataset_src: 'osisaf.ice_conc'
   model_src: 'topaz.v4'
   obs_window_min: -6
   obs_window_max: 0
@@ -91,14 +91,26 @@ obs_def:
 
 use_synthetic_obs: False
 
+dataset_def:
+  osisaf.ice_conc:
+    dataset_dir: '/cluster/projects/nn2993k/sim/data/OSISAF_ice_conc/polstere'
+
 model_def:
   topaz.v4:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/topaz/v4/default.yml'
-    nproc_per_job: 256   ##number of processors to run a forecast
-    walltime: 10000     ##walltime in seconds
+    basedir: '/cluster/work/users/yingyue/TP4b0.12'
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/topaz/env/setup.src'
+    nproc_per_run: 256   ##number of processors to run a forecast
+    nproc_per_util: 50
+    walltime: 3600     ##walltime in seconds
+    restart_dt: 168
+    forcing_dt: 6
     ens_run_type: scheduler
+    use_job_array: False
     ens_init_dir: '/cluster/work/users/yingyue/TP4b0.12/data'
     truth_dir: ''
+
+perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'

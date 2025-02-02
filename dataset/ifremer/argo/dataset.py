@@ -1,9 +1,9 @@
-import numpy as np
 import os
 import glob
-from netCDF4 import Dataset
+import numpy as np
+from datetime import datetime, timedelta
 from utils.conversion import dt1h
-from ..dataset_config import DatasetConfig
+from ...dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
 
@@ -58,10 +58,15 @@ class Dataset(DatasetConfig):
         """
         kwargs = super().parse_kwargs(**kwargs)
         name = kwargs['name']
-        model_z = kwargs['z']
-        model_grid = kwargs['grid']
-        model_mask = kwargs['mask']
+        
+        ##target grid for obs_seq
+        grid = kwargs['grid']
+        mask = kwargs['mask']
 
+        model = kwargs['model']
+        assert model is not None, 'read_obs: ERROR: model is required for argo dataset'
+        model.grid.set_destination_grid(grid)
+      
         obs_seq = {'obs':[],
                    't':[], 'z':[], 'y':[], 'x':[],
                    'err_std':[],
@@ -77,7 +82,7 @@ class Dataset(DatasetConfig):
 
             lat = f['LATITUDE'][0:nprof].data
             lon = f['LONGITUDE'][0:nprof].data
-            x, y = model_grid.proj(lon, lat)  ##coordinates in grid
+            x, y = grid.proj(lon, lat)  ##coordinates in grid
 
             juld = f['JULD'][0:nprof].data
             juld_qc = f['JULD_QC'][0:nprof].data
@@ -91,12 +96,13 @@ class Dataset(DatasetConfig):
                 z = 0. - f['DEPH'][0:nprof, 0:nlev].data
                 z_qc = f['DEPH_QC'][0:nprof, 0:nlev].data
 
-            ##model z (zm) at profile location
-            if model_z is not None:
-                nz, ny, nx = model_z.shape
+            ##model z (zm) at profile location on grid
+            if model.z is not None:
+                nz = model.z.shape[0]
                 zm = np.zeros((nprof, nz))
                 for k in range(nz):
-                    zm[:, k] = model_grid.interp(model_z[k, ...], x, y)
+                    ztmp = model.grid.convert(model.z[k, ...])
+                    zm[:, k] = grid.interp(ztmp, x, y)
 
             ##observed variable
             if name == 'ocean_temp' and 'TEMP' in f.variables:
@@ -120,7 +126,7 @@ class Dataset(DatasetConfig):
 
             ##check inside grid
             for p in range(nprof):
-                if x[p]<model_grid.xmin or x[p]>model_grid.xmax or y[p]<model_grid.ymin or y[p]>model_grid.ymax:
+                if x[p]<grid.xmin or x[p]>grid.xmax or y[p]<grid.ymin or y[p]>grid.ymax:
                     flag1[p] = 0
 
             for p in range(nprof):
@@ -133,7 +139,7 @@ class Dataset(DatasetConfig):
                     flag1[p] = 0
 
             ##check if location is unmasked (wet)
-            mask_prof = model_grid.interp(model_mask.astype(int), x, y)
+            mask_prof = grid.interp(mask.astype(int), x, y)
             for p in range(nprof):
                 if flag1[p] == 0:
                     continue
@@ -142,7 +148,7 @@ class Dataset(DatasetConfig):
                     flag1[p] = 0
                     continue
                 ##check if z level is deeper than model depth at profile location
-                if model_z is not None:
+                if model.z is not None:
                     for l in range(nlev):
                         if z[p,l] < np.min(zm[p,:]):
                             flag2[p,l] = 0
@@ -165,17 +171,17 @@ class Dataset(DatasetConfig):
                             flag1[p] = 0
                             flag2[p,:] = 0
 
-            ##thinning in horizontal TODO
+            ##TODO: thinning in horizontal
 
             ##thinning in vertical
-            if self.NUM_OBS_PER_LAYER is not None and model_z is not None:
-                nz, ny, nx = model_z.shape
+            if self.NUM_OBS_PER_LAYER is not None and model.z is not None:
+                nz = model.z.shape[0]
                 for p in range(nprof):
                     if flag1[p] == 0:
                         continue
                     ##target z levels to bin profile obs
                     zt = np.interp(np.arange(0, nz, 1/self.NUM_OBS_PER_LAYER),
-                                np.arange(1, nz+1, 1), zm[p, :])
+                                   np.arange(1, nz+1, 1), zm[p, :])
                     zt = np.sort(zt)
                     zt_ind = []
                     for l in range(nlev):
@@ -219,8 +225,8 @@ class Dataset(DatasetConfig):
 
         return obs_seq
 
-    def random_network(self, **kwargs):
+    def random_network(self, model, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-
+        raise NotImplementedError
+        obs_seq = {}
         return obs_seq
-

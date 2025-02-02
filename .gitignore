@@ -10,3 +10,5 @@ slurm*out
 log/
 output
 .env
+.vscode
+.pytest_cache

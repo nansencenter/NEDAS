@@ -1,0 +1,5 @@
+dataset_dir: "/cluster/work/users/yingyue/data/ACCIBEREG/EC_grib_files"
+dt_hours: 6
+nens: 50
+forecast_days: 10
+time_start: "202107010000"

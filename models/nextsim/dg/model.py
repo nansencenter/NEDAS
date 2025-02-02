@@ -118,7 +118,7 @@ class Model(ModelConfig):
                 var = np.array([u, v])
             else:
                 var = forcing.read_var(fname, [rec[name],], itime)[0,...].data
-
+                
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
