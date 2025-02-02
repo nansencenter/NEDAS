@@ -1,14 +1,16 @@
 # model config parameters
-grid_def:
-  proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
-  xstart: -2.5e6
-  xend: 2.498e6
-  ystart: -2e6
-  yend: 2.5e6
-  dx: 3e3
+proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
+xstart: -2.285e6
+xend: 1.396e6
+ystart: -0.866e6
+yend: 2.021e6
+dx: 24051.8
 
 restart_dt: 24  ##model restart interval (hours)
+
 ##physical parameters
+dg_comp: 6
+dgstress_comp: 8
 
 # here, we specify the required files
 files:
