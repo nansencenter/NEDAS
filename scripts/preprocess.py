@@ -2,14 +2,18 @@ import os
 import sys
 from utils.progress import timer
 from utils.parallel import Scheduler
+<<<<<<< HEAD
 from utils.dir_def import forecast_dir
+=======
+from utils.dir_def import forecast_dir, cycle_dir
+>>>>>>> other_features
 from utils.shell_utils import makedir, run_job
 
 def preprocess(c, model_name):
     """
     This function prepares the necessary files for an ensemble forecast
     """
-    print(f"\n\033[1;33mPreprocessing {model_name} ensemble members\033[0m", flush=True)
+    print(f"\nPreprocessing {model_name} ensemble members", flush=True)
     model = c.model_config[model_name]
     if c.time==c.time_start:
         restart_dir = model.ens_init_dir
@@ -19,6 +23,9 @@ def preprocess(c, model_name):
 
     path = forecast_dir(c, c.time, model_name)
     makedir(path)
+
+    if not c.job_submit:
+        c.job_submit = {}
 
     if c.job_submit.get('run_separate_jobs', False):
         ##ideally, if in preprocess method jobs are submitted through run_job, then
@@ -43,13 +50,12 @@ def preprocess(c, model_name):
             'time': c.time,
             'time_start': c.time_start,
             'forecast_period': c.cycle_period,
+            'time_start': c.time_start,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.preprocess, **job_opt)  ##add job to the queue
 
     scheduler.start_queue() ##start the job queue
-    if scheduler.error_jobs:
-        raise RuntimeError(f'scheduler: there are jobs with errors: {scheduler.error_jobs}')
     scheduler.shutdown()
     print(' done.', flush=True)
 
@@ -58,11 +64,24 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
+<<<<<<< HEAD
+=======
+    print(f"\033[1;33mRUNNING\033[0m {script_file}")
+
+>>>>>>> other_features
     ##build run commands for the preprocess script
     commands = f"source {c.python_env}; "
     commands += f"{sys.executable} {script_file} -c {config_file}"
 
+<<<<<<< HEAD
     run_job(commands, job_name="preprocess", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
+=======
+    job_submit_opts = {}
+    if c.job_submit:
+        job_submit_opts = c.job_submit
+
+    run_job(commands, job_name="preprocess", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+>>>>>>> other_features
 
 if __name__ == "__main__":
     from config import Config
@@ -70,4 +89,7 @@ if __name__ == "__main__":
 
     for model_name, model in c.model_config.items():
         timer(c)(preprocess)(c, model_name)
+<<<<<<< HEAD
 
+=======
+>>>>>>> other_features
