@@ -113,7 +113,7 @@ def run(c, **kwargs):
             recno = {}
             recno[time_name] = n_step
             if len(levels) > 1:
-                recno[k_name] = k
+                recno[k_name] = list(levels).index(k)
             # variable attr
             attr = {'standard_name':vname,
                     'units':rec['units'],
