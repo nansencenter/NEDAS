@@ -14,7 +14,7 @@ class Model(ModelConfig):
 
         level_sfc = np.array([0])
         self.seaice_variables = {  ##TODO: check units here and any missing variables
-             'seaice_conc': {'name':'cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'%'},
+             'seaice_conc': {'name':'cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
              'seaice_thick': {'name':'hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'snow_thick': {'name':'hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'seaice_temp': {'name':'tice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'K'},
@@ -117,7 +117,7 @@ class Model(ModelConfig):
             else:
                 var = forcing.read_var(fname, [rec[name],], itime)[0,...].data
     
-        var = units_convert(kwargs['units'], rec['units'], var)
+        var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
@@ -125,6 +125,8 @@ class Model(ModelConfig):
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name]
+
+        var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.seaice_variables:
             if rec['is_vector']:
