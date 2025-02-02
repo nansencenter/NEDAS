@@ -1,14 +1,9 @@
-import numpy as np
 import os
-import inspect
-import signal
-import subprocess
+import numpy as np
 from pyproj import Proj
-
-from config import parse_config
 from grid import Grid
-from utils.conversion import t2s, s2t, dt1h
-
+from utils.conversion import dt1h
+from utils.shell_utils import run_command, run_job, makedir
 # from .namelist import namelist
 # from .bin_io import read_
 from ..model_config import ModelConfig
@@ -87,9 +82,6 @@ class Model(ModelConfig):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
-        job_submit_cmd = kwargs['job_submit_cmd']
-        offset = task_id * self.nproc_per_run
-
         fname = self.filename(**kwargs)
         run_dir = os.path.dirname(fname)
         print('running wrf model in '+run_dir, flush=True)
@@ -103,15 +95,11 @@ class Model(ModelConfig):
 
         ##build the run command
         shell_cmd = "source "+wrf_src+"; "   ##enter wrf env
-        shell_cmd += job_submit_cmd+f" {task_nproc} {task_id*task_nproc} "+wrf_exe+" >& run.log"
+        shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
-        self.run_process = subprocess.Popen(shell_cmd, shell=True)
-        self.run_process.wait()
-
-        returncode = self.run_process.returncode
-        if returncode is not None and returncode < 0:
-            ##kill signal received, exit the run
-            return
+        run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
+                nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
+                walltime=self.walltime, **kwargs)
 
         # "SUCCESS COMPLETE" in log_file
 

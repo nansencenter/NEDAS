@@ -1,5 +1,5 @@
 import numpy as np
-import os
+from models.qg import Model
 from ..dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
@@ -24,6 +24,7 @@ class Dataset(DatasetConfig):
             nobs = kwargs['nobs']
 
         grid = kwargs['grid']
+
         obs_y = np.random.uniform(grid.ymin, grid.ymax, nobs)
         obs_x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
@@ -38,4 +39,6 @@ class Dataset(DatasetConfig):
                 'err_std': np.ones(nobs) * kwargs['err']['std']
                 }
         return obs_seq
-
+    
+    def read_obs(self, **kwargs):
+        raise NotImplementedError('read_obs: ERROR: read_obs not implemented for qg dataset')

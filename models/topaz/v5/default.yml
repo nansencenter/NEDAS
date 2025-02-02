@@ -10,7 +10,8 @@ nproc: 511
 
 nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
 nproc_per_util: 32
-restart_dt: 24
+restart_dt: 168
+output_dt: 24
 forcing_dt: 6
 
 ###model specific settings (blkdat)
@@ -32,7 +33,7 @@ isotop: 6.0   ## shallowest depth for isopycnal layers (m, <0 from file)
 saln0: 35.0   ##initial salinity value (psu), only used for iniflg<2
 locsig: 0   ## locally-referenced pot. density for stability (0=F,1=T)
 kapref: 0   ## thermobaric ref. state (-1=input,0=none,1,2,3=constant)
-thflag: 0   ## reference pressure flag (0=Sigma-0, 2=Sigma-2)
+thflag: 0   ## reference pressure flag (0=Sigma-0, 2=Sigma-2, 4=Sigma-4)
 thbase: 25.0   ## reference density (sigma units)
 vsigma: 0   ## spacially varying isopycnal target densities (0=F,1=T)
 sigma: [ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 24.05, 25.72, 26.40, 26.90, 27.13, 27.19, 27.25, 27.29, 27.34, 27.42, 27.50, 27.56, 27.63, 27.66, 27.69, 27.72, 27.74, 27.76, 27.78, 27.80, 27.82, 27.85, 27.87, 27.90, 27.93, 27.95, 27.97, 27.99, 28.01, 28.02, 28.03, 28.04, 28.05, 28.06, 28.07, 28.08, 28.09, 28.10, 28.11, 28.12]  ##density (sigma units) for each layer 1-kdm
@@ -199,6 +200,40 @@ jlport: [760, 2]   ##'jlport   ' = last  j-index (=jfport for north/south port)
 
 ##cice
 cice_dt: 1200.0  ##cice model time step (seconds)
+Nilayer  : 7   ## vertical layers for ice
+Nslayer  : 1   ## vertical layers for snow
+
+rhos     : 330.0   ## density of snow (kg/m^3)
+rhoi     : 917.0   ## density of ice (kg/m^3)
+rhow     : 1026.0  ## density of seawater (kg/m^3)
+cp_air   : 1005.0  ## specific heat of air (J/kg/K)
+##(Briegleb JGR 97 11475-11485  July 1992) cp_ice  := 2106.0   ## specific heat of fresh ice (J/kg/K)
+cp_ocn   : 4218.0   ## specific heat of ocean (J/kg/K)
+Lsub     : 2.835e6  ## latent heat, sublimation freshwater (J/kg)
+Lvap     : 2.501e6  ## latent heat, vaporization freshwater (J/kg)
+Lfresh   : 0.334e6  ## latent heat of melting fresh ice (j/kg)
+depressT : 0.054
+
+Tocnfrz  : -1.8    ## freezing temp of seawater (C),
+Tffresh  : 273.15  ## freezing temp of fresh ice (K)
+Tsmelt   : 0.0     ## melting temperature, snow top surface
+
+saltmax  : 3.2     ## max salt in ice
+min_salin: 0.1
+hs_min   : 1.e-4     ## min snow thickness for computing zTsn (m)
+msal     : 0.573
+nsal     : 0.407
 
 z_units: 'm'
-onem: 9806.
+
+ONEM: 9806.
+MIN_SEAICE_CONC: 0.05
+MAX_OCEAN_TEMP: 35.
+MIN_OCEAN_SALN: 5.
+MAX_OCEAN_SALN: 40.
+
+thref: 1.e-3
+
+aice_thresh: 1e-4
+fice_thresh: 5e-4
+hice_impact: 0

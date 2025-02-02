@@ -1,5 +1,5 @@
 import numpy as np
-import importlib
+from models.vort2d import Model
 from ..dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
@@ -13,8 +13,7 @@ class Dataset(DatasetConfig):
             'vortex_size':  {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
             }
 
-        self.obs_operator = {}
-        self.obs_operator['vort2d'] = {
+        self.obs_operator = {
             'vortex_position': self.get_vortex_position,
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
@@ -23,10 +22,13 @@ class Dataset(DatasetConfig):
     def random_network(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         name = kwargs['name']
+        model = kwargs['model']
+        assert isinstance(model, Model), 'random_network: ERROR: model must be an instance of models.vort2d.Model'
         grid = kwargs['grid']
 
         ##get truth vortex position, some network is vortex-following
-        velocity = self.get_velocity(**{**kwargs, 'path':kwargs['truth_dir']})
+        velocity = self.get_velocity(**{**kwargs, 'path': model.truth_dir})
+        ##diagnose the vortex position on grid
         i, j = self.vortex_position(velocity[0,...], velocity[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
@@ -143,17 +145,24 @@ class Dataset(DatasetConfig):
         return Rsize
 
     def get_velocity(self, **kwargs):
-        ##get the velocity field from model
-        module = importlib.import_module('models.vort2d')
-        model = getattr(module, 'Model')(**kwargs)
-        return model.read_var(**{**kwargs, 'name':'velocity'})
+        kwargs = super().parse_kwargs(**kwargs)
+        model = kwargs['model']
+        assert isinstance(model, Model), 'get_velocity: ERROR: model must be an instance of models.vort2d.Model'
+        grid = kwargs['grid']
+        ##read the velocity field from truth
+        model_velocity = model.read_var(**{**kwargs, 'name':'velocity'})
+        ##convert velocity to target grid
+        model.grid.set_destination_grid(grid)
+        velocity = model.grid.convert(model_velocity, is_vector=True)
+        return velocity
 
     def get_vortex_position(self, **kwargs):
         velocity = self.get_velocity(**kwargs)
+        grid = kwargs['model'].grid
         center_i, center_j = self.vortex_position(velocity[0,...], velocity[1,...])
         obs_seq = np.zeros((2, 1), dtype='float')
-        obs_seq[0,0] = kwargs['grid'].x[center_j, center_i]
-        obs_seq[1,0] = kwargs['grid'].y[center_j, center_i]
+        obs_seq[0,0] = grid.x[center_j, center_i]
+        obs_seq[1,0] = grid.y[center_j, center_i]
         return obs_seq
 
     def get_vortex_intensity(self, **kwargs):
@@ -163,8 +172,8 @@ class Dataset(DatasetConfig):
 
     def get_vortex_size(self, **kwargs):
         velocity = self.get_velocity(**kwargs)
+        dx = kwargs['model'].grid.dx
         center_i, center_j = self.vortex_position(velocity[0,...], velocity[1,...])
         Rsize = self.vortex_size(velocity[0,...], velocity[1,...], center_i, center_j)
-        Rsize = Rsize * kwargs['grid'].dx
+        Rsize = Rsize * dx
         return np.array([Rsize])
-

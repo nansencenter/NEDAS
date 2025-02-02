@@ -1,10 +1,8 @@
-import numpy as np
 import os
-import inspect
+import numpy as np
 from grid import Grid
-from config import parse_config
-from utils.conversion import t2s, s2t, dt1h
-from utils.shell_utils import run_command
+from utils.conversion import dt1h
+from utils.shell_utils import run_command, makedir
 from utils.netcdf_lib import nc_read_var, nc_write_var
 
 from .util import initial_condition, advance_time
@@ -83,7 +81,7 @@ class Model(ModelConfig):
 
     def preprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        run_command("mkdir -p "+kwargs['path'])
+        makedir(kwargs['path'])
 
         file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
         file2 = self.filename(**kwargs)
@@ -96,7 +94,7 @@ class Model(ModelConfig):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
-        run_command("mkdir -p "+kwargs['path'])
+        makedir(kwargs['path'])
 
         state = self.read_var(**kwargs)
         time = kwargs['time']
@@ -105,4 +103,3 @@ class Model(ModelConfig):
         next_state = advance_time(state, self.dx, forecast_period, self.dt, self.gen, self.diss)
         self.write_var(next_state, **{**kwargs, 'time':next_time})
         self.run_status = 'complete'
-
