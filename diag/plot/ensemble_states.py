@@ -109,12 +109,12 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
-        levels_by_variable += f"{vname}: ["
+        levels_by_variable += f"'{vname}': ["
         model = c.model_config[model_src]
         for level in model.variables[vname]['levels']:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
-        times_by_variable += f"{vname}: ["
+        times_by_variable += f"'{vname}': ["
         for t in np.arange(t2h(c.time), t2h(c.next_time), model.variables[vname]['dt']):
             times_by_variable += f"'{h2t(t):%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"

@@ -181,12 +181,12 @@ def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
         obs_ts = c.time + np.arange(obs_window_min, obs_window_max, obs_dt[i]) * dt1h
         levels = np.arange(obs_kmin[i], obs_kmax[i]+1)
 
-        levels_by_variable += f"{name}: ["
+        levels_by_variable += f"'{name}': ["
         for level in levels:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
 
-        times_by_variable += f"{name}: ["
+        times_by_variable += f"'{name}': ["
         for t in obs_ts:
             times_by_variable += f"'{t:%Y%m%dT%H%M%S}_{t+obs_dt[i]*dt1h:%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
