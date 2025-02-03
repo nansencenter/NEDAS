@@ -21,6 +21,18 @@ def nc_close(filename, f, comm):
     if comm is not None and not comm.parallel_io:
         comm.release_file_lock(filename)
 
+def var_in_file(f, varname):
+    """
+    Check if varname is available in filename
+    Use try-catch to check, so that compound varname (group/var) also works
+    """
+    try:
+        _ = f[varname]
+        return True
+    except Exception:
+        return False
+
+
 def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None, comm=None):
     """
     Write a variable to a netcdf file
@@ -80,7 +92,8 @@ def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None,
                     assert(recno[name] < f.dimensions[name].size), "recno for dimension "+name+" exceeds file size"
         else:
             f.createDimension(name, size=dim[name])
-    if varname not in f.variables:
+
+    if not var_in_file(f, varname):
         f.createVariable(varname, dtype, dim.keys())
 
     if isinstance(dat, np.ndarray):
@@ -115,11 +128,9 @@ def nc_read_var(filename, varname, comm=None):
     """
     f = nc_open(filename, 'r', comm)
 
-    try:
-        dat = f[varname][...]
-    except IndexError:
-        raise RuntimeError(f"variable '{varname}' is not defined in {filename}")
+    assert var_in_file(f, varname), f"variable '{varname}' is not defined in {filename}"
 
+    dat = f[varname][...]
     dat_out = dat.data
     dat_out[dat.mask] = np.nan
 
