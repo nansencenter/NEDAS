@@ -601,20 +601,11 @@ def prepare_obs(c):
         obs_seq[obs_rec_id] = seq
         obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
 
-    ##additional output for debugging
-    if c.debug:
-        # if c.pid == 0:
-        #     np.save(os.path.join(c.analysis_dir, 'rec_list.npy'), c.rec_list)
-        #     np.save(os.path.join(c.analysis_dir, 'mem_list.npy'), c.mem_list)
-        #     np.save(os.path.join(c.analysis_dir, 'obs_rec_list.npy'), c.obs_rec_list)
-        #     np.save(os.path.join(c.analysis_dir, 'obs_inds.npy'), c.obs_inds)
-        #     np.save(os.path.join(c.analysis_dir, 'partitions.npy'), c.partitions)
-        #     np.save(os.path.join(c.analysis_dir, 'par_list.npy'), c.par_list)
-        if c.pid_mem == 0:
-            #np.save(os.path.join(c.analysis_dir, f'obs_seq.{c.pid_rec}.npy'), obs_seq)
-            for obs_rec_id, rec in obs_seq.items():
-                file = os.path.join(c.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy')
-                np.save(file, rec)
+    ##output obs sequence
+    if c.pid_mem == 0:
+        for obs_rec_id, rec in obs_seq.items():
+            file = os.path.join(c.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy')
+            np.save(file, rec)
 
     return c.obs_info, obs_seq
 
@@ -668,13 +659,11 @@ def prepare_obs_from_state(c, obs_seq, fields, z_fields):
     c.comm.Barrier()
     print_1p(' done.\n')
 
-    ##additional output for debugging
-    if c.debug:
-        #np.save(os.path.join(c.analysis_dir, f'obs_prior_seq.{c.pid_mem}.{c.pid_rec}.npy'), obs_prior_seq)
-        for key, seq in obs_prior_seq.items():
-            mem_id, obs_rec_id = key
-            file = os.path.join(c.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
-            np.save(file, seq)
+    ##output obs_prior sequeneces
+    for key, seq in obs_prior_seq.items():
+        mem_id, obs_rec_id = key
+        file = os.path.join(c.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
+        np.save(file, seq)
 
     return obs_prior_seq
 
