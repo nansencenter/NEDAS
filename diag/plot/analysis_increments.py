@@ -116,14 +116,14 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
-        levels_by_variable += f"{vname}: ["
+        levels_by_variable += f"'{vname}': ["
         levels = [r['k'] for id,r in c.state_info['fields'].items() if r['name']==vname]
         levels.sort()
         for level in levels:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
 
-        times_by_variable += f"{vname}: ["
+        times_by_variable += f"'{vname}': ["
         for t in c.time + np.array(c.state_time_steps) * dt1h:
             times_by_variable += f"'{t:%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
