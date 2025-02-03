@@ -42,6 +42,7 @@ def assimilate(c):
 
     inflation(c, 'prior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq)
 
+    c.comm.Barrier()
     state_prior, z_state, lobs, lobs_prior = timer(c)(transpose_forward)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
 
     if c.assim_mode == 'batch':
@@ -52,6 +53,7 @@ def assimilate(c):
         raise ValueError(f"Error: assimilation mode {c.assim_mode} not recognized")
     state_post, lobs_post = timer(c)(assim)(c, state_prior, z_state, lobs, lobs_prior)
 
+    c.comm.Barrier()
     fields_post, obs_post_seq = timer(c)(transpose_backward)(c, state_post, lobs_post)
 
     timer(c)(output_ens_mean)(c, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'))
