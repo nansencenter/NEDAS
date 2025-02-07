@@ -136,7 +136,8 @@ class Topaz5Model(ModelConfig):
         elif kwargs['name'] in self.diag_variables:
             kstr = f"_k{kwargs['k']}_"
             tstr = t2s(kwargs['time'])
-            return os.path.join(kwargs['path'], kwargs['name']+kstr+tstr+mstr+'.npy')
+            file = os.path.join(mstr[1:], 'SCRATCH', kwargs['name']+kstr+tstr+'.npy')
+            return os.path.join(kwargs['path'], file)
 
         else:
             raise ValueError(f"filename: ERROR: unknown variable name '{kwargs['name']}'")
@@ -221,8 +222,14 @@ class Topaz5Model(ModelConfig):
                 f.close()
 
         elif name in self.diag_variables:
-            var = rec['operator'](**kwargs)
-            np.save(fname, var)
+            ##TODO: not sure if this is the right way to deal with diagnostic variables
+            ## if the npy file exists, should it just be read to give the variable,
+            ## or should we always calculate the variable from the model state, and refresh to the npy file?
+            if os.path.exists(fname):
+                var = np.load(fname)
+            else:
+                var = rec['operator'](**kwargs)
+                np.save(fname, var)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -384,7 +391,6 @@ class Topaz5Model(ModelConfig):
         #just return first level ocean_temp
         return self.read_var(**{**kwargs, 'name':'ocean_temp', 'k':1})
 
-    @lru_cache(maxsize=3)
     def get_seaice_conc(self, **kwargs):
         """
         Get total seaice concentration from multicategory ice concentration (aicen)
