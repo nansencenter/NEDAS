@@ -46,6 +46,8 @@ grid_def:
   dx: 0.1                  ##grid spacing in coordinate units (resolution)
   centered: False
 
+z_coords_from: 'mean'
+
 ##state vector definition (a list of definitions, one for each variable)
 state_def:
 - name: 'streamfunc'      ## name of the variable
