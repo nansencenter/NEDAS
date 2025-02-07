@@ -351,7 +351,7 @@ def partition_grid_point_list(c):
 
     return partitions
 
-def output_state(c, fields, state_file):
+def output_state(c, fields, state_file, mem_id_out=None, rec_id_out=None):
     """
     Parallel output the fields to the binary state_file
 
@@ -375,7 +375,12 @@ def output_state(c, fields, state_file):
     nm = len(c.mem_list[c.pid_mem])
     nr = len(c.rec_list[c.pid_rec])
     for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
+        if mem_id_out is not None and mem_id != mem_id_out:
+            continue
         for r, rec_id in enumerate(c.rec_list[c.pid_rec]):
+            if rec_id_out is not None and rec_id != rec_id_out:
+                continue
+
             if c.debug:
                 rec = c.state_info['fields'][rec_id]
                 print(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
@@ -435,6 +440,17 @@ def output_ens_mean(c, fields, mean_file):
             write_field(mean_file, c.state_info, c.mask, 0, rec_id, mean_fld)
     c.comm.Barrier()
     print_1p(' done.\n')
+
+def output_z_coords(c, z_fields, z_file):
+    ##topaz uses the first ensemble member z coords as the reference z for obs
+    ##include this here for backward compatibility
+    ##there is no need for choosing which member also, just use the first one
+    if c.z_coords_from == 'member':
+        output_state(c, z_fields, z_file, mem_id_out=0)
+
+    ##we use by default the ensemble mean z coords as the reference z for obs
+    if c.z_coords_from == 'mean':
+        output_ens_mean(c, z_fields, z_file)
 
 def prepare_state(c):
     """
