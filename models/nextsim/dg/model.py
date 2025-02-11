@@ -14,20 +14,22 @@ class Model(ModelConfig):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.native_variables = {
-             'seaice_conc': {'name':'data/cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
-             'seaice_thick': {'name':'data/hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
-             'seaice_damage': {'name':'data/damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
+             'seaice_conc_dg': {'name':'data/cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
+             'seaice_thick_dg': {'name':'data/hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':'m'},
+             'seaice_damage_dg': {'name':'data/damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
              'snow_thick': {'name':'data/hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'seaice_temp_k': {'name':'data/tice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0,1,2], 'units':'K'},
-             'seaice_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'km/day'},
+             'seaice_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
              }
         self.diag_variables = {
+             'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
+             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              }
         self.atmos_forcing_variables = {
             'atmos_surf_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
             'atmos_surf_press': {'name':'data/pair', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
-            'atmos_surf_temp': {'name':'data/tair', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'K'},
-            'atmos_surf_dewpoint': {'name':'data/dew2m', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'K'},
+            'atmos_surf_temp': {'name':'data/tair', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'C'},
+            'atmos_surf_dewpoint': {'name':'data/dew2m', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'C'},
             'atmos_down_shortwave': {'name':'data/sw_in', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'W/m2'},
             'atmos_down_longwave': {'name':'data/lw_in', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'W/m2'},
         }
@@ -37,7 +39,7 @@ class Model(ModelConfig):
             'ocean_surf_salinity': {'name':'data/sss', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
             'ocean_mixl_depth': {'name':'data/mld', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
         }
-        self.variables = {**self.native_variables, **self.atmos_forcing_variables, **self.ocean_forcing_variables}
+        self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables, **self.ocean_forcing_variables}
 
         self.z_units = 'm'
 
@@ -62,6 +64,9 @@ class Model(ModelConfig):
         name = kwargs['name']  ##name of the variable
         if name in self.native_variables:
             fname = restart.get_restart_filename(self.files['restart'], ens_mem_id, time)
+
+        elif name in self.diag_variables:
+            fname = f"{name}_k{kwargs['k']}_{t2s(kwargs['time'])}.npy"
 
         elif name in self.atmos_forcing_variables:
             fname = forcing.get_forcing_filename(self.files['forcing']['atmosphere'], ens_mem_id, time)
@@ -101,6 +106,10 @@ class Model(ModelConfig):
                 else:
                     var = nc_read_var(fname, rec['name'])
 
+        elif name in self.diag_variables:
+            var = rec['operator'](**kwargs)
+            np.save(fname, var)
+
         else:
             if name in self.atmos_forcing_variables:
                 forcing_name = 'atmosphere'
@@ -113,11 +122,11 @@ class Model(ModelConfig):
                                            kwargs['time']
                                            )
             if rec['is_vector']:
-                u = forcing.read_var(fname, [rec[name][0],], itime)[0,...].data
-                v = forcing.read_var(fname, [rec[name][1],], itime)[0,...].data
+                u = forcing.read_var(fname, [rec['name'][0],], itime)[0,...].data
+                v = forcing.read_var(fname, [rec['name'][1],], itime)[0,...].data
                 var = np.array([u, v])
             else:
-                var = forcing.read_var(fname, [rec[name],], itime)[0,...].data
+                var = forcing.read_var(fname, [rec['name'],], itime)[0,...].data
                 
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
@@ -132,9 +141,24 @@ class Model(ModelConfig):
 
         if name in self.native_variables:
             if rec['is_vector']:
-                restart.write_var(fname, list(rec[name]), np.ma.arary(var))
+                dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx}
+                for i in range(2):
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], comm=kwargs['comm'])
             else:
-                restart.write_var(fname, [rec[name],], np.ma.array([var,]))
+                if rec['name'] in ['data/cice', 'data/hice', 'data/damage']:
+                    dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx, 'dg_comp':None}
+                    recno = {'dg_comp':kwargs['k']}
+                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                elif rec['name'] in ['data/tice']:
+                    dims = {'zdim':None, 'ydim':self.grid.ny, 'xdim':self.grid.nx}
+                    recno = {'zdim':kwargs['k']}
+                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                else:
+                    nc_write_var(fname, dims, rec['name'], var, comm=kwargs['comm'])
+
+        elif name in self.diag_variables:
+            np.save(fname, var)
+
         else:
             if name in self.atmos_forcing_variables:
                 forcing_name = 'atmosphere'
@@ -147,12 +171,18 @@ class Model(ModelConfig):
                                            kwargs['time']
                                            )
             if rec['is_vector']:
-                forcing.write_var(fname, list(rec[name]), np.ma.array(var), itime)
+                forcing.write_var(fname, list(rec['name']), np.ma.array(var), itime)
             else:
-                forcing.write_var(fname, [rec[name],], np.ma.array([var,]))
+                forcing.write_var(fname, [rec['name'],], np.ma.array([var,]))
 
     def z_coords(self, **kwargs):
         return np.zeros(self.grid.x.shape)
+    
+    def get_seaice_conc(self, **kwargs):
+        return self.read_var(**{**kwargs, 'name':'seaice_conc_dg', 'k':0, 'units':1})
+
+    def get_seaice_thick(self, **kwargs):
+        return self.read_var(**{**kwargs, 'name':'seaice_thick_dg', 'k':0, 'units':1})
 
     def preprocess(self, task_id:int=0, **kwargs):
         """Preprocessing method for nextsim.dg
@@ -287,6 +317,9 @@ class Model(ModelConfig):
             fname_restart_init = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
             fname = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
             os.system(f'ln -fs {fname} {run_dir}')
+
+    def postprocess(self, task_id=0, **kwargs):
+        pass
 
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
