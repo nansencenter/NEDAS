@@ -89,7 +89,7 @@ def run(c, **kwargs) -> None:
         print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
 
     ##if the viewer html file does not exist, generate it
-    viewer = os.path.join(plot_dir, 'viewer.html')
+    viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, figsize, **kwargs)
 
@@ -204,5 +204,5 @@ def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
     ##write the html page to file
-    with open(os.path.join(plot_dir, 'viewer.html'), 'w') as f:
+    with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)
