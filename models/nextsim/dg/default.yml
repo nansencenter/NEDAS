@@ -1,7 +1,5 @@
 # model config parameters
 #grid definition
-##TODO: can we get stere proj x,y start and end directly to build the grid object?
-##      instead of converting from lon,lat which I think is unnecessary
 grid_def:
   proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
   xstart: -2.5e6
@@ -11,7 +9,9 @@ grid_def:
   dx: 3e3
 
 restart_dt: 24  ##model restart interval (hours)
+
 ##physical parameters
+dg_comp: 6
 
 # here, we specify the required files
 files:

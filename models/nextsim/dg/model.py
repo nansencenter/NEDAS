@@ -6,7 +6,7 @@ from grid import Grid
 from utils.conversion import units_convert, t2s, dt1h
 from utils.shell_utils import run_job, makedir
 from utils.netcdf_lib import nc_read_var, nc_write_var
-from . import restart, forcing, namelist
+from . import restart, forcing, namelist, dgLimit
 from ...model_config import ModelConfig
 
 class Model(ModelConfig):
@@ -127,7 +127,7 @@ class Model(ModelConfig):
                 var = np.array([u, v])
             else:
                 var = forcing.read_var(fname, [rec['name'],], itime)[0,...].data
-                
+
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
@@ -177,7 +177,7 @@ class Model(ModelConfig):
 
     def z_coords(self, **kwargs):
         return np.zeros(self.grid.x.shape)
-    
+
     def get_seaice_conc(self, **kwargs):
         return self.read_var(**{**kwargs, 'name':'seaice_conc_dg', 'k':0, 'units':1})
 
@@ -319,7 +319,26 @@ class Model(ModelConfig):
             os.system(f'ln -fs {fname} {run_dir}')
 
     def postprocess(self, task_id=0, **kwargs):
-        pass
+        """Postprocessing method for nextsim.dg
+        Parameters: same as preprocess
+        """
+        kwargs = super().parse_kwargs(**kwargs)
+
+        restartfile = restart.get_restart_filename(self.files['restart'], kwargs['member']+1, kwargs['time'])
+
+        # read cice hice from restart file
+        cice = nc_read_var(restartfile, 'data/cice')
+        hice = nc_read_var(restartfile, 'data/hice')
+
+        ##limit the cice between 0-1, and hice>0, before running the next forecast
+        cice = dgLimit.limit_max(cice, 1.0)
+        cice = dgLimit.limit_min(cice, 0.0)
+        hice = dgLimit.limit_min(hice, 0.0)
+
+        # write back to restart file
+        dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx, 'dg_comp':self.dg_comp}
+        nc_write_var(restartfile, dims, 'data/cice', cice, comm=kwargs['comm'])
+        nc_write_var(restartfile, dims, 'data/hice', hice, comm=kwargs['comm'])
 
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
