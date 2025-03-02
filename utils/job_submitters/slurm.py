@@ -11,8 +11,6 @@ class SLURMJobSubmitter(JobSubmitter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.parallel_mode = kwargs.get('parallel_mode', 'mpi')
-
         ##additional slurm options
         if self.host == 'betzy':
             self.ppn = kwargs.get('ppn', 128)
