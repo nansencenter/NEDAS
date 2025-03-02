@@ -324,7 +324,16 @@ class Model(ModelConfig):
         """
         kwargs = super().parse_kwargs(**kwargs)
 
-        restartfile = restart.get_restart_filename(self.files['restart'], kwargs['member']+1, kwargs['time'])
+        # get the current ensemble member id
+        ens_mem_id:int = kwargs['member'] + 1
+        # ensemble member directory for the current member
+        ens_mem_dir:str = f'ens_{str(ens_mem_id).zfill(2)}'
+
+        # directory where files are being collected to, and where the model will be run
+        run_dir = os.path.join(kwargs['path'], ens_mem_dir)
+
+        file = restart.get_restart_filename(self.files['restart'], ens_mem_id, kwargs['time'])
+        restartfile = os.path.join(run_dir, os.path.basename(file))
 
         # read cice hice from restart file
         cice = nc_read_var(restartfile, 'data/cice')
