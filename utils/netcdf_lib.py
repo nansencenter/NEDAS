@@ -21,18 +21,6 @@ def nc_close(filename, f, comm):
     if comm is not None and not comm.parallel_io:
         comm.release_file_lock(filename)
 
-def var_in_file(f, varname):
-    """
-    Check if varname is available in filename
-    Use try-catch to check, so that compound varname (group/var) also works
-    """
-    try:
-        _ = f[varname]
-        return True
-    except Exception:
-        return False
-
-
 def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None, comm=None):
     """
     Write a variable to a netcdf file
@@ -66,6 +54,16 @@ def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None,
     """
     f = nc_open(filename, 'a', comm)
 
+    varname_parts = varname.split('/')
+    group_path, varname = '/'.join(varname_parts[:-1]), varname_parts[-1]
+
+    group = f
+    if group_path:
+        for part in group_path.split('/'):
+            if part not in group.groups:
+                group.createGroup(part)
+            group = group.groups[part]
+
     if dtype is None:
         if isinstance(dat, np.ndarray):
             dtype = dat.dtype
@@ -84,26 +82,28 @@ def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None,
             assert(dat.shape[d] == dim[name]), "dat size for dimension "+name+" mismatch with dim["+name+"]={}".format(dim[name])
             d += 1
 
-        if name in f.dimensions:
+        if name in group.dimensions:
             if dim[name] is not None:
-                assert(f.dimensions[name].size==dim[name]), "dimension "+name+" size ({}) mismatch with file ({})".format(dim[name], f.dimensions[name].size)
+                assert(group.dimensions[name].size==dim[name]), "dimension "+name+" size ({}) mismatch with file ({})".format(dim[name], group.dimensions[name].size)
             else:
-                if not f.dimensions[name].isunlimited():
-                    assert(recno[name] < f.dimensions[name].size), "recno for dimension "+name+" exceeds file size"
+                if not group.dimensions[name].isunlimited():
+                    assert(recno[name] < group.dimensions[name].size), "recno for dimension "+name+" exceeds file size"
         else:
-            f.createDimension(name, size=dim[name])
+            group.createDimension(name, size=dim[name])
 
-    if not var_in_file(f, varname):
-        f.createVariable(varname, dtype, dim.keys())
+    if varname not in group.variables:
+        group.createVariable(varname, dtype, tuple(dim.keys()))
 
     if isinstance(dat, np.ndarray):
         dat = dat.astype(dtype)
     else:
         dat = dtype(dat)
-    f[varname][s] = dat  ##write dat to file
+
+    group[varname][s] = dat  ##write dat to file
+
     if attr is not None:
         for akey in attr:
-            f[varname].setncattr(akey, attr[akey])
+            group[varname].setncattr(akey, attr[akey])
 
     nc_close(filename, f, comm)
 
@@ -128,9 +128,19 @@ def nc_read_var(filename, varname, comm=None):
     """
     f = nc_open(filename, 'r', comm)
 
-    assert var_in_file(f, varname), f"variable '{varname}' is not defined in {filename}"
+    varname_parts = varname.split('/')
+    group_path, varname = '/'.join(varname_parts[:-1]), varname_parts[-1]
 
-    dat = f[varname][...]
+    group = f
+    if group_path:
+        for part in group_path.split('/'):
+            if part not in group.groups:
+                group.createGroup(part)
+            group = group.groups[part]
+
+    assert varname in group.variables, f"variable '{varname}' is not defined in {filename}"
+
+    dat = group[varname][...]
     dat_out = dat.data
     dat_out[dat.mask] = np.nan
 
