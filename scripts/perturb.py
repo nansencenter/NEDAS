@@ -6,7 +6,6 @@ from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
 from utils.shell_utils import run_command, run_job
-from utils.dir_def import forecast_dir, cycle_dir
 from utils.random_perturb import random_perturb
 
 def perturb(c):
@@ -14,7 +13,7 @@ def perturb(c):
 
     ##clean perturb files in current cycle dir
     for rec in c.perturb:
-        perturb_dir = os.path.join(forecast_dir(c, c.time, rec['model_src']), 'perturb')
+        perturb_dir = os.path.join(c.forecast_dir(c.time, rec['model_src']), 'perturb')
         if c.pid==0:
             run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
     c.comm.Barrier()
@@ -44,13 +43,13 @@ def perturb(c):
         model = c.model_config[model_name]  ##model class object
         mem_id = rec['member']
         mstr = f'_mem{mem_id+1:03d}'
-        path = forecast_dir(c, c.time, model_name)
+        path = c.forecast_dir(c.time, model_name)
         variable_list = ensure_list(rec['variable'])
 
         ##check if previous perturb is available from past cycles
         perturb = {}
         for vname in variable_list:
-            psfile = os.path.join(forecast_dir(c, c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
+            psfile = os.path.join(c.forecast_dir(c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
             if os.path.exists(psfile):
                 perturb[vname] = np.load(psfile)
             else:
@@ -136,7 +135,7 @@ def run(c):
     if c.job_submit:
         job_submit_opts = c.job_submit
         
-    run_job(commands, job_name="perturb", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+    run_job(commands, job_name="perturb", run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == "__main__":
     from config import Config

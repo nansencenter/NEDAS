@@ -1,6 +1,11 @@
 ##working directory for your experiment
 work_dir: '/cluster/work/users/yingyue/qg'
 
+directories:
+  cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
+  forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
+  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
+
 ##python environment source script
 python_env: '/cluster/home/yingyue/python.src'
 
