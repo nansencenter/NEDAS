@@ -4,8 +4,7 @@
 import os
 from config import Config
 from utils.conversion import dt1h
-from utils.dir_def import cycle_dir
-from scripts import preprocess, postprocess,perturb, assimilate, ensemble_forecast, diagnose
+from scripts import preprocess, postprocess, perturb, assimilate, ensemble_forecast, diagnose
 
 c = Config(parse_args=True)
 c.show_summary()
@@ -20,7 +19,7 @@ while c.time < c.time_end:
     c.next_time = c.time + c.cycle_period * dt1h
     print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
 
-    os.system("mkdir -p "+cycle_dir(c, c.time))
+    os.system("mkdir -p "+c.cycle_dir(c.time))
 
     preprocess.run(c)
 

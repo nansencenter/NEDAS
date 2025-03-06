@@ -5,7 +5,6 @@ import importlib.util
 from utils.conversion import dt1h, ensure_list
 from utils.parallel import distribute_tasks, bcast_by_root, by_rank
 from utils.progress import timer, print_with_cache, progress_bar
-from utils.dir_def import cycle_dir
 from utils.shell_utils import run_job
 
 def diagnose(c):
@@ -94,7 +93,7 @@ def run(c):
     if c.job_submit:
         job_submit_opts = c.job_submit
 
-    run_job(commands, job_name="diag", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+    run_job(commands, job_name="diag", run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == "__main__":
     from config import Config

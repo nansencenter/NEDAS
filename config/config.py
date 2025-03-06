@@ -31,24 +31,54 @@ class Config(object):
         for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
             setattr(self, key, None)
 
+    @property
+    def time(self):
+        return self._time
+
+    @time.setter
+    def time(self, value):
+        if isinstance(value, str):
+            self._time = s2t(value)
+        elif isinstance(value, datetime):
+            self._time = value
+        else:
+            raise TypeError(f"Error: time must be a string or datetime object, not {type(value)}")
+
+    @property
+    def prev_time(self):
+        if self.time > self.time_start:
+            return self.time - self.cycle_period * dt1h
+        else:
+            return self.time
+
+    @property
+    def next_time(self):
+        return self.time + self.cycle_period * dt1h
+
+    def cycle_dir(self, time):
+        return self.directories['cycle_dir'].format(work_dir=self.work_dir, time=time)
+
+    def forecast_dir(self, time, model_name):
+        return self.directories['forecast_dir'].format(work_dir=self.work_dir, time=time, model_name=model_name)
+
+    def analysis_dir(self, time, scale_id):
+        if self.nscale == 1:
+            scale_dir = ''
+        else:
+            scale_dir = f"scale{scale_id}"
+        return self.directories['analysis_dir'].format(work_dir=self.work_dir, time=time, scale_dir=scale_dir)
+
     def set_time(self):
         for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end']:
+            ##make sure key is defined in config file
             assert key in self.keys, f"'{key}' is missing in config file"
 
-        ##these keys become available at runtime
-        for key in ['time', 'prev_time', 'next_time']:
-            if key not in self.keys:
-                setattr(self, key, self.time_start)
-                self.keys.append(key)
-
-        ##convert string to datetime obj
-        for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
+            ##convert string to datetime obj
             setattr(self, key, s2t(getattr(self, key)))
 
-        ##make sure prev and next time is correct
-        if self.time > self.time_start:
-            self.prev_time = self.time - self.cycle_period * dt1h
-        self.next_time = self.time + self.cycle_period * dt1h
+        if self.time is None:
+            ##initialize current time to start time
+            self.time = self.time_start
 
     def set_comm(self):
         ##initialize mpi communicator
@@ -134,4 +164,3 @@ class Config(object):
                     value = t2s(value)
                 config_dict[key] = value
             yaml.dump(config_dict, f)
-

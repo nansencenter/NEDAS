@@ -4,7 +4,6 @@ import importlib.util
 from utils.parallel import bcast_by_root
 from utils.progress import timer
 from utils.shell_utils import run_job, makedir
-from utils.dir_def import analysis_dir, cycle_dir
 from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean, output_z_coords
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
 from assim_tools.transpose import transpose_forward, transpose_backward
@@ -90,7 +89,7 @@ def run(c):
     if hasattr(c, 'ppn'):
         job_submit_opts['ppn'] = c.ppn
 
-    run_job(commands, job_name='assimilate', run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+    run_job(commands, job_name='assimilate', run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == '__main__':
     from config import Config
