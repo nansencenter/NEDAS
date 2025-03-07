@@ -6,7 +6,6 @@ from grid import Grid
 from utils.netcdf_lib import nc_write_var
 from utils.conversion import ensure_list, proj2dict, s2t, dt1h
 from utils.shell_utils import makedir
-from utils.dir_def import forecast_dir
 
 def get_task_list(c, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""
@@ -77,7 +76,7 @@ def run(c, **kwargs):
     time_units = kwargs.get('time_units', 'seconds since 1970-01-01T00:00:00+00:00')
     time_calendar = kwargs.get('time_calendar', 'standard')
     t_steps = range(0, forecast_hours, dt_hours)
-    path = forecast_dir(c, time_start, model_name)
+    path = c.forecast_dir(time_start, model_name)
 
     for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h

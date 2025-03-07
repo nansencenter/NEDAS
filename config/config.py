@@ -3,6 +3,7 @@ import os
 import inspect
 import yaml
 import importlib
+from datetime import datetime
 from pyproj import Proj
 from grid import Grid
 from utils.parallel import Comm
@@ -19,6 +20,8 @@ class Config(object):
         for key, value in config_dict.items():
             setattr(self, key, value)
             self.keys.append(key)
+
+        self._time = None
 
         ##some attributes are useful in runtime
         self.set_time()

@@ -2,11 +2,10 @@ import numpy as np
 import os
 import struct
 from grid import Grid
-from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
+from utils.conversion import type_dic, type_size, t2h, h2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
-from utils.parallel import by_rank, bcast_by_root, distribute_tasks
+from utils.parallel import by_rank, distribute_tasks
 from utils.multiscale import get_scale_component, get_error_scale_factor
-from utils.dir_def import forecast_dir
 from .state import read_field
 
 """
@@ -432,7 +431,7 @@ def state_to_obs(c, **kwargs):
         if synthetic:
             path = model.truth_dir
         else:
-            path = forecast_dir(c, time, kwargs['model_src'])
+            path = c.forecast_dir(time, kwargs['model_src'])
 
         operator = dataset.obs_operator[kwargs['name']]
 
@@ -464,7 +463,7 @@ def state_to_obs(c, **kwargs):
                 if synthetic:
                     path = model.truth_dir
                 else:
-                    path = forecast_dir(c, time, kwargs['model_src'])
+                    path = c.forecast_dir(time, kwargs['model_src'])
 
                 if k == 0:  ##initialize grid obj for conversion
                     model.read_grid(path=path, **kwargs)

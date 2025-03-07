@@ -3,8 +3,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import analysis_dir
+from utils.conversion import ensure_list, dt1h
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 from assim_tools.state import parse_state_info, read_field
@@ -72,7 +71,7 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the field from bin file in analysis dir
-    adir = analysis_dir(c, c.time)
+    adir = c.analysis_dir(c.time)
     prior_file = os.path.join(adir, 'prior_state.bin')
     post_file = os.path.join(adir, 'post_state.bin')
     var_prior = read_field(prior_file, c.state_info, c.mask, member, rec_id)

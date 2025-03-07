@@ -3,9 +3,8 @@ import os
 import struct
 from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t, dt1h, ensure_list
 from utils.progress import print_with_cache, progress_bar
-from utils.parallel import distribute_tasks, bcast_by_root, by_rank
+from utils.parallel import distribute_tasks, by_rank
 from utils.multiscale import get_scale_component
-from utils.dir_def import forecast_dir
 
 """
 Note: The analysis is performed on a regular grid.
@@ -492,7 +491,7 @@ def prepare_state(c):
                 print_1p(progress_bar(m*nr+r, nm*nr))
 
             ##directory storing model output
-            path = forecast_dir(c, rec['time'], rec['model_src'])
+            path = c.forecast_dir(rec['time'], rec['model_src'])
 
             ##the model object for handling this variable
             model = c.model_config[rec['model_src']]
