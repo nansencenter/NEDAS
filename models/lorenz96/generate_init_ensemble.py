@@ -1,6 +1,5 @@
 import os
 from config import Config
-from utils.dir_def import forecast_dir
 
 c = Config(parse_args=True)
 

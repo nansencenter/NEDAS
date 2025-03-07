@@ -4,7 +4,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import forecast_dir
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 
@@ -71,7 +70,7 @@ def run(c, **kwargs) -> None:
     if 'forecast_dir' in kwargs:
         fdir = kwargs['forecast_dir'].format(time=c.time)
     else:
-        fdir = forecast_dir(c, c.time, model_src)
+        fdir = c.forecast_dir(c.time, model_src)
     var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
 

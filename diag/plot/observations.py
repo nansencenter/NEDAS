@@ -3,11 +3,10 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import analysis_dir
+from utils.conversion import ensure_list, dt1h
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
-from assim_tools.state import parse_state_info, read_field
+from assim_tools.state import parse_state_info
 from assim_tools.obs import parse_obs_info, read_mean_z_coords
 
 def get_task_list(c, **kwargs) -> list:
@@ -65,7 +64,6 @@ def run(c, **kwargs) -> None:
     ##analysis grid z coords
     c.state_info = parse_state_info(c)
     c.obs_info = parse_obs_info(c)
-    c.analysis_dir = analysis_dir(c, c.time)
 
     figsize = (kwargs.get('fig_size_x', 16), kwargs.get('fig_size_y', 7))
     landcolor = kwargs.get('land_color', 'gray')
@@ -97,7 +95,7 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the obs data from analysis_dir/obs_seq
-    adir = analysis_dir(c, c.time)
+    adir = c.analysis_dir(c.time)
     obs_seq = np.load(os.path.join(adir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
     obs_prior_seq = np.load(os.path.join(adir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 

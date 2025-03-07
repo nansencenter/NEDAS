@@ -1,11 +1,6 @@
 import numpy as np
-import struct
-import os
 from utils.parallel import by_rank
-from utils.conversion import type_convert, type_dic, type_size, t2h, h2t, t2s, s2t
 from utils.progress import print_with_cache, progress_bar
-from utils.dir_def import forecast_dir
-from .state import read_field
 from .alignment import alignment
 
 def update_restart(c, fields_prior, fields_post):
@@ -41,7 +36,7 @@ def update_restart(c, fields_prior, fields_post):
                 mem_id = c.mem_list[c.pid_mem][m]
                 rec_id = c.rec_list[c.pid_rec][r]
                 rec = c.state_info['fields'][rec_id]
-                path = forecast_dir(c, rec['time'], rec['model_src'])
+                path = c.forecast_dir(rec['time'], rec['model_src'])
                 model = c.model_config[rec['model_src']]
                 model.read_grid(path=path, member=mem_id, **rec)
                 file = model.filename(path=path, member=mem_id, **rec)
