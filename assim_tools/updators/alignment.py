@@ -1,9 +1,58 @@
-import numpy as np
 import os
-from utils.parallel import by_rank
+import numpy as np
 from utils.njit import njit
-from utils.progress import print_with_cache, progress_bar
 import utils.spatial_operation as sop
+from .base import Updator
+
+class AlignmentUpdator(Updator):
+    """Updator class with alignment technique"""
+
+    def compute_increment(self, c, fields_prior, fields_post, **kwargs):
+        pass
+
+    def update_restartfile(self, c, mem_id, rec_id, rec, path, model, fields_prior, fields_post, **kwargs):
+        """
+        Alignment technique, find displacement increment from prior to posterior
+        for one variable, then use this increment to adjust the model grid to
+        precondition all the analysis variables for next assimilation step
+        See more details in Ying 2019
+        """
+        # print = by_rank(c.comm, c.pid_show)(print_with_cache)
+        # print("alignment based on analysis increment of '"+c.alignment['variable']+"'\n")
+        option = kwargs.get('option', 'optical_flow')
+
+        if rec['name'] != c.alignment['variable']:
+            return
+        
+        if option == 'optical_flow':
+            displace = optical_flow(c.grid, c.mask, fields_prior[mem_id, rec_id], fields_post[mem_id, rec_id], **kwargs)
+            np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
+        else:
+            raise NotImplementedError(f"alignment: option '{option}' is not implemented!")
+
+        ##apply the displacement increments
+        # loop over mem_id
+        # loop over model
+        # for rec_id in c.rec_list[c.pid_rec]:
+        #     rec = c.state_info['fields'][rec_id]
+        #     model = c.model_config[rec['model_src']]
+
+        #     for mem_id in c.mem_list[c.pid_mem]:
+        #         ##directory storing model restart files
+        #         path = forecast_dir(c, rec['time'], rec['model_src'])
+        #         if hasattr(model, 'update_grid'):
+        #             ##the model class offer a method to update grid (a lagrangian approach)
+        #             ##so displace increment will be applied directly to the grid elements
+        #             model.grid.x += u
+        #             model.grid.y += v
+        #             model.update_grid(path=path, member=mem_id, **rec)
+
+        #         else:
+        #             ##change all the model variables to reflect the displace increment
+        #             sop.warp(grid, fld, u, v)
+        ##write the posterior variable to restart file
+        # model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)
+
 
 def optical_flow(grid, mask, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1, **kwargs):
     """
@@ -67,55 +116,3 @@ def get_HS80_optical_flow(fld1, fld2, mask, dx, dy, cyclic_dim, niter_max, w):
         v = v1
         niter += 1
     return u, v
-
-def alignment(c, fields_prior, fields_post, **kwargs):
-    """
-    Alignment technique, find displacement increment from prior to posterior
-    for one variable, then use this increment to adjust the model grid to
-    precondition all the analysis variables for next assimilation step
-    See more details in Ying 2019
-
-    Inputs:
-    - c: config object
-    - fields_prior, fields_post: prior and posterior fields dict
-    """
-    print = by_rank(c.comm, c.pid_show)(print_with_cache)
-    print("alignment based on analysis increment of '"+c.alignment['variable']+"'\n")
-    option = kwargs.get('option', 'optical_flow')
-
-    ##compute the displacement increments
-    for rec_id in c.rec_list[c.pid_rec]:
-        rec = c.state_info['fields'][rec_id]
-        if rec['name'] != c.alignment['variable']:
-            continue
-        for mem_id in c.mem_list[c.pid_mem]:
-            if option == 'optical_flow':
-                fld1 = fields_prior[mem_id, rec_id]
-                fld2 = fields_post[mem_id, rec_id]
-                displace = optical_flow(c.grid, c.mask, fld1, fld2, **kwargs)
-                np.save(os.path.join(c.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
-            else:
-                raise NotImplementedError(f"alignment: option '{option}' is not implemented!")
-    c.comm.Barrier()
-
-    ##apply the displacement increments
-    # loop over mem_id
-    # loop over model
-    # for rec_id in c.rec_list[c.pid_rec]:
-    #     rec = c.state_info['fields'][rec_id]
-    #     model = c.model_config[rec['model_src']]
-
-    #     for mem_id in c.mem_list[c.pid_mem]:
-    #         ##directory storing model restart files
-    #         path = forecast_dir(c, rec['time'], rec['model_src'])
-    #         if hasattr(model, 'update_grid'):
-    #             ##the model class offer a method to update grid (a lagrangian approach)
-    #             ##so displace increment will be applied directly to the grid elements
-    #             model.grid.x += u
-    #             model.grid.y += v
-    #             model.update_grid(path=path, member=mem_id, **rec)
-
-    #         else:
-    #             ##change all the model variables to reflect the displace increment
-    #             sop.warp(grid, fld, u, v)
-

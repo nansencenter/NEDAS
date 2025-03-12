@@ -6,6 +6,7 @@ from utils.progress import print_with_cache, progress_bar
 from utils.parallel import distribute_tasks, by_rank
 from utils.multiscale import get_scale_component
 
+##TODO: restructure into classes
 """
 Note: The analysis is performed on a regular grid.
 The entire state has dimensions: member, variable, time,  z,  y,  x
@@ -525,7 +526,7 @@ def prepare_state(c):
 
     ##additonal output of debugging
     if c.debug:
-        np.save(os.path.join(c.analysis_dir, f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
+        np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
 
     return fields, z_coords
 

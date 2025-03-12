@@ -21,6 +21,8 @@ def get_assimilator(c):
             from .assimilators.EAKF import EAKFAssimilator as Assimilator
 #        elif c.filter_type == 'RHF':
 #            from .assimilators.RHF import RHFAssimilator as Assimilator
+#        elif c.filter_type == 'QCEKF':
+#            from .assimilators.QCEKF import QCEKFAssimilator as Assimilator
         else:
             raise ValueError(f"Unknown filter_type {c.filter_type} for serial assimilation")
     else:
@@ -28,7 +30,10 @@ def get_assimilator(c):
     return Assimilator()
 
 def get_updator(c):
-    from .updators.base import Updator
+    if c.run_alignment:
+        from .updators.alignment import AlignmentUpdator as Updator
+    else:
+        from .updators.additive import AdditiveUpdator as Updator
     return Updator()
 
 # def get_localization(c):

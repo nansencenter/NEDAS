@@ -438,10 +438,10 @@ def transpose_forward(c, fields_prior, z_fields, obs_seq, obs_prior_seq):
     lobs_prior = transpose_obs_to_lobs(c, obs_prior_seq, ensemble=True)
 
     if c.debug:
-        np.save(os.path.join(c.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state_prior)
-        np.save(os.path.join(c.analysis_dir, f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), z_state)
-        np.save(os.path.join(c.analysis_dir, f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), lobs)
-        np.save(os.path.join(c.analysis_dir, f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), lobs_prior)
+        np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state_prior)
+        np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), z_state)
+        np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), lobs)
+        np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), lobs_prior)
 
     return state_prior, z_state, lobs, lobs_prior
 
