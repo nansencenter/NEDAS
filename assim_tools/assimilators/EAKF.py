@@ -1,5 +1,6 @@
 import numpy as np
 from utils.njit import njit
+from ..localization import local_factor_distance_based as local_factor
 from .serial import SerialAssimilator
 
 class EAKFAssimilator(SerialAssimilator):
@@ -58,51 +59,100 @@ class EAKFAssimilator(SerialAssimilator):
         return obs_incr
 
     @classmethod
-    def update_ensemble(cls, *args, **kwargs):
-        return cls._update_ensemble(*args, **kwargs)
+    def update_local_state(cls, *args, **kwargs):
+        return cls._update_local_state(*args, **kwargs)
+    
+    @staticmethod
+    @njit(cache=True)
+    def _update_local_state(state_data, obs_prior, obs_incr,
+                        h_dist, v_dist, t_dist,
+                        hroi, vroi, troi,
+                        localize_htype, localize_vtype, localize_ttype,
+                        ):
+
+        nens, nfld, nloc = state_data.shape
+
+        ##localization factor
+        h_lfactor = local_factor(h_dist, hroi, localize_htype)
+        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+        t_lfactor = local_factor(t_dist, troi, localize_ttype)
+
+        nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
+
+        lfactor = np.zeros((nfld, nloc))
+        for l in nloc_sub:
+            for n in range(nfld):
+                lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
+
+        state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
+
+    @classmethod
+    def update_local_obs(cls, *args, **kwargs):
+        return cls._update_local_obs(*args, **kwargs)
 
     @staticmethod
     @njit(cache=True)
-    def _update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
-        """
-        Update the ensemble variable using the obs increments
+    def _update_local_obs(obs_data, used, obs_prior, obs_incr,
+                        h_dist, v_dist, t_dist,
+                        hroi, vroi, troi,
+                        localize_htype, localize_vtype, localize_ttype,
+                        ):
 
-        Inputs:
-        - ens_prior: np.array[nens, ...]
-        The prior ensemble variables to be updated to posterior, dimension 0 is ensemble members
+        nens, nlobs = obs_data.shape
 
-        - obs_prior: np.array[nens]
-        Observation prior ensemble
+        ##distance between local obs_data and the obs being assimilated
+        h_lfactor = local_factor(h_dist, hroi, localize_htype)
+        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
+        t_lfactor = local_factor(t_dist, troi, localize_ttype)
 
-        - obs_incr: np.array[nens]
-        Observation space analysis increment
+        lfactor = h_lfactor * v_lfactor * t_lfactor
 
-        - local_factor: float
-        The localization factor to reduce spurious correlation in regression
+        ##update the unused obs within roi
+        ind = np.where(np.logical_and(~used, lfactor>0))[0]
 
-        Output:
-        - ens_post: np.array[nens, ...]
-        Updated ensemble
-        """
-        nens = ens_prior.shape[0]
-        ens_post = ens_prior.copy()
+        obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind])
 
-        ##obs-space statistics
-        obs_prior_mean = np.mean(obs_prior)
-        obs_prior_var = np.sum((obs_prior - obs_prior_mean)**2) / (nens-1)
+@njit(cache=True)
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
+    """
+    Update the ensemble variable using the obs increments
 
-        ##if there is no prior spread, don't update at all
-        if obs_prior_var == 0:
-            return ens_post
+    Inputs:
+    - ens_prior: np.array[nens, ...]
+    The prior ensemble variables to be updated to posterior, dimension 0 is ensemble members
 
-        cov = np.zeros(ens_prior.shape[1:])
-        for m in range(nens):
-            cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / (nens-1)
+    - obs_prior: np.array[nens]
+    Observation prior ensemble
 
-        reg_factor = cov / obs_prior_var
+    - obs_incr: np.array[nens]
+    Observation space analysis increment
 
-        ##the updated posterior ensemble
-        for m in range(nens):
-            ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
+    - local_factor: float
+    The localization factor to reduce spurious correlation in regression
 
+    Output:
+    - ens_post: np.array[nens, ...]
+    Updated ensemble
+    """
+    nens = ens_prior.shape[0]
+    ens_post = ens_prior.copy()
+
+    ##obs-space statistics
+    obs_prior_mean = np.mean(obs_prior)
+    obs_prior_var = np.sum((obs_prior - obs_prior_mean)**2) / (nens-1)
+
+    ##if there is no prior spread, don't update at all
+    if obs_prior_var == 0:
         return ens_post
+
+    cov = np.zeros(ens_prior.shape[1:])
+    for m in range(nens):
+        cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / (nens-1)
+
+    reg_factor = cov / obs_prior_var
+
+    ##the updated posterior ensemble
+    for m in range(nens):
+        ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
+
+    return ens_post

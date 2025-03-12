@@ -105,7 +105,7 @@ class BatchAssimilator:
                 ##covariance between state and obs
                 # stateV, obsV, corr = covariance(c.covariance, state_prior, obs_prior, state_var_id, obs_rec_id, h_dist, v_dist, t_dist)
 
-                BatchAssimilator.local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+                self.local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
                             obs, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization['vtype'],
                             state_t, obs_t, troi, c.localization['ttype'],
@@ -123,82 +123,7 @@ class BatchAssimilator:
         print_1p(' done.\n')
         return state_prior, lobs_prior
 
-    @classmethod
-    def local_analysis(cls, *args, **kwargs):
-        return cls._local_analysis(*args, **kwargs)
-
-    @staticmethod
-    @njit(cache=True)
-    def _local_analysis(state_prior, obs_prior, obs, obs_err, hlfactor,
-                    state_z, obs_z, vroi, localize_vtype,
-                    state_t, obs_t, troi, localize_ttype,
-                    impact_on_state, filter_type,
-                    rfactor=1., kfactor=1., nlobs_max=None) ->None:
-        """perform local analysis for one location in the analysis grid partition"""
-        nens, nfld = state_prior.shape
-        nens_obs, nlobs = obs_prior.shape
-        if nens_obs != nens:
-            raise ValueError('Error: number of ensemble members in state and obs do not match!')
-
-        lfactor_old = np.zeros(nlobs)
-        weights_old = np.eye(nens)
-
-        ##loop through the field records
-        for n in range(nfld):
-
-            ##vertical localization
-            vdist = np.abs(obs_z - state_z[n])
-            vlfactor = local_factor_distance_based(vdist, vroi, localize_vtype)
-            if (vlfactor==0).all():
-                continue  ##the state is outside of vroi of all obs, skip
-
-            ##temporal localization
-            tdist = np.abs(obs_t - state_t[n])
-            tlfactor = local_factor_distance_based(tdist, troi, localize_ttype)
-            if (tlfactor==0).all():
-                continue  ##the state is outside of troi of all obs, skip
-
-            ##total lfactor
-            lfactor =  hlfactor * vlfactor * tlfactor * impact_on_state[:, n]
-            if (lfactor==0).all():
-                continue
-
-            ##if prior spread is zero, don't update
-            if np.std(state_prior[:, n]) == 0:
-                continue
-
-            ##only need to assimilate obs with lfactor>0
-            ind = np.where(lfactor>0)[0]
-
-            ##TODO:get rid of obs if obs_prior is nan
-            # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
-            # ind = ind[valid]
-
-            ##sort the obs from high to low lfactor
-            sort_ind = np.argsort(lfactor[ind])[::-1]
-            ind = ind[sort_ind]
-
-            ##limit number of local obs if needed
-            ###e.g. topaz only keep the first 3000 obs with highest lfactor
-            # nlobs_max = 3000
-            ind = ind[:nlobs_max]
-
-            ##use cached weight if no localization is applied, to avoid repeated computation
-            if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
-                weights = weights_old
-            else:
-                weights = BatchAssimilator.ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], filter_type, lfactor[ind], rfactor, kfactor)
-
-            ##perform local analysis and update the ensemble state
-            state_prior[:, n] = BatchAssimilator.apply_ensemble_transform(state_prior[:, n], weights)
-
-            lfactor_old = lfactor[ind]
-            weights_old = weights
-
-    @classmethod
-    def ensemble_transform_weights(cls, *args, **kwargs):
-        raise NotImplementedError
-
-    @classmethod
-    def apply_ensemble_transform(cls, *args, **kwargs):
+    def local_analysis(self):
+        """Local analysis scheme for each model state variable (grid point)
+        to be implemented by derived classes"""
         raise NotImplementedError
