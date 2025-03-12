@@ -1,7 +1,6 @@
 import numpy as np
 from utils.parallel import by_rank
 from utils.progress import print_with_cache, progress_bar
-from ..alignment import alignment
 
 class Updator:
     """Base class for updators of the model restart files"""
@@ -16,7 +15,6 @@ class Updator:
         - field_prior, field_post
         the field-complete state variables before and after assimilate()
         """
-
         pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in c.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.nproc_mem + pid_mem_show
@@ -24,8 +22,8 @@ class Updator:
 
         print_1p(f'>>> update model restart files with analysis increments\n')
 
-        if c.run_alignment and c.scale_id < c.nscale:
-            alignment(c, fields_prior, fields_post, **c.alignment)
+        ##compute analysis increments
+        increment = self.compute_increment(c, fields_prior, fields_post)
 
         ##process the fields, each processor goes through its own subset of
         ##mem_id,rec_id simultaneously
@@ -55,45 +53,15 @@ class Updator:
                     else:
                         print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
 
-                    self.update_restartfile(c, mem_id, rec_id, rec, path, model, fields_prior, fields_post)
+                    ##apply the increment to restart files
+                    self.update_restartfile(c, mem_id, rec_id, rec, path, model, increment)
 
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
         print_1p(' done.\n')
 
-    def update_restartfile(self, c, mem_id, rec_id, rec, path, model, fields_prior, fields_post):
-        """
-        Method to update a single field rec_id in the model restart file.
-        This can be overridden by derived classes for specific update methods
-        Inputs:
-        - c: config module
-        - mem_id: member index
-        - rec_id: record index
-        - rec: c.state_info['fields'][rec_id] record
-        - path: path to the restart file
-        - model: model module
-        - fields_prior, fields_post: the field-complete state variables before and after assimilate()
-        """
-        c.grid.set_destination_grid(model.grid)
+    def compute_increment(self):
+        raise NotImplementedError
 
-        fld_prior = fields_prior[mem_id, rec_id]
-        fld_post = fields_post[mem_id, rec_id]
-
-        ##analysis increment
-        fld_incr = fld_post - fld_prior
-
-        ##misc. inverse transform
-        ##e.g. multiscale approach: just use the analysis increment directly
-
-        ##convert the posterior variable back to native model grid
-        var_prior = model.read_var(path=path, member=mem_id, **rec)
-        var_post = var_prior + c.grid.convert(fld_incr, is_vector=rec['is_vector'], method='linear')
-
-        ##TODO: temporary solution for nan values due to interpolation
-        # ind = np.where(np.isnan(var_post))
-        # var_post[ind] = var_prior[ind]
-        # if np.isnan(var_post).any():
-        #     raise ValueError('nan detected in var_post')
-
-        ##write the posterior variable to restart file
-        model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)
+    def update_restartfile(self):
+        raise NotImplementedError
