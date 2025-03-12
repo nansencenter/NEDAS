@@ -13,14 +13,15 @@ job_submit:
 nproc: 512      ##total number of processors for assimilate
 
 nens: 10         ##ensemble size
-run_assim: False ##if true, run the assimilation steps
-run_diag: True
+run_forecast: True
+run_analysis: False ##if true, run the assimilation steps
+run_diagnose: True
 debug: False     ##if true, output debug data/message
 
 time_start: '202107010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202107100000'         ##end time of the experiment
-time_assim_start: '202107010000' ##start time of the first analysis cycle
-time_assim_end: '202107100000'   ##end time of the last analysis cycle
+time_analysis_start: '202107010000' ##start time of the first analysis cycle
+time_analysis_end: '202107100000'   ##end time of the last analysis cycle
 cycle_period: 168                 ##cycle period, in hours
 
 time: '202107010000'
