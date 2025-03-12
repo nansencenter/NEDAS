@@ -4,31 +4,31 @@ import importlib.util
 from utils.parallel import bcast_by_root
 from utils.progress import timer
 from utils.shell_utils import run_job, makedir
+from assim_tools.registry import get_assimilator, get_updator
 from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean, output_z_coords
 from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
 from assim_tools.transpose import transpose_forward, transpose_backward
 from assim_tools.inflation import inflation
-from assim_tools.update import update_restart
 
-def assimilate(c):
+def analysis(c):
     """
-    The core assimilation algorithm
+    The analysis step workflow
     """
     assert c.nproc==c.comm.Get_size(), f"Error: nproc {c.nproc} not equal to mpi size {c.comm.Get_size()}"
 
-    c.analysis_dir = analysis_dir(c, c.time)
+    adir = c.analysis_dir(c.time, c.scale_id)
     if c.pid == 0:
-        makedir(c.analysis_dir)
-        print(f"\nRunning assimilation step in {c.analysis_dir}\n", flush=True)
+        makedir(adir)
+        print(f"\nRunning assimilation step in {adir}\n", flush=True)
 
     c.state_info = bcast_by_root(c.comm)(parse_state_info)(c)
     c.mem_list, c.rec_list = bcast_by_root(c.comm)(distribute_state_tasks)(c)
     c.partitions = bcast_by_root(c.comm)(partition_grid)(c)
     fields_prior, z_fields = timer(c)(prepare_state)(c)
 
-    timer(c)(output_state)(c, fields_prior, os.path.join(c.analysis_dir,'prior_state.bin'))
-    timer(c)(output_ens_mean)(c, fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'))
-    timer(c)(output_z_coords)(c, z_fields, os.path.join(c.analysis_dir,'z_coords.bin'))
+    timer(c)(output_state)(c, fields_prior, os.path.join(adir,'prior_state.bin'))
+    timer(c)(output_ens_mean)(c, fields_prior, os.path.join(adir,'prior_mean_state.bin'))
+    timer(c)(output_z_coords)(c, z_fields, os.path.join(adir,'z_coords.bin'))
 
     c.obs_info = bcast_by_root(c.comm)(parse_obs_info)(c)
     c.obs_rec_list = bcast_by_root(c.comm)(distribute_obs_tasks)(c)
@@ -39,33 +39,29 @@ def assimilate(c):
 
     obs_prior_seq = timer(c)(prepare_obs_from_state)(c, obs_seq, fields_prior, z_fields)
 
-    inflation(c, 'prior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq)
+    inflation(c, 'prior', fields_prior, os.path.join(adir,'prior_mean_state.bin'), obs_seq, obs_prior_seq)
 
     c.comm.Barrier()
     state_prior, z_state, lobs, lobs_prior = timer(c)(transpose_forward)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
 
-    if c.assim_mode == 'batch':
-        from assim_tools.batch_assim import batch_assim as assim
-    elif c.assim_mode == 'serial':
-        from assim_tools.serial_assim import serial_assim as assim
-    else:
-        raise ValueError(f"Error: assimilation mode {c.assim_mode} not recognized")
-    state_post, lobs_post = timer(c)(assim)(c, state_prior, z_state, lobs, lobs_prior)
+    assimilator = get_assimilator(c)
+    state_post, lobs_post = timer(c)(assimilator.assimilate)(c, state_prior, z_state, lobs, lobs_prior)
 
     c.comm.Barrier()
     fields_post, obs_post_seq = timer(c)(transpose_backward)(c, state_post, lobs_post)
 
-    timer(c)(output_ens_mean)(c, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'))
+    timer(c)(output_ens_mean)(c, fields_post, os.path.join(adir,'post_mean_state.bin'))
 
-    timer(c)(inflation)(c, 'posterior', fields_prior, os.path.join(c.analysis_dir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(c.analysis_dir,'post_mean_state.bin'), obs_post_seq)
+    timer(c)(inflation)(c, 'posterior', fields_prior, os.path.join(adir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(adir,'post_mean_state.bin'), obs_post_seq)
 
-    timer(c)(output_state)(c, fields_post, os.path.join(c.analysis_dir,'post_state.bin'))
+    timer(c)(output_state)(c, fields_post, os.path.join(adir,'post_state.bin'))
 
-    timer(c)(update_restart)(c, fields_prior, fields_post)
+    updator = get_updator(c)
+    timer(c)(updator.update)(c, fields_prior, fields_post)
 
 def run(c):
     """
-    Run the assimilate.py script with specified job submit options at runtime
+    Run the analysis.py script with specified job submit options at runtime
     """
     script_file = os.path.abspath(__file__)
     config_file = os.path.join(c.work_dir, 'config.yml')
@@ -89,7 +85,7 @@ def run(c):
     if hasattr(c, 'ppn'):
         job_submit_opts['ppn'] = c.ppn
 
-    run_job(commands, job_name='assimilate', run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
+    run_job(commands, job_name='analysis', run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == '__main__':
     from config import Config
@@ -98,5 +94,5 @@ if __name__ == '__main__':
     ##multiscale approach: loop over scale components and perform assimilation on each scale
     ##more complex loops can be implemented here
     for c.scale_id in range(c.nscale):
-        assimilate(c)
+        analysis(c)
 

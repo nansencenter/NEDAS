@@ -12,6 +12,8 @@ from .parse_config import parse_config
 
 class Config(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
+        self._time = None
+
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
@@ -21,18 +23,12 @@ class Config(object):
             setattr(self, key, value)
             self.keys.append(key)
 
-        self._time = None
-
         ##some attributes are useful in runtime
         self.set_time()
         self.set_comm()
         self.set_analysis_grid()
         self.set_model_config()
         self.set_dataset_config()
-
-        ##these attributes will also be useful during runtime
-        for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
-            setattr(self, key, None)
 
     @property
     def time(self):
@@ -72,16 +68,17 @@ class Config(object):
         return self.directories['analysis_dir'].format(work_dir=self.work_dir, time=time, scale_dir=scale_dir)
 
     def set_time(self):
-        for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end']:
+        for key in ['time_start', 'time_end', 'time_analysis_start', 'time_analysis_end']:
             ##make sure key is defined in config file
             assert key in self.keys, f"'{key}' is missing in config file"
-
             ##convert string to datetime obj
             setattr(self, key, s2t(getattr(self, key)))
 
         if self.time is None:
-            ##initialize current time to start time
+            ##initialize current time to start time, if not available
             self.time = self.time_start
+            if 'time' not in self.keys:
+                self.keys.append('time')
 
     def set_comm(self):
         ##initialize mpi communicator
@@ -153,7 +150,7 @@ class Config(object):
  working directory: {self.work_dir}
  parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
  cycling from {self.time_start} to {self.time_end}
- assimilation start at {self.time_assim_start}
+ analysis start at {self.time_analysis_start}
  cycle_period = {self.cycle_period} hours
  current time: {self.time}
  """, flush=True)
@@ -163,7 +160,7 @@ class Config(object):
         with open(config_file, 'w') as f:
             for key in self.keys:
                 value = getattr(self, key)
-                if key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
+                if key in ['time_start', 'time_end', 'time_analysis_start', 'time_analysis_end', 'time']:
                     value = t2s(value)
                 config_dict[key] = value
             yaml.dump(config_dict, f)

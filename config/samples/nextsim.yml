@@ -11,15 +11,16 @@ job_submit:
 nproc: 128        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: True  ##if true, run the assimilation steps
-run_diag: False
+run_forecast: True
+run_analysis: True  ##if true, run the assimilation steps
+run_diagnose: False
 
 debug: False     ##if true, output debug data/message
 
 time_start: '200612220000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '200702150000'         ##end time of the experiment
-time_assim_start: '200701010000' ##start time of the first analysis cycle
-time_assim_end: '200702140000'   ##end time of the last analysis cycle
+time_analysis_start: '200701010000' ##start time of the first analysis cycle
+time_analysis_end: '200702140000'   ##end time of the last analysis cycle
 cycle_period: 24                 ##cycle period, in hours
 
 obs_time_steps: [0]
