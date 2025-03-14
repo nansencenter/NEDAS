@@ -26,6 +26,7 @@ run_forecast: True  ##if true, run the ensemble forecast step
 run_analysis: True  ##if true, run the analysis step
 run_diagnose: True  ##if true, run the diagnose scripts
 debug: False        ##if true, output debug data/message
+timer: True         ##if true, output information on function runtime
 
 ##time control of the experiment
 time_start: '202301010000'          ## start time of the experiment, format ccyymmddHHMM
@@ -52,7 +53,8 @@ grid_def:
   dx: 0.1                  ##grid spacing in coordinate units (resolution)
   centered: False
 
-z_coords_from: 'mean'
+z_coords_from: 'mean'       ##use ensemble 'mean' or 'member' z coords as reference of obs z location
+distance_type: 'spherical'  ##use 'spherical' or 'cartesian' horizontal distance for localization
 
 ##state vector definition (a list of definitions, one for each variable)
 state_def:
@@ -81,6 +83,7 @@ obs_def:
                           ## this can help removing the analysis increment only on certain variables
 
 use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
+shuffle_obs: False       ## if true, shuffle the order of obs sequence
 
 ##dataset configuration dict(dataset_name, opts)
 ##will use config_file as starting point, additional variables will overwrite config_file settings
@@ -152,10 +155,15 @@ inflation:
 ## type of localization kernel (GC, step, exp, NICE...)
 ## specified for horizontal (h), vertical (v) and temporal (t) separately
 ## for distance-based localization, the radius of influence (roi) is specified in obs_def
-localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+localization:               ## localization is configured separately for horizontal, vertical and temporal relations
+                            ## leave blank if not applying localization
+  horizontal:
+    type: 'GC'              ## type of localization kernel (GC, step, exp, NICE...)
+    distance: 'cartesian'   ## type of distance function (default: cartesian; or spherical from lat/lon coords)
+  vertical:
+    type: 'GC'
+  temporal:
+    type: 'exp'
 
 ##diagnostic methods configuration
 diag:

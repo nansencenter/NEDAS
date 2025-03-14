@@ -1,6 +1,6 @@
 import numpy as np
 from utils.njit import njit
-from ..localization import local_factor_distance_based
+from ..localization.localization import local_factor_distance_based
 from .batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
