@@ -11,6 +11,10 @@ def timer(c=None):
     only processor c.pid_show in c.comm will show the timer message
     """
     def decorator(func):
+        if c is not None and not getattr(c, 'timer', True):
+            # if the config states timer=False, just return original func
+            return func
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             t0 = time.time()
@@ -21,6 +25,7 @@ def timer(c=None):
                 if c is None or (hasattr(c, 'comm') and c.comm.Get_rank() == getattr(c, 'pid_show', 0)):
                     print(f"timer: {func.__name__} took {t1 - t0} seconds\n", flush=True)
         return wrapper
+
     return decorator
 
 def progress_bar(task_id, ntask, width=50):

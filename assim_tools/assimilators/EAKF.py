@@ -1,6 +1,6 @@
 import numpy as np
 from utils.njit import njit
-from ..localization import local_factor_distance_based as local_factor
+from ..localization.localization import local_factor_distance_based as local_factor
 from .serial import SerialAssimilator
 
 class EAKFAssimilator(SerialAssimilator):

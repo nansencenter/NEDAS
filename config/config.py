@@ -6,13 +6,15 @@ import importlib
 from datetime import datetime
 from pyproj import Proj
 from grid import Grid
-from utils.parallel import Comm
+from utils.parallel import Comm, by_rank
+from utils.progress import print_with_cache
 from utils.conversion import s2t, t2s, dt1h
 from .parse_config import parse_config
 
 class Config(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         self._time = None
+        self._pid_show = 0
 
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -53,6 +55,18 @@ class Config(object):
     @property
     def next_time(self):
         return self.time + self.cycle_period * dt1h
+
+    @property
+    def pid_show(self):
+        return self._pid_show
+
+    @pid_show.setter
+    def pid_show(self, value):
+        self._pid_show = value
+    
+    @property
+    def print_1p(self):
+        return by_rank(self.comm, self.pid_show)(print_with_cache)
 
     def cycle_dir(self, time):
         return self.directories['cycle_dir'].format(work_dir=self.work_dir, time=time)
@@ -96,8 +110,6 @@ class Config(object):
         self.pid_rec = self.pid // self.nproc_mem
         self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
         self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
-
-        self.pid_show = 0  ##which pid is showing progress messages, default to root=0
 
     def set_analysis_grid(self):
         ##initialize analysis grid

@@ -1,63 +1,8 @@
 import os
 import sys
 import importlib.util
-from utils.parallel import bcast_by_root
-from utils.progress import timer
-from utils.shell_utils import run_job, makedir
-from assim_tools.registry import get_assimilator, get_updator
-from assim_tools.state import parse_state_info, distribute_state_tasks, partition_grid, prepare_state, output_state, output_ens_mean, output_z_coords
-from assim_tools.obs import parse_obs_info, distribute_obs_tasks, prepare_obs, prepare_obs_from_state, assign_obs, distribute_partitions
-from assim_tools.transpose import transpose_forward, transpose_backward
-from assim_tools.inflation import inflation
-
-def analysis(c):
-    """
-    The analysis step workflow
-    """
-    assert c.nproc==c.comm.Get_size(), f"Error: nproc {c.nproc} not equal to mpi size {c.comm.Get_size()}"
-
-    adir = c.analysis_dir(c.time, c.scale_id)
-    if c.pid == 0:
-        makedir(adir)
-        print(f"\nRunning assimilation step in {adir}\n", flush=True)
-
-    c.state_info = bcast_by_root(c.comm)(parse_state_info)(c)
-    c.mem_list, c.rec_list = bcast_by_root(c.comm)(distribute_state_tasks)(c)
-    c.partitions = bcast_by_root(c.comm)(partition_grid)(c)
-    fields_prior, z_fields = timer(c)(prepare_state)(c)
-
-    timer(c)(output_state)(c, fields_prior, os.path.join(adir,'prior_state.bin'))
-    timer(c)(output_ens_mean)(c, fields_prior, os.path.join(adir,'prior_mean_state.bin'))
-    timer(c)(output_z_coords)(c, z_fields, os.path.join(adir,'z_coords.bin'))
-
-    c.obs_info = bcast_by_root(c.comm)(parse_obs_info)(c)
-    c.obs_rec_list = bcast_by_root(c.comm)(distribute_obs_tasks)(c)
-    c.obs_info, obs_seq = timer(c)(bcast_by_root(c.comm_mem)(prepare_obs))(c)
-
-    c.obs_inds = bcast_by_root(c.comm_mem)(assign_obs)(c, obs_seq)
-    c.par_list = bcast_by_root(c.comm)(distribute_partitions)(c)
-
-    obs_prior_seq = timer(c)(prepare_obs_from_state)(c, obs_seq, fields_prior, z_fields)
-
-    inflation(c, 'prior', fields_prior, os.path.join(adir,'prior_mean_state.bin'), obs_seq, obs_prior_seq)
-
-    c.comm.Barrier()
-    state_prior, z_state, lobs, lobs_prior = timer(c)(transpose_forward)(c, fields_prior, z_fields, obs_seq, obs_prior_seq)
-
-    assimilator = get_assimilator(c)
-    state_post, lobs_post = timer(c)(assimilator.assimilate)(c, state_prior, z_state, lobs, lobs_prior)
-
-    c.comm.Barrier()
-    fields_post, obs_post_seq = timer(c)(transpose_backward)(c, state_post, lobs_post)
-
-    timer(c)(output_ens_mean)(c, fields_post, os.path.join(adir,'post_mean_state.bin'))
-
-    timer(c)(inflation)(c, 'posterior', fields_prior, os.path.join(adir,'prior_mean_state.bin'), obs_seq, obs_prior_seq, fields_post, os.path.join(adir,'post_mean_state.bin'), obs_post_seq)
-
-    timer(c)(output_state)(c, fields_post, os.path.join(adir,'post_state.bin'))
-
-    updator = get_updator(c)
-    timer(c)(updator.update)(c, fields_prior, fields_post)
+from utils.shell_utils import run_job
+from assim_tools.analysis_scheme import AnalysisScheme
 
 def run(c):
     """
@@ -90,9 +35,6 @@ def run(c):
 if __name__ == '__main__':
     from config import Config
     c = Config(parse_args=True)
-
-    ##multiscale approach: loop over scale components and perform assimilation on each scale
-    ##more complex loops can be implemented here
-    for c.scale_id in range(c.nscale):
-        analysis(c)
-
+    
+    analysis = AnalysisScheme()
+    analysis(c)

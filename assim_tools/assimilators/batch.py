@@ -1,56 +1,213 @@
+import os
+import copy
 import numpy as np
-from utils.parallel import by_rank, bcast_by_root
-from utils.njit import njit
-from utils.progress import print_with_cache, progress_bar
-from ..packing import pack_state_data, unpack_state_data, pack_obs_data, unpack_obs_data
-from ..localization import local_factor_distance_based
+from utils.parallel import bcast_by_root, distribute_tasks
+from utils.progress import progress_bar
+from ..localization.localization import local_factor_distance_based
 
 class BatchAssimilator:
 
-    def assimilate(self, c, state_prior, z_state, lobs, lobs_prior):
-        """Batch assimilation solves the matrix version EnKF analysis for each local state,
-        the local states in each partition are processed in parallel
-        Parameters:
-        - c: config object
-        - state_prior: np.array[nens, nfld, nloc]
-        - z_state: np.array[nfld, nloc]
-        - lobs: list of obs objects
-        - lobs_prior: list of obs objects
-        Returns:
-        - state_post: np.array[nens, nfld, nloc], updated version of state_prior
-        - lobs_post: list of obs objects, updated version of lobs_prior
+    def partition_grid(self, c, state, obs):
+        state.partitions = bcast_by_root(c.comm)(self.init_partitions)(c)
+        obs.obs_inds = bcast_by_root(c.comm_mem)(self.assign_obs)(c, state, obs)
+        state.par_list = bcast_by_root(c.comm)(self.distribute_partitions)(c, state, obs)
+
+    def init_partitions(self, c):
         """
+        Generate spatial partitioning of the domain
+        partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
+        for each partition indexed by par_id, the tuple contains indices for slicing the domain
+        Using regular slicing is more efficient than fancy indexing (used in irregular grid)
+        """
+        if len(c.grid.x.shape) == 2:
+            ny, nx = c.grid.x.shape
+
+            ##divide into square tiles with nx_tile grid points in each direction
+            ##the workload on each tile is uneven since there are masked points
+            ##so we divide into 3*nproc tiles so that they can be distributed
+            ##according to their load (number of unmasked points)
+            ntile = c.nproc_mem * 3
+            nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / ntile))), 1)
+
+            ##a list of (istart, iend, di, jstart, jend, dj) for tiles
+            ##note: we have 3*nproc entries in the list
+            partitions = [(i, np.minimum(i+nx_tile, nx), 1,   ##istart, iend, di
+                           j, np.minimum(j+nx_tile, ny), 1)   ##jstart, jend, dj
+                          for j in np.arange(0, ny, nx_tile)
+                          for i in np.arange(0, nx, nx_tile) ]
+
+        else:
+            npoints = c.grid.x.size
+            ##divide the domain into sqaure tiles, similar to regular_grid case, but collect
+            ##the grid points inside each tile and return the indices
+            ntile = c.nproc_mem * 3
+
+            if c.grid.Ly==0:
+                ##for 1D grid, just divide into equal sections, no y dimension
+                Dx = c.grid.Lx / ntile
+                partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0]
+                              for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
+
+            else:
+                ##for 2D grid, find number of tiles in each direction according to aspect ratio
+                ntile_y = max(int(np.sqrt(ntile * c.grid.Ly / c.grid.Lx)), 1)
+                ntile_x = max(ntile // ntile_y, 1)
+                Dx = c.grid.Lx / ntile_x
+                Dy = c.grid.Ly / ntile_y
+                partitions = [np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
+                                                      np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))
+                              for y in np.arange(c.grid.ymin, c.grid.ymax, Dy)
+                              for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
+
+        return partitions
+
+    def assign_obs(self, c, state, obs):
+        """
+        Assign the observation sequence to each partition par_id
+
+        Returns:
+        - obs_inds: dict[obs_rec_id, dict[par_id, inds]]
+        where inds is np.array with indices in the full obs_seq, for the subset of obs
+        that belongs to partition par_id
+        """
+        ##each pid_rec has a subset of obs_rec_list
+        obs_inds_pid = {}
+        for obs_rec_id in obs.obs_rec_list[c.pid_rec]:
+            ##screen horizontally for obs inside hroi of each partition
+            obs_inds_pid[obs_rec_id] = self.assign_obs_to_tiles(c, state, obs, obs_rec_id)
+
+        ##now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
+        ##gather all obs_rec_id from different pid_rec to form the complete obs_inds dict
+        obs_inds = {}
+        for entry in c.comm_rec.allgather(obs_inds_pid):
+            for obs_rec_id, data in entry.items():
+                obs_inds[obs_rec_id] = data
+
+        return obs_inds
+
+    def assign_obs_to_tiles(self, c, state, obs, obs_rec_id):
+        hroi = obs.info['records'][obs_rec_id]['hroi']
+
+        xo = np.array(obs.obs_seq[obs_rec_id]['x'])  ##obs x,y
+        yo = np.array(obs.obs_seq[obs_rec_id]['y'])
+
+        ##loop over partitions with par_id
+        obs_inds = {}
+        for par_id in range(len(state.partitions)):
+            ##find bounding box for this partition
+            if len(c.grid.x.shape)==2:
+                ist,ied,di,jst,jed,dj = state.partitions[par_id]
+                xmin, xmax, ymin, ymax = c.grid.x[0,ist], c.grid.x[0,ied-1], c.grid.y[jst,0], c.grid.y[jed-1,0]
+            else:
+                inds = state.partitions[par_id]
+                x = c.grid.x[inds]
+                y = c.grid.y[inds]
+                xmin, xmax, ymin, ymax = x.min(), x.max(), y.min(), y.max()
+            Dx = 0.5 * (xmax - xmin)
+            Dy = 0.5 * (ymax - ymin)
+            xc = xmin + Dx
+            yc = ymin + Dy
+
+            ##observations within the bounding box + halo region of width hroi will be assigned to
+            ##this partition. Although this will include some observations near the corner that are
+            ##not within hroi of any grid points, this is favorable for the efficiency in finding subset
+            obs_inds[par_id] = np.where(np.logical_and(c.grid.distance_in_x(xc, xo) <= Dx+hroi,
+                                                       c.grid.distance_in_y(yc, yo) <= Dy+hroi))[0]
+
+        return obs_inds
+
+    def distribute_partitions(self, c, state, obs):
+        par_list_full = np.arange(len(state.partitions))
+
+        ##distribute the list of par_id according to workload to each pid
+        ##number of unmasked grid points in each tile
+        if len(c.grid.x.shape) == 2:
+            nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
+                                 for ist,ied,di,jst,jed,dj in state.partitions] )
+        else:
+            nlpts_loc = np.array([np.sum((~c.mask[inds]).astype(int))
+                                 for inds in state.partitions] )
+
+        ##number of observations within the hroi of each tile, at loc,
+        ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
+        nlobs_loc = np.array([np.sum([len(obs.obs_inds[r][p])
+                                      for r in obs.info['records'].keys()])
+                              for p in par_list_full] )
+
+        workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
+        par_list = distribute_tasks(c.comm_mem, par_list_full, workload)
+
+        return par_list
+
+    def transpose_to_ensemble_complete(self, c, state, obs):
+        c.print_1p('>>> transpose to ensemble complete:\n')
+
+        c.print_1p('state variables: ')
+        state.state_prior = state.transpose_to_ensemble_complete(c, state.fields_prior)
+
+        c.print_1p('z coords: ')
+        state.z_state = state.transpose_to_ensemble_complete(c, state.z_fields)
+
+        c.print_1p('obs sequences: ')
+        obs.lobs = obs.transpose_to_ensemble_complete(c, state, obs.obs_seq)
+
+        c.print_1p('obs prior sequences: ')
+        obs.lobs_prior = obs.transpose_to_ensemble_complete(c, state, obs.obs_prior_seq, ensemble=True)
+
+        if c.debug:
+            analysis_dir = c.analysis_dir(c.time, c.scale_id)
+            np.save(os.path.join(analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state.state_prior)
+            np.save(os.path.join(analysis_dir, f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), state.z_state)
+            np.save(os.path.join(analysis_dir, f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), obs.lobs)
+            np.save(os.path.join(analysis_dir, f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), obs.lobs_prior)
+
+    def transpose_to_field_complete(self, c, state, obs):
+        c.print_1p('>>> transpose back to field complete\n')
+
+        c.print_1p('state variables: ')
+        state.fields_post = state.transpose_to_field_complete(c, state.state_post)
+
+        c.print_1p('obs prior sequences: ')
+        obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
+
+    def assimilate(self, c, state, obs):
+        """
+        batch assimilation solves the matrix version EnKF analysis for each local state,
+        the local states in each partition are processed in parallel
+        """
+        state.state_post = copy.deepcopy(state.state_prior)
+        obs.lobs_post = copy.deepcopy(obs.lobs_prior)
+
         ##pid with the most obs in its task list with show progress message
-        obs_count = np.array([np.sum([len(c.obs_inds[r][p])
-                                    for r in c.obs_info['records'].keys()
-                                    for p in lst])
-                            for lst in c.par_list.values()])
+        obs_count = np.array([np.sum([len(obs.obs_inds[r][p])
+                                      for r in obs.info['records'].keys()
+                                      for p in lst])
+                              for lst in state.par_list.values()])
         c.pid_show = np.argsort(obs_count)[-1]
-        print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
         ##count number of tasks
         ntask = 0
-        for par_id in c.par_list[c.pid_mem]:
+        for par_id in state.par_list[c.pid_mem]:
             if len(c.grid.x.shape)==2:
-                ist,ied,di,jst,jed,dj = c.partitions[par_id]
+                ist,ied,di,jst,jed,dj = state.partitions[par_id]
                 msk = c.mask[jst:jed:dj, ist:ied:di]
             else:
-                inds = c.partitions[par_id]
+                inds = state.partitions[par_id]
                 msk = c.mask[inds]
             for loc_id in range(np.sum((~msk).astype(int))):
                 ntask += 1
 
         ##now the actual work starts, loop through partitions stored on pid_mem
-        print_1p('>>> assimilate in batch mode:\n')
+        c.print_1p('>>> assimilate in batch mode:\n')
         task = 0
-        for par_id in c.par_list[c.pid_mem]:
-            state_data = pack_state_data(c, par_id, state_prior, z_state)
+        for par_id in state.par_list[c.pid_mem]:
+            state_data = state.pack_local_state_data(c, par_id, state.state_prior, state.z_state)
             nloc = state_data['state_prior'].shape[-1]
             ##skip forward if the partition is empty
             if nloc == 0:
                 continue
 
-            obs_data = pack_obs_data(c, par_id, lobs, lobs_prior)
+            obs_data = obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
             nlobs = obs_data['x'].size
             ##if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:
@@ -58,7 +215,7 @@ class BatchAssimilator:
                 if c.debug:
                     print(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)", flush=True)
                 else:
-                    print_1p(progress_bar(task-1, ntask))
+                    c.print_1p(progress_bar(task-1, ntask))
                 continue
 
             ##loop through the unmasked grid points in the partition
@@ -89,11 +246,11 @@ class BatchAssimilator:
                     if c.debug:
                         print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
                     else:
-                        print_1p(progress_bar(task, ntask))
+                        c.print_1p(progress_bar(task, ntask))
                     continue ##if all obs has no impact on state, just skip to next location
-                
+
                 ##vertical, time and cross-variable (impact_on_state) localization
-                obs = obs_data['obs'][ind]
+                obs_value = obs_data['obs'][ind]
                 obs_err = obs_data['err_std'][ind]
                 obs_z = obs_data['z'][ind]
                 obs_t = obs_data['t'][ind]
@@ -106,7 +263,7 @@ class BatchAssimilator:
                 # stateV, obsV, corr = covariance(c.covariance, state_prior, obs_prior, state_var_id, obs_rec_id, h_dist, v_dist, t_dist)
 
                 self.local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
-                            obs, obs_err, hlfactor,
+                            obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization['vtype'],
                             state_t, obs_t, troi, c.localization['ttype'],
                             impact_on_state, c.filter_type,
@@ -116,12 +273,12 @@ class BatchAssimilator:
                 if c.debug:
                     print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
                 else:
-                    print_1p(progress_bar(task, ntask))
+                    c.print_1p(progress_bar(task, ntask))
                 task += 1
 
-            unpack_state_data(c, par_id, state_prior, state_data)
-        print_1p(' done.\n')
-        return state_prior, lobs_prior
+            state.unpack_local_state_data(c, par_id, state.state_post, state_data)
+            obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
+        c.print_1p(' done.\n')
 
     def local_analysis(self):
         """Local analysis scheme for each model state variable (grid point)
