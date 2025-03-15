@@ -23,7 +23,7 @@ class AlignmentUpdator(Updator):
 
         if rec['name'] != c.alignment['variable']:
             return
-        
+
         if option == 'optical_flow':
             displace = optical_flow(c.grid, c.mask, fields_prior[mem_id, rec_id], fields_post[mem_id, rec_id], **kwargs)
             np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f"displace.m{mem_id}.k{rec['k']}.npy"), displace)

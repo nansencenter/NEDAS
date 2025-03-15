@@ -88,7 +88,10 @@ class AnalysisScheme:
     #     return Inflation(c)
 
     def get_misc_transform(self, c):
-        from .misc_transform.base import Transform
+        if c.nscale > 1:
+            from .misc_transform.scale_bandpass import ScaleBandpassTransform as Transform
+        else:
+            from .misc_transform.identity import Transform
         return Transform()
 
     def __call__(self, c):
