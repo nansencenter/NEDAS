@@ -94,12 +94,12 @@ class Obs:
                         'dt': 0,
                         'pos': pos,
                         'err':{'type': obs_err_type,
-                                'std': vrec['err'].get('std', 1.),  ##for synthetic obs perturb, real obs will have std from dataset
-                                'hcorr': vrec['err'].get('hcorr',0.),
-                                'vcorr': vrec['err'].get('vcorr',0.),
-                                'tcorr': vrec['err'].get('tcorr',0.),
-                                'cross_corr': vrec['err'].get('cross_corr',{}),
-                                },
+                               'std': vrec['err'].get('std', 1.),  ##for synthetic obs perturb, real obs will have std from dataset
+                               'hcorr': vrec['err'].get('hcorr',0.),
+                               'vcorr': vrec['err'].get('vcorr',0.),
+                               'tcorr': vrec['err'].get('tcorr',0.),
+                               'cross_corr': vrec['err'].get('cross_corr',{}),
+                               },
                         'hroi': vrec['hroi'],
                         'vroi': vrec['vroi'],
                         'troi': vrec['troi'],
@@ -462,12 +462,18 @@ class Obs:
                 else:
                     c.print_1p(progress_bar(m*nr+r, nr*nm))
 
-                seq = self.state_to_obs(c, state, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
+                seq = {}
+                ##need the coordinates for transform later
+                for key in ['x', 'y', 'z', 't']:
+                    seq[key] = self.obs_seq[key]
+                ##obtain obs_prior values from model state
+                seq['obs'] = self.state_to_obs(c, state, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
 
                 ##misc. transform here
                 seq = c.misc_transform.forward_obs(c, obs_rec, seq)
 
-                self.obs_prior_seq[mem_id, obs_rec_id] = seq
+                ##collect obs priors together
+                self.obs_prior_seq[mem_id, obs_rec_id] = seq['obs']
         c.comm.Barrier()
         c.print_1p(' done.\n')
 
