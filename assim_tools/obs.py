@@ -465,7 +465,7 @@ class Obs:
                 seq = {}
                 ##need the coordinates for transform later
                 for key in ['x', 'y', 'z', 't']:
-                    seq[key] = self.obs_seq[key]
+                    seq[key] = self.obs_seq[obs_rec_id][key]
                 ##obtain obs_prior values from model state
                 seq['obs'] = self.state_to_obs(c, state, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
 
