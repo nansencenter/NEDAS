@@ -86,11 +86,9 @@ class EAKFAssimilator(SerialAssimilator):
     @staticmethod
     @njit(cache=True)
     def _update_local_obs(obs_data, used, obs_prior, obs_incr,
-                        h_dist, v_dist, t_dist,
-                        hroi, vroi, troi,
-                        h_local_func, v_local_func, t_local_func):
-                      
-        nens, nlobs = obs_data.shape
+                          h_dist, v_dist, t_dist,
+                          hroi, vroi, troi,
+                          h_local_func, v_local_func, t_local_func):
 
         ##distance between local obs_data and the obs being assimilated
         h_lfactor = h_local_func(h_dist, hroi)

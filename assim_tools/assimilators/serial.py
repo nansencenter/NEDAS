@@ -1,4 +1,3 @@
-import os
 import copy
 import numpy as np
 from utils.parallel import bcast_by_root, distribute_tasks
@@ -75,12 +74,11 @@ class SerialAssimilator(Assimilator):
         so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
         """
         state.state_post = copy.deepcopy(state.state_prior)
-        obs.lobs_post = copy.deepcopy(obs.lobs_prior)
+        obs.lobs_post =copy.deepcopy(obs.lobs_prior)
 
         par_id = c.pid_mem
 
         state_data = state.pack_local_state_data(c, par_id, state.state_prior, state.z_state)
-        nens, nfld, nloc = state_data['state_prior'].shape
 
         obs_data = obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
         obs_list = bcast_by_root(c.comm)(obs.global_obs_list)(c)
@@ -91,7 +89,6 @@ class SerialAssimilator(Assimilator):
             c.print_1p(progress_bar(p, len(obs_list)))
 
             obs_rec_id, v, owner_pid, i = obs_list[p]
-            obs_rec = obs.info['records'][obs_rec_id]
 
             ##1. if the pid owns this obs, broadcast it to all pid
             if c.pid_mem == owner_pid:

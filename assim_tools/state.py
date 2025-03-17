@@ -662,7 +662,7 @@ class State:
         c.print_1p(' done.\n')
         return fields
 
-    def pack_local_state_data(self, c, par_id, state, z_state):
+    def pack_local_state_data(self, c, par_id, state_prior, z_state):
         """pack state dict into arrays to be more easily handled by jitted funcs"""
         data = {}
 
@@ -701,11 +701,11 @@ class State:
             data['var_id'][n] = self.info['variables'].index(rec['name'])
             for m in range(c.nens):
                 data['z'][n, :] += np.squeeze(z_state[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  ##ens mean z
-                data['state_prior'][m, n, :] = np.squeeze(state[m, rec_id][par_id][v, :])
+                data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
 
         return data
 
-    def unpack_local_state_data(self, c, par_id, state, data):
+    def unpack_local_state_data(self, c, par_id, state_prior, data):
         """unpack data and write back to the state dict"""
         nfld = len(data['field_ids'])
         nloc = len(data['x'])
@@ -713,4 +713,4 @@ class State:
         for m in range(c.nens):
             for n in range(nfld):
                 rec_id, v = data['field_ids'][n]
-                state[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]
+                state_prior[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]
