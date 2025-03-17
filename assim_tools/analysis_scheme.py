@@ -95,13 +95,16 @@ class AnalysisScheme:
         return local_func
 
     def get_inflation(self, c):
-        inflation_type = c.inflation['type'].split(',')
-        if 'multiplicative' in inflation_type:
-            from .inflation.multiplicative import MultiplicativeInflation as Inflation
-        elif 'RTPP' in inflation_type:
-            from .inflation.RTPP import RTPPInflation as Inflation
+        if c.inflation:
+            inflation_type = c.inflation.get('type', '').split(',')
+            if 'multiplicative' in inflation_type:
+                from .inflation.multiplicative import MultiplicativeInflation as Inflation
+            elif 'RTPP' in inflation_type:
+                from .inflation.RTPP import RTPPInflation as Inflation
+            else:
+                from .inflation.base import Inflation
         else:
-            raise ValueError(f"Unknown inflation type {inflation_type}")
+            from .inflation.base import Inflation
         return Inflation(c)
 
     def get_misc_transform(self, c):

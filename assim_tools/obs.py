@@ -805,7 +805,7 @@ class Obs:
                 data['t'][i:i+d] = np.array([t2h(t) for t in lobs[obs_rec_id][par_id]['t']])
                 data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std']
                 for m in range(c.nens):
-                    data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, :])
+                    data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, :].copy())
                 i += d
 
         return data

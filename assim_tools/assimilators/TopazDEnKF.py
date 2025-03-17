@@ -1,10 +1,8 @@
 import numpy as np
 from utils.njit import njit
-from ..localization.localization import local_factor_distance_based
 from .batch import BatchAssimilator
 
 class TopazDEnKFAssimilator(BatchAssimilator):
-
     @classmethod
     def local_analysis(cls, *args, **kwargs):
         return cls._local_analysis(*args, **kwargs)
@@ -14,7 +12,7 @@ class TopazDEnKFAssimilator(BatchAssimilator):
     def _local_analysis(state_prior, obs_prior, obs, obs_err, hlfactor,
                     state_z, obs_z, vroi, localize_vtype,
                     state_t, obs_t, troi, localize_ttype,
-                    impact_on_state, filter_type,
+                    impact_on_state,
                     rfactor=1., kfactor=1., nlobs_max=None) ->None:
         """perform local analysis for one location in the analysis grid partition"""
         nens, nfld = state_prior.shape
@@ -78,7 +76,7 @@ class TopazDEnKFAssimilator(BatchAssimilator):
             weights_old = weights
 
 @njit(cache=True)
-def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_factor, rfactor, kfactor):
+def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
     """
     Compute the transform weights for the local ensemble
 

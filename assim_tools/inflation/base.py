@@ -6,11 +6,15 @@ class Inflation:
     Class for inflating the ensemble members (covariance inflation)
     """
     def __init__(self, c):
-        inflation_type = c.inflation['type'].split(',')
+        if c.inflation:
+            inflation_type = c.inflation.get('type', '').split(',')
+            self.adaptive = c.inflation.get('adaptive', False)
+            self.coef = c.inflation['coef']
+        else:
+            inflation_type = ''
+            self.adaptive = False
         self.prior = ('prior' in inflation_type)
         self.posterior = ('posterior' in inflation_type)
-        self.adaptive = c.inflation.get('adaptive', False)
-        self.coef = c.inflation['coef']
 
     def __call__(self, c, state, obs, flag):
         """
@@ -25,7 +29,7 @@ class Inflation:
             if self.adaptive:
                 self.adaptive_prior_inflation(c, state, obs)
             self.apply_inflation(c, state, flag)
-        
+
         if flag == 'posterior' and self.posterior:
             if self.adaptive:
                 self.adaptive_post_inflation(c, state, obs)
@@ -97,11 +101,11 @@ class Inflation:
                 stats['vara'] += np.sum(variance_obs_post)
         return stats
 
-    def adaptive_prior_inflation(self):
-        raise NotImplementedError
+    def adaptive_prior_inflation(self, c, state, obs):
+        pass
 
-    def adaptive_post_inflation(self):
-        raise NotImplementedError
+    def adaptive_post_inflation(self, c, state, obs):
+        pass
 
-    def apply_inflation(self):
-        raise NotImplementedError
+    def apply_inflation(self, c, state, flag):
+        pass
