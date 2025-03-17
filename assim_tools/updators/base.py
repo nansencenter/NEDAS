@@ -3,6 +3,8 @@ from utils.progress import progress_bar
 
 class Updator:
     """Base class for updators of the model restart files"""
+    def __init__(self, c):
+        pass
 
     def update(self, c, state):
         """
@@ -17,7 +19,7 @@ class Updator:
         pid_mem_show = [p for p,lst in state.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.nproc_mem + pid_mem_show
-        
+
         c.print_1p(f'>>> update model restart files with analysis increments\n')
 
         ##compute analysis increments

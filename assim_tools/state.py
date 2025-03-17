@@ -31,6 +31,13 @@ class State:
     while easier to run assimilation algorithms with ensemble-complete state.
     """
     def __init__(self, c):
+        self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
+        self.prior_file = os.path.join(self.analysis_dir, 'prior_state.bin')
+        self.prior_mean_file = os.path.join(self.analysis_dir, 'prior_mean_state.bin')
+        self.post_file = os.path.join(self.analysis_dir, 'post_state.bin')
+        self.post_mean_file = os.path.join(self.analysis_dir, 'post_mean_state.bin')
+        self.z_coords_file = os.path.join(self.analysis_dir, 'z_coords.bin')
+
         self.info = bcast_by_root(c.comm)(self.parse_state_info)(c)
 
         self.mem_list, self.rec_list = bcast_by_root(c.comm)(self.distribute_state_tasks)(c)
@@ -45,6 +52,13 @@ class State:
         self.state_post = {}    ##will be created by assimilator.assimilate()
         self.fields_post = {}   ##will be created by transpose_to_field_complete()
         self.data = {}  ##will be created by pack_state_data, for use in assimilate()
+
+    def prepare_state(self, c):
+        """
+        Main method from state object to be called in the analysis script
+        """
+        self.fields_prior, self.z_fields = self.collect_fields_from_restartfiles(c)
+        self.output_z_coords(c)
 
     def parse_state_info(self, c):
         """
@@ -376,16 +390,16 @@ class State:
         c.comm.Barrier()
         c.print_1p(' done.\n')
 
-    def output_z_coords(self, c, z_fields, z_file):
+    def output_z_coords(self, c):
         ##topaz uses the first ensemble member z coords as the reference z for obs
         ##include this here for backward compatibility
         ##there is no need for choosing which member also, just use the first one
         if c.z_coords_from == 'member':
-            self.output_state(c, z_fields, z_file, mem_id_out=0)
+            self.output_state(c, self.z_fields, self.z_coords_file, mem_id_out=0)
 
         ##we use by default the ensemble mean z coords as the reference z for obs
         if c.z_coords_from == 'mean':
-            self.output_ens_mean(c, z_fields, z_file)
+            self.output_ens_mean(c, self.z_fields, self.z_coords_file)
 
     def collect_fields_from_restartfiles(self, c):
         """
@@ -457,25 +471,13 @@ class State:
 
         ##additonal output of debugging
         if c.debug:
-            np.save(os.path.join(c.analysis_dir(c.time, c.scale_id), f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
+            np.save(os.path.join(self.analysis_dir, f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
 
         return fields, z_fields
 
     def collect_scalar_variables(self, c):
         pass
         # TODO: implement scalars here for simultaneous state parameter estimation (SSPE)
-
-    def prepare_state(self, c):
-        """
-        Main method from state object to be called in the analysis script
-        """
-        self.fields_prior, self.z_fields = self.collect_fields_from_restartfiles(c)
-
-        analysis_dir = c.analysis_dir(c.time, c.scale_id)
-
-        self.output_state(c, self.fields_prior, os.path.join(analysis_dir,'prior_state.bin'))
-        self.output_ens_mean(c, self.fields_prior, os.path.join(analysis_dir,'prior_mean_state.bin'))
-        self.output_z_coords(c, self.z_fields, os.path.join(analysis_dir,'z_coords.bin'))
 
     def pack_field_chunk(self, c, fld, is_vector, dst_pid):
         fld_chk = {}

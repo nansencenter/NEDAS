@@ -28,9 +28,8 @@ class Grid(object):
 
     See NEDAS/tutorials/grid_convert.ipynb for some examples.
     """
-    def __init__(self, proj, x, y, bounds=None, regular=True,
-                 cyclic_dim=None, pole_dim=None, pole_index=None,
-                 triangles=None, neighbors=None, dst_grid=None):
+    def __init__(self, proj, x, y, bounds=None, regular=True, cyclic_dim=None, pole_dim=None, pole_index=None,
+                 distance_type='cartesian', triangles=None, neighbors=None, dst_grid=None):
         """
         Initialize a Grid object.
 
@@ -137,6 +136,8 @@ class Grid(object):
             if self.cyclic_dim is not None:
                 self._pad_cyclic_mesh_bounds()
             self._triangle_properties()
+
+        self.distance_type = distance_type
 
         self._dst_grid = None
         if dst_grid is not None:
@@ -900,7 +901,7 @@ class Grid(object):
                 dist_y = np.minimum(dist_y, self.Ly - dist_y)
         return dist_y
 
-    def distance(self, ref_x, x, ref_y, y, p=2):
+    def distance(self, ref_x, x, ref_y, y, p=2, type='cartesian'):
         """
         Compute distance for points (x,y) to the reference point
         Input:
@@ -910,21 +911,45 @@ class Grid(object):
         points whose distance to the reference points will be computed
         - p: int
         Minkowski p-norm order, default is 2
+        - type: str
+        'cartesian' (default) or 'spherical'
         Output:
         - dist: np.array(float)
         """
         ##TODO: account for other geometry (neighbors) here
 
-        ##normal cartesian distances in x and y
-        dist_x = self.distance_in_x(ref_x, x)
-        dist_y = self.distance_in_y(ref_y, y)
-        if p == 1:
-            dist = dist_x + dist_y  ##Manhattan distance, order 1
-        elif p == 2:
-            dist = np.hypot(dist_x, dist_y)   ##Euclidean distance, order 2
+        if type == 'cartesian':
+            ##normal cartesian distances in x and y
+            dist_x = self.distance_in_x(ref_x, x)
+            dist_y = self.distance_in_y(ref_y, y)
+            if p == 1:
+                dist = dist_x + dist_y  ##Manhattan distance, order 1
+            elif p == 2:
+                dist = np.hypot(dist_x, dist_y)   ##Euclidean distance, order 2
+            else:
+                raise NotImplementedError(f"grid.distance: p-norm order {p} is not implemented for 2D grid")
+            return dist
+
+        ##compute spherical distance on Earth instead
+        elif type == 'spherical':
+            reflon, reflat = self.proj(ref_x, ref_y, inverse=True)
+            lon, lat = self.proj(x, y, inverse=True)
+            RE = 6371000.0
+            invrad = np.pi / 180.
+            rlon1 = np.atleast_1d(reflon) * invrad
+            rlat1 = np.atleast_1d(reflat) * invrad
+            rlon2 = np.atleast_1d(lon) * invrad
+            rlat2 = np.atleast_1d(lat) * invrad
+            ##from m_spherdist.F90 in enkf-topaz:
+            cos_d = np.sin(rlat1) * np.sin(rlat2) + np.cos(rlat1) * np.cos(rlat2) * np.cos(rlon1 - rlon2)
+            dist = RE * np.acos(np.clip(cos_d, -1, 1))
+            ##Haversine formula to avoid precision loss
+            # a = np.sin((rlat2 - rlat1) / 2)**2 + np.cos(rlat1) * np.cos(rlat2) * np.sin((rlon1 - rlon2) / 2)**2
+            # dist = 2 * RE * np.asin(np.sqrt(a))
+            return dist
+
         else:
-            raise NotImplementedError(f"grid.distance: p-norm order {p} is not implemented for 2D grid")
-        return dist
+            raise ValueError(f"unknown distance type '{type}'")
 
     ### Some methods for basic data visulisation and map plotting
     def _collect_shape_data(self, shapes):

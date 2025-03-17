@@ -10,7 +10,7 @@ class Grid1D(object):
     This introduces y coordinates in Grid1D class, although y is not defined for 1D grid, this makes the code that
     calles Grid/Grid1D methods to be easier to maintain.
     """
-    def __init__(self, x, bounds=None, regular=True, cyclic=False, dst_grid=None):
+    def __init__(self, x, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
 
         ##coordinates and properties of the 2D grid
         self.x = x
@@ -34,6 +34,9 @@ class Grid1D(object):
             self.Lx = self.xmax - self.xmin
         self.Ly = 0
         self.mfx, self.mfy = 1, 1
+
+        if distance_type != 'cartesian':
+            raise ValueError(f"distance_type {distance_type} not supported for 1D grid.")
 
         self._dst_grid = None
         if dst_grid is not None:

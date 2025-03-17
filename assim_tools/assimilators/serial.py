@@ -3,14 +3,9 @@ import copy
 import numpy as np
 from utils.parallel import bcast_by_root, distribute_tasks
 from utils.progress import progress_bar
+from .base import Assimilator
 
-class SerialAssimilator:
-
-    def partition_grid(self, c, state, obs):
-        state.partitions = bcast_by_root(c.comm)(self.init_partitions)(c)
-        obs.obs_inds = bcast_by_root(c.comm_mem)(self.assign_obs)(c, obs)
-        state.par_list = bcast_by_root(c.comm)(self.distribute_partitions)(c)
-
+class SerialAssimilator(Assimilator):
     def init_partitions(self, c):
         """
         Generate spatial partitioning of the domain
@@ -41,7 +36,7 @@ class SerialAssimilator:
 
         return partitions
 
-    def assign_obs(self, c, obs):
+    def assign_obs(self, c, state, obs):
         """
         Assign the observation sequence to each partition par_id
 
@@ -68,43 +63,12 @@ class SerialAssimilator:
 
         return obs_inds
 
-    def distribute_partitions(self, c):
+    def distribute_partitions(self, c, state, obs):
         ##just assign each partition to each pid, pid==par_id
         par_list = {p:np.array([p]) for p in range(c.nproc_mem)}
         return par_list
 
-    def transpose_to_ensemble_complete(self, c, state, obs):
-        c.print_1p('>>> transpose to ensemble complete:\n')
-
-        c.print_1p('state variables: ')
-        state.state_prior = state.transpose_to_ensemble_complete(c, state.fields_prior)
-
-        c.print_1p('z coords: ')
-        state.z_state = state.transpose_to_ensemble_complete(c, state.z_fields)
-
-        c.print_1p('obs sequences: ')
-        obs.lobs = obs.transpose_to_ensemble_complete(c, state, obs.obs_seq)
-
-        c.print_1p('obs prior sequences: ')
-        obs.lobs_prior = obs.transpose_to_ensemble_complete(c, state, obs.obs_prior_seq, ensemble=True)
-
-        if c.debug:
-            analysis_dir = c.analysis_dir(c.time, c.scale_id)
-            np.save(os.path.join(analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state.state_prior)
-            np.save(os.path.join(analysis_dir, f'z_state.{c.pid_mem}.{c.pid_rec}.npy'), state.z_state)
-            np.save(os.path.join(analysis_dir, f'lobs.{c.pid_mem}.{c.pid_rec}.npy'), obs.lobs)
-            np.save(os.path.join(analysis_dir, f'lobs_prior.{c.pid_mem}.{c.pid_rec}.npy'), obs.lobs_prior)
-
-    def transpose_to_field_complete(self, c, state, obs):
-        c.print_1p('>>> transpose back to field complete\n')
-
-        c.print_1p('state variables: ')
-        state.fields_post = state.transpose_to_field_complete(c, state.state_post)
-
-        c.print_1p('obs prior sequences: ')
-        obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
-
-    def assimilate(self, c, state, obs):
+    def assimilation_algorithm(self, c, state, obs):
         """
         serial assimilation goes through the list of observations one by one
         for each obs the near by state variables are updated one by one.
@@ -146,7 +110,7 @@ class SerialAssimilator:
             obs_p = c.comm_mem.bcast(obs_p, root=owner_pid)
 
             ##compute obs-space increment
-            obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'], c.filter_type)
+            obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
 
             ##2. all pid update their own locally stored state:
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
@@ -155,7 +119,7 @@ class SerialAssimilator:
             self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
                             state_h_dist, state_v_dist, state_t_dist,
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.localization['htype'], c.localization['vtype'], c.localization['ttype'])
+                            c.local_funcs['horizontal'], c.local_funcs['vertical'], c.local_funcs['temporal'])
 
             ##3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
@@ -164,7 +128,7 @@ class SerialAssimilator:
             self.update_local_obs(obs_data['obs_prior'], obs_data['used'], obs_p['prior'], obs_incr,
                             obs_h_dist, obs_v_dist, obs_t_dist,
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.localization['htype'], c.localization['vtype'], c.localization['ttype'])
+                            c.local_funcs['horizontal'], c.local_funcs['vertical'], c.local_funcs['temporal'])
 
         state.unpack_local_state_data(c, par_id, state.state_post, state_data)
         obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)

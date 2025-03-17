@@ -1,21 +1,40 @@
 import numpy as np
 from utils.njit import njit
-from ..localization.localization import local_factor_distance_based
 from .batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
-
     @classmethod
-    def local_analysis(cls, *args, **kwargs):
-        return cls._local_analysis(*args, **kwargs)
+    def local_analysis(cls, c, loc_id, ind, hlfactor, state_data, obs_data):
+        state_prior = state_data['state_prior'][..., loc_id]
+        state_var_id = state_data['var_id']  ##variable id for each field (nfld)
+        state_z = state_data['z'][:, loc_id]
+        state_t = state_data['t'][:]
+
+        obs_prior = obs_data['obs_prior'][:,ind]
+        obs_value = obs_data['obs'][ind]
+        obs_err = obs_data['err_std'][ind]
+        obs_z = obs_data['z'][ind]
+        obs_t = obs_data['t'][ind]
+        obs_rec_id = obs_data['obs_rec_id'][ind]
+        vroi = obs_data['vroi'][obs_rec_id]
+        troi = obs_data['troi'][obs_rec_id]
+        impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
+
+        cls._local_analysis(state_prior, obs_prior, obs_value, obs_err,
+                            hlfactor,
+                            state_z, obs_z, vroi, c.local_funcs['vertical'],
+                            state_t, obs_t, troi, c.local_funcs['temporal'],
+                            impact_on_state,
+                            c.rfactor, c.kfactor, c.nlobs_max)
 
     @staticmethod
     @njit(cache=True)
-    def _local_analysis(state_prior, obs_prior, obs, obs_err, hlfactor,
-                    state_z, obs_z, vroi, localize_vtype,
-                    state_t, obs_t, troi, localize_ttype,
-                    impact_on_state, filter_type,
-                    rfactor=1., kfactor=1., nlobs_max=None) ->None:
+    def _local_analysis(state_prior, obs_prior, obs_value, obs_err,
+                        hlfactor,
+                        state_z, obs_z, vroi, v_local_func,
+                        state_t, obs_t, troi, t_local_func,
+                        impact_on_state,
+                        rfactor=1., kfactor=1., nlobs_max=None) ->None:
         """perform local analysis for one location in the analysis grid partition"""
         nens, nfld = state_prior.shape
         nens_obs, nlobs = obs_prior.shape
@@ -30,13 +49,13 @@ class ETKFAssimilator(BatchAssimilator):
 
             ##vertical localization
             vdist = np.abs(obs_z - state_z[n])
-            vlfactor = local_factor_distance_based(vdist, vroi, localize_vtype)
+            vlfactor = v_local_func(vdist, vroi)
             if (vlfactor==0).all():
                 continue  ##the state is outside of vroi of all obs, skip
 
             ##temporal localization
             tdist = np.abs(obs_t - state_t[n])
-            tlfactor = local_factor_distance_based(tdist, troi, localize_ttype)
+            tlfactor = t_local_func(tdist, troi)
             if (tlfactor==0).all():
                 continue  ##the state is outside of troi of all obs, skip
 
@@ -69,7 +88,7 @@ class ETKFAssimilator(BatchAssimilator):
             if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
                 weights = weights_old
             else:
-                weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], filter_type, lfactor[ind], rfactor, kfactor)
+                weights = ensemble_transform_weights(obs_value[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind], rfactor, kfactor)
 
             ##perform local analysis and update the ensemble state
             state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
@@ -78,7 +97,7 @@ class ETKFAssimilator(BatchAssimilator):
             weights_old = weights
 
 @njit(cache=True)
-def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_factor, rfactor, kfactor):
+def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
     """
     Compute the transform weights for the local ensemble
 
@@ -91,9 +110,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
 
     - obs_prior: np.array[nens, nlobs]
     The observation priors
-
-    - filter_type: str
-    Type of filter to use: "ETKF", or "DEnKF"
 
     - local_factor: np.array[nlobs]
     Localization/impact factor for each observation
@@ -180,17 +196,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, filter_type, local_facto
             ##if failed just return equal weights (no update)
             return np.eye(nens)
 
-    if filter_type == 'ETKF':
-        ##the update of ens pert is (I + S^T S)^-0.5, namely sqrt(var_ratio)
-        var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
-
-    elif filter_type == 'DEnKF':
-        ##take Taylor approx. of var_ratio_sqrt (Sakov 2008)
-        var_ratio_sqrt = np.eye(nens) - 0.5 * gain @ S
-
-    else:
-        print('Error: unknown filter type: '+filter_type)
-        raise ValueError
+    var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
 
     weights += var_ratio_sqrt
 

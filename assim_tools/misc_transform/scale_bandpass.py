@@ -5,6 +5,9 @@ class ScaleBandpassTransform:
     """
     Base class for misc. transforms: no transform
     """
+    def __init__(self, c):
+        pass
+
     def forward_state(self, c, rec, field):
         field = get_scale_component(c.grid, field, c.character_length, c.scale_id)
         return field

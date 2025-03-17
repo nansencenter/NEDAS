@@ -1,17 +1,15 @@
 import numpy as np
 from utils.njit import njit
-from ..localization.localization import local_factor_distance_based as local_factor
 from .serial import SerialAssimilator
 
 class EAKFAssimilator(SerialAssimilator):
-
     @classmethod
     def obs_increment(cls, *args, **kwargs):
         return cls._obs_increment(*args, **kwargs)
 
     @staticmethod
     @njit(cache=True)
-    def _obs_increment(obs_prior, obs, obs_err, filter_type):
+    def _obs_increment(obs_prior, obs, obs_err):
         """
         Compute analysis increment in observation space
 
@@ -24,9 +22,6 @@ class EAKFAssimilator(SerialAssimilator):
 
         - obs_err: float
         The observation error standard deviation
-
-        - filter_type: str
-        Type of filtering to apply: "EAKF" (default), "RHF", etc.
 
         Return:
         - obs_incr: np.array[nens]
@@ -61,21 +56,19 @@ class EAKFAssimilator(SerialAssimilator):
     @classmethod
     def update_local_state(cls, *args, **kwargs):
         return cls._update_local_state(*args, **kwargs)
-    
+
     @staticmethod
     @njit(cache=True)
     def _update_local_state(state_data, obs_prior, obs_incr,
-                        h_dist, v_dist, t_dist,
-                        hroi, vroi, troi,
-                        localize_htype, localize_vtype, localize_ttype,
-                        ):
+                            h_dist, v_dist, t_dist,
+                            hroi, vroi, troi,
+                            h_local_func, v_local_func, t_local_func):
 
         nens, nfld, nloc = state_data.shape
 
-        ##localization factor
-        h_lfactor = local_factor(h_dist, hroi, localize_htype)
-        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
-        t_lfactor = local_factor(t_dist, troi, localize_ttype)
+        h_lfactor = h_local_func(h_dist, hroi)
+        v_lfactor = v_local_func(v_dist, vroi)
+        t_lfactor = t_local_func(t_dist, troi)
 
         nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
@@ -95,15 +88,14 @@ class EAKFAssimilator(SerialAssimilator):
     def _update_local_obs(obs_data, used, obs_prior, obs_incr,
                         h_dist, v_dist, t_dist,
                         hroi, vroi, troi,
-                        localize_htype, localize_vtype, localize_ttype,
-                        ):
-
+                        h_local_func, v_local_func, t_local_func):
+                      
         nens, nlobs = obs_data.shape
 
         ##distance between local obs_data and the obs being assimilated
-        h_lfactor = local_factor(h_dist, hroi, localize_htype)
-        v_lfactor = local_factor(v_dist, vroi, localize_vtype)
-        t_lfactor = local_factor(t_dist, troi, localize_ttype)
+        h_lfactor = h_local_func(h_dist, hroi)
+        v_lfactor = v_local_func(v_dist, vroi)
+        t_lfactor = t_local_func(t_dist, troi)
 
         lfactor = h_lfactor * v_lfactor * t_lfactor
 
