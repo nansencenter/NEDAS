@@ -2,6 +2,9 @@ class Transform:
     """
     Base class for misc. transforms: no transform
     """
+    def __init__(self, c):
+        pass
+    
     def forward_state(self, c, rec, field):
         return field
 

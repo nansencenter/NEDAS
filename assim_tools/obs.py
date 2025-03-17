@@ -26,6 +26,8 @@ class Obs:
     computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
     """
     def __init__(self, c, state):
+        self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
+    
         self.info = bcast_by_root(c.comm)(self.parse_obs_info)(c, state)
 
         self.obs_rec_list = bcast_by_root(c.comm)(self.distribute_obs_tasks)(c)
@@ -160,7 +162,6 @@ class Obs:
         z coordinate fields for all unique level k defined in state_info
         """
         ##first, get a list of indices k
-        z_file = os.path.join(c.analysis_dir(c.time, c.scale_id), 'z_coords.bin')
         k_list = list(set([r['k'] for i,r in state.info['fields'].items() if r['time']==time]))
 
         ##get z coords for each level
@@ -173,7 +174,7 @@ class Obs:
             rec_id = [i for i,r in state.info['fields'].items() if r['time']==time and r['k']==k_list[k]][0]
 
             ##read the z field with (mem_id=0, rec_id) from z_file
-            z_fld = state.read_field(z_file, c.mask, 0, rec_id)
+            z_fld = state.read_field(state.z_coords_file, c.mask, 0, rec_id)
 
             ##assign the coordinates to z(k)
             if state.info['fields'][rec_id]['is_vector']:
@@ -277,8 +278,8 @@ class Obs:
                         fld = state.fields_prior[mem_id, rec_id]
 
                     else:  ##option 1.2: read field from state binfile
-                        z = state.read_field(os.path.join(c.analysis_dir(c.time, c.scale_id),'z_coords.bin'), c.state_info, c.mask, 0, rec_id)
-                        fld = state.read_field(os.path.join(c.analysis_dir(c.time, c.scale_id),'prior_state.bin'), c.state_info, c.mask, mem_id, rec_id)
+                        z = state.read_field(state.z_coords_file, c.state_info, c.mask, 0, rec_id)
+                        fld = state.read_field(state.prior_file, c.state_info, c.mask, mem_id, rec_id)
 
                 else:  ##option 1.3: get the field from model.read_var
                     if synthetic:
@@ -422,7 +423,7 @@ class Obs:
         ##output obs sequence
         if c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
-                file = os.path.join(c.analysis_dir(c.time, c.scale_id), f'obs_seq.rec{obs_rec_id}.npy')
+                file = os.path.join(self.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy')
                 np.save(file, rec)
 
         return obs_seq
@@ -480,7 +481,7 @@ class Obs:
         ##output obs_prior sequeneces
         for key, seq in self.obs_prior_seq.items():
             mem_id, obs_rec_id = key
-            file = os.path.join(c.analysis_dir(c.time, c.scale_id), f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
+            file = os.path.join(self.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}.npy')
             np.save(file, seq)
 
     def global_obs_list(self, c):

@@ -122,7 +122,8 @@ class Config(object):
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
             centered = self.grid_def.get('centered', False)
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered)
+            distance_type = self.grid_def.get('distance_type', 'cartesian')
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered, distance_type=distance_type)
 
             ##mask for invalid grid points (none for now, add option later)
             self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)

@@ -19,10 +19,10 @@ class AnalysisScheme:
             raise RuntimeError(f"Error: nproc {nproc} != mpi size {nproc_actual}")
 
     def init_analysis_dir(self, c):
-        analysis_dir = c.analysis_dir(c.time, c.scale_id)
+        self._analysis_dir = c.analysis_dir(c.time, c.scale_id)
         if c.pid == 0:
-            makedir(analysis_dir)
-            print(f"\nRunning assimilation step in {analysis_dir}\n", flush=True)
+            makedir(self._analysis_dir)
+            print(f"\nRunning assimilation step in {self._analysis_dir}\n", flush=True)
 
     def get_state(self, c):
         from .state import State
@@ -58,41 +58,58 @@ class AnalysisScheme:
         else:
             raise ValueError(f"Unknown assim_mode {c.assim_mode}")
 
-        return Assimilator()
+        return Assimilator(c)
 
     def get_updator(self, c):
         if c.run_alignment:
             from .updators.alignment import AlignmentUpdator as Updator
         else:
             from .updators.additive import AdditiveUpdator as Updator
-        return Updator()
+        return Updator(c)
 
-    def get_localization(self, c):
-        localization = {}
+    def get_local_funcs(self, c):
+        local_funcs = {}
         for key in ['horizontal', 'vertical', 'temporal']:
             if c.localization[key]:
-                localization[key] = self.get_localization_component(c.localization[key])
-        return localization
+                local_funcs[key] = self.get_local_func_component(c.localization[key])
+            else:
+                local_funcs[key]
+        return local_funcs
 
-    def get_localization_component(self, type):
-        if type in ['GC', 'step', 'exp']:
-            from .localization.distance_based import DistanceBasedLocalization as Localization
-        elif type in ['NICE']:
-            from .localization.correlation_based import CorrelationBasedLocalization as Localization
+    def get_local_func_component(self, localization_type):
+        localization_types = localization_type.split(',')
+
+        ##distance-based localization schemes
+        if 'GC' in localization_types:
+            from .localization.distance_based import local_func_GC as local_func
+        elif 'step' in localization_types:
+            from .localization.distance_based import local_func_step as local_func
+        elif 'exp' in localization_types:
+            from .localization.distance_based import local_func_exp as local_func
+
+        # ##correlation based localization schemes
+        # elif 'SER' in localization_types:
+        #     from .localization.SER import CorrelationBasedLocalization as Localization
+        # else:
+        #     raise ValueError(f"Unknown localization type {type}")
+        return local_func
+
+    def get_inflation(self, c):
+        inflation_type = c.inflation['type'].split(',')
+        if 'multiplicative' in inflation_type:
+            from .inflation.multiplicative import MultiplicativeInflation as Inflation
+        elif 'RTPP' in inflation_type:
+            from .inflation.RTPP import RTPPInflation as Inflation
         else:
-            raise ValueError(f"Unknown localization type {type}")
-        return Localization()
-
-    # def get_inflation(self, c):
-    #     from .inflation import Inflation
-    #     return Inflation(c)
+            raise ValueError(f"Unknown inflation type {inflation_type}")
+        return Inflation(c)
 
     def get_misc_transform(self, c):
         if c.nscale > 1:
             from .misc_transform.scale_bandpass import ScaleBandpassTransform as Transform
         else:
             from .misc_transform.identity import Transform
-        return Transform()
+        return Transform(c)
 
     def __call__(self, c):
         """
@@ -107,8 +124,8 @@ class AnalysisScheme:
         for c.scale_id in range(c.nscale):
             self.init_analysis_dir(c)
             c.misc_transform = self.get_misc_transform(c)
-            # c.localization = self.get_localization(c)
-            # c.inflation = self.get_inflation(c)
+            c.local_funcs = self.get_local_funcs(c)
+            c.inflation = self.get_inflation(c)
 
             state = self.get_state(c)
             timer(c)(state.prepare_state)(c)
@@ -118,11 +135,7 @@ class AnalysisScheme:
             timer(c)(obs.prepare_obs_from_state)(c, state)
 
             assimilator = self.get_assimilator(c)
-            assimilator.partition_grid(c, state, obs)
-            timer(c)(assimilator.transpose_to_ensemble_complete)(c, state, obs)
             timer(c)(assimilator.assimilate)(c, state, obs)
-            timer(c)(assimilator.transpose_to_field_complete)(c, state, obs)
 
             updator = self.get_updator(c)
             timer(c)(updator.update)(c, state)
-

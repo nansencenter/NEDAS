@@ -52,6 +52,7 @@ grid_def:
   ymax: 257
   dx: 0.1                  ##grid spacing in coordinate units (resolution)
   centered: False
+  distance_type: 'cartesian'    ## type of distance function (default: cartesian; or spherical from lat/lon coords)
 
 z_coords_from: 'mean'       ##use ensemble 'mean' or 'member' z coords as reference of obs z location
 distance_type: 'spherical'  ##use 'spherical' or 'cartesian' horizontal distance for localization
@@ -147,7 +148,7 @@ alignment:
 
 ##covariance inflation technique in assimilation
 inflation:
-  type: 'posterior,relax'   ## type of inflation (posterior/prior, relax/inflate
+  type: 'posterior,RTPP'    ## type of inflation (posterior/prior, multiplicative/RTPP...)
   adaptive: True            ## if true, run an adaptive version of the inflation scheme
   coef: 1.0                 ## static inflation coefficient
 
@@ -156,14 +157,9 @@ inflation:
 ## specified for horizontal (h), vertical (v) and temporal (t) separately
 ## for distance-based localization, the radius of influence (roi) is specified in obs_def
 localization:               ## localization is configured separately for horizontal, vertical and temporal relations
-                            ## leave blank if not applying localization
-  horizontal:
-    type: 'GC'              ## type of localization kernel (GC, step, exp, NICE...)
-    distance: 'cartesian'   ## type of distance function (default: cartesian; or spherical from lat/lon coords)
-  vertical:
-    type: 'GC'
-  temporal:
-    type: 'exp'
+  horizontal: 'GC,NICE'          ## type of localization kernel (GC, step, exp, NICE...)
+  vertical: 'GC'
+  temporal: 'exp'
 
 ##diagnostic methods configuration
 diag:
