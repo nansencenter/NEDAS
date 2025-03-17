@@ -438,7 +438,7 @@ class State:
                 fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
 
                 ##misc. transform can be added here
-                fld = c.misc_transform.forward_state(c, rec, fld)
+                # fld = c.misc_transform.forward_state(c, rec, fld)
 
                 ##save field to dict
                 fields[mem_id, rec_id] = fld

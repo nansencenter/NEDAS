@@ -414,7 +414,7 @@ class Obs:
                 print('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}'.format(seq['obs'].shape[-1]), flush=True)
 
             ##misc. transform here
-            seq = c.misc_transform.forward_obs(c, obs_rec, seq)
+            # seq = c.misc_transform.forward_obs(c, obs_rec, seq)
 
             obs_seq[obs_rec_id] = seq
             obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
@@ -465,7 +465,7 @@ class Obs:
                 seq = self.state_to_obs(c, state, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
 
                 ##misc. transform here
-                seq = c.misc_transform.forward_obs(c, obs_rec, seq)
+                # seq = c.misc_transform.forward_obs(c, obs_rec, seq)
 
                 self.obs_prior_seq[mem_id, obs_rec_id] = seq
         c.comm.Barrier()
