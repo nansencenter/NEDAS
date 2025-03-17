@@ -180,48 +180,66 @@ class BatchAssimilator(Assimilator):
                     c.print_1p(progress_bar(task-1, ntask))
                 continue
 
-        ##loop through the unmasked grid points in the partition
-        for loc_id in range(nloc):
-            ##state variable metadata for this location
-            state_x = state_data['x'][loc_id]
-            state_y = state_data['y'][loc_id]
+            ##loop through the unmasked grid points in the partition
+            for loc_id in range(nloc):
+                ##state variable metadata for this location
+                state_var_id = state_data['var_id']  ##variable id for each field (nfld)
+                state_x = state_data['x'][loc_id]
+                state_y = state_data['y'][loc_id]
+                state_z = state_data['z'][:, loc_id]
+                state_t = state_data['t'][:]
 
-            ##filter out obs outside the hroi in each direction first (using L1 norm to speed up)
-            obs_rec_id = obs_data['obs_rec_id']
-            hroi = obs_data['hroi'][obs_rec_id]
-            hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
-            ind = np.where(hdist<=hroi)[0]
+                ##filter out obs outside the hroi in each direction first (using L1 norm to speed up)
+                obs_rec_id = obs_data['obs_rec_id']
+                hroi = obs_data['hroi'][obs_rec_id]
+                hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
+                ind = np.where(hdist<=hroi)[0]
 
-            ##compute horizontal localization factor (using L2 norm for distance)
-            obs_rec_id = obs_data['obs_rec_id'][ind]
-            hroi = obs_data['hroi'][obs_rec_id]
-            hdist = c.grid.distance(state_x, obs_data['x'][ind], state_y, obs_data['y'][ind], p=2)
-            hlfactor = c.local_funcs['horizontal'](hdist, hroi)
-            ind1 = np.where(hlfactor>0)[0]
-            ind = ind[ind1]
-            hlfactor = hlfactor[ind1]
+                ##compute horizontal localization factor (using L2 norm for distance)
+                obs_rec_id = obs_data['obs_rec_id'][ind]
+                hroi = obs_data['hroi'][obs_rec_id]
+                hdist = c.grid.distance(state_x, obs_data['x'][ind], state_y, obs_data['y'][ind], p=2)
+                hlfactor = c.local_funcs['horizontal'](hdist, hroi)
+                ind1 = np.where(hlfactor>0)[0]
+                ind = ind[ind1]
+                hlfactor = hlfactor[ind1]
 
-            if len(ind1) == 0:
+                if len(ind1) == 0:
+                    if c.debug:
+                        print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
+                    else:
+                        c.print_1p(progress_bar(task, ntask))
+                    continue ##if all obs has no impact on state, just skip to next location
+
+                ##vertical, time and cross-variable (impact_on_state) localization
+                obs_value = obs_data['obs'][ind]
+                obs_err = obs_data['err_std'][ind]
+                obs_z = obs_data['z'][ind]
+                obs_t = obs_data['t'][ind]
+                obs_rec_id = obs_data['obs_rec_id'][ind]
+                vroi = obs_data['vroi'][obs_rec_id]
+                troi = obs_data['troi'][obs_rec_id]
+                impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
+
+                self.local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+                                    obs_value, obs_err, hlfactor,
+                                    state_z, obs_z, vroi, c.local_funcs['vertical'],
+                                    state_t, obs_t, troi, c.local_funcs['temporal'],
+                                    impact_on_state, c.filter_type,
+                                    c.rfactor, c.kfactor, c.nlobs_max)
+
+                ##add progress message
                 if c.debug:
-                    print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
+                    print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
                 else:
                     c.print_1p(progress_bar(task, ntask))
-                continue ##if all obs has no impact on state, just skip to next location
-
-            self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
-
-            ##add progress message
-            if c.debug:
-                print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
-            else:
-                c.print_1p(progress_bar(task, ntask))
-            task += 1
+                task += 1
 
             state.unpack_local_state_data(c, par_id, state.state_post, state_data)
             obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
-    def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
+    def local_analysis(self):
         """Local analysis scheme for each model state variable (grid point)
         to be implemented by derived classes"""
         raise NotImplementedError
