@@ -67,29 +67,29 @@ class AnalysisScheme:
             from .updators.additive import AdditiveUpdator as Updator
         return Updator()
 
-    def get_localization(self, c):
-        localization = {}
-        for key in ['horizontal', 'vertical', 'temporal']:
-            if c.localization[key]:
-                localization[key] = self.get_localization_component(c.localization[key])
-        return localization
+    # def get_localization(self, c):
+    #     localization = {}
+    #     for key in ['horizontal', 'vertical', 'temporal']:
+    #         if c.localization[key]:
+    #             localization[key] = self.get_localization_component(c.localization[key])
+    #     return localization
 
-    def get_localization_component(self, type):
-        if type in ['GC', 'step', 'exp']:
-            from .localization.distance_based import DistanceBasedLocalization as Localization
-        elif type in ['NICE']:
-            from .localization.correlation_based import CorrelationBasedLocalization as Localization
-        else:
-            raise ValueError(f"Unknown localization type {type}")
-        return Localization()
+    # def get_localization_component(self, type):
+    #     if type in ['GC', 'step', 'exp']:
+    #         from .localization.distance_based import DistanceBasedLocalization as Localization
+    #     elif type in ['NICE']:
+    #         from .localization.correlation_based import CorrelationBasedLocalization as Localization
+    #     else:
+    #         raise ValueError(f"Unknown localization type {type}")
+    #     return Localization()
 
     # def get_inflation(self, c):
     #     from .inflation import Inflation
     #     return Inflation(c)
 
-    def get_misc_transform(self, c):
-        from .misc_transform.base import Transform
-        return Transform()
+    # def get_misc_transform(self, c):
+    #     from .misc_transform.base import Transform
+    #     return Transform()
 
     def __call__(self, c):
         """
@@ -103,7 +103,7 @@ class AnalysisScheme:
         ##more complex outer loops can be implemented here
         for c.scale_id in range(c.nscale):
             self.init_analysis_dir(c)
-            c.misc_transform = self.get_misc_transform(c)
+            # c.misc_transform = self.get_misc_transform(c)
             # c.localization = self.get_localization(c)
             # c.inflation = self.get_inflation(c)
 

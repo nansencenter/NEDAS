@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from utils.parallel import bcast_by_root, distribute_tasks
 from utils.progress import progress_bar
-from ..localization.localization import local_factor_distance_based
+from ..localization import local_factor_distance_based
 
 class BatchAssimilator:
 
