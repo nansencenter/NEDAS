@@ -35,8 +35,6 @@ obs_def:
   dataset_src: 'lorenz96'
   model_src: 'lorenz96'
   nobs: 10
-  obs_window_min: -3
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.5
@@ -49,6 +47,8 @@ use_synthetic_obs: True
 
 dataset_def:
   lorenz96:
+    obs_window_min: -3
+    obs_window_max: 0
 
 model_def:
   lorenz96:
@@ -77,11 +77,13 @@ alignment:
   smoothness_weight: 1
 
 inflation:
-  type: 'posterior,relax'
+  type: 'posterior,RTPP'
   adaptive: True
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
+
+diag:

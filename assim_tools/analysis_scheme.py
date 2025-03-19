@@ -135,7 +135,7 @@ class AnalysisScheme:
 
             obs = self.get_obs(c, state)
             timer(c)(obs.prepare_obs)(c, state)
-            timer(c)(obs.prepare_obs_from_state)(c, state)
+            timer(c)(obs.prepare_obs_from_state)(c, state, 'prior')
 
             assimilator = self.get_assimilator(c)
             timer(c)(assimilator.assimilate)(c, state, obs)

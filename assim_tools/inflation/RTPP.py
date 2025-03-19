@@ -22,10 +22,9 @@ class RTPPInflation(Inflation):
             amb2 = stats['amb2'] / stats['total_nobs']
             beta = np.sqrt(varb/vara)
             lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
-            if True: #c.debug:
-                c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-                c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-                c.print_1p(f"beta = {beta}, lambda = {lamb}\n")
+            c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
+            c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+            c.print_1p(f"beta = {beta}, lambda = {lamb}\n")
             if beta <= 1:
                 self.coef = 0
             else:

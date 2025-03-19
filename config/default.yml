@@ -55,7 +55,6 @@ grid_def:
   distance_type: 'cartesian'    ## type of distance function (default: cartesian; or spherical from lat/lon coords)
 
 z_coords_from: 'mean'       ##use ensemble 'mean' or 'member' z coords as reference of obs z location
-distance_type: 'spherical'  ##use 'spherical' or 'cartesian' horizontal distance for localization
 
 ##state vector definition (a list of definitions, one for each variable)
 state_def:
