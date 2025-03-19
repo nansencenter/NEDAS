@@ -83,9 +83,6 @@ class NextsimModel(ModelConfig):
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
-        
-        ##TODO: search in parent directory for specified time if needed
-        
 
     def read_grid_from_mshfile(self, mshfile):
         """
@@ -135,12 +132,21 @@ class NextsimModel(ModelConfig):
             elements = (self.grid.triangles + 1).flatten()
             write_data(meshfile, 'Elements', elements)
 
-    def displace(self, d, **kwargs):
+    def displace(self, u, v, **kwargs):
         """
-        Nextsim has a Lagrangian mesh, so applying displacement directly
+        Nextsim has a Lagrangian mesh, so it's possible to displace the mesh coordinates directly
+        Inputs:
+        - u, v: displacement vectors defined on self.grid.x,y
         """
-        pass
-        ##read grid, add u, v then write grid
+        ##read grid, refresh self.grid.x, y
+        self.read_grid(**kwargs)
+
+        ##apply the displacement vectors -u, -v
+        self.grid.x -= u
+        self.grid.y -= v
+
+        ##write the updated mesh node xy to the restart file
+        self.write_grid(**kwargs)
 
     def read_mask(self, **kwargs):
         pass
@@ -206,10 +212,10 @@ class NextsimModel(ModelConfig):
             if rec['is_vector']:
                 for i in range(2):
                     data_attr={'standard_name':rec['name'][i], 'units':rec['units'], 'grid_mapping':'projection_stereo'}
-                    nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'][i], var[i, ...], recno={'time':nt_in_file}, attr=data_attr)
+                    nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'][i], var[i, ...], recno={'time':nt_in_file}, attr=data_attr, comm=kwargs['comm'])
             else:
                 data_attr={'standard_name':rec['name'], 'units':rec['units'], 'grid_mapping':'projection_stereo'}
-                nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'], var, recno={'time':nt_in_file}, attr=data_attr)
+                nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'], var, recno={'time':nt_in_file}, attr=data_attr, comm=kwargs['comm'])
 
     def z_coords(self, **kwargs):
         ##for nextsim, just discard inputs and simply return zero as z_coords
@@ -268,7 +274,24 @@ class NextsimModel(ModelConfig):
     def postprocess(self, task_id=0, **kwargs):
         ##place holder for now
         ##for any post processing needed after assimilation, to fix any model state that is not consistent
-        pass
+        kwargs = super().parse_kwargs(**kwargs)
+        time = kwargs['time']
+        if kwargs['member'] is not None:
+            mstr = '{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        run_dir = os.path.join(kwargs['path'], mstr)
+        restart_file = self.filename(**kwargs)
+
+        ##read seaice conc and thick, check value, fix values out of normal range, then write back to file
+        sic = self.read_var(**{**kwargs, 'name':'seaice_conc', 'units':1})
+        sit = self.read_var(**{**kwargs, 'name':'seaice_thick', 'units':'m'})
+
+        sic = np.maximum(np.minimum(sic, 1.0), 0.0)
+        sit = np.maximum(sit, 0.0)
+
+        self.write_var(sic, **{**kwargs, 'name':'seaice_conc', 'units':1})
+        self.write_var(sit, **{**kwargs, 'name':'seaice_thick', 'units':'m'})
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -321,7 +344,7 @@ class NextsimModel(ModelConfig):
             makedir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
-            ##run the model and wait for results
+       ##run the model and wait for results
             run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
                     nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
