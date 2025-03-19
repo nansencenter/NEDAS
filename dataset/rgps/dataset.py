@@ -30,7 +30,7 @@ class Dataset(DatasetConfig):
             'seaice_drift': self.get_seaice_property('seaice_drift'),
             'seaice_shear': self.get_seaice_property('seaice_shear'),
             'seaice_div': self.get_seaice_property('seaice_div'),
-            'seaice_vort': self.get_seaice_property('seaice_vort'), 
+            'seaice_vort': self.get_seaice_property('seaice_vort'),
             }
 
         def parse_kwargs(self, **kwargs):
@@ -39,7 +39,7 @@ class Dataset(DatasetConfig):
             assert kwargs['obs_window_max'] is not None, 'rgps.read_obs: obs_window_max is not defined'
             assert kwargs['obs_window_min'] is not None, 'rgps.read_obs: obs_window_min is not defined'
             return kwargs
-        
+
         def filename(self, **kwargs):
             kwargs = parse_kwargs(**kwargs)
             t = kwargs['time']
@@ -156,7 +156,7 @@ class Dataset(DatasetConfig):
 
         def random_network(self, **kwargs):
             raise NotImplementedError('rgps.random_network: random_network not implemented for rgps dataset')
-            
+
         def get_model_files(self, **kwargs):
             kwargs = parse_kwargs(**kwargs)
 
