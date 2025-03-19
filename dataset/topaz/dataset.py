@@ -58,15 +58,16 @@ class Dataset(DatasetConfig):
         name = kwargs['name']
         time = kwargs['time']
         grid = kwargs['grid']
-
-        obs_thin = False
         model = kwargs.get('model')
-        if model is not None and hasattr(model, 'z') and model.z is not None:
-            ##model vertical layers are defined, perform vertical thinning on profiler obs
-            obs_thin = True
+        if self.vthin:
+            ##check if model.z is available for vertical thinning
+            if model is None or not hasattr(model, 'z') or model.z is None:
+                print("WARNING: topaz.dataset: model.z levels are not provided, setting vthin to False")
+                self.vthin = False
 
         is_vector = self.variables[name]['is_vector']
-        obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
+        obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[],
+                   'ipiv':[], 'jpiv':[], 'ns':[], 'in_coords':[], 'stat':[], 'i_orig_grid':[], 'j_orig_grid':[], 'h':[], 'date':[]}
 
         try:
             fname = self.filename(**kwargs)
@@ -105,6 +106,22 @@ class Dataset(DatasetConfig):
                 obs_seq['y'].append(y)
                 obs_seq['x'].append(x)
                 obs_seq['err_std'].append(np.sqrt(data[i][1]))
+
+                ##additional info
+                obs_seq['ipiv'].append(data[i][6])
+                obs_seq['jpiv'].append(data[i][7])
+                obs_seq['ns'].append(data[i][8])
+                obs_seq['in_coords'].append([data[i][9], data[i][10], data[i][11], data[i][12]])
+                obs_seq['stat'].append(data[i][13])
+                obs_seq['i_orig_grid'].append(data[i][14])
+                obs_seq['j_orig_grid'].append(data[i][15])
+                obs_seq['h'].append(data[i][16])
+                obs_seq['date'].append(data[i][17])
+
+        if self.vthin and name in ['ocean_temp', 'ocean_saln']:
+            ##thin observation profiles vertically by picking those closest to model levels only
+            mask = np.full(len(obs_seq['obs']), False)
+            
 
         for key in obs_seq.keys():
             obs_seq[key] = np.array(obs_seq[key])
