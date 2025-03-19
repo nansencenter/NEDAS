@@ -44,8 +44,6 @@ obs_def:
 - name: 'seaice_conc'
   dataset_src: 'osisaf.ice_conc'
   model_src: 'nextsim.dg'
-  obs_window_min: -6
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.2
@@ -60,6 +58,8 @@ use_synthetic_obs: False
 dataset_def:
   osisaf.ice_conc:
     dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
+    obs_window_min: -6
+    obs_window_max: 0
 
 model_def:
   nextsim.dg:
@@ -79,13 +79,13 @@ assim_mode: 'batch'
 filter_type: 'ETKF'
 
 inflation:
-  type: 'posterior,relax'
+  type: 'prior,multiplicative'
   adaptive: True
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
 diag:

@@ -184,7 +184,7 @@ class Obs:
 
         return z
 
-    def state_to_obs(self, c, state, **kwargs):
+    def state_to_obs(self, c, state, flag, **kwargs):
         """
         Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
         This function includes several ways to compute the obs_prior:
@@ -209,7 +209,9 @@ class Obs:
         won't include the true state, the only options above are 1.3 or 2 for this case.
 
         Inputs:
-        - c: config module
+        - c: config object
+        - state: state object
+        - flag: 'prior' or 'posterior'
 
         Some kwargs:
         - member: int, member index; or None if dealing with synthetic obs
@@ -275,11 +277,21 @@ class Obs:
                     ##TODO: can merge the two into state property getters
                     if rec_id in state.rec_list[c.pid_rec] and mem_id in state.mem_list[c.pid_mem]:
                         z = state.z_fields[mem_id, rec_id]
-                        fld = state.fields_prior[mem_id, rec_id]
+                        if flag == 'prior':
+                            fld = state.fields_prior[mem_id, rec_id]
+                        elif flag == 'posterior':
+                            fld = state.fields_post[mem_id, rec_id]
+                        else:
+                            raise ValueError
 
                     else:  ##option 1.2: read field from state binfile
-                        z = state.read_field(state.z_coords_file, c.state_info, c.mask, 0, rec_id)
-                        fld = state.read_field(state.prior_file, c.state_info, c.mask, mem_id, rec_id)
+                        z = state.read_field(state.z_coords_file, c.mask, 0, rec_id)
+                        if flag == 'prior':
+                            fld = state.read_field(state.prior_file, c.mask, mem_id, rec_id)
+                        elif flag == 'posterior':
+                            fld = state.read_field(state.post_file, c.mask, mem_id, rec_id)
+                        else:
+                            raise ValueError
 
                 else:  ##option 1.3: get the field from model.read_var
                     if synthetic:
@@ -402,7 +414,7 @@ class Obs:
                 seq = dataset.random_network(model=model, grid=c.grid, mask=c.mask, **obs_rec)
 
                 ##compute obs values
-                seq['obs'] = self.state_to_obs(c, state, member=None, **obs_rec, **seq)
+                seq['obs'] = self.state_to_obs(c, state, 'prior', member=None, **obs_rec, **seq)
 
                 ##perturb with obs err
                 seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec['err']['std']
@@ -431,7 +443,7 @@ class Obs:
     def prepare_obs(self, c, state):
         self.obs_seq = bcast_by_root(c.comm_mem)(self.collect_obs_seq)(c, state)
 
-    def prepare_obs_from_state(self, c, state):
+    def prepare_obs_from_state(self, c, state, flag):
         """
         Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
@@ -447,7 +459,6 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * c.nproc_mem + pid_mem_show
         c.print_1p('>>> compute observation priors\n')
-        self.obs_prior_seq = {}
 
         ##process the obs, each proc gets its own workload as a subset of
         ##all proc goes through their own task list simultaneously
@@ -468,13 +479,18 @@ class Obs:
                 for key in ['x', 'y', 'z', 't']:
                     seq[key] = self.obs_seq[obs_rec_id][key]
                 ##obtain obs_prior values from model state
-                seq['obs'] = self.state_to_obs(c, state, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
+                seq['obs'] = self.state_to_obs(c, state, flag, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
 
                 ##misc. transform here
                 seq = c.misc_transform.forward_obs(c, obs_rec, seq)
 
                 ##collect obs priors together
-                self.obs_prior_seq[mem_id, obs_rec_id] = seq['obs']
+                if flag == 'prior':
+                    self.obs_prior_seq[mem_id, obs_rec_id] = seq['obs']
+                elif flag == 'posterior':
+                    self.obs_post_seq[mem_id, obs_rec_id] = seq['obs']
+                else:
+                    raise ValueError
         c.comm.Barrier()
         c.print_1p(' done.\n')
 

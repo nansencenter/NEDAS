@@ -183,11 +183,8 @@ class BatchAssimilator(Assimilator):
             ##loop through the unmasked grid points in the partition
             for loc_id in range(nloc):
                 ##state variable metadata for this location
-                state_var_id = state_data['var_id']  ##variable id for each field (nfld)
                 state_x = state_data['x'][loc_id]
                 state_y = state_data['y'][loc_id]
-                state_z = state_data['z'][:, loc_id]
-                state_t = state_data['t'][:]
 
                 ##filter out obs outside the hroi in each direction first (using L1 norm to speed up)
                 obs_rec_id = obs_data['obs_rec_id']
@@ -211,22 +208,7 @@ class BatchAssimilator(Assimilator):
                         c.print_1p(progress_bar(task, ntask))
                     continue ##if all obs has no impact on state, just skip to next location
 
-                ##vertical, time and cross-variable (impact_on_state) localization
-                obs_value = obs_data['obs'][ind]
-                obs_err = obs_data['err_std'][ind]
-                obs_z = obs_data['z'][ind]
-                obs_t = obs_data['t'][ind]
-                obs_rec_id = obs_data['obs_rec_id'][ind]
-                vroi = obs_data['vroi'][obs_rec_id]
-                troi = obs_data['troi'][obs_rec_id]
-                impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
-
-                self.local_analysis(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
-                                    obs_value, obs_err, hlfactor,
-                                    state_z, obs_z, vroi, c.local_funcs['vertical'],
-                                    state_t, obs_t, troi, c.local_funcs['temporal'],
-                                    impact_on_state, c.filter_type,
-                                    c.rfactor, c.kfactor, c.nlobs_max)
+                self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
 
                 ##add progress message
                 if c.debug:

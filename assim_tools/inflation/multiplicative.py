@@ -14,9 +14,8 @@ class MultiplicativeInflation(Inflation):
             varb = stats['varb'] / stats['total_nobs']
             varo = stats['varo'] / stats['total_nobs']
             omb2 = stats['omb2'] / stats['total_nobs']
-            if c.debug:
-                c.print_1p(f"varb = {varb}, varo={varo}\n")
-                c.print_1p(f"omb2 = {omb2}\n")
+            c.print_1p(f"varb = {varb}, varo={varo}\n")
+            c.print_1p(f"omb2 = {omb2}\n")
             self.coef = np.sqrt((omb2 - varo) / varb)
 
     def adaptive_post_inflation(self, c, state, obs):
@@ -33,9 +32,8 @@ class MultiplicativeInflation(Inflation):
             omb2 = stats['omb2'] / stats['total_nobs']
             omaamb = stats['omaamb'] / stats['total_nobs']
             amb2 = stats['amb2'] / stats['total_nobs']
-            if True: #c.debug:
-                c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-                c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+            c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
+            c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
             # self.coef = np.sqrt(omaamb/vara)
             self.coef = np.sqrt((omb2-varo-amb2)/vara)
 

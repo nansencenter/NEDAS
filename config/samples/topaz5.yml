@@ -196,15 +196,14 @@ covariance:
   #static_lookup_table: '/cluster/home/yingyue/data/cov/static.yml'
 
 inflation:
-  type: 'posterior,inflate'
+  type: 'posterior,multiplicative'
   adaptive: False
   coef: 1.01
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
-  #NICE_lookup_table: '/cluster/work/users/yingyue/NICE/lookup.{nens}.mat'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
 diag:
 ##convert seaice conc output to nc files for ICECAP diagnostics

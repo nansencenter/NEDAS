@@ -54,19 +54,22 @@ state_def:
 
 obs_def:
 - name: 'seaice_conc'
-  dataset_src: 'osisaf'
-  dataset_dir: '/cluster/work/users/yingyue/data/osisaf'
+  dataset_src: 'osisaf.ice_conc'
   model_src: 'nextsim.v1'
-  obs_window_min: -6
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.2
   hroi: 1e5
-  vroi: 1e10
-  troi: 24
+  vroi: inf
+  troi: inf
   impact_on_state:
     seaice_velocity: 0.5
+
+dataset_def:
+  osisaf.ice_conc:
+    dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
+    obs_window_min: -6
+    obs_window_max: 0
 
 use_synthetic_obs: False
 
@@ -110,7 +113,8 @@ inflation:
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
+diag:

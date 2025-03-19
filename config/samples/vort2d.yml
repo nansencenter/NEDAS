@@ -36,8 +36,6 @@ obs_def:
   dataset_src: 'vort2d'
   model_src: 'vort2d'
   nobs: 1000
-  obs_window_min: -3
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 1.0
@@ -51,6 +49,8 @@ use_synthetic_obs: True
 
 dataset_def:
   vort2d:
+    obs_window_min: -3
+    obs_window_max: 0
 
 model_def:
   vort2d:
@@ -79,11 +79,13 @@ alignment:
   smoothness_weight: 1
 
 inflation:
-  type: 'posterior,relax'
+  type: 'posterior,RTPP' #multiplicative'
   adaptive: True
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
+
+diag:

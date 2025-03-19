@@ -11,12 +11,12 @@ class Assimilator:
         """
         Main method to run the batch assimilation algorithm
         """
-        timer(c)(self.prior_inflation)(c, state, obs)
-        timer(c)(self.partition_grid)(c, state, obs)
+        self.prior_inflation(c, state, obs)
+        self.partition_grid(c, state, obs)
         timer(c)(self.transpose_to_ensemble_complete)(c, state, obs)
         timer(c)(self.assimilation_algorithm)(c, state, obs)
-        timer(c)(self.transpose_to_field_complete)(c, state, obs)
-        timer(c)(self.posterior_inflation)(c, state, obs)
+        self.transpose_to_field_complete(c, state, obs)
+        self.posterior_inflation(c, state, obs)
 
     def prior_inflation(self, c, state, obs):
         """
@@ -30,6 +30,7 @@ class Assimilator:
         """
         Apply covariance inflation for the posterior ensemble
         """
+        obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
         state.output_ens_mean(c, state.fields_post, state.post_mean_file)
         c.inflation(c, state, obs, 'posterior')
         state.output_state(c, state.fields_post, state.post_file)
