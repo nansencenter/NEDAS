@@ -3,15 +3,17 @@ ulimit -s 2000000
 # Load the right modules
 module --force purge
 ml load StdEnv
-ml load CMake/3.12.1
-ml -q load iimpi/2019b
-ml -q load Boost/1.71.0-iimpi-2019b
-ml -q load netCDF-C++4/4.3.1-iimpi-2019b
+ml load CMake/3.27.6-GCCcore-13.2.0
+ml load gompi/2023b
+ml load Boost.MPI/1.83.0-gompi-2023b
+ml load netCDF-C++4/4.3.1-gompi-2023b
+ml load OpenBLAS/0.3.24-GCC-13.2.0
 
 # Linking module and neXtSIM envinronment variables
-export BOOST_INCDIR=$EBROOTBOOST/include
-export BOOST_LIBDIR=$EBROOTBOOST/lib
-export NETCDF_DIR=/cluster/software/netCDF-C++4/4.3.1-iimpi-2019b
+export BOOST_INCDIR=$EBROOTBOOSTMPI/include
+export BOOST_LIBDIR=$EBROOTBOOSTMPI/lib
+export NETCDF_DIR=/cluster/software/netCDF-C++4/4.3.1-gompi-2023b
+export MPI_INC_DIR=$EBROOTOPENMPI/include
 
 #======= User or use-case specific directories
 export NEXTSIMDIR=$HOME/code/nextsim
@@ -22,9 +24,9 @@ unset USE_ENSEMBLE
 
 # compilers
 export CC=mpicc
-export CXX=mpiicpc
+export CXX=mpicxx
 export CFLAGS+=" -O3 -fPIC"
-export CXXFLAGS+=" -O3 -pthread -fPIC -fopenmp"
+export CXXFLAGS+=" -O3 -pthread -fPIC -fopenmp -DBOOST_TIMER_ENABLE_DEPRECATED"
 export CCFLAGS+=" $CFLAGS"
 
 #======= links to input observation and forecasts data, and meshes,
@@ -34,7 +36,7 @@ export NEXTSIM_MESH_DIR=$CLUSTER_ROOT_DIR/mesh
 export INPUT_OBS_DATA_DIR=$CLUSTER_ROOT_DIR/data
 
 #GMSH related variables
-export GMSH_DIR=$CLUSTER_ROOT_DIR/packages/gmsh-intel
+export GMSH_DIR=$CLUSTER_ROOT_DIR/packages/gmsh
 
 # ======== LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=$BOOST_DIR/lib:$LD_LIBRARY_PATH
