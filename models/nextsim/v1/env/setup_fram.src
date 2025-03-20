@@ -10,6 +10,7 @@ ml load Boost.MPI/1.79.0-iimpi-2022a
 export BOOST_INCDIR=$EBROOTBOOSTMPI/include
 export BOOST_LIBDIR=$EBROOTBOOSTMPI/lib
 export NETCDF_DIR=/cluster/software/netCDF-C++4/4.3.1-iimpi-2022a
+export MPI_INC_DIR=$EBROOTIMPI/mpi/latest/include
 
 #======= User or use-case specific directories
 export NEXTSIMDIR=$HOME/code/nextsim
