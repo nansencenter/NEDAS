@@ -65,8 +65,6 @@ def run(c, **kwargs):
     y = grid.y[:, 0] / 1e5  ##convert to 100km units
     lon, lat = grid.proj(grid.x, grid.y, inverse=True)
 
-    model.grid.set_destination_grid(grid)
-
     if 'time' in kwargs:
         time_start = s2t(kwargs['time'])
     else:
@@ -91,8 +89,12 @@ def run(c, **kwargs):
         levels = rec['levels']
         is_vector = rec['is_vector']
         for k in levels:
+
             # read the field from model restart file
             fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
+            model.read_grid(path=path, name=vname, time=t, member=member, k=k)
+            model.grid.set_destination_grid(grid)
+
             # convert to output grid
             fld_ = model.grid.convert(fld, is_vector=is_vector)
             # build dimension records
