@@ -23,7 +23,7 @@ class Assimilator:
         Apply covariance inflation for the prior ensemble
         """
         state.output_ens_mean(c, state.fields_prior, state.prior_mean_file)
-        c.inflation(c, state, obs, 'prior')
+        c.inflation_func(c, state, obs, 'prior')
         state.output_state(c, state.fields_prior, state.prior_file)
 
     def posterior_inflation(self, c, state, obs):
@@ -32,7 +32,7 @@ class Assimilator:
         """
         obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
         state.output_ens_mean(c, state.fields_post, state.post_mean_file)
-        c.inflation(c, state, obs, 'posterior')
+        c.inflation_func(c, state, obs, 'posterior')
         state.output_state(c, state.fields_post, state.post_file)
 
     def partition_grid(self, c, state, obs):

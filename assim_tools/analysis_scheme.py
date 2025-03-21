@@ -67,16 +67,16 @@ class AnalysisScheme:
             from .updators.additive import AdditiveUpdator as Updator
         return Updator(c)
 
-    def get_local_funcs(self, c):
+    def get_localization_funcs(self, c):
         local_funcs = {}
         for key in ['horizontal', 'vertical', 'temporal']:
             if c.localization[key]:
-                local_funcs[key] = self.get_local_func_component(c.localization[key])
+                local_funcs[key] = self.get_localization_func_component(c.localization[key])
             else:
                 local_funcs[key]
         return local_funcs
 
-    def get_local_func_component(self, localization_type):
+    def get_localization_func_component(self, localization_type):
         localization_types = localization_type.split(',')
 
         ##distance-based localization schemes
@@ -94,7 +94,7 @@ class AnalysisScheme:
         #     raise ValueError(f"Unknown localization type {type}")
         return local_func
 
-    def get_inflation(self, c):
+    def get_inflation_func(self, c):
         if c.inflation:
             inflation_type = c.inflation.get('type', '').split(',')
             if 'multiplicative' in inflation_type:
@@ -127,8 +127,8 @@ class AnalysisScheme:
         for c.scale_id in range(c.nscale):
             self.init_analysis_dir(c)
             c.misc_transform = self.get_misc_transform(c)
-            c.local_funcs = self.get_local_funcs(c)
-            c.inflation = self.get_inflation(c)
+            c.localization_funcs = self.get_localization_funcs(c)
+            c.inflation_func = self.get_inflation_func(c)
 
             state = self.get_state(c)
             timer(c)(state.prepare_state)(c)

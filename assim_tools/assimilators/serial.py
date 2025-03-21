@@ -116,7 +116,7 @@ class SerialAssimilator(Assimilator):
             self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
                             state_h_dist, state_v_dist, state_t_dist,
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.local_funcs['horizontal'], c.local_funcs['vertical'], c.local_funcs['temporal'])
+                            c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
             ##3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
@@ -125,7 +125,7 @@ class SerialAssimilator(Assimilator):
             self.update_local_obs(obs_data['obs_prior'], obs_data['used'], obs_p['prior'], obs_incr,
                             obs_h_dist, obs_v_dist, obs_t_dist,
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.local_funcs['horizontal'], c.local_funcs['vertical'], c.local_funcs['temporal'])
+                            c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
         state.unpack_local_state_data(c, par_id, state.state_post, state_data)
         obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
