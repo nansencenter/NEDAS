@@ -21,8 +21,8 @@ class ETKFAssimilator(BatchAssimilator):
 
         local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
                             obs_value, obs_err, hlfactor,
-                            state_z, obs_z, vroi, c.local_funcs['vertical'],
-                            state_t, obs_t, troi, c.local_funcs['temporal'],
+                            state_z, obs_z, vroi, c.localization_funcs['vertical'],
+                            state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
 
 @njit(cache=True)

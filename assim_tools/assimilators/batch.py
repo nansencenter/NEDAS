@@ -196,7 +196,7 @@ class BatchAssimilator(Assimilator):
                 obs_rec_id = obs_data['obs_rec_id'][ind]
                 hroi = obs_data['hroi'][obs_rec_id]
                 hdist = c.grid.distance(state_x, obs_data['x'][ind], state_y, obs_data['y'][ind], p=2)
-                hlfactor = c.local_funcs['horizontal'](hdist, hroi)
+                hlfactor = c.localization_funcs['horizontal'](hdist, hroi)
                 ind1 = np.where(hlfactor>0)[0]
                 ind = ind[ind1]
                 hlfactor = hlfactor[ind1]
