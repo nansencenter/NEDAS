@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from matplotlib.tri import Triangulation
 from scipy.io import loadmat
 
-def get_data_traj_pairs(self, file_name, d0_out, d1_out, dt_tol=2):
+def get_data_traj_pairs(file_name, d0_out, d1_out, dt_tol=2):
     """ Get rgps trajectory pairs x,y,t defined on rgps_proj, in km,day units"""
 
     ##several records, each contain pairs of points:
@@ -88,7 +88,6 @@ def get_velocity(x0, y0, t0, x1, y1, t1):
 
 def get_velocity_gradients(x, y, u, v):
     tri = get_triangulation(x, y)
-
     xt, yt, ut, vt = [i[tri.triangles].T for i in (x, y, u, v)]
 
     ux, uy, vx, vy = 0, 0, 0, 0
@@ -99,5 +98,19 @@ def get_velocity_gradients(x, y, u, v):
         vy -= (vt[i0] + vt[i1]) * (xt[i0] - xt[i1])
 
     ux, uy, vx, vy = [i / (2 * tri.a) for i in (ux, uy, vx, vy)]
-
     return ux, uy, vx, vy
+
+def get_deform_shear(x0, y0, t0, x1, y1, t1):
+    u, v = get_velocity(x0, y0, t0, x1, y1, t1)
+    ux, uy, vx, vy = get_velocity_gradients(x0, y0, u, v)
+    return np.hypot(ux - vy, uy + vx)
+
+def get_deform_div(x0, y0, t0, x1, y1, t1):
+    u, v = get_velocity(x0, y0, t0, x1, y1, t1)
+    ux, uy, vx, vy = get_velocity_gradients(x0, y0, u, v)
+    return ux + vy
+
+def get_deform_vort(x0, y0, t0, x1, y1, t1):
+    u, v = get_velocity(x0, y0, t0, x1, y1, t1)
+    ux, uy, vx, vy = get_velocity_gradients(x0, y0, u, v)
+    return vx - uy

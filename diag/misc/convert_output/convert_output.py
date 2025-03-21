@@ -123,7 +123,11 @@ def run(c, **kwargs):
                     }
             if is_vector:
                 for i in range(2):
-                    nc_write_var(file, dims, rec['name'][i], fld_[i,...], recno=recno, attr=attr, comm=c.comm)
+                    if isinstance(rec['name'], tuple):
+                        rec_name = rec['name'][i]
+                    else:
+                        rec_name = rec['name']+'_'+(x_name, y_name)[i]
+                    nc_write_var(file, dims, rec_name, fld_[i,...], recno=recno, attr=attr, comm=c.comm)
             else:
                 nc_write_var(file, dims, rec['name'], fld_, recno=recno, attr=attr, comm=c.comm)
 
