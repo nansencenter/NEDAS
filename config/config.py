@@ -126,7 +126,13 @@ class Config(object):
             self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered, distance_type=distance_type)
 
             ##mask for invalid grid points (none for now, add option later)
-            self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+            if 'mask' in self.grid_def:
+                model_name = self.grid_def['mask']
+                module = importlib.import_module('models.'+model_name)
+                model = getattr(module, 'Model')()
+                self.mask = model.prepare_mask(self.grid)
+            else:
+                self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
 
         else:
             ##get analysis grid from model module

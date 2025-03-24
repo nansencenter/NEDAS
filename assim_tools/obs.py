@@ -27,7 +27,7 @@ class Obs:
     """
     def __init__(self, c, state):
         self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
-    
+
         self.info = bcast_by_root(c.comm)(self.parse_obs_info)(c, state)
 
         self.obs_rec_list = bcast_by_root(c.comm)(self.distribute_obs_tasks)(c)
@@ -228,20 +228,9 @@ class Obs:
         """
         mem_id = kwargs['member']
         synthetic = True if mem_id is None else False
-
         time = kwargs['time']
         obs_name = kwargs['name']
         is_vector = kwargs['is_vector']
-
-        obs_x = np.array(kwargs['x'])
-        obs_y = np.array(kwargs['y'])
-        obs_z = np.array(kwargs['z'])
-        nobs = len(obs_x)
-
-        if is_vector:
-            seq = np.full((2, nobs), np.nan)
-        else:
-            seq = np.full(nobs, np.nan)
 
         ##obs dataset source module
         dataset = c.dataset_config[kwargs['dataset_src']]
@@ -250,7 +239,7 @@ class Obs:
 
         ##option 1  TODO: update README and comments
         ## if dataset module provides an obs_operator, use it to compute obs
-        if hasattr(dataset, 'obs_operator') and kwargs['name'] in dataset.obs_operator:
+        if hasattr(dataset, 'obs_operator') and obs_name in dataset.obs_operator:
             if synthetic:
                 path = model.truth_dir
             else:
@@ -265,6 +254,15 @@ class Obs:
         ## if obs variable is one of the state variable, or can be computed by the model,
         ## then we just need to collect the 3D variable and interpolate in x,y,z
         elif obs_name in model.variables:
+
+            obs_x = np.array(kwargs['x'])
+            obs_y = np.array(kwargs['y'])
+            obs_z = np.array(kwargs['z'])
+            nobs = len(obs_x)
+            if is_vector:
+                seq = np.full((2, nobs), np.nan)
+            else:
+                seq = np.full(nobs, np.nan)
 
             levels = model.variables[obs_name]['levels']
             for k in range(len(levels)):
@@ -304,22 +302,22 @@ class Obs:
                         model.grid.set_destination_grid(c.grid)
 
                     model_z = model.z_coords(path=path, member=kwargs['member'], time=kwargs['time'], k=levels[k])
-                    z_ = model.grid.convert(model_z)
+                    z_ = model.grid.convert(model_z, method='nearest')
                     z = np.array([z_, z_]) if is_vector else z_
 
                     model_fld = model.read_var(path=path, name=kwargs['name'], member=kwargs['member'], time=kwargs['time'], k=levels[k])
-                    fld = model.grid.convert(model_fld, is_vector=is_vector)
+                    fld = model.grid.convert(model_fld, is_vector=is_vector, method='nearest')
 
                 ##horizontal interp field to obs_x,y, for current layer k
                 if is_vector:
-                    z = c.grid.interp(z[0, ...], obs_x, obs_y)
+                    z = c.grid.interp(z[0, ...], obs_x, obs_y, method='nearest')
                     zc = np.array([z, z])
-                    v1 = c.grid.interp(fld[0, ...], obs_x, obs_y)
-                    v2 = c.grid.interp(fld[1, ...], obs_x, obs_y)
+                    v1 = c.grid.interp(fld[0, ...], obs_x, obs_y, method='nearest')
+                    v2 = c.grid.interp(fld[1, ...], obs_x, obs_y, method='nearest')
                     vc = np.array([v1, v2])
                 else:
-                    zc = c.grid.interp(z, obs_x, obs_y)
-                    vc = c.grid.interp(fld, obs_x, obs_y)
+                    zc = c.grid.interp(z, obs_x, obs_y, method='nearest')
+                    vc = c.grid.interp(fld, obs_x, obs_y, method='nearest')
 
                 ##vertical interp to obs_z, take ocean depth as example:
                 ##    -------------------------------------------
@@ -476,7 +474,7 @@ class Obs:
 
                 seq = {}
                 ##need the coordinates for transform later
-                for key in ['x', 'y', 'z', 't']:
+                for key in ['x', 'y', 'z', 't', 'err_std']:
                     seq[key] = self.obs_seq[obs_rec_id][key]
                 ##obtain obs_prior values from model state
                 seq['obs'] = self.state_to_obs(c, state, flag, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])

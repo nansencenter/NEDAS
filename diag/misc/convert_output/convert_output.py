@@ -91,8 +91,8 @@ def run(c, **kwargs):
         for k in levels:
 
             # read the field from model restart file
-            fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
             model.read_grid(path=path, name=vname, time=t, member=member, k=k)
+            fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
             model.grid.set_destination_grid(grid)
 
             # convert to output grid

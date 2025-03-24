@@ -444,12 +444,17 @@ class State:
                 ##the model object for handling this variable
                 model = c.model_config[rec['model_src']]
 
-                model.read_grid(path=path, member=mem_id, **rec)
-                model.grid.set_destination_grid(c.grid)
-
                 ##read field from restart file
+                model.read_grid(path=path, member=mem_id, **rec)
                 var = model.read_var(path=path, member=mem_id, **rec)
+
+                model.grid.set_destination_grid(c.grid)
                 fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
+
+                if rec['is_vector']:
+                    fld[:, c.mask] = np.nan
+                else:
+                    fld[c.mask] = np.nan
 
                 ##misc. transform can be added here
                 fld = c.misc_transform.forward_state(c, rec, fld)
