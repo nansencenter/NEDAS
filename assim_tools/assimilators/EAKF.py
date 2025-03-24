@@ -8,7 +8,7 @@ class EAKFAssimilator(SerialAssimilator):
         return cls._obs_increment(*args, **kwargs)
 
     @staticmethod
-    @njit(cache=True)
+    @njit
     def _obs_increment(obs_prior, obs, obs_err):
         """
         Compute analysis increment in observation space
@@ -58,7 +58,7 @@ class EAKFAssimilator(SerialAssimilator):
         return cls._update_local_state(*args, **kwargs)
 
     @staticmethod
-    @njit(cache=True)
+    @njit
     def _update_local_state(state_data, obs_prior, obs_incr,
                             h_dist, v_dist, t_dist,
                             hroi, vroi, troi,
@@ -84,7 +84,7 @@ class EAKFAssimilator(SerialAssimilator):
         return cls._update_local_obs(*args, **kwargs)
 
     @staticmethod
-    @njit(cache=True)
+    @njit
     def _update_local_obs(obs_data, used, obs_prior, obs_incr,
                           h_dist, v_dist, t_dist,
                           hroi, vroi, troi,
@@ -102,7 +102,7 @@ class EAKFAssimilator(SerialAssimilator):
 
         obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind])
 
-@njit(cache=True)
+@njit
 def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
     """
     Update the ensemble variable using the obs increments

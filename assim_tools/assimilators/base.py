@@ -86,8 +86,9 @@ class Assimilator:
         c.print_1p('state variables: ')
         state.fields_post = state.transpose_to_field_complete(c, state.state_post)
 
-        c.print_1p('obs prior sequences: ')
-        obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
+        # c.print_1p('obs prior sequences: ')
+        ##TODO there is a bug here, in transpose seq[:, ind] out of bound
+        # obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
 
     def assimilation_algorithm(self, c, state, obs):
         """

@@ -35,6 +35,6 @@ def run(c):
 if __name__ == '__main__':
     from config import Config
     c = Config(parse_args=True)
-    
+
     analysis = AnalysisScheme()
     analysis(c)
