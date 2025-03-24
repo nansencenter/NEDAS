@@ -22,6 +22,7 @@ nproc: 16
 
 ##some experiment design parameters
 nens: 20            ##ensemble size
+run_prepare: True
 run_forecast: True  ##if true, run the ensemble forecast step
 run_analysis: True  ##if true, run the analysis step
 run_diagnose: True  ##if true, run the diagnose scripts

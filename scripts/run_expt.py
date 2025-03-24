@@ -17,9 +17,9 @@ while c.time < c.time_end:
 
     os.system("mkdir -p "+c.cycle_dir(c.time))
 
-    preprocess.run(c)
-
-    perturb.run(c)
+    if c.run_prepare:
+        preprocess.run(c)
+        perturb.run(c)
 
     ##assimilation step
     if c.run_analysis and c.time >= c.time_analysis_start and c.time <= c.time_analysis_end:
