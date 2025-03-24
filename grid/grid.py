@@ -137,6 +137,8 @@ class Grid(object):
             if self.cyclic_dim is not None:
                 self._pad_cyclic_mesh_bounds()
 
+        self.mask = np.full(self.x.shape, False)
+
         self.distance_type = distance_type
 
         self._dst_grid = None
@@ -242,6 +244,7 @@ class Grid(object):
         if nlevel == 0:
             return self
         else:
+            ##create a new grid object with x,y at new resolution level
             new_grid = copy.deepcopy(self)
             fac = 2**nlevel
             new_grid.dx = self.dx * fac
@@ -250,6 +253,9 @@ class Grid(object):
             new_grid.ny = int(np.round(self.Ly / new_grid.dy))
             assert min(new_grid.nx, new_grid.ny) > 1, "Grid.change_resolution_level: new resolution too low, try smaller nlevel"
             new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
+            ##coarsen the mask
+            self.set_destination_grid(new_grid)
+            new_grid.mask = self.convert(self.mask).astype(bool)
             return new_grid
 
     def _mesh_dx(self):

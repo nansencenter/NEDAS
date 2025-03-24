@@ -12,7 +12,7 @@ class L96Model(ModelConfig):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
-        self.mask = np.full(self.grid.x.shape, False)
+        self.grid.mask = np.full(self.grid.x.shape, False)
 
         self.variables = {'state': {'name':'state', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'*'}, }
         self.z_units = '*'

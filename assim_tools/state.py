@@ -110,7 +110,7 @@ class State:
 
                         ##update seek position
                         nv = 2 if rec['is_vector'] else 1
-                        fld_size = np.sum((~c.mask).astype(int))
+                        fld_size = np.sum((~c.grid.mask).astype(int))
                         pos += nv * fld_size * type_size[rec['dtype']]
                         rec_id += 1
 
@@ -339,7 +339,7 @@ class State:
                 fld = fields[mem_id, rec_id]
 
                 ##write the data to binary file
-                self.write_field(state_file, c.mask, mem_id, rec_id, fld)
+                self.write_field(state_file, c.grid.mask, mem_id, rec_id, fld)
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
@@ -385,7 +385,7 @@ class State:
 
             if c.pid_mem == 0:
                 mean_fld = sum_fld / c.nens
-                self.write_field(mean_file, c.mask, 0, rec_id, mean_fld)
+                self.write_field(mean_file, c.grid.mask, 0, rec_id, mean_fld)
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
@@ -452,9 +452,9 @@ class State:
                 fld = model.grid.convert(var, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
 
                 if rec['is_vector']:
-                    fld[:, c.mask] = np.nan
+                    fld[:, c.grid.mask] = np.nan
                 else:
-                    fld[c.mask] = np.nan
+                    fld[c.grid.mask] = np.nan
 
                 ##misc. transform can be added here
                 fld = c.misc_transform.forward_state(c, rec, fld)
@@ -491,14 +491,14 @@ class State:
                 ##slice for this par_id
                 istart,iend,di,jstart,jend,dj = self.partitions[par_id]
                 ##save the unmasked points in slice to fld_chk for this par_id
-                mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+                mask_chk = c.grid.mask[jstart:jend:dj, istart:iend:di]
                 if is_vector:
                     fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
                 else:
                     fld_chk[par_id] = fld[jstart:jend:dj, istart:iend:di][~mask_chk]
             else:
                 inds = self.partitions[par_id]
-                mask_chk = c.mask[inds]
+                mask_chk = c.grid.mask[inds]
                 if is_vector:
                     fld_chk[par_id] = fld[:, inds][:, ~mask_chk]
                 else:
@@ -509,11 +509,11 @@ class State:
         for par_id in self.par_list[src_pid]:
             if len(c.grid.x.shape) == 2:
                 istart,iend,di,jstart,jend,dj = self.partitions[par_id]
-                mask_chk = c.mask[jstart:jend:dj, istart:iend:di]
+                mask_chk = c.grid.mask[jstart:jend:dj, istart:iend:di]
                 fld[..., jstart:jend:dj, istart:iend:di][..., ~mask_chk] = fld_chk[par_id]
             else:
                 inds = self.partitions[par_id]
-                mask_chk = c.mask[inds]
+                mask_chk = c.grid.mask[inds]
                 fld[..., inds][..., ~mask_chk] = fld_chk[par_id]
 
     def transpose_to_ensemble_complete(self, c, fields):
@@ -674,13 +674,13 @@ class State:
         ##x,y coordinates for local state variables on pid
         if len(c.grid.x.shape) == 2:  ##regular grid
             ist,ied,di,jst,jed,dj = self.partitions[par_id]
-            msk = c.mask[jst:jed:dj, ist:ied:di]
+            msk = c.grid.mask[jst:jed:dj, ist:ied:di]
             data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
             data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
 
         else:
             inds = self.partitions[par_id]
-            msk = c.mask[inds]
+            msk = c.grid.mask[inds]
             data['x'] = c.grid.x[inds][~msk]
             data['y'] = c.grid.y[inds][~msk]
 

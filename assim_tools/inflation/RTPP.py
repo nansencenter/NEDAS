@@ -47,8 +47,8 @@ class RTPPInflation(Inflation):
 
         for r, rec_id in enumerate(state.rec_list[c.pid_rec]):
             ##read the mean field with rec_id
-            fld_prior_mean = state.read_field(state.prior_mean_file, c.mask, 0, rec_id)
-            fld_post_mean = state.read_field(state.post_mean_file, c.mask, 0, rec_id)
+            fld_prior_mean = state.read_field(state.prior_mean_file, c.grid.mask, 0, rec_id)
+            fld_post_mean = state.read_field(state.post_mean_file, c.grid.mask, 0, rec_id)
 
             for m, mem_id in enumerate(state.mem_list[c.pid_mem]):
                 if c.debug:

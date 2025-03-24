@@ -40,7 +40,7 @@ class Model(ModelConfig):
 
         # construct grid obj based on config
         self.grid = Grid.regular_grid(Proj(self.proj), self.xstart, self.xend, self.ystart, self.yend, self.dx)
-        self.mask = np.full(self.grid.x.shape, False)  ##model grid points that are masked (land?)
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##model grid points that are masked (land?)
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

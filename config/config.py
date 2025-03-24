@@ -130,9 +130,9 @@ class Config(object):
                 model_name = self.grid_def['mask']
                 module = importlib.import_module('models.'+model_name)
                 model = getattr(module, 'Model')()
-                self.mask = model.prepare_mask(self.grid)
+                self.grid.mask = model.prepare_mask(self.grid)
             else:
-                self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+                self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
 
         else:
             ##get analysis grid from model module
@@ -141,7 +141,6 @@ class Config(object):
             module = importlib.import_module('models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
             self.grid = model.grid
-            self.mask = model.mask
 
     def set_model_config(self):
         ##initialize model config dict
@@ -161,7 +160,7 @@ class Config(object):
             module = importlib.import_module('dataset.'+dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **kwargs)
+            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.grid.mask, **kwargs)
 
     def show_summary(self):
         ##print a summary

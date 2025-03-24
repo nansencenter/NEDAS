@@ -17,7 +17,6 @@ class ModelConfig(object):
             setattr(self, key, value)
 
         self.grid = None
-        self.mask = None
         self.z = None
 
         self.variables = {}

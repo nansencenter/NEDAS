@@ -95,7 +95,7 @@ class Topaz5Model(ModelConfig):
         self.grid = get_topaz_grid(grid_info_file)
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        self.depth, self.mask = get_depth(self.depthfile, self.grid)
+        self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
         self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
         if os.path.exists(self.meanssh_file):
@@ -176,11 +176,11 @@ class Topaz5Model(ModelConfig):
         if name in self.restart_variables:
             f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
             if rec['is_vector']:
-                var1 = f.read_field(rec['name'][0], level=kwargs['k'], tlevel=1, mask=self.mask)
-                var2 = f.read_field(rec['name'][1], level=kwargs['k'], tlevel=1, mask=self.mask)
+                var1 = f.read_field(rec['name'][0], level=kwargs['k'], tlevel=1, mask=self.grid.mask)
+                var2 = f.read_field(rec['name'][1], level=kwargs['k'], tlevel=1, mask=self.grid.mask)
                 var = np.array([var1, var2])
             else:
-                var = f.read_field(rec['name'], level=kwargs['k'], tlevel=1, mask=self.mask)
+                var = f.read_field(rec['name'], level=kwargs['k'], tlevel=1, mask=self.grid.mask)
             f.close()
 
         elif name in self.iced_variables:
@@ -260,9 +260,9 @@ class Topaz5Model(ModelConfig):
             f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
             if rec['is_vector']:
                 for i in range(2):
-                    f.overwrite_field(var[i,...], self.mask, rec['name'][i], level=kwargs['k'], tlevel=1)
+                    f.overwrite_field(var[i,...], self.grid.mask, rec['name'][i], level=kwargs['k'], tlevel=1)
             else:
-                f.overwrite_field(var, self.mask, rec['name'], level=kwargs['k'], tlevel=1)
+                f.overwrite_field(var, self.grid.mask, rec['name'], level=kwargs['k'], tlevel=1)
             f.close()
 
         elif name in self.iced_variables:
@@ -377,14 +377,14 @@ class Topaz5Model(ModelConfig):
             montg[ind] += pres[k+1, ...][ind] * oneta[ind] * (thstar[k+1, ...][ind] - thstar[k, ...][ind]) * self.thref**2
         ssh[ind] = (montg[ind] / self.thref + pbavg[ind]) / self.ONEM
         ssh[~ind] = np.nan
-        ssh[self.mask] = np.nan
+        ssh[self.grid.mask] = np.nan
         return ssh
 
     def get_ocean_surf_height_anomaly(self, **kwargs):
         assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
         ssh = self.get_ocean_surf_height(**kwargs)
         sla = ssh - self.meanssh
-        sla[self.mask] = np.nan
+        sla[self.grid.mask] = np.nan
         return sla
 
     def get_ocean_surf_temp(self, **kwargs):
@@ -404,7 +404,7 @@ class Topaz5Model(ModelConfig):
             seaice_conc += self.read_var(**{**rec, 'k':k})
         
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
-        seaice_conc[self.mask] = np.nan
+        seaice_conc[self.grid.mask] = np.nan
         return seaice_conc
 
     def get_seaice_thick(self, **kwargs):
@@ -424,7 +424,7 @@ class Topaz5Model(ModelConfig):
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'seaice')
         seaice_thick[ind] = np.minimum(seaice_volume[ind] / seaice_conc[ind], upper_limit)
-        seaice_thick[self.mask] = np.nan
+        seaice_thick[self.grid.mask] = np.nan
         return seaice_thick
 
     def get_snow_thick(self, **kwargs):
@@ -586,7 +586,7 @@ class Topaz5Model(ModelConfig):
         fice = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         hice = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         zSin, Tmlt = fix_zsin_profile(self.Nilayer+1, self.saltmax, self.depressT, self.nsal, self.msal)
-        adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.mask,
+        adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.grid.mask,
                              self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
 
         ##update the diagnostic ice variables
