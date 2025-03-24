@@ -58,7 +58,7 @@ class NextsimModel(ModelConfig):
         ##default grid and mask (before getting set by read_grid)
         self.read_grid_from_mshfile(os.path.join(self.nextsim_mesh_dir, self.msh_filename))
 
-        self.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
 
         self.grid_bank = {}
 

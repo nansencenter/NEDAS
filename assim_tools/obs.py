@@ -174,7 +174,7 @@ class Obs:
             rec_id = [i for i,r in state.info['fields'].items() if r['time']==time and r['k']==k_list[k]][0]
 
             ##read the z field with (mem_id=0, rec_id) from z_file
-            z_fld = state.read_field(state.z_coords_file, c.mask, 0, rec_id)
+            z_fld = state.read_field(state.z_coords_file, c.grid.mask, 0, rec_id)
 
             ##assign the coordinates to z(k)
             if state.info['fields'][rec_id]['is_vector']:
@@ -248,7 +248,7 @@ class Obs:
             operator = dataset.obs_operator[kwargs['name']]
 
             ##get the obs seq from operator
-            seq = operator(path=path, model=model, grid=c.grid, mask=c.mask, **kwargs)
+            seq = operator(path=path, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         ##option 2:
         ## if obs variable is one of the state variable, or can be computed by the model,
@@ -283,11 +283,11 @@ class Obs:
                             raise ValueError
 
                     else:  ##option 1.2: read field from state binfile
-                        z = state.read_field(state.z_coords_file, c.mask, 0, rec_id)
+                        z = state.read_field(state.z_coords_file, c.grid.mask, 0, rec_id)
                         if flag == 'prior':
-                            fld = state.read_field(state.prior_file, c.mask, mem_id, rec_id)
+                            fld = state.read_field(state.prior_file, c.grid.mask, mem_id, rec_id)
                         elif flag == 'posterior':
-                            fld = state.read_field(state.post_file, c.mask, mem_id, rec_id)
+                            fld = state.read_field(state.post_file, c.grid.mask, mem_id, rec_id)
                         else:
                             raise ValueError
 
@@ -409,7 +409,7 @@ class Obs:
 
             if c.use_synthetic_obs:
                 ##generate synthetic obs network
-                seq = dataset.random_network(model=model, grid=c.grid, mask=c.mask, **obs_rec)
+                seq = dataset.random_network(model=model, grid=c.grid, mask=c.grid.mask, **obs_rec)
 
                 ##compute obs values
                 seq['obs'] = self.state_to_obs(c, state, 'prior', member=None, **obs_rec, **seq)
@@ -419,7 +419,7 @@ class Obs:
 
             else:
                 ##read dataset files and obtain obs sequence
-                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.mask, **obs_rec)
+                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, **obs_rec)
 
             if c.pid_mem == 0:
                 print('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}'.format(seq['obs'].shape[-1]), flush=True)

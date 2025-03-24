@@ -70,8 +70,8 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the field from bin file in analysis dir
-    var_prior = state.read_field(state.prior_file, c.mask, member, rec_id)
-    var_post = state.read_field(state.post_file, c.mask, member, rec_id)
+    var_prior = state.read_field(state.prior_file, c.grid.mask, member, rec_id)
+    var_post = state.read_field(state.post_file, c.grid.mask, member, rec_id)
     incr = var_post - var_prior
 
     ##plot the field

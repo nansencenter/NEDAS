@@ -115,10 +115,10 @@ class BatchAssimilator(Assimilator):
         ##distribute the list of par_id according to workload to each pid
         ##number of unmasked grid points in each tile
         if len(c.grid.x.shape) == 2:
-            nlpts_loc = np.array([np.sum((~c.mask[jst:jed:dj, ist:ied:di]).astype(int))
+            nlpts_loc = np.array([np.sum((~c.grid.mask[jst:jed:dj, ist:ied:di]).astype(int))
                                  for ist,ied,di,jst,jed,dj in state.partitions] )
         else:
-            nlpts_loc = np.array([np.sum((~c.mask[inds]).astype(int))
+            nlpts_loc = np.array([np.sum((~c.grid.mask[inds]).astype(int))
                                  for inds in state.partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
@@ -152,10 +152,10 @@ class BatchAssimilator(Assimilator):
         for par_id in state.par_list[c.pid_mem]:
             if len(c.grid.x.shape)==2:
                 ist,ied,di,jst,jed,dj = state.partitions[par_id]
-                msk = c.mask[jst:jed:dj, ist:ied:di]
+                msk = c.grid.mask[jst:jed:dj, ist:ied:di]
             else:
                 inds = state.partitions[par_id]
-                msk = c.mask[inds]
+                msk = c.grid.mask[inds]
             for loc_id in range(np.sum((~msk).astype(int))):
                 ntask += 1
 

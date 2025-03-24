@@ -124,8 +124,10 @@ class AnalysisScheme:
 
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
-        for c.scale_id in range(c.nscale):
+        analysis_grid = c.grid
+        for c.scale_id in range(1): #c.nscale):
             self.init_analysis_dir(c)
+            c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.scale_id])
             c.misc_transform = self.get_misc_transform(c)
             c.localization_funcs = self.get_localization_funcs(c)
             c.inflation_func = self.get_inflation_func(c)
