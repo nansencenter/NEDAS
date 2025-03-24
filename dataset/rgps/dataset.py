@@ -4,6 +4,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import pyproj
 from scipy.spatial import KDTree
+from grid import Grid
 from .utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
 from ..dataset_config import DatasetConfig
 
@@ -26,12 +27,14 @@ class Dataset(DatasetConfig):
         ##tolerance when searching for the time along trajectory
         self.dt_tol=timedelta(days=self.DAYS_SEARCH_TOLERANCE)
 
-        self.obs_operator = {
-            'seaice_drift': self.get_seaice_drift,
-            'seaice_deform_shear': self.get_seaice_deform_shear,
-            'seaice_deform_div': self.get_seaice_deform_div,
-            'seaice_deform_vort': self.get_seaice_deform_vort,
-        }
+        self.obs_operator = {}
+        ##TODO the get_traj_pairs functions sometimes fail, near the tree.query part, returns wrong index?
+        ## for now use the model.diag_variables for deform variables instead
+        #    'seaice_drift': self.get_seaice_drift,
+        #    'seaice_deform_shear': self.get_seaice_deform_shear,
+        #    'seaice_deform_div': self.get_seaice_deform_div,
+        #    'seaice_deform_vort': self.get_seaice_deform_vort,
+        #}
 
     def parse_kwargs(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -79,7 +82,7 @@ class Dataset(DatasetConfig):
         ##      triangles: velocity is defined on nodes and deform on elements
         ##      record: trajectory id, we process one record at a time
         obs_seq = {'obs':[], 'err_std':[], 't':[], 'z':[], 'y':[], 'x':[],
-                    'x0':[], 'y0':[], 'triangles':[], 'record':[], 'index':[]}
+                   'x0':[], 'y0':[], 'triangles':[], 'record':[], 'index':[]}
 
         rec = 0
         for file_name in self.filename(**kwargs):
@@ -146,11 +149,30 @@ class Dataset(DatasetConfig):
 
         ##convert from list to np.array
         ##raw data are kept in list format
-        for key in ('obs', 'err_std', 't', 'y', 'x', 'z', 'record', 'index'):
+        for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
             obs_seq[key] = np.array(obs_seq[key])
 
         if self.variables[obs_name]['is_vector']:
             obs_seq['obs'] = obs_seq['obs'].T
+
+        ##superob to target grid, coarsen and keep the valid grid points
+        ##make a mesh grid for the obs points
+        obs_x, obs_y = obs_seq['x'], obs_seq['y']
+        obs_grid = Grid(grid.proj, obs_x, obs_y, regular=False)
+        ##remove unwanted triangles in the mesh
+        msk = np.logical_or(obs_grid.tri.a > 2e8, obs_grid.tri.p > 1e5, obs_grid.tri.ratio < 0.3)
+        obs_grid = Grid(grid.proj, obs_x, obs_y, regular=False, triangles=obs_grid.tri.triangles[~msk,:])
+        ##convert to target grid with coarse graining (superobing)
+        obs_grid.set_destination_grid(grid)
+        obs_on_grid = obs_grid.convert(obs_seq['obs'], coarse_grain=True)
+        ##overwrite the obs info with superobs
+        msk = np.isnan(obs_on_grid)
+        obs_seq['x'] = grid.x[~msk].flatten()
+        obs_seq['y'] = grid.y[~msk].flatten()
+        obs_seq['obs'] = obs_on_grid[~msk].flatten()
+        ##other parameters 
+        for key in ('z', 't', 'err_std'):
+            obs_seq[key] = np.full(obs_seq['x'].size, obs_seq[key][0])
 
         return obs_seq
 
@@ -191,7 +213,6 @@ class Dataset(DatasetConfig):
 
     def get_traj_pairs(self, **kwargs):
         """get nextsim simulated trajectory pairs, corresponding to rgps"""
-        kwargs = super().parse_kwargs(**kwargs)
         model = kwargs['model']
 
         ##rgps start positions on rgps_proj, in km units
@@ -201,8 +222,8 @@ class Dataset(DatasetConfig):
         nrec = len(x0)
         x, y, i, dx, dy = [], [], [], [], []
         for r in range(nrec):
-            x.append(x0[r].copy())
-            y.append(y0[r].copy())
+            x.append(x0[r].copy()*1000)
+            y.append(y0[r].copy()*1000)
             i.append(np.zeros(x0[r].shape, dtype='int'))
             dx.append(np.zeros(x0[r].shape))
             dy.append(np.zeros(x0[r].shape))
@@ -217,31 +238,30 @@ class Dataset(DatasetConfig):
             fname = file_list[n]
 
             ##get model mesh points in native proj, in meters
-            model.read_grid(filename=fname, **kwargs)
+            model.read_grid(meshfile=fname, **kwargs)
             mx = model.grid.x
             my = model.grid.y
             ##convert to rgps_proj, in km units
             x_, y_ = self.proj(*model.grid.proj(mx, my, inverse=True))
-            mx, my = x_/1000, y_/1000
 
             if n==0 or 'post_regrid' in fname:
                 ##build kdtree for spatial search if model mesh changed
-                tree = KDTree(np.vstack([mx, my]).T)
+                tree = KDTree(np.vstack([x_, y_]).T)
 
                 ##search for traj position in mesh
                 for r in range(nrec):
                     d, i[r] = tree.query(np.vstack([x[r], y[r]]).T)
-                    dx[r], dy[r] = x[r] - mx[i[r]], y[r] - my[i[r]]
+                    dx[r], dy[r] = x[r] - x_[i[r]], y[r] - y_[i[r]]
 
             if 'post_regrid' not in fname:
                 ##move to next position
                 for r in range(nrec):
-                    x[r], y[r] = mx[i[r]] + dx[r], my[i[r]] + dy[r]
+                    x[r], y[r] = x_[i[r]] + dx[r], y_[i[r]] + dy[r]
 
         pairs = []
         for r in range(nrec):
             pairs.append([x0[r], y0[r], np.full(x0[r].shape, t0),
-                        x[r],  y[r], np.full(x0[r].shape, t1)])
+                          x[r]/1000,  y[r]/1000, np.full(x0[r].shape, t1)])
         return pairs
 
     def _get_seaice_property(self, obs_name, compute_func, **kwargs):
@@ -250,7 +270,7 @@ class Dataset(DatasetConfig):
         xo, yo, tri, r, i = kwargs['x'], kwargs['y'], kwargs['triangles'], kwargs['record'], kwargs['index']
         nobs = xo.size
 
-        if self.variables[obs_name]['is_vector']:    
+        if self.variables[obs_name]['is_vector']:
             obs_seq = np.full((2, nobs), np.nan)
         else:
             obs_seq = np.full(nobs, np.nan)

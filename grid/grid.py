@@ -126,6 +126,7 @@ class Grid(object):
             self.npoints = self.x.size
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
             self.tri.inds = np.arange(self.npoints)
+            self._triangle_properties()
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
@@ -135,7 +136,6 @@ class Grid(object):
             self.Ly = self.ymax - self.ymin
             if self.cyclic_dim is not None:
                 self._pad_cyclic_mesh_bounds()
-            self._triangle_properties()
 
         self.distance_type = distance_type
 
@@ -273,6 +273,9 @@ class Grid(object):
             return np.mean(sa[valid])
 
     def _triangle_properties(self):
+        """
+        computes triangle properties for the mesh triangles
+        """
         t = self.tri.triangles
         x = self.x[self.tri.inds]
         y = self.y[self.tri.inds]
@@ -1255,7 +1258,8 @@ class Grid(object):
 
         else:
             assert fld.shape == x.shape
-            v = np.array(fld)
+            msk = ~np.isnan(fld)
+            v = np.array(fld[msk])
             vbound = np.maximum(np.minimum(v, vmax), vmin)
 
             if isinstance(cmap, str):
@@ -1263,7 +1267,7 @@ class Grid(object):
             cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
 
             cind = ((vbound - vmin) / dv).astype(int)
-            ax.scatter(x, y, markersize, color=cmap[cind], **kwargs)
+            ax.scatter(x[msk], y[msk], markersize, color=cmap[cind], **kwargs)
 
         self.set_xylim(ax)
 
