@@ -1,15 +1,16 @@
 import os
 import glob
 import numpy as np
+from datetime import datetime, timedelta
 from utils.netcdf_lib import nc_read_var, nc_write_var
-from utils.conversion import dt1h, units_convert
+from utils.conversion import t2s, s2t, dt1h, units_convert
 from utils.shell_utils import run_command, makedir, run_job
 from utils.progress import watch_files
 from grid import Grid
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
+from .drift_utils import get_deformation_nodes
 from .namelist import namelist
-from .diag import *
 from ...model_config import ModelConfig
 
 class NextsimModel(ModelConfig):
@@ -30,15 +31,17 @@ class NextsimModel(ModelConfig):
             'seaice_ridge_ratio': {'name':'M_ridge_ratio', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
             'seaice_conc_young': {'name':'M_conc_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
             'seaice_thick_young': {'name':'M_h_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
-            'seaice_age': {'name':'M_age', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'?' },
+            'seaice_age': {'name':'M_age', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'year' },
             'seaice_conc_myi': {'name':'M_conc_myi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
             'seaice_thick_myi': {'name':'M_thick_myi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
             'snow_thick': {'name':'M_snow_thick', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
             'snow_thick_young': {'name':'M_hs_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
             }
         self.diag_variables = {
-            'seaice_drift': {'getter':get_seaice_drift, 'dtype':'float', 'is_vector':True, 'levels':[0], 'units':'km/day' },
-            'seaice_deform_shear': {'getter':get_seaice_drift, 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'1/day' },
+            'seaice_drift': {'name':'drift', 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'km/day' },
+            'seaice_deform_div': {'name':'deform_e1', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
+            'seaice_deform_shear': {'name':'deform_e2', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
+            'seaice_deform_vort': {'name':'deform_e3', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
             }
         self.atmos_forcing_variables = {
             'atmos_surf_velocity': {'name':('x_wind_10m', 'y_wind_10m'), 'is_vector':True, 'dt':self.forcing_dt, 'levels':[0], 'units':'m/s'},
@@ -100,7 +103,10 @@ class NextsimModel(ModelConfig):
         """
         kwargs = super().parse_kwargs(**kwargs)
         if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
-            meshfile = self.filename(**kwargs).replace('field', 'mesh')
+            if 'meshfile' in kwargs:
+                meshfile = kwargs['meshfile']
+            else:
+                meshfile = self.filename(**kwargs).replace('field', 'mesh')
             ###only need to read the uniq grid once, store known meshfile in memory bank
             if meshfile not in self.grid_bank:
                 ##read the grid from mesh file and add to grid_bank
@@ -110,6 +116,7 @@ class NextsimModel(ModelConfig):
                 n_elements = int(elements.size/3)
                 triangles = elements.reshape((n_elements, 3)) - 1
                 self.grid_bank[meshfile] = Grid(proj, x, y, regular=False, triangles=triangles)
+                self.grid_bank[meshfile].id = read_data(meshfile, 'id')
             self.grid = self.grid_bank[meshfile]
 
         elif kwargs['name'] in self.atmos_forcing_variables:
@@ -151,6 +158,11 @@ class NextsimModel(ModelConfig):
     def read_mask(self, **kwargs):
         pass
 
+    def prepare_mask(self, dst_grid):
+        self.grid.set_destination_grid(dst_grid)
+        tmp = self.grid.convert(np.ones(self.grid.x.shape))
+        return np.isnan(tmp)
+
     def read_var(self, **kwargs):
         """read variable from a model restart file"""
         kwargs = super().parse_kwargs(**kwargs)
@@ -165,7 +177,7 @@ class NextsimModel(ModelConfig):
                 var = var.reshape((2, -1))
 
         elif name in self.diag_variables:
-            var = rec['getter'](**kwargs)
+            var = self.get_diag_var(**kwargs)
 
         elif name in self.atmos_forcing_variables:
             time = kwargs['time']
@@ -220,6 +232,51 @@ class NextsimModel(ModelConfig):
     def z_coords(self, **kwargs):
         ##for nextsim, just discard inputs and simply return zero as z_coords
         return np.zeros(self.grid.x.shape)
+
+    def get_seaice_drift(self, **kwargs):
+        dt1day = timedelta(days=1)
+        t2 = kwargs['time']
+        t1 = kwargs['time'] - dt1day*3  ##TODO: make the duration configurable
+        dt = (t2 - t1) / dt1day
+
+        if kwargs['member'] is not None:
+            mstr = '{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t1), 'nextsim.v1', mstr, f"mesh_{t1:%Y%m%dT%H%M%SZ}.bin")
+        self.read_grid(meshfile=meshfile, **kwargs)
+        grid1 = self.grid_bank[meshfile]
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t2-dt1day), 'nextsim.v1', mstr, f"mesh_{t2:%Y%m%dT%H%M%SZ}.bin")
+        self.read_grid(meshfile=meshfile, **kwargs)
+        grid2 = self.grid_bank[meshfile]
+        ids_cmn_12, ids1i, ids2i = np.intersect1d(grid1.id, grid2.id, return_indices=True)
+        x1n = grid1.x[ids1i] / 1000
+        y1n = grid1.y[ids1i] / 1000
+        x2n = grid2.x[ids2i] / 1000
+        y2n = grid2.y[ids2i] / 1000
+        u = (x2n - x1n) / dt
+        v = (y2n - y1n) / dt
+        self.grid = Grid(grid1.proj, grid2.x[ids2i], grid2.y[ids2i], regular=False)
+        return x2n, y2n, u, v
+
+    def get_diag_var(self, **kwargs):
+        name = kwargs['name']
+        if name == 'seaice_drift':
+            _, _, u, v = self.get_seaice_drift(**kwargs)
+            return np.array([u, v])
+
+        if 'seaice_deform' in name:
+            x, y, u, v = self.get_seaice_drift(**kwargs)
+            e1, e2, e3, _, _, _ = get_deformation_nodes(x, y, u, v)
+            if name == 'seaice_deform_div':
+                return e1
+            if name == 'seaice_deform_shear':
+                return e2
+            if name == 'seaice_deform_vort':
+                return e3
+
+        raise NotImplementedError('cannot get diagnostic variable {name}')
 
     def read_param(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
