@@ -164,13 +164,17 @@ class Dataset(DatasetConfig):
         obs_grid = Grid(grid.proj, obs_x, obs_y, regular=False, triangles=obs_grid.tri.triangles[~msk,:])
         ##convert to target grid with coarse graining (superobing)
         obs_grid.set_destination_grid(grid)
-        obs_on_grid = obs_grid.convert(obs_seq['obs'], coarse_grain=True)
+        obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name]['is_vector'], coarse_grain=True)
         ##overwrite the obs info with superobs
-        msk = np.isnan(obs_on_grid)
+        if self.variables[obs_name]['is_vector']:
+            msk = np.isnan(obs_on_grid[0,...])
+            obs_seq['obs'] = np.array([obs_on_grid[0,~msk].flatten(), obs_on_grid[1,~msk].flatten()])
+        else:
+            msk = np.isnan(obs_on_grid)
+            obs_seq['obs'] = obs_on_grid[~msk].flatten()
         obs_seq['x'] = grid.x[~msk].flatten()
         obs_seq['y'] = grid.y[~msk].flatten()
-        obs_seq['obs'] = obs_on_grid[~msk].flatten()
-        ##other parameters 
+        ##other parameters
         for key in ('z', 't', 'err_std'):
             obs_seq[key] = np.full(obs_seq['x'].size, obs_seq[key][0])
 
