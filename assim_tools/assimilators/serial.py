@@ -106,6 +106,9 @@ class SerialAssimilator(Assimilator):
                 obs_p = None
             obs_p = c.comm_mem.bcast(obs_p, root=owner_pid)
 
+            if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['obs']):
+                continue
+
             ##compute obs-space increment
             obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
 

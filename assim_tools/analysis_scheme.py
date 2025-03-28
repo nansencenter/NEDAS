@@ -61,7 +61,7 @@ class AnalysisScheme:
         return Assimilator(c)
 
     def get_updator(self, c):
-        if c.run_alignment:
+        if c.run_alignment and c.scale_id < c.nscale-1:
             from .updators.alignment import AlignmentUpdator as Updator
         else:
             from .updators.additive import AdditiveUpdator as Updator
@@ -125,7 +125,7 @@ class AnalysisScheme:
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         analysis_grid = c.grid
-        for c.scale_id in range(1): #c.nscale):
+        for c.scale_id in range(c.nscale):
             self.init_analysis_dir(c)
             c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.scale_id])
             c.misc_transform = self.get_misc_transform(c)

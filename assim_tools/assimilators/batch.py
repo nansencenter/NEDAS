@@ -192,6 +192,9 @@ class BatchAssimilator(Assimilator):
                 hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
                 ind = np.where(hdist<=hroi)[0]
 
+                ##TODO: filter out nan in obs_prior
+                #obs_data['obs_prior']
+
                 ##compute horizontal localization factor (using L2 norm for distance)
                 obs_rec_id = obs_data['obs_rec_id'][ind]
                 hroi = obs_data['hroi'][obs_rec_id]

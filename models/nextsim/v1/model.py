@@ -130,14 +130,46 @@ class NextsimModel(ModelConfig):
         only updating the mesh node position x,y
         """
         kwargs = super().parse_kwargs(**kwargs)
-        if kwargs['name'] in self.native_variables:
-            meshfile = self.filename(**kwargs).replace('field', 'mesh')
+        meshfile = self.filename(**kwargs).replace('field', 'mesh')
 
-            write_data(meshfile, 'Nodes_x', self.grid.x)
-            write_data(meshfile, 'Nodes_y', self.grid.y)
+        write_data(meshfile, 'Nodes_x', self.grid.x)
+        write_data(meshfile, 'Nodes_y', self.grid.y)
 
-            elements = (self.grid.triangles + 1).flatten()
-            write_data(meshfile, 'Elements', elements)
+        elements = (self.grid.tri.triangles + 1).flatten()
+        write_data(meshfile, 'Elements', elements)
+
+    def get_boundary_nodes(self):
+        edges = set()
+        for triangle in self.grid.tri.triangles:
+            for i in range(3):
+                edge = tuple(sorted((triangle[i], triangle[(i+1) % 3])))
+                if edge in edges:
+                    edges.remove(edge)  # If seen twice, it's an internal edge
+                else:
+                    edges.add(edge)
+        return np.unique(np.array(list(edges)))  ##the boundary node indices
+
+    def get_neighbor_nodes(self, nodes):
+        neighbors = set()
+        for i in nodes:
+            r,c = np.where(self.grid.tri.edges == i)
+            for n in self.grid.tri.edges[r, c-1]:
+                neighbors.add(n)
+        return neighbors
+
+    def taper_boundary(self, fld, depth=5):
+        fld_taper = fld.copy()
+        used_nodes = []
+        nodes = self.get_boundary_nodes()
+        fld_taper[nodes] = 0
+        used_nodes.extend(nodes)
+        for n in range(1, depth):
+            nodes = self.get_neighbor_nodes(nodes)
+            nodes.difference_update(used_nodes)
+            nodes = list(set(nodes))
+            fld_taper[nodes] *= n / depth
+            used_nodes.extend(nodes)
+        return fld_taper
 
     def displace(self, u, v, **kwargs):
         """
@@ -148,9 +180,13 @@ class NextsimModel(ModelConfig):
         ##read grid, refresh self.grid.x, y
         self.read_grid(**kwargs)
 
+        ##make sure boundary is not moving
+        u = self.taper_boundary(u)
+        v = self.taper_boundary(v)
+
         ##apply the displacement vectors -u, -v
-        self.grid.x -= u
-        self.grid.y -= v
+        self.grid.x += u
+        self.grid.y += v
 
         ##write the updated mesh node xy to the restart file
         self.write_grid(**kwargs)
@@ -343,12 +379,18 @@ class NextsimModel(ModelConfig):
         ##read seaice conc and thick, check value, fix values out of normal range, then write back to file
         sic = self.read_var(**{**kwargs, 'name':'seaice_conc', 'units':1})
         sit = self.read_var(**{**kwargs, 'name':'seaice_thick', 'units':'m'})
+        damage = self.read_var(**{**kwargs, 'name':'seaice_damage', 'units':1})
+        rr = self.read_var(**{**kwargs, 'name':'seaice_ridge_ratio', 'units':1})
 
         sic = np.maximum(np.minimum(sic, 1.0), 0.0)
         sit = np.maximum(sit, 0.0)
+        damage = np.maximum(np.minimum(damage, 0.9999), 0.0)
+        rr = np.maximum(np.minimum(rr, 1.0), 0.0)
 
         self.write_var(sic, **{**kwargs, 'name':'seaice_conc', 'units':1})
         self.write_var(sit, **{**kwargs, 'name':'seaice_thick', 'units':'m'})
+        self.write_var(damage, **{**kwargs, 'name':'seaice_damage', 'units':1})
+        self.write_var(rr, **{**kwargs, 'name':'seaice_ridge_ratio', 'units':1})
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

@@ -87,7 +87,7 @@ def coarsen(grid, fld, nlevel):
     return grid1, fld1
 
 
-def refine(grid, fld, nlevel):
+def refine(grid, mask, fld, nlevel):
     """
     refine the image by upsampling the grid points by factors of 2,
     input:
@@ -102,12 +102,46 @@ def refine(grid, fld, nlevel):
     if nlevel == 0:
         return grid, fld
     grid1 = grid.change_resolution_level(-nlevel)
+    grid1.mask = mask  ##don't know how to sharpen mask, need to provide high-res mask from input args
     grid.set_destination_grid(grid1)
     fld1 = np.zeros(fld.shape[:-2]+(grid1.ny, grid1.nx))
     for ind in np.ndindex(fld.shape[:-2]):
-        fld1[ind] = grid.convert(fld[ind], is_vector=False, method='linear')
+        fld_nearest = grid.convert(fld[ind], is_vector=False, method='nearest')
+        fld_linear = grid.convert(fld[ind], is_vector=False, method='linear')
+        void = np.isnan(fld_linear)
+        fld_linear[void] = fld_nearest[void]
+        fld1[ind] = fld_linear
     return grid1, fld1
 
+##some original coarsen/sharpen functions working for 2**n grid points
+def coarsen_mask(mask, lev1, lev2):  ##only subsample no smoothing, avoid mask growing
+    if lev1 < lev2:
+        for k in range(lev1, lev2):
+            ni, nj = mask.shape[-2:]
+            mask1 = mask[..., 0:ni:2, 0:nj:2]
+            mask = mask1
+    return mask
+
+def coarsen_field(fld, lev1, lev2):
+    if lev1 < lev2:
+        for k in range(lev1, lev2):
+            ni, nj = fld.shape[-2:]
+            fld1 = 0.25*(fld[..., 0:ni:2, 0:nj:2] + fld[..., 1:ni:2, 0:nj:2] + fld[..., 0:ni:2, 1:nj:2] + fld[..., 1:ni:2, 1:nj:2])
+            fld = fld1
+    return fld
+
+def sharpen_field(fld, lev1, lev2):
+    if lev1 > lev2:
+        for k in range(lev1, lev2, -1):
+            ni, nj = fld.shape[-2:]
+            fld1 = np.zeros(fld.shape[:-2]+(ni*2, nj))
+            fld1[..., 0:ni*2:2, :] = fld
+            fld1[..., 1:ni*2:2, :] = 0.5*(np.roll(fld, -1, axis=-2) + fld)
+            fld2 = np.zeros(fld.shape[:-2]+(ni*2, nj*2))
+            fld2[..., :, 0:nj*2:2] = fld1
+            fld2[..., :, 1:nj*2:2] = 0.5*(np.roll(fld1, -1, axis=-1) + fld1)
+            fld = fld2
+    return fld
 
 def warp(grid, fld, u, v):
     """
@@ -122,6 +156,10 @@ def warp(grid, fld, u, v):
     assert grid.x.shape == v.shape, "warp: input v size mismatch with grid"
     fld1 = fld.copy()
     for ind in np.ndindex(fld.shape[:-2]):
-        fld1[ind] = grid.interp(fld[ind], grid.x-u, grid.y-v, method='linear')
+        fld_nearest = grid.interp(fld[ind], grid.x-u, grid.y-v, method='nearest')
+        fld_linear = grid.interp(fld[ind], grid.x-u, grid.y-v, method='linear')
+        void = np.isnan(fld_linear)
+        fld_linear[void] = fld_nearest[void]
+        fld1[ind] = fld_linear
     return fld1
 
