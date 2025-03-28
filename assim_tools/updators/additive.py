@@ -3,37 +3,43 @@ from .base import Updator
 
 class AdditiveUpdator(Updator):
 
-    def compute_increment(self, c, fields_prior, fields_post):
+    def compute_increment(self, c, state):
+        """
+        Additive updator: just compute the difference between prior and posterior as increments
+        """
+        self.increment = {}
+        for mem_id, rec_id in state.fields_prior.keys():
+            rec = state.info['fields'][rec_id]
+            fld_prior = state.fields_prior[mem_id, rec_id]
+            fld_post = state.fields_post[mem_id, rec_id]
 
-        increment = {}
-        for mem_id, rec_id in fields_prior.keys():
-            increment[mem_id, rec_id] = fields_post[mem_id, rec_id] - fields_prior[mem_id, rec_id]
+            ##misc transform inverse
+            fld_prior = c.misc_transform.backward_state(c, rec, fld_prior)
+            fld_post = c.misc_transform.backward_state(c, rec, fld_post)
 
-        return increment
+            ##collect the increments
+            self.increment[mem_id, rec_id] = fld_post - fld_prior
 
-    def update_restartfile(self, c, mem_id, rec_id, rec, path, model, increment):
+    def update_restartfile(self, c, state, mem_id, rec_id):
         """
         Method to update a single field rec_id in the model restart file.
         This can be overridden by derived classes for specific update methods
         Inputs:
-        - c: config module
+        - c: config object
+        - state: state object
         - mem_id: member index
         - rec_id: record index
-        - rec: c.state_info['fields'][rec_id] record
-        - path: path to the restart file
-        - model: model module
-        - fields_prior, fields_post: the field-complete state variables before and after assimilate()
         """
+        rec = state.info['fields'][rec_id]
+        model = c.model_config[rec['model_src']]
+        path = c.forecast_dir(rec['time'], rec['model_src'])
         model.read_grid(path=path, member=mem_id, **rec)
-
-        ##misc. inverse transform
-        ##e.g. multiscale approach: just use the analysis increment directly
 
         ##convert the posterior variable back to native model grid
         var_prior = model.read_var(path=path, member=mem_id, **rec)
 
         c.grid.set_destination_grid(model.grid)
-        incr = c.grid.convert(increment[mem_id, rec_id], is_vector=rec['is_vector'], method='linear')
+        incr = c.grid.convert(self.increment[mem_id, rec_id], is_vector=rec['is_vector'], method='linear')
 
         if rec['is_vector']:
             fld_shape = var_prior.shape[1:]
@@ -54,5 +60,5 @@ class AdditiveUpdator(Updator):
         if np.isnan(var_post).any():
             raise ValueError('nan detected in var_post')
 
-        ##write the posterior variable to restart file
+        ##write the posterior variable to restart filediff
         model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)

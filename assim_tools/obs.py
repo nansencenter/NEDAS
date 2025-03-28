@@ -102,7 +102,7 @@ class Obs:
                                'tcorr': vrec['err'].get('tcorr',0.),
                                'cross_corr': vrec['err'].get('cross_corr',{}),
                                },
-                        'hroi': vrec['hroi'],
+                        'hroi': vrec['hroi'] * c.localize_scale_fac[c.scale_id],
                         'vroi': vrec['vroi'],
                         'troi': vrec['troi'],
                         'impact_on_state': impact_on_state,

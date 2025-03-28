@@ -4,7 +4,7 @@ from utils.progress import progress_bar
 class Updator:
     """Base class for updators of the model restart files"""
     def __init__(self, c):
-        pass
+        self.increment = {}
 
     def update(self, c, state):
         """
@@ -23,7 +23,7 @@ class Updator:
         c.print_1p(f'>>> update model restart files with analysis increments\n')
 
         ##compute analysis increments
-        increment = self.compute_increment(c, state.fields_prior, state.fields_post)
+        self.compute_increment(c, state)
 
         ##process the fields, each processor goes through its own subset of
         ##mem_id,rec_id simultaneously
@@ -32,20 +32,21 @@ class Updator:
         nr_max = np.max([len(lst) for _,lst in state.rec_list.items()])
         for r in range(nr_max):
             for m in range(nm_max):
+                ##get file names for sync io
                 pid_active = ( m < len(state.mem_list[c.pid_mem]) and r < len(state.rec_list[c.pid_rec]) )
                 if pid_active:
                     mem_id = state.mem_list[c.pid_mem][m]
                     rec_id = state.rec_list[c.pid_rec][r]
                     rec = state.info['fields'][rec_id]
-                    path = c.forecast_dir(rec['time'], rec['model_src'])
-                    model = c.model_config[rec['model_src']]
-                    model.read_grid(path=path, member=mem_id, **rec)
-                    file = model.filename(path=path, member=mem_id, **rec)
-                else:
-                    file = None
-                all_files = c.comm.allgather(file)
-                for file in all_files:
-                    c.comm.init_file_lock(file)
+                #     path = c.forecast_dir(rec['time'], rec['model_src'])
+                #     model = c.model_config[rec['model_src']]
+                #     file = model.filename(path=path, member=mem_id, **rec)
+                # else:
+                #     file = None
+                # all_files = c.comm.allgather(file)
+                # ##create the file locks
+                # for file in all_files:
+                #     c.comm.init_file_lock(file)
 
                 if pid_active:
                     if c.debug:
@@ -54,10 +55,10 @@ class Updator:
                         c.print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
 
                     ##apply the increment to restart files
-                    self.update_restartfile(c, mem_id, rec_id, rec, path, model, increment)
+                    self.update_restartfile(c, state, mem_id, rec_id)
 
         c.comm.Barrier()
-        c.comm.cleanup_file_locks()
+        #c.comm.cleanup_file_locks()
         c.print_1p(' done.\n')
 
     def compute_increment(self):

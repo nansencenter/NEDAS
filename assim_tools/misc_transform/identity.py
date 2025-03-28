@@ -4,7 +4,7 @@ class Transform:
     """
     def __init__(self, c):
         pass
-    
+
     def forward_state(self, c, rec, field):
         return field
 

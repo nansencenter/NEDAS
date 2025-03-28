@@ -245,6 +245,7 @@ class Grid(object):
             return self
         else:
             ##create a new grid object with x,y at new resolution level
+            self._dst_grid = None
             new_grid = copy.deepcopy(self)
             fac = 2**nlevel
             new_grid.dx = self.dx * fac
@@ -255,7 +256,7 @@ class Grid(object):
             new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
             ##coarsen the mask
             self.set_destination_grid(new_grid)
-            new_grid.mask = self.convert(self.mask).astype(bool)
+            new_grid.mask = self.convert(self.mask, method='nearest').astype(bool)
             return new_grid
 
     def _mesh_dx(self):
@@ -295,7 +296,7 @@ class Grid(object):
         ##(1: equilateral triangle, ~0: very elongated)
         self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
 
-    @cached_property
+    @property
     def mfx(self):
         """
         Map scaling factors in x direction (mfx), since on the projection plane dx is not exactly
@@ -312,7 +313,7 @@ class Grid(object):
             _,_,gcdx = geod.inv(lon, lat, lon1x, lat1x)
             return self.dx / gcdx
 
-    @cached_property
+    @property
     def mfy(self):
         """
         Map scaling factors in y direction (mfy), since on the projection plane dy is not exactly
