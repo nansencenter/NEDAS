@@ -1303,7 +1303,7 @@ class Grid(object):
         """
         ###plot the coastline to indicate land area
         if color is not None:
-            draw_patch(ax, self.land_data, color=color, zorder=0)
+            draw_patch(ax, self.land_data, color=color, zorder=3)
         if linecolor is not None:
             draw_line(ax, self.land_data, linecolor=linecolor, linewidth=linewidth, linestyle='-', zorder=8)
         if showriver:

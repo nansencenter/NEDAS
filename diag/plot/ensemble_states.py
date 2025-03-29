@@ -16,8 +16,6 @@ def get_task_list(c, **kwargs) -> list:
     nlevels = ensure_list(kwargs['nlevels'])
     cmap = ensure_list(kwargs['cmap'])
 
-    c.next_time = c.time + c.cycle_period * dt1h
-
     tasks = []
     for member in range(c.nens):
         for i, vname in enumerate(variables):

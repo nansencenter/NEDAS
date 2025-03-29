@@ -62,7 +62,10 @@ class AnalysisScheme:
 
     def get_updator(self, c):
         if c.run_alignment and c.scale_id < c.nscale-1:
-            from .updators.alignment import AlignmentUpdator as Updator
+            if c.interp_displace:
+                from .updators.alignment_interp import AlignmentUpdator as Updator
+            else:
+                from .updators.alignment import AlignmentUpdator as Updator
         else:
             from .updators.additive import AdditiveUpdator as Updator
         return Updator(c)

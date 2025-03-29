@@ -142,6 +142,7 @@ obs_err_scale_fac: [1]       ## scale factor for observation error variances
 
 ##alignment technique in assimilation
 run_alignment: False         ## if true, run alignment technique
+interp_displace: False
 alignment:
   variable: 'streamfunc'     ## which variable the alignment is based on
   nlevel: 5                  ## number of resolution levels in multi-grid approach
