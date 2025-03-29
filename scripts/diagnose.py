@@ -16,7 +16,6 @@ def diagnose(c):
 
     ##the processor with most work load will show progress messages
     c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
-    print_1p = by_rank(c.comm, c.pid_show)(print_with_cache)
 
     ##init file locks for collective i/o
     init_file_locks(c)
@@ -26,7 +25,7 @@ def diagnose(c):
         if c.debug:
             print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
         else:
-            print_1p(progress_bar(task_id, ntask))
+            c.print_1p(progress_bar(task_id, ntask))
 
         method_name = f"diag.{rec['method']}"
         mod = importlib.import_module(method_name)

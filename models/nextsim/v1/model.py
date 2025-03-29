@@ -280,10 +280,10 @@ class NextsimModel(ModelConfig):
         else:
             mstr = ''
 
-        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t1), 'nextsim.v1', mstr, f"mesh_{t1:%Y%m%dT%H%M%SZ}.bin")
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t1), 'nextsim.v1', mstr, 'restart', f"mesh_{t1:%Y%m%dT%H%M%SZ}.bin")
         self.read_grid(meshfile=meshfile, **kwargs)
         grid1 = self.grid_bank[meshfile]
-        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t2-dt1day), 'nextsim.v1', mstr, f"mesh_{t2:%Y%m%dT%H%M%SZ}.bin")
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t2-dt1day), 'nextsim.v1', mstr, 'restart', f"mesh_{t2:%Y%m%dT%H%M%SZ}.bin")
         self.read_grid(meshfile=meshfile, **kwargs)
         grid2 = self.grid_bank[meshfile]
         ids_cmn_12, ids1i, ids2i = np.intersect1d(grid1.id, grid2.id, return_indices=True)
@@ -382,10 +382,10 @@ class NextsimModel(ModelConfig):
         damage = self.read_var(**{**kwargs, 'name':'seaice_damage', 'units':1})
         rr = self.read_var(**{**kwargs, 'name':'seaice_ridge_ratio', 'units':1})
 
-        sic = np.maximum(np.minimum(sic, 1.0), 0.0)
+        sic = np.maximum(np.minimum(sic, 0.9999), 0.0)
         sit = np.maximum(sit, 0.0)
         damage = np.maximum(np.minimum(damage, 0.9999), 0.0)
-        rr = np.maximum(np.minimum(rr, 1.0), 0.0)
+        rr = np.maximum(np.minimum(rr, 0.9999), 0.0)
 
         self.write_var(sic, **{**kwargs, 'name':'seaice_conc', 'units':1})
         self.write_var(sit, **{**kwargs, 'name':'seaice_thick', 'units':'m'})
