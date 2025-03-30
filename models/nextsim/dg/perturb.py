@@ -7,7 +7,7 @@ from utils.fft_lib import fft2, ifft2, get_wn, fftwn
 from grid import Grid
 
 def gen_perturb(grid: Grid,
-                   perturb_type: typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen'],
+                   perturb_type: typing.Literal['gaussian_evensen'],
                    amp: float,
                    hcorr : int,
                    powerlaw:float=-3.) -> np.ndarray:
@@ -195,14 +195,11 @@ def pres_adjusted_wind_perturb(grid: Grid, ampl_pres:float, ampl_wind:float,
     # the sign function is used to distinguish the coriolis parameter for different hemisphere
     fcor:np.ndarray = np.sign(plat)*(2*np.sin(rlat/r2d)*2*np.pi/86400)
 
-    # minimum spatial resolution
-    dx_min: float = grid.dx.min()
     # ratio between the wind speed amplitude and a typical wind speed from pressure gradient
     wprsfac:float =1.
     if with_wind_speed_limit:
         # typical pressure gradient
-        wprsfac=np.sqrt(ampl_pres)/(scorr*dx_min)
-        wprsfac=wprsfac/fcor.max()
+        wprsfac=np.sqrt(ampl_pres)/scorr/fcor
         wprsfac=np.sqrt(ampl_wind)/wprsfac
 
     # calc u,v from pres according to pres-wind relation

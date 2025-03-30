@@ -1,11 +1,15 @@
 work_dir: '/bettik/yumengch-ext/DATA/nextsim.dg'   ##working directory for the experiment
 
+python_env: '/bettik/yumengch-ext/NEDAS/config/samples/python_dahu.src'
+
 job_submit:
   host: gricad
   scheduler: oar
   ppn: 32
   project: pr-sasip
+  # one can choose `devel` queue or `standard` queue
   queue: devel
+  walltime: 1800
   run_separate_jobs: True
 
 nproc: 32          ##total number of processors
@@ -65,6 +69,7 @@ model_def:
   nextsim.dg:
     config_file: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/default.yml'
     model_env: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/setup-gricad.src'
+    model_config_file: '/bettik/yumengch-ext/NEDAS/models/nextsim/dg/template.cfg'
     nproc_per_run: 8    ##number of processors to run a forecast
     parallel_mode: openmp
     walltime: 10000     ##walltime in seconds

@@ -1,6 +1,21 @@
+<<<<<<< HEAD
+work_dir: '/cluster/work/users/yingyue/TP5_test'   ##working directory for the experiment
+
+python_env: '/cluster/home/yingyue/python.src'   ##python environment source script
+
+job_submit:
+  host: betzy
+  project: nn2993k
+  queue: normal
+  scheduler: slurm
+  run_separate_jobs: True
+
+nproc: 512       ##total number of processors for assimilate
+=======
 work_dir: '/cluster/work/users/yingyue/TP5'   ##working directory for the experiment
 
 python_env: '/cluster/home/yingyue/python.src'   ##python environment source script
+>>>>>>> other_features
 
 job_submit:
   host: betzy
@@ -12,6 +27,13 @@ job_submit:
 
 nproc: 512      ##total number of processors for assimilate
 
+<<<<<<< HEAD
+time_start: '202109060000'       ##start time of the experiment, format ccyymmddHHMM
+time_end: '202203210000'         ##end time of the experiment
+time_assim_start: '202109130000' ##start time of the first analysis cycle
+time_assim_end: '202203140000'   ##end time of the last analysis cycle
+cycle_period: 24                ##cycle period, in hours
+=======
 nens: 10         ##ensemble size
 run_forecast: True
 run_analysis: False ##if true, run the assimilation steps
@@ -25,6 +47,7 @@ time_analysis_end: '202107100000'   ##end time of the last analysis cycle
 cycle_period: 168                 ##cycle period, in hours
 
 time: '202107010000'
+>>>>>>> other_features
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -67,11 +90,15 @@ state_def:
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
+<<<<<<< HEAD
+- name: 'seaice_volume_ncat'
+=======
 - name: 'seaice_conc'
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
 - name: 'seaice_thick'
+>>>>>>> other_features
   model_src: 'topaz.v5'
   var_type: 'field'
   err_type: 'normal'
@@ -247,3 +274,10 @@ diag:
   nlevels_diff: [10, 10, 10, 10, 10, 10]
   cmap_diff: ['cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance', 'cmocean.balance']
 
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  time_start: '202109060000'
+  time_end: '202109130000'
+  file: '/cluster/work/users/yingyue/data/TP5/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

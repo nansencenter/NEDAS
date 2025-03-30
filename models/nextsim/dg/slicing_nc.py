@@ -45,13 +45,14 @@ def copy_group(src_group, dst_group, time_index, time_dimension_name, time) -> N
 
 def copy_time_sliced_nc_file(source_file:str, target_file,
                              time_index:np.ndarray,
-                             time_dimension_name:str,
+                             time_varname:str,
                              time:datetime) -> None:
     # Open the source netCDF file in read mode
     with netCDF4.Dataset(source_file, 'r') as src:
         # Open the target netCDF file in write mode
         with netCDF4.Dataset(target_file, 'w') as dst:
             # Copy the root group (dimensions, variables, and groups)
+            time_dimension_name = src[time_varname].dimensions[0]
             copy_group(src, dst, time_index, time_dimension_name, time)
             dst.sync()
 

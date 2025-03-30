@@ -45,6 +45,8 @@ def preprocess(c, model_name):
             'time': c.time,
             'forecast_period': c.cycle_period,
             'time_start': c.time_start,
+            'time_end': c.time_end,
+            'debug': c.debug,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.preprocess, **job_opt)  ##add job to the queue

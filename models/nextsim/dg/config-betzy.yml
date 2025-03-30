@@ -1,17 +1,16 @@
 # model config parameters
-#grid definition
-grid_def:
-  proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
-  xstart: -2.5e6
-  xend: 2.498e6
-  ystart: -2e6
-  yend: 2.5e6
-  dx: 3e3
+proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
+xstart: -2.285e6
+xend: 1.396e6
+ystart: -0.866e6
+yend: 2.021e6
+dx: 24051.8
 
 restart_dt: 24  ##model restart interval (hours)
 
 ##physical parameters
 dg_comp: 6
+dgstress_comp: 8
 
 # here, we specify the required files
 files:
@@ -31,7 +30,7 @@ files:
     # 3. otherwise, change the way we obtain filenames in
     #    function get_restart_filename
     #    in models/nextsim/dg/model/restart.py
-    format: '/bettik/yumengch-ext/DATA/restart{time}.nc'
+    format: '/cluster/work/users/yingyue/nextsimdg/icbc/restart{time}.nc'
     # this is the time_format used to derive the time string in restart filename
     # this follows the strftime format
     # See `https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes`_
@@ -56,7 +55,7 @@ files:
       # 3. otherwise, change the way we obtain filenames in
       #    function get_forcing_filename
       #    in models/nextsim/dg/model/forcing.py
-      format: '/bettik/yumengch-ext/DATA/25km_NH.ERA5_{start}_{end}.nc'
+      format: '/cluster/work/users/yingyue/nextsimdg/icbc/25km_NH.ERA5_{start}_{end}.nc'
       # datetime format to fill start and end date of the forcing file format
       datetime_format: '%Y-%m-%d'
       # initial start date of all the forcing file
@@ -87,7 +86,7 @@ files:
       # 3. otherwise, change the way we obtain filenames in
       #    function get_forcing_filename
       #    in models/nextsim/dg/model/forcing.py
-      format: '/bettik/yumengch-ext/DATA/25km_NH.TOPAZ4_{start}_{end}.nc'
+      format: '/cluster/work/users/yingyue/nextsimdg/icbc/25km_NH.TOPAZ4_{start}_{end}.nc'
       # datetime format to fill start and end date of the forcing file format
       datetime_format: '%Y-%m-%d'
       # initial start date of all the forcing file
@@ -103,35 +102,10 @@ files:
       lon_name: 'data/longitude'
       lat_name: 'data/latitude'
 perturb:
-  restart:
-    variables:
-        # the lists have 1-1 correspondence with other lists in this section
-        # if geostrophic_wind_adjust is true, pressure field must be in names
-        # and it should not have wind fields here (it will be useless anyway as the wind perturbation is from pressure perturbations)
-        # if the variable is in the netCDF group of 'data', we need to provide the full path
-        names: ['data/cice', 'data/hice', 'data/hsnow', 'data/tice', 'data/sss', 'data/sst', ]
-        # type of perturbation:
-        # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
-        # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
-        # displace: generate a random wavenumber-1 displacement for the whole domain
-        # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
-        # amplitude of the perturbation
-        # sqrt(10), sqrt(50),
-        amp: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
-        # horizontal correlation length scale in meters
-        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
-        # time decorrelation scale in hours
-        tcorr: [48, 48, 48, 48, 48, 48]
-        # the content of the bound list can either be a float or None
-        # if it is None, the bound is not set
-        # lower bounds of the data
-        lower_bounds: [0., 0., 0., None, None, None]
-        # upper bounds of the data
-        upper_bounds: [None, None, None, None, None, None]
   forcing:
     # this is used to save the perturbation files (.npy format)
-    path: '/bettik/yumengch-ext/DATA/nextsim.dg/ndg_02/perturb'
+    # remember to remove them when running a new experiment
+    path: '/cluster/work/users/yingyue/nextsimdg/perturb'
     # section names must correspond to section names under files
     # e.g., atmosphere, ocean
     # atmosphere perturbation settings
