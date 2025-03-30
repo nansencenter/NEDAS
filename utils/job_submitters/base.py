@@ -34,6 +34,7 @@ class JobSubmitter(object):
         self.run_separate_jobs = kwargs.get('run_separate_jobs', False)
         self.use_job_array = kwargs.get('use_job_array', False)
         self.array_size = kwargs.get('array_size', 1)
+        self.parallel_mode = kwargs.get('parallel_mode', 'mpi')
 
     @property
     def nproc(self):
@@ -113,7 +114,12 @@ class JobSubmitter(object):
         Execute command for running the job on the host machine, replacing 'JOB_EXECUTE' in 'commands'
         Vanila JobSubmitter will just run "mpirun -np nproc ...", and discard the ppn and offset settings
         """
-        return f"mpirun -np {self.nproc}"
+        if self.parallel_mode == 'mpi':
+            return f"mpirun -np {self.nproc}"
+        elif self.parallel_mode == 'openmp':
+            return f"export OMP_NUM_THREADS={self.nproc};"
+        else:
+            raise ValueError(f"unknown parallel_mode '{self.parallel_mode}'")
 
     @property
     def job_array_index_name(self):

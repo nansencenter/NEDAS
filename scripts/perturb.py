@@ -118,14 +118,11 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
-<<<<<<< HEAD
-=======
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
     if not hasattr(c, 'perturb') or c.perturb is None:
         print('no perturbation defined in config, exiting\n\n')
         return
 
->>>>>>> other_features
     ##build run commands for the perturb script
     commands = f"source {c.python_env}; "
 
@@ -134,17 +131,11 @@ def run(c):
     else:
         print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
         commands += f"{sys.executable} {script_file} -c {config_file} --nproc=1"
-<<<<<<< HEAD
-        
-    run_job(commands, job_name="perturb", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
-=======
 
     job_submit_opts = {}
     if c.job_submit:
-        job_submit_opts = c.job_submit
-        
+        job_submit_opts = c.job_submit        
     run_job(commands, job_name="perturb", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
->>>>>>> other_features
 
 if __name__ == "__main__":
     from config import Config

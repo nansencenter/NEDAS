@@ -7,7 +7,7 @@ from utils.progress import print_with_cache, progress_bar
 from .obs import global_obs_list
 # from .covariance import covariance_model
 from .packing import pack_state_data, unpack_state_data, pack_obs_data, unpack_obs_data
-from .localization import local_factor
+from .localization import local_factor_distance_based
 
 def serial_assim(c, state_prior, z_state, lobs, lobs_prior):
     """
@@ -193,9 +193,9 @@ def update_local_state(state_data, obs_prior, obs_incr,
     nens, nfld, nloc = state_data.shape
 
     ##localization factor
-    h_lfactor = local_factor(h_dist, hroi, localize_htype)
-    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
-    t_lfactor = local_factor(t_dist, troi, localize_ttype)
+    h_lfactor = local_factor_distance_based(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor_distance_based(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor_distance_based(t_dist, troi, localize_ttype)
 
     nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
@@ -216,9 +216,9 @@ def update_local_obs(obs_data, used, obs_prior, obs_incr,
     nens, nlobs = obs_data.shape
 
     ##distance between local obs_data and the obs being assimilated
-    h_lfactor = local_factor(h_dist, hroi, localize_htype)
-    v_lfactor = local_factor(v_dist, vroi, localize_vtype)
-    t_lfactor = local_factor(t_dist, troi, localize_ttype)
+    h_lfactor = local_factor_distance_based(h_dist, hroi, localize_htype)
+    v_lfactor = local_factor_distance_based(v_dist, vroi, localize_vtype)
+    t_lfactor = local_factor_distance_based(t_dist, troi, localize_ttype)
 
     lfactor = h_lfactor * v_lfactor * t_lfactor
 

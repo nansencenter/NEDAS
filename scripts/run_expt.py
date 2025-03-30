@@ -31,13 +31,7 @@ while c.time < c.time_end:
         assimilate.run(c)
         postprocess.run(c)
 
-<<<<<<< HEAD
-        postprocess.run(c)
-
-    ##forecast step
-=======
     ##advance model state to next analysis cycle
->>>>>>> other_features
     ensemble_forecast.run(c)
 
     ##compute diagnostics
