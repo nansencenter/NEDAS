@@ -40,6 +40,9 @@ def ensemble_forecast_scheduler(c, model_name):
             'member': mem_id,
             'time': c.time,
             'forecast_period': c.cycle_period,
+            'time_start': c.time_start,
+            'time_end': c.time_end,
+            'debug': c.debug,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.run, **job_opt)  ##add job to the queue
@@ -64,6 +67,7 @@ def ensemble_forecast_batch(c, model_name):
         'nens': c.nens,
         'time': c.time,
         'forecast_period': c.cycle_period,
+        'time_start': c.time_start,
         **c.job_submit,
         }
     model.run_batch(**job_opt)

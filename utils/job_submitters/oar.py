@@ -1,4 +1,5 @@
 import os
+import stat
 import subprocess
 import tempfile
 from time import sleep
@@ -13,16 +14,20 @@ class OARJobSubmitter(JobSubmitter):
 
         ##temporary node file
         if not self.run_separate_jobs:
-            with tempfile.NamedTemporaryFile(delete=False) as file:
+            with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
 
         ##host specific settings
         if self.host == 'gricad':
-            ##job submit node based on queue type
-            if self.queue == 'devel':
-                self.job_submit_node = 'oar-dahu3'
+            p = subprocess.run("hostname", capture_output=True, text=True)
+            if p.stdout.replace('\n', '').replace(' ', '') in ['dahu-oar3', 'f-dahu']:
+                self.job_submit_node = None  ##don't need ssh for oarsub on compute nodes
             else:
-                self.job_submit_node = 'f-dahu'
+                ##job submit node based on queue type
+                if self.queue == 'devel':
+                    self.job_submit_node = 'dahu-oar3'
+                else:
+                    self.job_submit_node = 'f-dahu'
 
     @property
     def nproc_avail(self):
@@ -73,14 +78,18 @@ class OARJobSubmitter(JobSubmitter):
 
     def submit_job_and_monitor(self, commands):
         ##build the job script
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.sh') as job_script:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False,
+                                         dir=self.run_dir,
+                                         prefix=self.job_name+'.',
+                                         suffix='.sh') as job_script:
             job_script.write("#!/bin/bash\n")
 
             ##OAR headers
             job_script.write(f"#OAR -n {self.job_name}\n")
             job_script.write(f"#OAR -l /nodes={self.nnode}/core={self.ppn},walltime={seconds_to_timestr(self.walltime)}\n")
             job_script.write(f"#OAR --project {self.project}\n")
-            job_script.write(f"#OAR -t {self.queue}\n")
+            if self.queue == 'devel':
+                job_script.write(f"#OAR -t {self.queue}\n")
 
             log_file = os.path.join(self.run_dir, f"{self.job_name}.%jobid%.stdout")
             job_script.write(f"#OAR --stdout {log_file}\n")
@@ -95,10 +104,17 @@ class OARJobSubmitter(JobSubmitter):
 
             self.job_script = job_script.name
 
+        # the job script has to be executables in OAR system
+        st = os.stat(self.job_script)
+        os.chmod(self.job_script, st.st_mode | stat.S_IEXEC)
+
         ##submit the job script
-        process = subprocess.run(['ssh', self.job_submit_node,
-                                  f"oarsub -S {self.job_script}"],
-                                  capture_output=True)
+        if self.job_submit_node:
+            submit_cmd = ['ssh', self.job_submit_node,
+                          f"oarsub -S {self.job_script}"]
+        else:
+            submit_cmd = ["oarsub", "-S", f"{self.job_script}"]
+        process = subprocess.run(submit_cmd, capture_output=True)
         s = process.stderr.decode('utf-8')
         print(s, flush=True)
         s = process.stdout.decode('utf-8')
@@ -106,7 +122,7 @@ class OARJobSubmitter(JobSubmitter):
 
         ##monitor the queue for job completion
         if self.use_job_array:
-            self.job_id = int(s.split('OAR_ARRAY_ID=')[-1])
+            self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_ARRAY_ID=')[-1])
             while True:
                 sleep(self.check_dt)
                 p = subprocess.run(['ssh', self.job_submit_node,
@@ -124,6 +140,18 @@ class OARJobSubmitter(JobSubmitter):
                     raise RuntimeError(f"Error job array {self.job_id}")
 
         else:
-            ##TODO: also add capture of normal job id and monitor here
-            pass
-
+            self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_JOB_ID=')[-1])
+            while True:
+                sleep(20)
+                p = subprocess.run(['ssh', self.job_submit_node,
+                                    'oarstat', '-f', f'--job {self.job_id}',
+                                    '| grep "state = "'], capture_output=True)
+                s = p.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
+                s = s[0]
+                print(s, flush=True)
+                jobs_status = s.split('state=')[-1].replace(' ', '')
+                # end this loop if all jobs are terminated
+                if jobs_status == 'Terminated':
+                    break
+                if jobs_status == 'Error':
+                    raise RuntimeError(f"Error in job {self.job_id}")

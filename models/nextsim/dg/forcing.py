@@ -70,7 +70,7 @@ def get_fname_daterange(current_date: datetime, initial_date:str, interval:str, 
     return start_date_str, end_date_str
 
 
-def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: datetime, next_time: datetime) -> tuple[np.ndarray, list[datetime]]:
+def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: datetime, next_time: datetime, debug:bool=False) -> tuple[np.ndarray, list[datetime]]:
     """Get the indices and corresponding time that includes time and next_time from the netcdf file
 
     This function is not seeking the exact time and next_time in the forcing file,
@@ -113,8 +113,9 @@ def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: dat
             # get the all the time between current time and next time in the forcing file
             file_time: list[datetime] = [cftime.num2date(f[time_varname][it], time_units)
                                          for it in range(it0, it1 + 1)]
-            print (f'file: {fname}; 'f'file time: {file_time[0]} to {file_time[-1]},'
-                   f'forecast time: {time} to {next_time}')
+            if debug:
+                print (f'file: {fname}; 'f'file time: {file_time[0]} to {file_time[-1]},'
+                       f'forecast time: {time} to {next_time}')
     return np.arange(it0, it1 + 1), file_time
 
 def get_time_index(fname:str, time_varname:str, time_units_name:str, time:datetime) -> int:
@@ -284,7 +285,7 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
     return fname
 
 
-def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: datetime, next_time:datetime) -> None:
+def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: datetime, next_time:datetime, debug=False) -> None:
     """perturb the forcing variables
 
     Parameters
@@ -312,7 +313,7 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
     os.makedirs(os.path.join(pert_path, f'ensemble_{i_ens}'), exist_ok=True)
     # time index and time array
     time_index: np.ndarray[typing.Any, np.dtype[np.int64]]
-    time_array: np.ndarray[typing.Any, np.dtype[np.float64]]
+    time_array: list[datetime]
 
     for forcing_name in forcing_options:
         if forcing_name not in file_options: continue
@@ -327,7 +328,7 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
         time_index, time_array = get_time_from_nc(file_options_comp['fname_src'],
                                                   file_options_comp['time_name'],
                                                   file_options_comp['time_units_name'],
-                                                  time, next_time
+                                                  time, next_time, debug
                                                   )
         # get prev_time
         prev_time:datetime = get_prev_time_from_nc(file_options_comp['fname_src'],
