@@ -4,7 +4,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import forecast_dir
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 
@@ -16,8 +15,6 @@ def get_task_list(c, **kwargs) -> list:
     vmax = ensure_list(kwargs['vmax'])
     nlevels = ensure_list(kwargs['nlevels'])
     cmap = ensure_list(kwargs['cmap'])
-
-    c.next_time = c.time + c.cycle_period * dt1h
 
     tasks = []
     for member in range(c.nens):
@@ -59,7 +56,7 @@ def run(c, **kwargs) -> None:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
 
     ##if the viewer html file does not exist, generate it
-    viewer = os.path.join(plot_dir, 'viewer.html')
+    viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, model_src, variables, figsize)
 
@@ -71,7 +68,7 @@ def run(c, **kwargs) -> None:
     if 'forecast_dir' in kwargs:
         fdir = kwargs['forecast_dir'].format(time=c.time)
     else:
-        fdir = forecast_dir(c, c.time, model_src)
+        fdir = c.forecast_dir(c.time, model_src)
     var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
 
@@ -109,12 +106,12 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
-        levels_by_variable += f"{vname}: ["
+        levels_by_variable += f"'{vname}': ["
         model = c.model_config[model_src]
         for level in model.variables[vname]['levels']:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
-        times_by_variable += f"{vname}: ["
+        times_by_variable += f"'{vname}': ["
         for t in np.arange(t2h(c.time), t2h(c.next_time), model.variables[vname]['dt']):
             times_by_variable += f"'{h2t(t):%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
@@ -132,5 +129,5 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
     ##write the html page to file
-    with open(os.path.join(plot_dir, 'viewer.html'), 'w') as f:
+    with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

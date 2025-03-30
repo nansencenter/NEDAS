@@ -4,7 +4,6 @@ import subprocess
 from utils.progress import timer
 from utils.conversion import t2s
 from utils.parallel import Scheduler
-from utils.dir_def import forecast_dir, cycle_dir
 from utils.shell_utils import makedir, run_job
 
 def ensemble_forecast_scheduler(c, model_name):
@@ -12,7 +11,7 @@ def ensemble_forecast_scheduler(c, model_name):
     This function runs ensemble forecasts to advance to the next cycle
     """
     model = c.model_config[model_name]
-    path = forecast_dir(c, c.time, model_name)
+    path = c.forecast_dir(c.time, model_name)
     makedir(path)
     print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 
@@ -59,7 +58,7 @@ def ensemble_forecast_batch(c, model_name):
     in a simultaneous manner
     """
     model = c.model_config[model_name]
-    path = forecast_dir(c, c.time, model_name)
+    path = c.forecast_dir(c.time, model_name)
     makedir(path)
     print(f"\nRunning {model_name} ensemble forecast in {path}", flush=True)
 

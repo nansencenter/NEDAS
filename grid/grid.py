@@ -28,9 +28,8 @@ class Grid(object):
 
     See NEDAS/tutorials/grid_convert.ipynb for some examples.
     """
-    def __init__(self, proj, x, y, bounds=None, regular=True,
-                 cyclic_dim=None, pole_dim=None, pole_index=None,
-                 triangles=None, neighbors=None, dst_grid=None):
+    def __init__(self, proj, x, y, bounds=None, regular=True, cyclic_dim=None, pole_dim=None, pole_index=None,
+                 distance_type='cartesian', triangles=None, neighbors=None, dst_grid=None):
         """
         Initialize a Grid object.
 
@@ -127,6 +126,7 @@ class Grid(object):
             self.npoints = self.x.size
             self.tri = Triangulation(self.x, self.y, triangles=triangles)
             self.tri.inds = np.arange(self.npoints)
+            self._triangle_properties()
             dx = self._mesh_dx()
             self.dx = dx
             self.dy = dx
@@ -136,7 +136,10 @@ class Grid(object):
             self.Ly = self.ymax - self.ymin
             if self.cyclic_dim is not None:
                 self._pad_cyclic_mesh_bounds()
-            self._triangle_properties()
+
+        self.mask = np.full(self.x.shape, False)
+
+        self.distance_type = distance_type
 
         self._dst_grid = None
         if dst_grid is not None:
@@ -241,6 +244,8 @@ class Grid(object):
         if nlevel == 0:
             return self
         else:
+            ##create a new grid object with x,y at new resolution level
+            self._dst_grid = None
             new_grid = copy.deepcopy(self)
             fac = 2**nlevel
             new_grid.dx = self.dx * fac
@@ -249,6 +254,9 @@ class Grid(object):
             new_grid.ny = int(np.round(self.Ly / new_grid.dy))
             assert min(new_grid.nx, new_grid.ny) > 1, "Grid.change_resolution_level: new resolution too low, try smaller nlevel"
             new_grid.x, new_grid.y = np.meshgrid(self.xmin + np.arange(new_grid.nx) * new_grid.dx, self.ymin + np.arange(new_grid.ny) * new_grid.dy)
+            ##coarsen the mask
+            self.set_destination_grid(new_grid)
+            new_grid.mask = self.convert(self.mask, method='nearest').astype(bool)
             return new_grid
 
     def _mesh_dx(self):
@@ -272,6 +280,9 @@ class Grid(object):
             return np.mean(sa[valid])
 
     def _triangle_properties(self):
+        """
+        computes triangle properties for the mesh triangles
+        """
         t = self.tri.triangles
         x = self.x[self.tri.inds]
         y = self.y[self.tri.inds]
@@ -285,7 +296,7 @@ class Grid(object):
         ##(1: equilateral triangle, ~0: very elongated)
         self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
 
-    @cached_property
+    @property
     def mfx(self):
         """
         Map scaling factors in x direction (mfx), since on the projection plane dx is not exactly
@@ -302,7 +313,7 @@ class Grid(object):
             _,_,gcdx = geod.inv(lon, lat, lon1x, lat1x)
             return self.dx / gcdx
 
-    @cached_property
+    @property
     def mfy(self):
         """
         Map scaling factors in y direction (mfy), since on the projection plane dy is not exactly
@@ -900,7 +911,7 @@ class Grid(object):
                 dist_y = np.minimum(dist_y, self.Ly - dist_y)
         return dist_y
 
-    def distance(self, ref_x, x, ref_y, y, p=2):
+    def distance(self, ref_x, x, ref_y, y, p=2, type='cartesian'):
         """
         Compute distance for points (x,y) to the reference point
         Input:
@@ -910,21 +921,45 @@ class Grid(object):
         points whose distance to the reference points will be computed
         - p: int
         Minkowski p-norm order, default is 2
+        - type: str
+        'cartesian' (default) or 'spherical'
         Output:
         - dist: np.array(float)
         """
         ##TODO: account for other geometry (neighbors) here
 
-        ##normal cartesian distances in x and y
-        dist_x = self.distance_in_x(ref_x, x)
-        dist_y = self.distance_in_y(ref_y, y)
-        if p == 1:
-            dist = dist_x + dist_y  ##Manhattan distance, order 1
-        elif p == 2:
-            dist = np.hypot(dist_x, dist_y)   ##Euclidean distance, order 2
+        if type == 'cartesian':
+            ##normal cartesian distances in x and y
+            dist_x = self.distance_in_x(ref_x, x)
+            dist_y = self.distance_in_y(ref_y, y)
+            if p == 1:
+                dist = dist_x + dist_y  ##Manhattan distance, order 1
+            elif p == 2:
+                dist = np.hypot(dist_x, dist_y)   ##Euclidean distance, order 2
+            else:
+                raise NotImplementedError(f"grid.distance: p-norm order {p} is not implemented for 2D grid")
+            return dist
+
+        ##compute spherical distance on Earth instead
+        elif type == 'spherical':
+            reflon, reflat = self.proj(ref_x, ref_y, inverse=True)
+            lon, lat = self.proj(x, y, inverse=True)
+            RE = 6371000.0
+            invrad = np.pi / 180.
+            rlon1 = np.atleast_1d(reflon) * invrad
+            rlat1 = np.atleast_1d(reflat) * invrad
+            rlon2 = np.atleast_1d(lon) * invrad
+            rlat2 = np.atleast_1d(lat) * invrad
+            ##from m_spherdist.F90 in enkf-topaz:
+            cos_d = np.sin(rlat1) * np.sin(rlat2) + np.cos(rlat1) * np.cos(rlat2) * np.cos(rlon1 - rlon2)
+            dist = RE * np.acos(np.clip(cos_d, -1, 1))
+            ##Haversine formula to avoid precision loss
+            # a = np.sin((rlat2 - rlat1) / 2)**2 + np.cos(rlat1) * np.cos(rlat2) * np.sin((rlon1 - rlon2) / 2)**2
+            # dist = 2 * RE * np.asin(np.sqrt(a))
+            return dist
+
         else:
-            raise NotImplementedError(f"grid.distance: p-norm order {p} is not implemented for 2D grid")
-        return dist
+            raise ValueError(f"unknown distance type '{type}'")
 
     ### Some methods for basic data visulisation and map plotting
     def _collect_shape_data(self, shapes):
@@ -1230,7 +1265,8 @@ class Grid(object):
 
         else:
             assert fld.shape == x.shape
-            v = np.array(fld)
+            msk = ~np.isnan(fld)
+            v = np.array(fld[msk])
             vbound = np.maximum(np.minimum(v, vmax), vmin)
 
             if isinstance(cmap, str):
@@ -1238,7 +1274,7 @@ class Grid(object):
             cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
 
             cind = ((vbound - vmin) / dv).astype(int)
-            ax.scatter(x, y, markersize, color=cmap[cind], **kwargs)
+            ax.scatter(x[msk], y[msk], markersize, color=cmap[cind], **kwargs)
 
         self.set_xylim(ax)
 
@@ -1267,7 +1303,7 @@ class Grid(object):
         """
         ###plot the coastline to indicate land area
         if color is not None:
-            draw_patch(ax, self.land_data, color=color, zorder=0)
+            draw_patch(ax, self.land_data, color=color, zorder=3)
         if linecolor is not None:
             draw_line(ax, self.land_data, linecolor=linecolor, linewidth=linewidth, linestyle='-', zorder=8)
         if showriver:

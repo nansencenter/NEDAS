@@ -6,7 +6,6 @@ from grid import Grid
 from utils.netcdf_lib import nc_write_var
 from utils.conversion import ensure_list, proj2dict, s2t, dt1h
 from utils.shell_utils import makedir
-from utils.dir_def import forecast_dir
 
 def get_task_list(c, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""
@@ -66,8 +65,6 @@ def run(c, **kwargs):
     y = grid.y[:, 0] / 1e5  ##convert to 100km units
     lon, lat = grid.proj(grid.x, grid.y, inverse=True)
 
-    model.grid.set_destination_grid(grid)
-
     if 'time' in kwargs:
         time_start = s2t(kwargs['time'])
     else:
@@ -77,7 +74,7 @@ def run(c, **kwargs):
     time_units = kwargs.get('time_units', 'seconds since 1970-01-01T00:00:00+00:00')
     time_calendar = kwargs.get('time_calendar', 'standard')
     t_steps = range(0, forecast_hours, dt_hours)
-    path = forecast_dir(c, time_start, model_name)
+    path = c.forecast_dir(time_start, model_name)
 
     for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h
@@ -92,8 +89,12 @@ def run(c, **kwargs):
         levels = rec['levels']
         is_vector = rec['is_vector']
         for k in levels:
+
             # read the field from model restart file
+            model.read_grid(path=path, name=vname, time=t, member=member, k=k)
             fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
+            model.grid.set_destination_grid(grid)
+
             # convert to output grid
             fld_ = model.grid.convert(fld, is_vector=is_vector)
             # build dimension records
@@ -122,7 +123,11 @@ def run(c, **kwargs):
                     }
             if is_vector:
                 for i in range(2):
-                    nc_write_var(file, dims, rec['name'][i], fld_[i,...], recno=recno, attr=attr, comm=c.comm)
+                    if isinstance(rec['name'], tuple):
+                        rec_name = rec['name'][i]
+                    else:
+                        rec_name = rec['name']+'_'+(x_name, y_name)[i]
+                    nc_write_var(file, dims, rec_name, fld_[i,...], recno=recno, attr=attr, comm=c.comm)
             else:
                 nc_write_var(file, dims, rec['name'], fld_, recno=recno, attr=attr, comm=c.comm)
 

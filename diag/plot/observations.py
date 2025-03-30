@@ -3,12 +3,11 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import analysis_dir
+from utils.conversion import ensure_list, dt1h
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
-from assim_tools.state import parse_state_info, read_field
-from assim_tools.obs import parse_obs_info, read_mean_z_coords
+from assim_tools.state import State
+from assim_tools.obs import Obs
 
 def get_task_list(c, **kwargs) -> list:
 
@@ -23,8 +22,8 @@ def get_task_list(c, **kwargs) -> list:
     nlevels_diff = ensure_list(kwargs['nlevels_diff'])
     cmap_diff = ensure_list(kwargs['cmap_diff'])
 
-    c.state_info = parse_state_info(c)
-    c.obs_info = parse_obs_info(c)
+    state = State(c)
+    obs = Obs(c, state)
 
     ##observation time steps within window
     obs_window_min = kwargs.get('obs_window_min', 0)
@@ -35,8 +34,8 @@ def get_task_list(c, **kwargs) -> list:
 
     tasks = []
     for i, vname in enumerate(variables):
-        ##check if obs rec is defined in c.obs_info
-        obs_rec_query = [id for id,r in c.obs_info['records'].items() if r['name']==vname and r['dataset_src']==dataset_src[i]]
+        ##check if obs rec is defined in obs.info
+        obs_rec_query = [id for id,r in obs.info['records'].items() if r['name']==vname and r['dataset_src']==dataset_src[i]]
         assert len(obs_rec_query)>0, f"cannot find obs record for '{vname}' from dataset '{dataset_src[i]}'"
         obs_rec_id = obs_rec_query[0]
 
@@ -62,17 +61,15 @@ def run(c, **kwargs) -> None:
         plot_dir = os.path.join(c.work_dir, 'plots', 'observations')
     makedir(plot_dir)
 
-    ##analysis grid z coords
-    c.state_info = parse_state_info(c)
-    c.obs_info = parse_obs_info(c)
-    c.analysis_dir = analysis_dir(c, c.time)
+    state = State(c)
+    obs = Obs(c, state)
 
     figsize = (kwargs.get('fig_size_x', 16), kwargs.get('fig_size_y', 7))
     landcolor = kwargs.get('land_color', 'gray')
 
     obs_rec_id = kwargs['obs_rec_id']
     member = kwargs['member']
-    obs_rec = c.obs_info['records'][obs_rec_id]
+    obs_rec = obs.info['records'][obs_rec_id]
     vmin = kwargs['vmin']
     vmax = kwargs['vmax']
     nlevels = kwargs['nlevels']
@@ -89,7 +86,7 @@ def run(c, **kwargs) -> None:
         print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
 
     ##if the viewer html file does not exist, generate it
-    viewer = os.path.join(plot_dir, 'viewer.html')
+    viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, figsize, **kwargs)
 
@@ -97,16 +94,15 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the obs data from analysis_dir/obs_seq
-    adir = analysis_dir(c, c.time)
-    obs_seq = np.load(os.path.join(adir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
-    obs_prior_seq = np.load(os.path.join(adir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
+    obs_seq = np.load(os.path.join(state.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
+    obs_prior_seq = np.load(os.path.join(state.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 
     ##filter for the obs within time and vertical level range
     tmask = (obs_seq['t'] > t) & (obs_seq['t'] <= t+dt*dt1h)
     obs_z = np.abs(obs_seq['z'])
     obs_x = obs_seq['x']
     obs_y = obs_seq['y']
-    model_z = np.abs(read_mean_z_coords(c, c.time))
+    model_z = np.abs(obs.read_mean_z_coords(c, state, c.time))
     if k == 0:
         zk = c.grid.interp(model_z[k], obs_x, obs_y)
         zmask = (obs_seq['z'] == zk)
@@ -181,12 +177,12 @@ def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
         obs_ts = c.time + np.arange(obs_window_min, obs_window_max, obs_dt[i]) * dt1h
         levels = np.arange(obs_kmin[i], obs_kmax[i]+1)
 
-        levels_by_variable += f"{name}: ["
+        levels_by_variable += f"'{name}': ["
         for level in levels:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
 
-        times_by_variable += f"{name}: ["
+        times_by_variable += f"'{name}': ["
         for t in obs_ts:
             times_by_variable += f"'{t:%Y%m%dT%H%M%S}_{t+obs_dt[i]*dt1h:%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
@@ -204,5 +200,5 @@ def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
     ##write the html page to file
-    with open(os.path.join(plot_dir, 'viewer.html'), 'w') as f:
+    with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

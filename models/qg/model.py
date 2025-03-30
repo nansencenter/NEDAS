@@ -20,7 +20,7 @@ class QGModel(ModelConfig):
         self.ny, self.nx = n, n
         x, y = np.meshgrid(np.arange(n), np.arange(n))
         self.grid = Grid(None, x, y, cyclic_dim='xy')
-        self.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
 
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)

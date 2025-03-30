@@ -41,7 +41,7 @@ class Model(ModelConfig):
         depth = f.read_field('depth')
         f.close()
         self.depth = -depth.data
-        self.mask = depth.mask
+        self.grid.mask = depth.mask
         
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

@@ -5,14 +5,15 @@ job_submit:
 nproc: 1          ##total number of processors
 
 nens: 100         ##ensemble size
-run_assim: True   ##if true, run the assimilation steps
-run_diag: False
+run_forecast: True
+run_analysis: True   ##if true, run the assimilation steps
+run_diagnose: False
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202302180000'         ##end time of the experiment
-time_assim_start: '202301010000' ##start time of the first analysis cycle
-time_assim_end: '202302180000'   ##end time of the last analysis cycle
+time_analysis_start: '202301010000' ##start time of the first analysis cycle
+time_analysis_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
 obs_time_steps: [0]
@@ -32,11 +33,8 @@ state_def:
 obs_def:
 - name: 'streamfunc'
   dataset_src: 'qg'
-  dataset_dir: '.'
   model_src: 'qg.emulator'
   nobs: 3000
-  obs_window_min: -6
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.2
@@ -45,6 +43,11 @@ obs_def:
   troi: 24
   impact_on_state:
      streamfunc: 1.0
+
+dataset_def:
+  qg:
+    obs_window_min: -6
+    obs_window_max: 0
 
 use_synthetic_obs: True
 
@@ -67,7 +70,8 @@ inflation:
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
+diag:

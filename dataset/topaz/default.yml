@@ -3,3 +3,5 @@ basedir: /cluster/work/users/yingyue/TP5a0.06
 dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
 obs_window_min: -168
 obs_window_max: 0
+
+vthin: True  ##thin obs by keeping a single obs within a model layer

@@ -1,6 +1,11 @@
 ##working directory for your experiment
 work_dir: '/cluster/work/users/yingyue/qg'
 
+directories:
+  cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
+  forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
+  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
+
 ##python environment source script
 python_env: '/cluster/home/yingyue/python.src'
 
@@ -16,17 +21,20 @@ job_submit:
 nproc: 16
 
 ##some experiment design parameters
-nens: 20          ##ensemble size
-run_assim: True   ##if true, run the assimilation steps
-run_diag: False   ##if true, run diagnotics
-debug: False      ##if true, output debug data/message
+nens: 20            ##ensemble size
+run_prepare: True
+run_forecast: True  ##if true, run the ensemble forecast step
+run_analysis: True  ##if true, run the analysis step
+run_diagnose: True  ##if true, run the diagnose scripts
+debug: False        ##if true, output debug data/message
+timer: True         ##if true, output information on function runtime
 
 ##time control of the experiment
-time_start: '202301010000'       ## start time of the experiment, format ccyymmddHHMM
-time_end: '202302180000'         ## end time of the experiment
-time_assim_start: '202301010000' ## start time of the first analysis cycle
-time_assim_end: '202302180000'   ## end time of the last analysis cycle
-cycle_period: 12                 ## cycle period, in hours
+time_start: '202301010000'          ## start time of the experiment, format ccyymmddHHMM
+time_end: '202302180000'            ## end time of the experiment
+time_analysis_start: '202301010000' ## start time of the first analysis cycle
+time_analysis_end: '202302180000'   ## end time of the last analysis cycle
+cycle_period: 12                    ## cycle period, in hours
 
 obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time
 obs_time_scale: 0                ## smoothing window in hours for observations
@@ -45,6 +53,9 @@ grid_def:
   ymax: 257
   dx: 0.1                  ##grid spacing in coordinate units (resolution)
   centered: False
+  distance_type: 'cartesian'    ## type of distance function (default: cartesian; or spherical from lat/lon coords)
+
+z_coords_from: 'mean'       ##use ensemble 'mean' or 'member' z coords as reference of obs z location
 
 ##state vector definition (a list of definitions, one for each variable)
 state_def:
@@ -73,6 +84,7 @@ obs_def:
                           ## this can help removing the analysis increment only on certain variables
 
 use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
+shuffle_obs: False       ## if true, shuffle the order of obs sequence
 
 ##dataset configuration dict(dataset_name, opts)
 ##will use config_file as starting point, additional variables will overwrite config_file settings
@@ -123,12 +135,14 @@ nlobs_max:                 ## maximum number of local observations to be assimil
 nscale: 1                    ## number of scale components
 scale_id: 0                  ## current scale component index
 decompose_obs: False         ## if true, decompose observations as well
+resolution_level: [0]        ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
 character_length: [16]       ## characteristic length (in grid coord unit) for each scale (large to small)
 localize_scale_fac: [1]      ## scale factor for localization distances
 obs_err_scale_fac: [1]       ## scale factor for observation error variances
 
 ##alignment technique in assimilation
 run_alignment: False         ## if true, run alignment technique
+interp_displace: False
 alignment:
   variable: 'streamfunc'     ## which variable the alignment is based on
   nlevel: 5                  ## number of resolution levels in multi-grid approach
@@ -136,7 +150,7 @@ alignment:
 
 ##covariance inflation technique in assimilation
 inflation:
-  type: 'posterior,relax'   ## type of inflation (posterior/prior, relax/inflate
+  type: 'posterior,RTPP'    ## type of inflation (posterior/prior, multiplicative/RTPP...)
   adaptive: True            ## if true, run an adaptive version of the inflation scheme
   coef: 1.0                 ## static inflation coefficient
 
@@ -144,10 +158,10 @@ inflation:
 ## type of localization kernel (GC, step, exp, NICE...)
 ## specified for horizontal (h), vertical (v) and temporal (t) separately
 ## for distance-based localization, the radius of influence (roi) is specified in obs_def
-localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+localization:               ## localization is configured separately for horizontal, vertical and temporal relations
+  horizontal: 'GC,NICE'          ## type of localization kernel (GC, step, exp, NICE...)
+  vertical: 'GC'
+  temporal: 'exp'
 
 ##diagnostic methods configuration
 diag:

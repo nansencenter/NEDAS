@@ -18,6 +18,8 @@ class Dataset(DatasetConfig):
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
         self.grid = Grid(proj, x, y)
 
+        self.obs_operator = {'seaice_drift': self.get_seaice_drift,}
+
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         path = kwargs['path']
@@ -126,3 +128,19 @@ class Dataset(DatasetConfig):
 
         return obs_seq
 
+    def get_seaice_drift(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+        grid = kwargs['grid']
+        path = kwargs['path']
+        member = kwargs['member']
+        model = kwargs['model']
+        model.grid.set_destination_grid(grid)
+
+        start_x = kwargs['x']
+        start_y = kwargs['y']
+        start_t = kwargs['t']
+        x = start_x.copy()
+        y = start_y.copy()
+        obs_seq = np.zeros((2,)+x.shape)
+
+        return obs_seq

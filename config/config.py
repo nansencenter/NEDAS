@@ -3,14 +3,19 @@ import os
 import inspect
 import yaml
 import importlib
+from datetime import datetime
 from pyproj import Proj
 from grid import Grid
-from utils.parallel import Comm
+from utils.parallel import Comm, by_rank
+from utils.progress import print_with_cache
 from utils.conversion import s2t, t2s, dt1h
 from .parse_config import parse_config
 
 class Config(object):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
+        self._time = None
+        self._pid_show = 0
+
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
@@ -27,28 +32,67 @@ class Config(object):
         self.set_model_config()
         self.set_dataset_config()
 
-        ##these attributes will also be useful during runtime
-        for key in ['state_info','mem_list','rec_list','partitions','obs_info','obs_rec_list','obs_inds','par_list']:
-            setattr(self, key, None)
+    @property
+    def time(self):
+        return self._time
+
+    @time.setter
+    def time(self, value):
+        if isinstance(value, str):
+            self._time = s2t(value)
+        elif isinstance(value, datetime):
+            self._time = value
+        else:
+            raise TypeError(f"Error: time must be a string or datetime object, not {type(value)}")
+
+    @property
+    def prev_time(self):
+        if self.time > self.time_start:
+            return self.time - self.cycle_period * dt1h
+        else:
+            return self.time
+
+    @property
+    def next_time(self):
+        return self.time + self.cycle_period * dt1h
+
+    @property
+    def pid_show(self):
+        return self._pid_show
+
+    @pid_show.setter
+    def pid_show(self, value):
+        self._pid_show = value
+    
+    @property
+    def print_1p(self):
+        return by_rank(self.comm, self.pid_show)(print_with_cache)
+
+    def cycle_dir(self, time):
+        return self.directories['cycle_dir'].format(work_dir=self.work_dir, time=time)
+
+    def forecast_dir(self, time, model_name):
+        return self.directories['forecast_dir'].format(work_dir=self.work_dir, time=time, model_name=model_name)
+
+    def analysis_dir(self, time, scale_id):
+        if self.nscale == 1:
+            scale_dir = ''
+        else:
+            scale_dir = f"scale{scale_id}"
+        return self.directories['analysis_dir'].format(work_dir=self.work_dir, time=time, scale_dir=scale_dir)
 
     def set_time(self):
-        for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end']:
+        for key in ['time_start', 'time_end', 'time_analysis_start', 'time_analysis_end']:
+            ##make sure key is defined in config file
             assert key in self.keys, f"'{key}' is missing in config file"
-
-        ##these keys become available at runtime
-        for key in ['time', 'prev_time', 'next_time']:
-            if key not in self.keys:
-                setattr(self, key, self.time_start)
-                self.keys.append(key)
-
-        ##convert string to datetime obj
-        for key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
+            ##convert string to datetime obj
             setattr(self, key, s2t(getattr(self, key)))
 
-        ##make sure prev and next time is correct
-        if self.time > self.time_start:
-            self.prev_time = self.time - self.cycle_period * dt1h
-        self.next_time = self.time + self.cycle_period * dt1h
+        if self.time is None:
+            ##initialize current time to start time, if not available
+            self.time = self.time_start
+            if 'time' not in self.keys:
+                self.keys.append('time')
 
     def set_comm(self):
         ##initialize mpi communicator
@@ -67,8 +111,6 @@ class Config(object):
         self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
         self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
 
-        self.pid_show = 0  ##which pid is showing progress messages, default to root=0
-
     def set_analysis_grid(self):
         ##initialize analysis grid
         if self.grid_def['type'] == 'custom':
@@ -80,10 +122,17 @@ class Config(object):
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
             centered = self.grid_def.get('centered', False)
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered)
+            distance_type = self.grid_def.get('distance_type', 'cartesian')
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered, distance_type=distance_type)
 
             ##mask for invalid grid points (none for now, add option later)
-            self.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+            if 'mask' in self.grid_def:
+                model_name = self.grid_def['mask']
+                module = importlib.import_module('models.'+model_name)
+                model = getattr(module, 'Model')()
+                self.grid.mask = model.prepare_mask(self.grid)
+            else:
+                self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
 
         else:
             ##get analysis grid from model module
@@ -92,7 +141,6 @@ class Config(object):
             module = importlib.import_module('models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
             self.grid = model.grid
-            self.mask = model.mask
 
     def set_model_config(self):
         ##initialize model config dict
@@ -112,7 +160,7 @@ class Config(object):
             module = importlib.import_module('dataset.'+dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.mask, **kwargs)
+            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.grid.mask, **kwargs)
 
     def show_summary(self):
         ##print a summary
@@ -120,7 +168,7 @@ class Config(object):
  working directory: {self.work_dir}
  parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
  cycling from {self.time_start} to {self.time_end}
- assimilation start at {self.time_assim_start}
+ analysis start at {self.time_analysis_start}
  cycle_period = {self.cycle_period} hours
  current time: {self.time}
  """, flush=True)
@@ -130,8 +178,7 @@ class Config(object):
         with open(config_file, 'w') as f:
             for key in self.keys:
                 value = getattr(self, key)
-                if key in ['time_start', 'time_end', 'time_assim_start', 'time_assim_end', 'time', 'prev_time', 'next_time']:
+                if key in ['time_start', 'time_end', 'time_analysis_start', 'time_analysis_end', 'time']:
                     value = t2s(value)
                 config_dict[key] = value
             yaml.dump(config_dict, f)
-

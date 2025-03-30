@@ -2,7 +2,6 @@ import os
 import sys
 from utils.progress import timer
 from utils.parallel import Scheduler
-from utils.dir_def import forecast_dir, cycle_dir
 from utils.shell_utils import makedir, run_job
 
 def preprocess(c, model_name):
@@ -14,10 +13,10 @@ def preprocess(c, model_name):
     if c.time==c.time_start:
         restart_dir = model.ens_init_dir
     else:
-        restart_dir = forecast_dir(c, c.prev_time, model_name)
+        restart_dir = c.forecast_dir(c.prev_time, model_name)
     print(f"using restart files in {restart_dir}", flush=True)
 
-    path = forecast_dir(c, c.time, model_name)
+    path = c.forecast_dir(c.time, model_name)
     makedir(path)
 
     if not c.job_submit:
@@ -70,7 +69,8 @@ def run(c):
     job_submit_opts = {}
     if c.job_submit:
         job_submit_opts = c.job_submit
-    run_job(commands, job_name="preprocess", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
+
+    run_job(commands, job_name="preprocess", run_dir=c.cycle_dir(c.time), nproc=c.nproc, **job_submit_opts)
 
 if __name__ == "__main__":
     from config import Config

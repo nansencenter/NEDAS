@@ -15,14 +15,15 @@ job_submit:
 nproc: 32          ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: True  ##if true, run the assimilation steps
-run_diag: False
+run_forecast: True
+run_analysis: True  ##if true, run the assimilation steps
+run_diagnose: False
 debug: True       ##if true, output debug data/message
 
 time_start: '201001010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '201001040000'         ##end time of the experiment
-time_assim_start: '201010300000' ##start time of the first analysis cycle
-time_assim_end: '201001040000'   ##end time of the last analysis cycle
+time_analysis_start: '201010300000' ##start time of the first analysis cycle
+time_analysis_end: '201001040000'   ##end time of the last analysis cycle
 cycle_period: 24                 ##cycle period, in hours
 
 obs_time_steps: [0]
@@ -47,8 +48,6 @@ obs_def:
 - name: 'seaice_conc'
   dataset_src: 'osisaf.ice_conc'
   model_src: 'nextsim.dg'
-  obs_window_min: -6
-  obs_window_max: 0
   err:
     type: 'normal'
     std: 0.2
@@ -63,6 +62,8 @@ use_synthetic_obs: False
 dataset_def:
   osisaf.ice_conc:
     dataset_dir: '/bettik/yumengch-ext/DATA/data/OSISAF'
+    obs_window_min: -6
+    obs_window_max: 0
 
 model_def:
   nextsim.dg:
@@ -83,13 +84,13 @@ assim_mode: 'batch'
 filter_type: 'ETKF'
 
 inflation:
-  type: 'posterior,relax'
+  type: 'prior,multiplicative'
   adaptive: True
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
 diag:

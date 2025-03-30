@@ -3,11 +3,10 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.conversion import ensure_list, t2h, h2t, dt1h
-from utils.dir_def import analysis_dir
+from utils.conversion import ensure_list, dt1h
 from utils.shell_utils import makedir
 from utils.graphics import add_colorbar, adjust_ax_size, get_cmap
-from assim_tools.state import parse_state_info, read_field
+from assim_tools.state import State
 
 def get_task_list(c, **kwargs) -> list:
 
@@ -17,13 +16,12 @@ def get_task_list(c, **kwargs) -> list:
     nlevels_diff = ensure_list(kwargs['nlevels_diff'])
     cmap_diff = ensure_list(kwargs['cmap_diff'])
 
-    c.next_time = c.time + c.cycle_period * dt1h
-    c.state_info = parse_state_info(c)
+    state = State(c)
 
     tasks = []
     for member in range(c.nens):
         for i, vname in enumerate(variables):
-            levels = [r['k'] for id,r in c.state_info['fields'].items() if r['name']==vname]
+            levels = [r['k'] for id,r in state.info['fields'].items() if r['name']==vname]
             assert len(levels)>0, f"cannot find state variable '{vname}'"
             for k in levels:
                 for t in c.time + np.array(c.state_time_steps) * dt1h:
@@ -54,17 +52,17 @@ def run(c, **kwargs) -> None:
     k = kwargs['k']
     time = kwargs['time']
 
-    c.state_info = parse_state_info(c)
-    rec_query = [id for id,r in c.state_info['fields'].items() if r['name']==vname and r['k']==k]
+    state = State(c)
+    rec_query = [id for id,r in state.info['fields'].items() if r['name']==vname and r['k']==k]
     assert len(rec_query)>0, f"cannot find state variable '{vname}' at k={k}"
     rec_id = rec_query[0]
-    rec = c.state_info['fields'][rec_id]
+    rec = state.info['fields'][rec_id]
 
     if c.debug:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
 
     ##if the viewer html file does not exist, generate it
-    viewer = os.path.join(plot_dir, 'viewer.html')
+    viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, variables, figsize)
 
@@ -72,11 +70,8 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the field from bin file in analysis dir
-    adir = analysis_dir(c, c.time)
-    prior_file = os.path.join(adir, 'prior_state.bin')
-    post_file = os.path.join(adir, 'post_state.bin')
-    var_prior = read_field(prior_file, c.state_info, c.mask, member, rec_id)
-    var_post = read_field(post_file, c.state_info, c.mask, member, rec_id)
+    var_prior = state.read_field(state.prior_file, c.grid.mask, member, rec_id)
+    var_post = state.read_field(state.post_file, c.grid.mask, member, rec_id)
     incr = var_post - var_prior
 
     ##plot the field
@@ -110,20 +105,20 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
     with open(os.path.join(os.path.dirname(__file__), 'viewer.html'), 'rt') as f:
         html_page = f.read()
 
-    c.state_info = parse_state_info(c)
+    state = State(c)
 
     ##replace the placeholder with the list of variables,levels,times,members
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
-        levels_by_variable += f"{vname}: ["
-        levels = [r['k'] for id,r in c.state_info['fields'].items() if r['name']==vname]
+        levels_by_variable += f"'{vname}': ["
+        levels = [r['k'] for id,r in state.info['fields'].items() if r['name']==vname]
         levels.sort()
         for level in levels:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
 
-        times_by_variable += f"{vname}: ["
+        times_by_variable += f"'{vname}': ["
         for t in c.time + np.array(c.state_time_steps) * dt1h:
             times_by_variable += f"'{t:%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
@@ -142,5 +137,5 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
     ##write the html page to file
-    with open(os.path.join(plot_dir, 'viewer.html'), 'w') as f:
+    with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

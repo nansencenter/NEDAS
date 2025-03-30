@@ -3,12 +3,11 @@
 import os
 import numpy as np
 from utils.netcdf_lib import nc_write_var
-from utils.dir_def import analysis_dir
 from utils.conversion import t2h
 from assim_tools.state import read_field
 
 def run(c):
-    adir = analysis_dir(c, c.time)
+    adir = c.analysis_dir(c.time)
     filename = os.path.join(adir, 'prior_state.bin')
 
     ##convert bin file state variables [nfield, ny, nx] * nens

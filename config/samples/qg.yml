@@ -6,14 +6,15 @@ job_submit:
 nproc: 5        ##total number of processors
 
 nens: 20         ##ensemble size
-run_assim: True  ##if true, run the assimilation steps
-run_diag: True
+run_forecast: True
+run_analysis: True  ##if true, run the assimilation steps
+run_diagnose: True
 debug: False      ##if true, output debug data/message
 
 time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
 time_end: '202302180000'         ##end time of the experiment
-time_assim_start: '202301010000' ##start time of the first analysis cycle
-time_assim_end: '202302180000'   ##end time of the last analysis cycle
+time_analysis_start: '202301010000' ##start time of the first analysis cycle
+time_analysis_end: '202302180000'   ##end time of the last analysis cycle
 cycle_period: 12                 ##cycle period, in hours
 
 obs_time_steps: [0]
@@ -34,8 +35,6 @@ obs_def:
 - name: 'streamfunc'
   dataset_src: 'qg'
   model_src: 'qg'
-  obs_window_min: -6
-  obs_window_max: 0
   nobs: 3000
   err:
     type: 'normal'
@@ -50,6 +49,8 @@ use_synthetic_obs: True
 
 dataset_def:
   qg:
+    obs_window_min: -6
+    obs_window_max: 0
 
 model_def:
   qg:
@@ -64,6 +65,9 @@ perturb:
 
 assim_mode: 'batch'
 filter_type: 'ETKF'
+rfactor: 1
+kfactor: 1
+nlobs_max:
 
 ##multiscale approach
 nscale: 1                    ## number of scale components
@@ -81,14 +85,14 @@ alignment:
   smoothness_weight: 1       ## strength of the smoothness constraint
 
 inflation:
-  type: 'posterior,relax'
+  type: 'posterior,RTPP'
   adaptive: True
   coef: 1.0
 
 localization:
-  htype: 'GC'
-  vtype: 'GC'
-  ttype: 'GC'
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
 
 diag:
 - method: 'misc.convert_output'

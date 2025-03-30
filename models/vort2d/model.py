@@ -17,7 +17,7 @@ class Model(ModelConfig):
         x = ii*self.dx
         y = jj*self.dx
         self.grid = Grid(None, x, y, cyclic_dim='xy')
-        self.mask = np.full(self.grid.x.shape, False)  ##no mask
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##no mask
 
         levels = np.array([0])  ##there is no vertical levels
 
