@@ -18,6 +18,11 @@ class DatasetConfig(object):
         if not hasattr(self, 'dataset_dir'):
             self.dataset_dir = '.'
 
+        if not hasattr(self, 'obs_window_min'):
+            self.obs_window_min = 0
+        if not hasattr(self, 'obs_window_max'):
+            self.obs_window_max = 0
+
         self.variables = {}
 
     def parse_kwargs(self, **kwargs):

@@ -2,11 +2,7 @@ import os
 import sys
 from utils.progress import timer
 from utils.parallel import Scheduler
-<<<<<<< HEAD
-from utils.dir_def import forecast_dir
-=======
 from utils.dir_def import forecast_dir, cycle_dir
->>>>>>> other_features
 from utils.shell_utils import makedir, run_job
 
 def preprocess(c, model_name):
@@ -48,9 +44,10 @@ def preprocess(c, model_name):
             'path': path,
             'member': mem_id,
             'time': c.time,
-            'time_start': c.time_start,
             'forecast_period': c.cycle_period,
             'time_start': c.time_start,
+            'time_end': c.time_end,
+            'debug': c.debug,
             **c.job_submit,
             }
         scheduler.submit_job(job_name, model.preprocess, **job_opt)  ##add job to the queue
@@ -64,24 +61,16 @@ def run(c):
     config_file = os.path.join(c.work_dir, 'config.yml')
     c.dump_yaml(config_file)
 
-<<<<<<< HEAD
-=======
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
 
->>>>>>> other_features
     ##build run commands for the preprocess script
     commands = f"source {c.python_env}; "
     commands += f"{sys.executable} {script_file} -c {config_file}"
 
-<<<<<<< HEAD
-    run_job(commands, job_name="preprocess", run_dir=c.work_dir, nproc=c.nproc, **c.job_submit)
-=======
     job_submit_opts = {}
     if c.job_submit:
         job_submit_opts = c.job_submit
-
     run_job(commands, job_name="preprocess", run_dir=cycle_dir(c, c.time), nproc=c.nproc, **job_submit_opts)
->>>>>>> other_features
 
 if __name__ == "__main__":
     from config import Config
@@ -89,7 +78,3 @@ if __name__ == "__main__":
 
     for model_name, model in c.model_config.items():
         timer(c)(preprocess)(c, model_name)
-<<<<<<< HEAD
-
-=======
->>>>>>> other_features

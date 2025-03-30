@@ -36,7 +36,12 @@ class SLURMJobSubmitter(JobSubmitter):
         if self.run_separate_jobs:
             return f"srun -n {self.nproc} --unbuffered"
         else:
-            return f"srun -n {self.nproc} -N {self.nnode} -r {self.offset_node} --exact --unbuffered"
+            if self.parallel_mode == 'mpi':
+                return f"srun -n {self.nproc} -N {self.nnode} -r {self.offset_node} --exact --unbuffered"
+            elif self.parallel_mode == 'openmp':
+                return f"export OMP_NUM_THREADS={self.nproc}; srun -N 1 -r {self.offset_node} -n 1 --cpus-per-task={self.nproc} --unbuffered"
+            else:
+                raise ValueError(f"unknown parallel_mode '{self.parallel_mode}'")
 
     @property
     def job_array_index_name(self):
@@ -110,8 +115,6 @@ class SLURMJobSubmitter(JobSubmitter):
                     ##job not running, pending, or cleaning up
                     raise RuntimeError(f"job {self.job_name} failed with status {job_status}")
 
-<<<<<<< HEAD
-=======
                 if job_status == 'PD':  ##if job is pending in queue, keep waiting
                     continue
 
@@ -129,7 +132,6 @@ class SLURMJobSubmitter(JobSubmitter):
                     print(self.job_name, 'stagnant', elapsed_time)
                     raise RuntimeError(f"job {self.job_name} killed: {self.log_file} remain stagnent for {self.stagnant_log_timeout} seconds")
 
->>>>>>> other_features
         ##check log file and report errors
         if self.use_job_array:
             for i in range(self.array_size):
