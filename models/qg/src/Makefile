@@ -1,7 +1,6 @@
 # Makefile created by mkmf $Id: mkmf,v 12.0 2005/04/14 19:59:08 fms Exp $ 
 
-include mkmf.template.intel
-
+include mkmf.src
 
 .DEFAULT:
 	-touch $@
@@ -26,8 +25,8 @@ transform_tools.o: ./transform_tools.f90 fft_fftw3_1pe.o op_rules.o
 	$(FC) $(FFLAGS) -c	./transform_tools.f90
 op_rules.o: ./op_rules.f90 io_tools.o
 	$(FC) $(FFLAGS) -c	./op_rules.f90
-eigrg1.o: ./eigrg1.f
-	ifort -r8 -i4 -c	./eigrg1.f
+eigrg1.o: ./eigrg1.f90
+	$(FC) $(FFLAGS) -c	./eigrg1.f90
 syscalls_linux.o: ./syscalls_linux.f90
 	$(FC) $(FFLAGS) -c	./syscalls_linux.f90
 io_tools.o: ./io_tools.f90
