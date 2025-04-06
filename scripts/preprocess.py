@@ -63,7 +63,7 @@ def run(c):
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
 
     ##build run commands for the preprocess script
-    commands = f"source {c.python_env}; "
+    commands = f". {c.python_env}; "
     commands += f"{sys.executable} {script_file} -c {config_file}"
 
     job_submit_opts = {}

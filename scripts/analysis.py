@@ -15,7 +15,7 @@ def run(c):
     print(f"\033[1;33mRUNNING\033[0m {script_file}")
 
     ##build run commands for the perturb script
-    commands = f"source {c.python_env}; "
+    commands = f". {c.python_env}; "
 
     if importlib.util.find_spec("mpi4py") is not None:
         commands += f"JOB_EXECUTE {sys.executable} -m mpi4py {script_file} -c {config_file}"

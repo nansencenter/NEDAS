@@ -94,7 +94,7 @@ class Model(ModelConfig):
         ##collect restart variables from bin and write to wrfrst
 
         ##build the run command
-        shell_cmd = "source "+wrf_src+"; "   ##enter wrf env
+        shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
         run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
