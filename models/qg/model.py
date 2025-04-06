@@ -181,7 +181,7 @@ class QGModel(ModelConfig):
         qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
 
         ##build the shell command line
-        shell_cmd = "source "+self.model_env+"; "   ##enter the qg model env
+        shell_cmd = ". "+self.model_env+"; "   ##enter the qg model env
         shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
         shell_cmd += "rm -f restart.nml; "      ##clean up before run
         shell_cmd += prep_input_cmd             ##prepare input file

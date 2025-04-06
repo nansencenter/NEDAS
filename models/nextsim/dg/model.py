@@ -369,7 +369,7 @@ class Model(ModelConfig):
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
-        shell_cmd = f"source {self.model_env}; "
+        shell_cmd = f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += "ln -fs $NDG_BLD_DIR/nextsim .; "
         shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
@@ -405,7 +405,7 @@ class Model(ModelConfig):
 
         ##build shell commands for running the model using job array
         shell_cmd = "echo starting the script...; "
-        shell_cmd += f"source {self.model_env}; "
+        shell_cmd += f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += f"echo {run_dir}; "
         shell_cmd += "cd ens_$(printf '%02d' JOB_ARRAY_INDEX); "

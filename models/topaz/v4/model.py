@@ -207,7 +207,7 @@ class Model(ModelConfig):
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
 
         ##build the shell command line
-        shell_cmd =  "source "+model_src+"; "   ##enter topaz v4 env
+        shell_cmd =  ". "+model_src+"; "   ##enter topaz v4 env
         shell_cmd += "cd "+run_dir+"; "          ##enter run directory
         shell_cmd += f"JOB_EXECUTE {model_exe} {kwargs['member']+1} >& run.log"
 

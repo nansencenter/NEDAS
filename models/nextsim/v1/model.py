@@ -423,7 +423,7 @@ class NextsimModel(ModelConfig):
         log_file = os.path.join(run_dir, 'run.log')
         run_command("touch "+log_file)
 
-        shell_cmd = f"source {self.model_env}; "
+        shell_cmd = f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += f"export NEXTSIM_DATA_DIR={os.path.join(run_dir,'data')}; "
         shell_cmd += f"JOB_EXECUTE {model_exe} --config-files=config/nextsim.cfg >& run.log"

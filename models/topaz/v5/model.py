@@ -634,7 +634,7 @@ class Topaz5Model(ModelConfig):
 
             ##build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
-            shell_cmd =  "source "+self.model_env+"; "  ##enter topaz5 env
+            shell_cmd =  ". "+self.model_env+"; "  ##enter topaz5 env
             shell_cmd += "cd "+run_dir+"; "             ##enter run directory
             shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
 
@@ -700,7 +700,7 @@ class Topaz5Model(ModelConfig):
 
         ##build the shell command line
         model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
-        shell_cmd =  "source "+self.model_env+"; "
+        shell_cmd =  ". "+self.model_env+"; "
         shell_cmd += "cd mem$(printf '%03d' JOB_ARRAY_INDEX); " 
         shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
         run_job(shell_cmd, job_name='topaz5', run_dir=run_dir, array_size=nens,
