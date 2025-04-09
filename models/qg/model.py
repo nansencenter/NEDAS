@@ -27,8 +27,8 @@ class QGModel(ModelConfig):
 
         ##the model is nondimensionalized, but it's convenient to introduce
         ##a scaling for time control in cycling experiments:
-        ##0.05 time units ~ 12 hours
-        ##dt = 0.00025 ~ 216 seconds
+        ##0.1 nondimensional time units ~ 1 day
+        self.tscale
 
         self.variables = {
             'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':12, 'levels':levels, 'units':'*'},
@@ -164,18 +164,19 @@ class QGModel(ModelConfig):
         run_dir = os.path.dirname(input_file)
         makedir(run_dir)
 
+        time_start = kwargs['time_start']
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
         output_file = self.filename(**{**kwargs, 'time':next_time})
 
-        ##check status, skip if already run
-        # if os.path.exists(output_file):
-        #     return
-
-        if self.psi_init_type == 'read':
+        if time >= time_start:
+            #this is during cycling
+            psi_init_type = 'read'
             prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
         else:
+            ##this is initial run for spin up
+            psi_init_type = self.psi_init_type
             prep_input_cmd = ''
 
         qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
@@ -186,13 +187,13 @@ class QGModel(ModelConfig):
         shell_cmd += "rm -f restart.nml; "      ##clean up before run
         shell_cmd += prep_input_cmd             ##prepare input file
         shell_cmd += "JOB_EXECUTE "+qg_exe+" . " ##the qg model exe
-        shell_cmd += ">& run.log"               ##output to log
+        shell_cmd += "> run.log 2>&1"               ##output to log
 
         log_file = os.path.join(run_dir, 'run.log')
 
         ##give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
-            namelist(self, time, forecast_period, dt_ratio, run_dir)
+            namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
             run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
@@ -200,10 +201,6 @@ class QGModel(ModelConfig):
             with open(log_file, 'rt') as f:
                 if 'Calculation done' in f.read():
                     break
-            # returncode = self.run_process.returncode
-            # if returncode is not None and returncode < 0:
-            #     ##kill signal received, exit the run func
-            #     return
 
         ##check output
         with open(log_file, 'rt') as f:
@@ -215,3 +212,4 @@ class QGModel(ModelConfig):
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
         run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+

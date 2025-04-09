@@ -14,15 +14,16 @@ beta: 16  ## beta_0*L^2/[(2pi)^2 U]
 adapt_dt: False  ## if true, use adaptive time steps
 dt: 0.00025  ## time step
 
-psi_init_file: 'input'
-psi_init_type: 'read'  ## initial condition input source: read/spectral_m/spectral_z/elliptical_vortex
+##the model is nondimensionalized, but it's convenient to introduce a scaling to real time units
+tscale: 0.1  ##1 day in model nondimensional time units
 
-initialize_energy: False ## if true, the input field will be normalized
+psi_init_type: 'spectral_m'  ## initial condition: spectral_m/spectral_z/elliptical_vortex
 e_o: 10  ## initial energy
 k_o: 3  ## initial peak wavenumber
 delk: 5  ## initial spread in wavenumber
 m_o: 0  ## initial modal peak
 z_o: 0  ## initial level of peak
+spinup_hours: 36  ##spin up period to establish the turbulent flow
 
 strat_type: 'linear'  ## stratification type: linear/twolayer/exp/stc/read
 deltc: 0.1  ## thermocline thickness
@@ -51,6 +52,4 @@ rho_slope: 0.001  ## linear slope for filter
 
 bot_drag: 0.5  ## bottom drag coef
 therm_drag: 0  ## thermal drag coef
-
-idum: 0  ## random seed number
 
