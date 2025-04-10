@@ -182,7 +182,7 @@ class Model(ModelConfig):
         return self.read_var(**{**kwargs, 'name':'seaice_conc_dg', 'k':0, 'units':1})
 
     def get_seaice_thick(self, **kwargs):
-        return self.read_var(**{**kwargs, 'name':'seaice_thick_dg', 'k':0, 'units':1})
+        return self.read_var(**{**kwargs, 'name':'seaice_thick_dg', 'k':0, 'units':'m'})
 
     def preprocess(self, task_id:int=0, **kwargs):
         """Preprocessing method for nextsim.dg
