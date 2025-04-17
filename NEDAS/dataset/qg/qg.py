@@ -1,5 +1,4 @@
 import numpy as np
-from NEDAS.models.qg import Model
 from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):

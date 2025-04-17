@@ -1,6 +1,6 @@
 import numpy as np
-from ...utils.njit import njit
-from .batch import BatchAssimilator
+from NEDAS.utils.njit import njit
+from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class TopazDEnKFAssimilator(BatchAssimilator):
 

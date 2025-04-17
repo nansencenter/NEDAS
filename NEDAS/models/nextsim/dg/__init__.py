@@ -1,1 +1,1 @@
-from .model import Model
+from NEDAS.models.nextsim.dg.model import Model

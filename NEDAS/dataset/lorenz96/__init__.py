@@ -1,1 +1,1 @@
-from NEDAS.dataset.lorenz96 import Dataset
+from NEDAS.dataset.lorenz96.lorenz96 import Dataset
