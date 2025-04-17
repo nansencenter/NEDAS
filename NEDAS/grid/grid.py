@@ -7,9 +7,9 @@ from matplotlib import colormaps
 from matplotlib.tri import Triangulation
 from pyproj import Proj, Geod
 import shapefile
-from utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_reference_vector_legend
+from NEDAS.utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_reference_vector_legend
 
-class Grid(object):
+class Grid:
     """
     Grid class to handle 2D field defined on a regular grid or unstructured mesh
 

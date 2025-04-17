@@ -1,1 +1,1 @@
-from .model import QGModel as Model
+from NEDAS.models.qg.model import QGModel as Model

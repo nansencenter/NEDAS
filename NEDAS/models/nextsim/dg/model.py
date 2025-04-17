@@ -2,12 +2,12 @@ import numpy as np
 import os
 import subprocess
 from pyproj import Proj
-from grid import Grid
-from utils.conversion import units_convert, t2s, dt1h
-from utils.shell_utils import run_job, makedir
-from utils.netcdf_lib import nc_read_var, nc_write_var
-from . import restart, forcing, namelist, dgLimit
-from ...model_config import ModelConfig
+from NEDAS.grid import Grid
+from NEDAS.utils.conversion import units_convert, t2s, dt1h
+from NEDAS.utils.shell_utils import run_job, makedir
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.models.nextsim.dg import restart, forcing, namelist, dgLimit
+from NEDAS.models.model_config import ModelConfig
 
 class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

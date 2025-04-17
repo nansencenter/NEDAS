@@ -1,7 +1,7 @@
 import os
 import configparser
-from utils.conversion import dt1h
-from . import restart, forcing
+from NEDAS.utils.conversion import dt1h
+from NEDAS.models.nextsim.dg import restart, forcing
 
 def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwargs):
     ens_mem_id:int = kwargs['member'] + 1  ##TODO: member could be None for deterministic runs

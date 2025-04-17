@@ -18,11 +18,10 @@ import netCDF4 # type: ignore
 import numpy as np
 import pyproj # type: ignore
 
-from utils.conversion import t2s
-from grid import Grid
-from .perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
-
-from . import slicing_nc
+from NEDAS.utils.conversion import t2s
+from NEDAS.grid import Grid
+from NEDAS.models.nextsim.dg.perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
+from NEDAS.models.nextsim.dg import slicing_nc
 
 # both the topaz and ERA5 data are projected onto the same grid at the moment
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)

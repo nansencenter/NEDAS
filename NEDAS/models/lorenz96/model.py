@@ -1,11 +1,11 @@
 import os
 import numpy as np
-from grid import Grid1D
-from utils.conversion import dt1h
-from utils.shell_utils import run_command, makedir
-from utils.netcdf_lib import nc_read_var, nc_write_var
-from .core import M_nl
-from ..model_config import ModelConfig
+from NEDAS.grid import Grid1D
+from NEDAS.utils.conversion import dt1h
+from NEDAS.utils.shell_utils import run_command, makedir
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.models.lorenz96.core import M_nl
+from NEDAS.models.model_config import ModelConfig
 
 class L96Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

@@ -3,8 +3,8 @@ import stat
 import subprocess
 import tempfile
 from time import sleep
-from utils.conversion import seconds_to_timestr
-from .base import JobSubmitter
+from NEDAS.utils.conversion import seconds_to_timestr
+from NEDAS.utils.job_submitters.base import JobSubmitter
 
 class OARJobSubmitter(JobSubmitter):
     """JobSubmitter Class customized for OAR schedulers"""

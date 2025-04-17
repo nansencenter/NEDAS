@@ -1,7 +1,7 @@
 import numpy as np
-from utils.njit import njit
+from NEDAS.utils.njit import njit
 
-@njit(cache=True)
+@njit
 def local_func_GC(dist, roi):
     """
     Localization factor based on distance and radius of influence (roi)
@@ -33,7 +33,7 @@ def local_func_GC(dist, roi):
 
     return lfactor.reshape(shape)
 
-@njit(cache=True)
+@njit
 def local_func_step(dist, roi):
     shape = dist.shape
     dist = dist.flatten()
@@ -41,7 +41,7 @@ def local_func_step(dist, roi):
     lfactor[np.where(dist<=roi)] = 1.0
     return lfactor.reshape(shape)
 
-@njit(cache=True)
+@njit
 def local_func_exp(dist, roi):
     shape = dist.shape
     dist = dist.flatten()

@@ -1,11 +1,11 @@
 import numpy as np
 import glob, os
 from pyproj import Proj
-from grid import Grid
 from scipy.interpolate import LinearNDInterpolator
 from netCDF4 import Dataset
 from datetime import datetime, timedelta
-from .proj import lonlat2xy, xy2lonlat
+from NEDAS.grid import Grid
+from NEDAS.models.noresm.proj import lonlat2xy, xy2lonlat
 
 levels = np.arange(1, 31, 1)
 variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':1440, 'levels':levels, 'units':'m/s'},

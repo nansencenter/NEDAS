@@ -1,5 +1,5 @@
 import numpy as np
-from .njit import njit
+from NEDAS.utils.njit import njit
 
 @njit
 def gradx(fld, dx, cyclic_dim=None):

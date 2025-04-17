@@ -1,16 +1,14 @@
 import numpy as np
 import os
 import subprocess
-from datetime import datetime
 from functools import lru_cache
 
-from utils.conversion import units_convert, t2s, s2t, dt1h
-from utils.shell_utils import run_job
-from config import parse_config
-from .namelist import namelist
-from ..abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
-from ..model_grid import get_topaz_grid, stagger, destagger
-from ...model_config import ModelConfig
+from NEDAS.utils.conversion import units_convert, t2s, s2t, dt1h
+from NEDAS.utils.shell_utils import run_job
+from NEDAS.models.topaz.v4.namelist import namelist
+from NEDAS.models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
+from NEDAS.models.topaz.model_grid import get_topaz_grid, stagger, destagger
+from NEDAS.models.model_config import ModelConfig
 
 class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

@@ -1,5 +1,5 @@
 import numpy as np
-from .base import Updator
+from NEDAS.assim_tools.updators.base import Updator
 
 class AdditiveUpdator(Updator):
 

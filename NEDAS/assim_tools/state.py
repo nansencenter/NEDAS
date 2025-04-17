@@ -1,9 +1,9 @@
 import os
 import struct
 import numpy as np
-from utils.conversion import type_dic, type_size, t2h, h2t, dt1h, ensure_list
-from utils.parallel import distribute_tasks, bcast_by_root
-from utils.progress import progress_bar
+from NEDAS.utils.conversion import type_dic, type_size, t2h, h2t, dt1h, ensure_list
+from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
+from NEDAS.utils.progress import progress_bar
 
 class State:
     """

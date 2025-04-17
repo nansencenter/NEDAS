@@ -1,6 +1,6 @@
 import numpy as np
-from utils.njit import njit
-from .serial import SerialAssimilator
+from NEDAS.utils.njit import njit
+from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
 
 class EAKFAssimilator(SerialAssimilator):
     @classmethod

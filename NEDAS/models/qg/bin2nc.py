@@ -1,10 +1,10 @@
 import numpy as np
 import os
 import sys
-from models.qg import Model
-from models.qg.util import read_data_bin, spec2grid
-from utils.conversion import t2s, s2t, dt1h
-from utils.netcdf_lib import nc_write_var
+from NEDAS.models.qg import Model
+from NEDAS.models.qg.util import read_data_bin, spec2grid
+from NEDAS.utils.conversion import t2s, s2t, dt1h
+from NEDAS.utils.netcdf_lib import nc_write_var
 
 model_name = sys.argv[1] ##'qg'
 nens = int(sys.argv[2]) ##20

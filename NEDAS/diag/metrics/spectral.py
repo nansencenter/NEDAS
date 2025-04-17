@@ -1,17 +1,14 @@
 ###util func for diagnostics
 import numpy as np
-from fft_lib import fft2, get_wn
+from NEDAS.utils.fft_lib import fft2, get_wn
 
 def rmse(fld, fld_tr):
     return
 
-
 def pattern_corr(fld, fld_tr):
     return
 
-
 ##some spectral diagnostics
-
 def pwrspec2d(fld):
     """
     Horizontal 2D power spectrum p(k2d), on a regular Cartesian grid
@@ -55,9 +52,7 @@ def pwrspec2d(fld):
 
     return wn, pwr
 
-
 ###some ensemble metrics
-
 def crps(fld_ens, fld_tr):
     return
 

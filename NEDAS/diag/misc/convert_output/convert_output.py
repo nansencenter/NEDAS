@@ -2,10 +2,10 @@ import os
 import yaml
 import cftime
 from pyproj import Proj
-from grid import Grid
-from utils.netcdf_lib import nc_write_var
-from utils.conversion import ensure_list, proj2dict, s2t, dt1h
-from utils.shell_utils import makedir
+from NEDAS.grid import Grid
+from NEDAS.utils.netcdf_lib import nc_write_var
+from NEDAS.utils.conversion import ensure_list, proj2dict, s2t, dt1h
+from NEDAS.utils.shell_utils import makedir
 
 def get_task_list(c, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""

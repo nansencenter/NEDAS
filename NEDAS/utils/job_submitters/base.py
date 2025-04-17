@@ -3,7 +3,7 @@ import sys
 import subprocess
 import tempfile
 
-class JobSubmitter(object):
+class JobSubmitter:
     def __init__(self, **kwargs):
         """
         Input kwargs:

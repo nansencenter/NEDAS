@@ -1,6 +1,6 @@
 import numpy as np
-from models.vort2d import Model
-from ..dataset_config import DatasetConfig
+from NEDAS.models.vort2d import Model
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

@@ -1,10 +1,10 @@
 import numpy as np
 import os
 import glob
-from utils.conversion import dt1h
-from models.topaz.time_format import datetojul
-from .uf_data import read_uf_data
-from ..dataset_config import DatasetConfig
+from NEDAS.utils.conversion import dt1h
+from NEDAS.models.topaz.time_format import datetojul
+from NEDAS.dataset.topaz.uf_data import read_uf_data
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
     """

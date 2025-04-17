@@ -1,7 +1,7 @@
 ##check if your mpi environment is correctly setup
 import numpy as np
 import unittest
-from utils.parallel import Comm, distribute_tasks
+from NEDAS.utils.parallel import Comm, distribute_tasks
 
 class TestParallel(unittest.TestCase):
 

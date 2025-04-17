@@ -2,9 +2,9 @@ import os
 import subprocess
 import tempfile
 from time import sleep
-from utils.conversion import seconds_to_timestr
-from utils.progress import find_keyword_in_file, count_lines_in_file
-from .base import JobSubmitter
+from NEDAS.utils.conversion import seconds_to_timestr
+from NEDAS.utils.progress import find_keyword_in_file, count_lines_in_file
+from NEDAS.utils.job_submitters.base import JobSubmitter
 
 class SLURMJobSubmitter(JobSubmitter):
     """JobSubmitter Class customized for SLURM schedulers"""

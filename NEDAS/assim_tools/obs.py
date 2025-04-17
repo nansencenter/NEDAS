@@ -1,8 +1,8 @@
 import os
 import numpy as np
-from utils.conversion import t2h, h2t, dt1h, ensure_list
-from utils.progress import progress_bar
-from utils.parallel import bcast_by_root, distribute_tasks
+from NEDAS.utils.conversion import t2h, h2t, dt1h, ensure_list
+from NEDAS.utils.progress import progress_bar
+from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 
 class Obs:
     """

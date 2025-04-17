@@ -1,12 +1,12 @@
 import os
 import numpy as np
-from grid import Grid
-from utils.conversion import dt1h
-from utils.shell_utils import run_command, makedir
-from utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.grid import Grid
+from NEDAS.utils.conversion import dt1h
+from NEDAS.utils.shell_utils import run_command, makedir
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 
-from .util import initial_condition, advance_time
-from ..model_config import ModelConfig
+from NEDAS.models.vort2d.util import initial_condition, advance_time
+from NEDAS.models.model_config import ModelConfig
 
 class Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

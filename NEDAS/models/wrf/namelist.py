@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from utils.conversion import dt1h
+from NEDAS.utils.conversion import dt1h
 
 def bool_str(value):
     if value:

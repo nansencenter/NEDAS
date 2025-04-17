@@ -1,6 +1,6 @@
 import os
-from config import Config
-from utils.conversion import dt1h
+from NEDAS.config import Config
+from NEDAS.utils.conversion import dt1h
 
 c = Config(parse_args=True)
 

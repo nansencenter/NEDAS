@@ -1,6 +1,6 @@
 import numpy as np
-from utils.random_perturb import random_field_powerlaw
-from utils.fft_lib import fft2, ifft2, get_wn
+from NEDAS.utils.random_perturb import random_field_powerlaw
+from NEDAS.utils.fft_lib import fft2, ifft2, get_wn
 
 def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
     """

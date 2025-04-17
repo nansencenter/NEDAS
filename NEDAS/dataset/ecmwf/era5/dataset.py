@@ -3,12 +3,12 @@
 import os
 import numpy as np
 from datetime import datetime, timedelta
-import netCDF4
-from grid import Grid
 from pyproj import Proj
-from utils.conversion import units_convert
-from .. import atmos_utils
-from ...dataset_config import DatasetConfig
+import netCDF4
+from NEDAS.grid import Grid
+from NEDAS.utils.conversion import units_convert
+from NEDAS.dataset.ecmwf import atmos_utils
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

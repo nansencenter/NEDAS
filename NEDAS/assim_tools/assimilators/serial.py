@@ -1,8 +1,8 @@
 import copy
 import numpy as np
-from utils.parallel import bcast_by_root, distribute_tasks
-from utils.progress import progress_bar
-from .base import Assimilator
+from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
+from NEDAS.utils.progress import progress_bar
+from NEDAS.assim_tools.assimilators.base import Assimilator
 
 class SerialAssimilator(Assimilator):
     def init_partitions(self, c):

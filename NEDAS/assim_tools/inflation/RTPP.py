@@ -1,6 +1,6 @@
 import numpy as np
-from utils.progress import progress_bar
-from .base import Inflation
+from NEDAS.utils.progress import progress_bar
+from NEDAS.assim_tools.inflation.base import Inflation
 
 class RTPPInflation(Inflation):
     def adaptive_prior_inflation(self, c, state, obs):

@@ -1,6 +1,6 @@
 import typing
 import numpy as np
-from utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 
 def thickness_upper_limit(seaice_conc: np.ndarray, target_variable: typing.Literal['seaice','snow']) -> np.ndarray:
     """upper threshold for seaice_thick based on daily output of CICE 1993-2016"""

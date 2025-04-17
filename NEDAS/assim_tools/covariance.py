@@ -1,6 +1,6 @@
 import yaml
 import numpy as np
-from utils.njit import njit
+from NEDAS.utils.njit import njit
 
 # def covariance(x, y, cov_model='ensemble'):
 #     if cov_model == 'ensemble':
@@ -8,7 +8,7 @@ from utils.njit import njit
 #     elif cov_model == 'static':
 #         return None
 
-@njit(cache=True)
+@njit
 def ensemble_covariance(state_ens, obs_ens):
     """
     Compute ensemble-based covariance between state and observation variables
@@ -55,7 +55,7 @@ def ensemble_covariance(state_ens, obs_ens):
     return state_variance, obs_variance, corr
 
 #def static_covariance(lookup, h_dist, v_dist, t_dist, ):
-#    
+#
 #    return state
 
 def covariance_lookup(c):

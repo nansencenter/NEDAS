@@ -4,9 +4,9 @@ import numpy as np
 from datetime import datetime, timedelta
 import pyproj
 from scipy.spatial import KDTree
-from grid import Grid
-from .utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
-from ..dataset_config import DatasetConfig
+from NEDAS.grid import Grid
+from NEDAS.dataset.rgps.utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
 

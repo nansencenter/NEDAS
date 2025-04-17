@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from utils.parallel import bcast_by_root
-from utils.progress import timer
+from NEDAS.utils.parallel import bcast_by_root
+from NEDAS.utils.progress import timer
 
 class Assimilator:
     def __init__(self, c):

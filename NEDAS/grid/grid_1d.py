@@ -2,7 +2,7 @@ import numpy as np
 import copy
 from functools import cached_property
 
-class Grid1D(object):
+class Grid1D:
     """
     Grid class to handle fields defined on a 1D grid
 

@@ -5,13 +5,13 @@ import yaml
 import importlib
 from datetime import datetime
 from pyproj import Proj
-from grid import Grid
-from utils.parallel import Comm, by_rank
-from utils.progress import print_with_cache
-from utils.conversion import s2t, t2s, dt1h
-from .parse_config import parse_config
+from NEDAS.grid import Grid
+from NEDAS.utils.parallel import Comm, by_rank
+from NEDAS.utils.progress import print_with_cache
+from NEDAS.utils.conversion import s2t, t2s, dt1h
+from NEDAS.config.parse_config import parse_config
 
-class Config(object):
+class Config:
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         self._time = None
         self._pid_show = 0
@@ -63,7 +63,7 @@ class Config(object):
     @pid_show.setter
     def pid_show(self, value):
         self._pid_show = value
-    
+
     @property
     def print_1p(self):
         return by_rank(self.comm, self.pid_show)(print_with_cache)

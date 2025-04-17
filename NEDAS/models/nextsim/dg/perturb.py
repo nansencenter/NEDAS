@@ -2,9 +2,9 @@ import numpy as np
 import typing
 from scipy.optimize import fsolve, root_scalar # type: ignore
 from scipy.ndimage import distance_transform_edt, gaussian_filter # type: ignore
-from utils.spatial_operation import gradx, grady, warp
-from utils.fft_lib import fft2, ifft2, get_wn, fftwn
-from grid import Grid
+from NEDAS.utils.spatial_operation import gradx, grady, warp
+from NEDAS.utils.fft_lib import fft2, ifft2, get_wn, fftwn
+from NEDAS.grid import Grid
 
 def gen_perturb(grid: Grid,
                    perturb_type: typing.Literal['gaussian_evensen'],

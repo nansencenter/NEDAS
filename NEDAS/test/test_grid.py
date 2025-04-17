@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
-from grid import Grid
 from pyproj import Proj
+from NEDAS.grid import Grid
 
 class TestGrid(unittest.TestCase):
     def test_regular_grid_creation(self):

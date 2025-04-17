@@ -4,7 +4,7 @@ from functools import wraps
 import time
 from concurrent.futures import ProcessPoolExecutor
 import threading
-from .progress import print_with_cache, progress_bar
+from NEDAS.utils.progress import print_with_cache, progress_bar
 
 def check_parallel_io():
     ##check if netcdf is built with parallel support
@@ -15,7 +15,7 @@ def check_parallel_io():
     except Exception:
         return False
 
-class Comm(object):
+class Comm:
     """Communicator class with MPI support"""
 
     def __init__(self):
@@ -96,7 +96,7 @@ class Comm(object):
             lock_win.Unlock(0)
             # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
-class DummyComm(object):
+class DummyComm:
     """Dummy communicator for python without mpi"""
     def __init__(self):
         self.size = 1
@@ -227,7 +227,7 @@ def distribute_tasks(comm, tasks, load=None):
 
     return task_list
 
-class Scheduler(object):
+class Scheduler:
     """
     A scheduler class for queuing and running multiple jobs on available workers (group of processors).
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess

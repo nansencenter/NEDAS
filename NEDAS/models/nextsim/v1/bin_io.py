@@ -1,6 +1,6 @@
 import numpy as np
 import struct
-from utils.conversion import type_convert, type_dic, type_size
+from NEDAS.utils.conversion import type_convert, type_dic, type_size
 
 def get_info(filename):
     """basic read/write of data from nextsim bin/dat file"""

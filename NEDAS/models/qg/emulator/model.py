@@ -1,13 +1,10 @@
 import os
 import subprocess
 import numpy as np
-from config import parse_config
-from grid import Grid
-from utils.conversion import t2s, dt1h
-from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from ..util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
-from ..model import QGModel
-from .netutils import Att_Res_UNet
+from NEDAS.utils.conversion import t2s, dt1h
+from NEDAS.models.qg.util import read_data_bin, write_data_bin, grid2spec, spec2grid
+from NEDAS.models.qg.model import QGModel
+from NEDAS.models.qg.emulator.netutils import Att_Res_UNet
 
 class QGModelEmulator(QGModel):
     """

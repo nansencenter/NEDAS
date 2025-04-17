@@ -4,7 +4,7 @@ import argparse
 import threading
 import numpy as np
 from netCDF4 import Dataset
-from utils.parallel import distribute_tasks, Comm
+from NEDAS.utils.parallel import distribute_tasks, Comm
 
 def read_chunks(filename, chk_list, var_list):
     ##get the total dimensions for each variable

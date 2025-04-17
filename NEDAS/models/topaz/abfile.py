@@ -17,7 +17,7 @@ class AFileError(Exception) :
 class BFileError(Exception) :
     pass
 
-class AFile(object) :
+class AFile :
     """ Class for doing binary input/output on hycom .a files. Normally used by 
     ABFile* classes, but can be called by itself to read a .a-file """
     huge = 2.0**100
@@ -169,7 +169,7 @@ class AFile(object) :
     def jdm(self):
         return self._jdm
 
-class ABFile(object) :
+class ABFile:
     """ Class for doing input/output on pairs of hycom .a and .b files. Base class, 
     not meant to be used directly """
 

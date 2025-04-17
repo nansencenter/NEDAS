@@ -1,5 +1,5 @@
 import os
-from config import Config
+from NEDAS.config import Config
 
 c = Config(parse_args=True)
 

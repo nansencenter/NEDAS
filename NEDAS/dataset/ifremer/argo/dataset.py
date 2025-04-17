@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 from datetime import datetime, timedelta
-from utils.conversion import dt1h
+from ....utils.conversion import dt1h
 from ...dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):

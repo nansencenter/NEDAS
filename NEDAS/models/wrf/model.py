@@ -1,12 +1,12 @@
 import os
 import numpy as np
 from pyproj import Proj
-from grid import Grid
-from utils.conversion import dt1h
-from utils.shell_utils import run_command, run_job, makedir
+from NEDAS.grid import Grid
+from NEDAS.utils.conversion import dt1h
+from NEDAS.utils.shell_utils import run_command, run_job, makedir
 # from .namelist import namelist
 # from .bin_io import read_
-from ..model_config import ModelConfig
+from NEDAS.models.model_config import ModelConfig
 
 class Model(ModelConfig):
 

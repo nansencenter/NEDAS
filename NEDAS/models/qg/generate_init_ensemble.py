@@ -1,7 +1,7 @@
 import os
 from datetime import timedelta
-from config import Config
-from scripts import ensemble_forecast
+from NEDAS.config import Config
+from NEDAS.scripts import ensemble_forecast
 
 c = Config(parse_args=True)
 model = c.model_config['qg']

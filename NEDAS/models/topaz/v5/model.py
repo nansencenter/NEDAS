@@ -3,17 +3,17 @@ import glob
 from functools import lru_cache
 from datetime import datetime, timedelta
 import numpy as np
-from utils.conversion import units_convert, t2s, dt1h
-from utils.netcdf_lib import nc_read_var, nc_write_var
-from utils.shell_utils import run_command, run_job, makedir
-from utils.progress import watch_log, find_keyword_in_file, watch_files
-from .namelist import namelist
-from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
-from .cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
-from ..time_format import dayfor
-from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
-from ..model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
-from ...model_config import ModelConfig
+from NEDAS.utils.conversion import units_convert, t2s, dt1h
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.utils.shell_utils import run_command, run_job, makedir
+from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
+from NEDAS.models.topaz.v5.namelist import namelist
+from NEDAS.models.topaz.v5.postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
+from NEDAS.models.topaz.v5.cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
+from NEDAS.models.topaz.time_format import dayfor
+from NEDAS.models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileForcing
+from NEDAS.models.topaz.model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
+from NEDAS.models.model_config import ModelConfig
 
 class Topaz5Model(ModelConfig):
     def __init__(self, config_file=None, parse_args=False, **kwargs):

@@ -1,10 +1,10 @@
 import numpy as np
-from .njit import njit
+from NEDAS.utils.njit import njit
 
-@njit(cache=True)
+@njit
 def normal_cdf():
     pass
 
-@njit(cache=True)
+@njit
 def inv_weighted_normal_cdf():
     pass

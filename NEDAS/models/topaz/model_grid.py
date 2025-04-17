@@ -1,8 +1,8 @@
 import struct
 import numpy as np
-from grid import Grid
-from .abfile import ABFileBathy
-from .confmap import ConformalMapping
+from NEDAS.grid import Grid
+from NEDAS.models.topaz.abfile import ABFileBathy
+from NEDAS.models.topaz.confmap import ConformalMapping
 
 def get_topaz_grid(grid_info_file):
     proj = ConformalMapping.init_from_file(grid_info_file)

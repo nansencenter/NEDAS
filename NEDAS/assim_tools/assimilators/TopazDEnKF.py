@@ -1,81 +1,98 @@
 import numpy as np
-from utils.njit import njit
+from ...utils.njit import njit
 from .batch import BatchAssimilator
 
 class TopazDEnKFAssimilator(BatchAssimilator):
-    @classmethod
-    def local_analysis(cls, *args, **kwargs):
-        return cls._local_analysis(*args, **kwargs)
 
-    @staticmethod
-    @njit(cache=True)
-    def _local_analysis(state_prior, obs_prior, obs, obs_err, hlfactor,
-                    state_z, obs_z, vroi, localize_vtype,
-                    state_t, obs_t, troi, localize_ttype,
-                    impact_on_state,
-                    rfactor=1., kfactor=1., nlobs_max=None) ->None:
-        """perform local analysis for one location in the analysis grid partition"""
-        nens, nfld = state_prior.shape
-        nens_obs, nlobs = obs_prior.shape
-        if nens_obs != nens:
-            raise ValueError('Error: number of ensemble members in state and obs do not match!')
+    def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
+        state_var_id = state_data['var_id']  ##variable id for each field (nfld)
+        state_z = state_data['z'][:, loc_id]
+        state_t = state_data['t'][:]
 
-        lfactor_old = np.zeros(nlobs)
-        weights_old = np.eye(nens)
+        ##vertical, time and cross-variable (impact_on_state) localization
+        obs_value = obs_data['obs'][ind]
+        obs_err = obs_data['err_std'][ind]
+        obs_z = obs_data['z'][ind]
+        obs_t = obs_data['t'][ind]
+        obs_rec_id = obs_data['obs_rec_id'][ind]
+        vroi = obs_data['vroi'][obs_rec_id]
+        troi = obs_data['troi'][obs_rec_id]
+        impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
 
-        ##loop through the field records
-        for n in range(nfld):
+        local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+                            obs_value, obs_err, hlfactor,
+                            state_z, obs_z, vroi, c.localization_funcs['vertical'],
+                            state_t, obs_t, troi, c.localization_funcs['temporal'],
+                            impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
 
-            ##vertical localization
-            vdist = np.abs(obs_z - state_z[n])
-            vlfactor = local_factor_distance_based(vdist, vroi, localize_vtype)
-            if (vlfactor==0).all():
-                continue  ##the state is outside of vroi of all obs, skip
+@njit
+def local_analysis_main(state_prior, obs_prior,
+                        obs, obs_err, hlfactor,
+                        state_z, obs_z, vroi, vlocal_func,
+                        state_t, obs_t, troi, tlocal_func,
+                        impact_on_state, rfactor=1., kfactor=1., nlobs_max=None) ->None:
+    """perform local analysis for one location in the analysis grid partition"""
+    nens, nfld = state_prior.shape
+    nens_obs, nlobs = obs_prior.shape
+    if nens_obs != nens:
+        raise ValueError('Error: number of ensemble members in state and obs do not match!')
 
-            ##temporal localization
-            tdist = np.abs(obs_t - state_t[n])
-            tlfactor = local_factor_distance_based(tdist, troi, localize_ttype)
-            if (tlfactor==0).all():
-                continue  ##the state is outside of troi of all obs, skip
+    lfactor_old = np.zeros(nlobs)
+    weights_old = np.eye(nens)
 
-            ##total lfactor
-            lfactor =  hlfactor * vlfactor * tlfactor * impact_on_state[:, n]
-            if (lfactor==0).all():
-                continue
+    ##loop through the field records
+    for n in range(nfld):
 
-            ##if prior spread is zero, don't update
-            if np.std(state_prior[:, n]) == 0:
-                continue
+        ##vertical localization
+        vdist = np.abs(obs_z - state_z[n])
+        vlfactor = vlocal_func(vdist, vroi)
+        if (vlfactor==0).all():
+            continue  ##the state is outside of vroi of all obs, skip
 
-            ##only need to assimilate obs with lfactor>0
-            ind = np.where(lfactor>0)[0]
+        ##temporal localization
+        tdist = np.abs(obs_t - state_t[n])
+        tlfactor = tlocal_func(tdist, troi)
+        if (tlfactor==0).all():
+            continue  ##the state is outside of troi of all obs, skip
 
-            ##TODO:get rid of obs if obs_prior is nan
-            # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
-            # ind = ind[valid]
+        ##total lfactor
+        lfactor =  hlfactor * vlfactor * tlfactor * impact_on_state[:, n]
+        if (lfactor==0).all():
+            continue
 
-            ##sort the obs from high to low lfactor
-            sort_ind = np.argsort(lfactor[ind])[::-1]
-            ind = ind[sort_ind]
+        ##if prior spread is zero, don't update
+        if np.std(state_prior[:, n]) == 0:
+            continue
 
-            ##limit number of local obs if needed
-            ###e.g. topaz only keep the first 3000 obs with highest lfactor
-            # nlobs_max = 3000
-            ind = ind[:nlobs_max]
+        ##only need to assimilate obs with lfactor>0
+        ind = np.where(lfactor>0)[0]
 
-            ##use cached weight if no localization is applied, to avoid repeated computation
-            if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
-                weights = weights_old
-            else:
-                weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], filter_type, lfactor[ind], rfactor, kfactor)
+        ##TODO:get rid of obs if obs_prior is nan
+        # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
+        # ind = ind[valid]
 
-            ##perform local analysis and update the ensemble state
-            state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
+        ##sort the obs from high to low lfactor
+        sort_ind = np.argsort(lfactor[ind])[::-1]
+        ind = ind[sort_ind]
 
-            lfactor_old = lfactor[ind]
-            weights_old = weights
+        ##limit number of local obs if needed
+        ###e.g. topaz only keep the first 3000 obs with highest lfactor
+        # nlobs_max = 3000
+        ind = ind[:nlobs_max]
 
-@njit(cache=True)
+        ##use cached weight if no localization is applied, to avoid repeated computation
+        if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
+            weights = weights_old
+        else:
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind], rfactor, kfactor)
+
+        ##perform local analysis and update the ensemble state
+        state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
+
+        lfactor_old = lfactor[ind]
+        weights_old = weights
+
+@njit
 def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
     """
     Compute the transform weights for the local ensemble
@@ -194,7 +211,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
 
     return weights
 
-@njit(cache=True)
+@njit
 def apply_ensemble_transform(ens_prior, weights):
     """Apply the weights to transform local ensemble"""
 

@@ -9,7 +9,7 @@ _deg=180./_pi_1
 _rad=1.0/_deg
 _epsil=1.0E-9
 
-class ConformalMapping(object) :
+class ConformalMapping:
     def __init__(self,lat_a,lon_a,lat_b,lon_b,wlim,elim,ires,slim,nlim,jres,mercator,mercfac,lold) :
         """Constructor: arguments: (grid.info)
             lat_a, lon_a      : position of pole A in geo coordinates

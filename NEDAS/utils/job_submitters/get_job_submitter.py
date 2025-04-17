@@ -1,7 +1,7 @@
 from typing import Optional
-from .base import JobSubmitter
-from .slurm import SLURMJobSubmitter
-from .oar import OARJobSubmitter
+from NEDAS.utils.job_submitters.base import JobSubmitter
+from NEDAS.utils.job_submitters.slurm import SLURMJobSubmitter
+from NEDAS.utils.job_submitters.oar import OARJobSubmitter
 
 def get_job_submitter(scheduler:Optional[str]=None, **kwargs) -> JobSubmitter:
     """

@@ -4,8 +4,8 @@ import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from config import Config
-from utils.conversion import t2s, s2t, dt1h
+from NEDAS.config import Config
+from NEDAS.utils.conversion import t2s, s2t, dt1h
 
 def get_scale(fld, krange, s):
     return fld

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import re
-from config.parse_config import convert_notation
+from NEDAS.config.parse_config import convert_notation
 
 class TestConvertNotation(unittest.TestCase):
     def test_dict_conversion(self):

@@ -36,6 +36,9 @@ time_analysis_start: '202301010000' ## start time of the first analysis cycle
 time_analysis_end: '202302180000'   ## end time of the last analysis cycle
 cycle_period: 12                    ## cycle period, in hours
 
+time: '202301010000'
+step: 'preprocess'
+
 obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time
 obs_time_scale: 0                ## smoothing window in hours for observations
 state_time_steps: [0]            ## time steps defining the 4D state vector, hours, relative to cycle time

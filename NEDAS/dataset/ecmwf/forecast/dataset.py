@@ -1,11 +1,11 @@
 import os
 import pygrib
-import numpy as np
-from grid import Grid
 from pyproj import Proj
-from utils.conversion import units_convert, s2t, dt1h
-from .. import atmos_utils
-from ...dataset_config import DatasetConfig
+import numpy as np
+from NEDAS.grid import Grid
+from NEDAS.utils.conversion import units_convert, s2t, dt1h
+from NEDAS.dataset.ecmwf import atmos_utils
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 from dataset.ecmwf.era5 import Dataset
 era5 = Dataset()

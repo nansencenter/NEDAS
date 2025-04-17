@@ -4,8 +4,8 @@ import glob
 from datetime import datetime, timedelta
 import netCDF4
 import pyproj
-from grid import Grid
-from ...dataset_config import DatasetConfig
+from NEDAS.grid import Grid
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
 

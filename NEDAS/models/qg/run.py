@@ -1,6 +1,6 @@
 ##demo of how to run the qg model in standalone mode
 from datetime import datetime
-from models.qg import Model
+from NEDAS.models.qg import Model
 
 ##run the model by
 ##python models/qg/run.py -c models/qg/default.yml

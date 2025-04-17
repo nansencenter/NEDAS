@@ -1,6 +1,6 @@
 import numpy as np
 import unittest
-from assim_tools.analysis import *
+from NEDAS.assim_tools.analysis import *
 
 class TestAnalysis(unittest.TestCase):
 

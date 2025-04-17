@@ -1,6 +1,6 @@
 import numpy as np
-from models.lorenz96 import Model
-from ..dataset_config import DatasetConfig
+from NEDAS.models.lorenz96 import Model
+from NEDAS.dataset.dataset_config import DatasetConfig
 
 class Dataset(DatasetConfig):
 

@@ -2,8 +2,8 @@ import unittest
 import numpy as np
 from datetime import datetime
 
-from models.topaz.v5 import Model
-from models.topaz.confmap import ConformalMapping
+from NEDAS.models.topaz.v5 import Model
+from NEDAS.models.topaz.confmap import ConformalMapping
 
 
 class TestTopaz5Model(unittest.TestCase):

@@ -1,11 +1,11 @@
 import numpy as np
-from utils.njit import njit
-from .batch import BatchAssimilator
+from NEDAS.utils.njit import njit
+from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
-        state_var_id = state_data['var_id']  ##variable id for each field (nfld)\
+        state_var_id = state_data['var_id']  ##variable id for each field (nfld)
         state_z = state_data['z'][:, loc_id]
         state_t = state_data['t'][:]
 
@@ -25,7 +25,7 @@ class ETKFAssimilator(BatchAssimilator):
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
 
-@njit(cache=True)
+@njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
@@ -92,7 +92,7 @@ def local_analysis_main(state_prior, obs_prior,
         lfactor_old = lfactor[ind]
         weights_old = weights
 
-@njit(cache=True)
+@njit
 def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
     """
     Compute the transform weights for the local ensemble
@@ -198,7 +198,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
 
     return weights
 
-@njit(cache=True)
+@njit
 def apply_ensemble_transform(ens_prior, weights):
     """Apply the weights to transform local ensemble"""
 

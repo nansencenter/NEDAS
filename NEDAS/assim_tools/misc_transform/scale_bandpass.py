@@ -1,6 +1,6 @@
 import numpy as np
-from grid import Grid
-from utils.multiscale import get_scale_component, get_error_scale_factor
+from NEDAS.grid import Grid
+from NEDAS.utils.multiscale import get_scale_component, get_error_scale_factor
 
 class ScaleBandpassTransform:
     """

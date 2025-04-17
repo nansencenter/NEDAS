@@ -1,9 +1,9 @@
 import os
 import inspect
 from datetime import datetime
-from config import parse_config
+from NEDAS.config import parse_config
 
-class ModelConfig(object):
+class ModelConfig:
     """
     Class for configuring and running a model
     """

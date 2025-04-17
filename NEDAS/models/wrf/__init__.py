@@ -1,1 +1,1 @@
-from .model import Model
+from NEDAS.models.wrf.model import Model

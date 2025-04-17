@@ -2,16 +2,16 @@ import os
 import glob
 import numpy as np
 from datetime import datetime, timedelta
-from utils.netcdf_lib import nc_read_var, nc_write_var
-from utils.conversion import t2s, s2t, dt1h, units_convert
-from utils.shell_utils import run_command, makedir, run_job
-from utils.progress import watch_files
-from grid import Grid
-from .gmshlib import read_mshfile, proj
-from .bin_io import read_data, write_data
-from .drift_utils import get_deformation_nodes
-from .namelist import namelist
-from ...model_config import ModelConfig
+from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
+from NEDAS.utils.conversion import t2s, s2t, dt1h, units_convert
+from NEDAS.utils.shell_utils import run_command, makedir, run_job
+from NEDAS.utils.progress import watch_files
+from NEDAS.grid import Grid
+from NEDAS.models.nextsim.v1.gmshlib import read_mshfile, proj
+from NEDAS.models.nextsim.v1.bin_io import read_data, write_data
+from NEDAS.models.nextsim.v1.drift_utils import get_deformation_nodes
+from NEDAS.models.nextsim.v1.namelist import namelist
+from NEDAS.models.model_config import ModelConfig
 
 class NextsimModel(ModelConfig):
     """
