@@ -40,32 +40,29 @@ def str2bool(data):
 
 def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     """
-    Load configuration from yaml files and runtime arguments
+    Load configuration from YAML files and runtime arguments.
 
-    Inputs:
-    - code_dir: str
-      path to the default.yml
-    - config_file: str
-      alternative yaml config file to overwrite the default settings
-    - parse_args: bool
-      if true, parse runtime arguments with argparse
-      NB: only enable this once in a program to avoid namespace confusion
-    - **kwargs
-      config_dict entries can also be added/updated through kwargs
+    This function loads configuration settings from a default YAML file,
+    optionally overridden by a user-specified YAML file and/or runtime arguments.
 
-    Return:
-    - config_dict: dict[key, value]
-      a dictionary with config variables
+    Args:
+        code_dir (str): Path to the `default.yml` file.
+        config_file (str): Alternative YAML config file to overwrite default settings.
+        parse_args (bool): If True, parse runtime arguments with argparse.
+            Only enable this once in a program to avoid namespace confusion.
+        **kwargs: Additional configuration key-value pairs that can override existing settings.
 
-    If user provides --config_file=file.yml then values defined in file.yml
-    will overwrite the default values
+    Returns:
+        dict: A dictionary containing all configuration variables.
 
-    The default.yml provides the list of configuration variables,
-    an ArgumentParser will be created to parse these variables.
-    If user provide a runtime argument --variable=value, then value will be
-    used to replace the default value for that variable.
+    Notes:
+        - If the user provides `--config_file=file.yml`, then values defined in `file.yml`
+          will overwrite those in the default YAML file.
+        - The `default.yml` defines the list of configuration variables.
+        - An ArgumentParser is created to parse these variables.
+        - If the user provides a runtime argument like `--variable=value`,
+          that value will replace the default for the specified variable.
     """
-
     if parse_args:
         input_args = sys.argv[1:]
         if len(input_args) == 0:

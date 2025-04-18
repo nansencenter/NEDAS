@@ -2,6 +2,7 @@ nproc_per_run: 1
 nproc_per_util: 1
 restart_dt: 12
 output_dt: 12
+forcing_dt: 12
 model_code_dir: ''
 model_data_dir: ''
 

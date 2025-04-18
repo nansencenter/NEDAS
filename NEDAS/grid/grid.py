@@ -162,20 +162,16 @@ class Grid:
     def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
         """
         Create a regular grid within specified boundaries.
+
         Parameters:
-        - proj: pyproj.Proj
-        Projection from lon,lat to x,y.
-        - xstart, xend, ystart, yend: float
-        Boundaries of the grid in the x and y directions.
-        - dx: float
-        Resolution of the grid.
-        - centered: bool, optional
-        Toggle for grid points to be on vertices (False) or in the middle of each grid box (True).
-        Default is False.
-        - **kwargs:
-          Additional keyword arguments.
+            proj (pyproj.Proj): Projection from lon,lat to x,y.
+            xstart, xend, ystart, yend (float): Boundaries of the grid in the x and y directions.
+            dx (float): Resolution of the grid.
+            centered (bool): Optional, Toggle for grid points to be on vertices (False) or in the middle of each grid box (True).  Default is False.
+            **kwargs: Additional keyword arguments.
+
         Returns:
-        - Grid: A Grid object representing the regular grid.
+            Grid: A Grid object representing the regular grid.
         """
         self = cls.__new__(cls)
         dx = float(dx)
@@ -432,28 +428,34 @@ class Grid:
 
     def find_index(self, x_, y_):
         """
-        Finding indices of self.x,y corresponding to the given x_,y_
-        Inputs:
-        - x_, y_: float or np.array
-        x, y coordinates of target point(s)
+        Find indices of `self.x`, `self.y` corresponding to the given `x_`, `y_`.
+
+        Args:
+            x_ (float or np.ndarray): x-coordinates of target point(s).
+            y_ (float or np.ndarray): y-coordinates of target point(s).
+
         Returns:
-        - inside: bool, np.array with x_.flatten().size
-        Whether x_,y_ points are inside the grid.
-        Note that the following returned properties only have the inside points
-        - indices: int, np.array with inside_size
-        Indices of the grid elements that x_,y_ falls in.
-        For regular grid, it is None since vertices can pinpoint the grid box already.
-        For irregular mesh, it is the index for tri.triangles from tri_finder.
-        - vertices: int, np.array with shape (inside_size, n),
-        n = 4 for regular grid boxes, or 3 for mesh elements
-        The grid indices in self.x,y (flattened) for the nodes of each
-        grid element that x_,y_ falls in.
-        - in_coords: float, np.array with shape (inside_size, n),
-        n = 2 for regular grid boxes, or 3 for mesh elements
-        The internal coordinates for x_,y_ within the grid box/element,
-        used in computing interp_weights, see illustration below.
-        - nearest: int, np.array with inside_size
-        The indices for the nodes in self.x,y that are closest to x_,y_
+            inside (np.ndarray of bool): Boolean array of shape `(x_.size,)` indicating whether
+                each `x_`, `y_` point lies inside the grid.
+
+            indices (np.ndarray of int or None): Indices of grid elements containing the input points.
+                - For regular grids, this is `None` since vertices suffice to locate the grid box.
+                - For unstructured meshes, these are indices into `tri.triangles`, from `tri_finder`.
+
+            vertices (np.ndarray of int): Array of shape `(inside_size, n)`, where
+                `n = 4` for regular grid boxes or `n = 3` for mesh triangles.
+                These are indices into `self.x`, `self.y` (flattened) for the vertices
+                of the grid element that each point falls in.
+
+            in_coords (np.ndarray of float): Array of shape `(inside_size, n)` giving internal coordinates
+                of each point within the containing element. Used to compute interpolation weights.
+
+            nearest (np.ndarray of int): Array of shape `(inside_size,)` with indices of the grid nodes
+                closest to each point.
+
+        Notes:
+            - This function assumes `self.x`, `self.y` define either a regular or triangular grid.
+            - Internal coordinates are used for interpolation and vary in dimension based on the grid type.
         """
         x_ = np.array(x_).flatten()
         y_ = np.array(y_).flatten()

@@ -38,12 +38,13 @@ class Config:
 
     @time.setter
     def time(self, value):
-        if isinstance(value, str):
-            self._time = s2t(value)
-        elif isinstance(value, datetime):
-            self._time = value
-        else:
-            raise TypeError(f"Error: time must be a string or datetime object, not {type(value)}")
+        if value:
+            if isinstance(value, str):
+                self._time = s2t(value)
+            elif isinstance(value, datetime):
+                self._time = value
+            else:
+                raise TypeError(f"Error: time must be a string or datetime object, not {type(value)}")
 
     @property
     def prev_time(self):
@@ -128,7 +129,7 @@ class Config:
             ##mask for invalid grid points (none for now, add option later)
             if 'mask' in self.grid_def:
                 model_name = self.grid_def['mask']
-                module = importlib.import_module('models.'+model_name)
+                module = importlib.import_module('NEDAS.models.'+model_name)
                 model = getattr(module, 'Model')()
                 self.grid.mask = model.prepare_mask(self.grid)
             else:
@@ -138,7 +139,7 @@ class Config:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
             kwargs = self.model_def[model_name]
-            module = importlib.import_module('models.'+model_name)
+            module = importlib.import_module('NEDAS.models.'+model_name)
             model = getattr(module, 'Model')(**kwargs)
             self.grid = model.grid
 
@@ -147,7 +148,7 @@ class Config:
         self.model_config = {}
         for model_name, kwargs in self.model_def.items():
             ##load model class instance
-            module = importlib.import_module('models.'+model_name)
+            module = importlib.import_module('NEDAS.models.'+model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
             self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
@@ -157,7 +158,7 @@ class Config:
         self.dataset_config = {}
         for dataset_name, kwargs in self.dataset_def.items():
             ##load dataset module
-            module = importlib.import_module('dataset.'+dataset_name)
+            module = importlib.import_module('NEDAS.dataset.'+dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
             self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.grid.mask, **kwargs)
