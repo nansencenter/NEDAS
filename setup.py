@@ -1,11 +1,3 @@
-[metadata]
-description-file = README.md
+from setuptools import setup
 
-[options]
-packages = find:
-package_dir =
-    =nedas
-include_package_data = True
-install_requires =
-    numpy>=1.18.0
-    # other dependencies from your requirements.txt
+setup()

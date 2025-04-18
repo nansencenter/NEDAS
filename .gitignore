@@ -10,3 +10,5 @@ slurm*out
 .env
 .vscode
 .pytest_cache
+docs/build
+*.egg-info

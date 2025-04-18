@@ -13,9 +13,31 @@ readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: BSD License",
   "Operating System :: OS Independent",
 ]
+dependencies = [
+  "numpy",
+  "scipy",
+  "netCDF4",
+  "pygrib",
+  "pyproj",
+  "pyshp",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+mpi = ["mpi4py"]
+numba = ["numba"]
+fftw = ["pyFFTW"]
+
+[project.scripts]
+nedas-run = "NEDAS.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/nansencenter/NEDAS"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+
