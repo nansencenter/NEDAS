@@ -7,8 +7,8 @@ slurm*out
 *.nc
 *.npy
 *.npz
-log/
-output
 .env
 .vscode
 .pytest_cache
+docs/build
+*.egg-info
