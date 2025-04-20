@@ -4,18 +4,18 @@ NEDAS.schemes package
 Submodules
 ----------
 
-NEDAS.schemes. ensemble\_forecast module
-----------------------------------------
-
-.. automodule:: NEDAS.schemes. ensemble_forecast
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 NEDAS.schemes.base module
 -------------------------
 
 .. automodule:: NEDAS.schemes.base
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+NEDAS.schemes.ensemble\_forecast module
+---------------------------------------
+
+.. automodule:: NEDAS.schemes.ensemble_forecast
    :members:
    :show-inheritance:
    :undoc-members:

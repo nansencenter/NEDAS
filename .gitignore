@@ -12,3 +12,4 @@ slurm*out
 .pytest_cache
 docs/build
 *.egg-info
+*.ipynb

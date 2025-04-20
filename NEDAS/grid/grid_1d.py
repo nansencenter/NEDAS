@@ -1,6 +1,5 @@
 import numpy as np
 import copy
-from functools import cached_property
 
 class Grid1D:
     """
@@ -53,9 +52,6 @@ class Grid1D:
 
     @classmethod
     def regular_grid(cls, xstart, xend, dx, centered=False, **kwargs):
-        """
-        Create a regular grid within specified boundaries.
-        """
         self = cls.__new__(cls)
         x = np.arange(xstart, xend, dx)
         if centered:
@@ -65,24 +61,12 @@ class Grid1D:
 
     @classmethod
     def random_grid(cls, xstart, xend, npoints, **kwargs):
-        """
-        Create a grid with randomly positioned points within specified boundaries.
-        """
         self = cls.__new__(cls)
         x = np.random.uniform(0, 1, npoints) * (xend - xstart) + xstart
         self.__init__(x, bounds=[xstart, xend], regular=False, **kwargs)
         return self
 
     def change_resolution_level(self, nlevel):
-        """
-        Generate a new grid with changed resolution
-        Input:
-         - nlevel: int
-           positive: downsample grid |nlevel| times, each time doubling the grid spacing
-           negative: upsample grid |nlevel| times, each time halving the grid spacing
-        Return:
-         - new_grid: Grid object
-        """
         if not self.regular:
             raise NotImplementedError("change_resolution only works for regular grid now")
         if nlevel == 0:
@@ -98,10 +82,6 @@ class Grid1D:
 
     @property
     def dst_grid(self):
-        """
-        Destination grid for convert, interp, rotate_vector methods
-        once specified a dst_grid, the setter will compute corresponding rotation_matrix and interp_weights
-        """
         return self._dst_grid
 
     @dst_grid.setter
@@ -126,24 +106,9 @@ class Grid1D:
         self.coarsen_nearest = nearest
 
     def set_destination_grid(self, grid):
-        """
-        Set method for self.dst_grid the destination Grid object to convert to.
-        """
         self.dst_grid = grid
 
     def wrap_cyclic(self, x_):
-        """
-        When interpolating for point x_,y_, if the coordinates falls outside of the domain,
-        we wrap around and make then inside again, if the boundary condition is cyclic (self.cyclic_dim)
-
-        Inputs:
-        - x_, y_: np.array
-          x, y coordinates of a grid
-
-        Returns:
-        - x_, y_: np.array
-          Same as input but x, y values are wrapped to be within the boundaries again.
-        """
         if self.cyclic:
             x_ = np.mod(x_ - self.xmin, self.Lx) + self.xmin
         return x_
@@ -178,17 +143,6 @@ class Grid1D:
         return inside, vertices, in_coords, nearest
 
     def _interp_weights(self, inside, vertices, in_coords):
-        """
-        Compute interpolation weights from the outputs of find_index
-        the interp_weights are the weights (sums to 1) given to each grid vertex in self.x,y
-        based on their distance to the x_,y_ points (as specified by the in_coords)
-
-        Inputs:
-        - inside, vertices, in_coords: from the output of self.find_index
-
-        Output:
-        - interp_weights: float, np.array with vertices.shape
-        """
         ##compute bilinear interp weights
         interp_weights = np.zeros(vertices.shape)
         interp_weights[:, 0] =  1-in_coords
@@ -196,28 +150,6 @@ class Grid1D:
         return interp_weights
 
     def interp(self, fld, x=None, y=None, method='linear'):
-        """
-        Interpolation of 2D field data (fld) from one grid (self or given x,y) to another (dst_grid).
-        This can be used for grid refining (low->high resolution) or grid thinning (high->low resolution).
-        This also converts between different grid geometries.
-
-        Inputs:
-        - fld: np.array
-          Input field defined on self, should have same shape as self.x,y
-
-        - x,y: float or np.array, optional
-          If x,y are specified, the function computes the weights and apply them to fld
-          If x,y are None, the self.dst_grid.x,y are used.
-          Since their interp_weights are precalculated by dst_grid.setter it will be efficient
-          to run interp for many different input flds quickly.
-
-        - method: str
-          Interpolation method, can be 'nearest' or 'linear'
-
-        Returns:
-        - fld_interp: float, np.array
-          The interpolated field defined on the destination grid
-        """
         if x is None:
             ##use precalculated weights for self.dst_grid
             inside = self.interp_inside
@@ -246,21 +178,6 @@ class Grid1D:
 
     ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
-        """
-        Coarse-graining is sometimes needed when the dst_grid is at lower resolution than self.
-        Since many points of self.x,y falls in one dst_grid box/element, it is better to
-        average them to represent the field on the low-res grid, instead of interpolating
-        only from the nearest points that will cause representation errors.
-
-        Inputs:
-        - fld: float, np.array
-          Input field to perform coarse-graining on, it is defined on self.
-
-        Outputs:
-        - fld_coarse: float, np.array
-          The coarse-grained field defined on self.dst_grid.
-        """
-
         ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
@@ -284,9 +201,6 @@ class Grid1D:
         return fld_coarse.reshape(self.dst_grid.x.shape)
 
     def convert(self, fld, is_vector=False, method='linear', coarse_grain=False, **kwargs):
-        """
-        Main method to convert from self to dst_grid coordinate systems:
-        """
         if self.dst_grid != self:
             fld_out = np.full(self.dst_grid.x.shape, np.nan)
             fld_out = self.interp(fld, method=method)
@@ -299,20 +213,10 @@ class Grid1D:
             fld_out = fld
         return fld_out
 
-    def distance_in_x(self, ref_x, x):
+    def distance(self, ref_x, x, ref_y=None, y=None, p=1):
         ##normal cartesian distances in x and y
         dist_x = np.abs(x - ref_x)
         ##if there are cyclic boundary condition, take care of the wrap around
         if self.cyclic:
             dist_x = np.minimum(dist_x, self.Lx - dist_x)
         return dist_x
-
-    def distance_in_y(self, ref_y, y):
-        return np.zeros(y.shape)
-
-    def distance(self, ref_x, x, ref_y=None, y=None, p=1):
-        """
-        Compute distance for points x to the reference point
-        """
-        return self.distance_in_x(ref_x, x)
-

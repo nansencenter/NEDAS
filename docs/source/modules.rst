@@ -5,4 +5,3 @@ NEDAS
    :maxdepth: 4
 
    NEDAS
-   setup

@@ -20,6 +20,30 @@ NEDAS.grid.grid\_1d module
    :show-inheritance:
    :undoc-members:
 
+NEDAS.grid.grid\_base module
+----------------------------
+
+.. automodule:: NEDAS.grid.grid_base
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+NEDAS.grid.grid\_irregular module
+---------------------------------
+
+.. automodule:: NEDAS.grid.grid_irregular
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+NEDAS.grid.grid\_regular module
+-------------------------------
+
+.. automodule:: NEDAS.grid.grid_regular
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 Module contents
 ---------------
 
