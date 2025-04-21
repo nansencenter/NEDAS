@@ -1,7 +1,8 @@
 import os
+from abc import ABC, abstractmethod
 from NEDAS.utils.shell_utils import makedir
 
-class AnalysisScheme:
+class AnalysisScheme(ABC):
     """
     Class for setting up and running the analysis scheme
 
@@ -75,7 +76,7 @@ class AnalysisScheme:
             if c.localization[key]:
                 local_funcs[key] = self.get_localization_func_component(c.localization[key])
             else:
-                local_funcs[key]
+                local_funcs[key] = None
         return local_funcs
 
     def get_localization_func_component(self, localization_type):
@@ -118,6 +119,10 @@ class AnalysisScheme:
             from NEDAS.assim_tools.misc_transform.identity import Transform
         return Transform(c)
 
+    @abstractmethod
     def __call__(self):
-        raise NotImplementedError("AnalysisScheme.__call__ function shall be implemented by subclasses")
+        """
+        Main function to run the analysis scheme.
+        """
+        pass
 

@@ -11,12 +11,15 @@ def get_task_list(c, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""
     # parse kwargs
     # load the default config first
+    default_config_file = os.path.join(os.path.dirname(__file__), 'default.yml')
+    with open(default_config_file, 'r') as f:
+        kwargs_from_default = yaml.safe_load(f)
     kwargs_from_config_file = {}
-    if 'config_file' in kwargs:
+    if 'config_file' in kwargs and kwargs['config_file'] is not None:
         with open(kwargs['config_file'], 'r') as f:
             kwargs_from_config_file = yaml.safe_load(f)
     # overwrite with kwargs
-    kwargs = {**kwargs_from_config_file, **kwargs}
+    kwargs = {**kwargs_from_default, **kwargs_from_config_file, **kwargs}
 
     ##generate task list
     tasks = []

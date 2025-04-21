@@ -23,7 +23,7 @@ def timer(c=None):
             finally:
                 t1 = time.time()
                 if c is None or (hasattr(c, 'comm') and c.comm.Get_rank() == getattr(c, 'pid_show', 0)):
-                    print(f"timer: {func.__name__} took {t1 - t0} seconds\n", flush=True)
+                    print(f"timer: {func.__name__} took {t1 - t0} seconds", flush=True)
         return wrapper
 
     return decorator
