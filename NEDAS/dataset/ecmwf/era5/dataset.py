@@ -8,9 +8,9 @@ import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
 from NEDAS.dataset.ecmwf import atmos_utils
-from NEDAS.dataset.dataset_config import DatasetConfig
+from NEDAS.dataset.base import DatasetBase
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 

@@ -1,8 +1,9 @@
 import os
 from datetime import timedelta
 from NEDAS.config import Config
-from NEDAS.scripts import ensemble_forecast
+from NEDAS.schemes.offline_filter import OfflineFilterAnalysisScheme
 
+scheme = OfflineFilterAnalysisScheme()
 c = Config(parse_args=True)
 model = c.model_config['qg']
 
@@ -14,7 +15,7 @@ print(f"initial condition type: {model.psi_init_type}")
 print(f"spinup period: {model.spinup_hours} hours")
 
 print(f"Running ensemble forecast from {c.time} to {c.next_time}")
-ensemble_forecast.run(c)
+scheme.run_step(c, 'ensemble_forecast')
 
 print("Moving output files")
 fcst_dir = c.forecast_dir(c.time, 'qg')

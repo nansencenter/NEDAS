@@ -6,9 +6,9 @@ from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.models.qg.namelist import namelist
 from NEDAS.models.qg.util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from NEDAS.models.qg.util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
-from NEDAS.models.model_config import ModelConfig
+from NEDAS.models.base import ModelBase
 
-class QGModel(ModelConfig):
+class QGModel(ModelBase):
     """
     Class for configuring and running the qg model
     """

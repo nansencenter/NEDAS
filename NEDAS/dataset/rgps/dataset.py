@@ -6,9 +6,9 @@ import pyproj
 from scipy.spatial import KDTree
 from NEDAS.grid import Grid
 from NEDAS.dataset.rgps.utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
-from NEDAS.dataset.dataset_config import DatasetConfig
+from NEDAS.dataset.base import DatasetBase
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)

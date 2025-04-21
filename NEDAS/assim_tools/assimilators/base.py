@@ -1,9 +1,10 @@
 import os
+from abc import ABC, abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root
 from NEDAS.utils.progress import timer
 
-class Assimilator:
+class Assimilator(ABC):
     def __init__(self, c):
         self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
 
@@ -90,8 +91,9 @@ class Assimilator:
         ##TODO there is a bug here, in transpose seq[:, ind] out of bound
         # obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
 
+    @abstractmethod
     def assimilation_algorithm(self, c, state, obs):
         """
         The main assimilation algorithm will be implemented by subclasses
         """
-        raise NotImplementedError
+        pass

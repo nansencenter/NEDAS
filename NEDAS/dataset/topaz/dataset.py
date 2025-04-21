@@ -4,9 +4,9 @@ import glob
 from NEDAS.utils.conversion import dt1h
 from NEDAS.models.topaz.time_format import datetojul
 from NEDAS.dataset.topaz.uf_data import read_uf_data
-from NEDAS.dataset.dataset_config import DatasetConfig
+from NEDAS.dataset.base import DatasetBase
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
     """
     Observations already preprocessed by TOPAZ EnKF Prep_Routines, saved in unformatted binary format
     """

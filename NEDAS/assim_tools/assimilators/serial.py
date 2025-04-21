@@ -1,4 +1,5 @@
 import copy
+from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.utils.progress import progress_bar
@@ -134,11 +135,14 @@ class SerialAssimilator(Assimilator):
         obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
+    @abstractmethod
     def obs_increment(self):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def update_local_state(self):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def update_local_obs(self):
-        raise NotImplementedError
+        pass

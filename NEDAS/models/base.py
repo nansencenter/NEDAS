@@ -1,9 +1,11 @@
 import os
 import inspect
+from abc import ABC, abstractmethod
+import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 
-class ModelConfig:
+class ModelBase(ABC):
     """
     Class for configuring and running a model
     """
@@ -57,3 +59,79 @@ class ModelConfig:
 
         return kwargs
 
+    @abstractmethod
+    def read_grid(self, **kwargs) -> None:
+        """
+        Read the grid information from the model output.
+
+        Args:
+            **kwargs: Keyword arguments for reading the grid.
+        """
+        pass
+
+    @abstractmethod
+    def read_var(self, **kwargs) -> np.ndarray:
+        """
+        Read a variable from the model output.
+
+        Args:
+            **kwargs: Keyword arguments for reading the variable.
+
+        Returns:
+            np.ndarray: The read variable.
+        """
+        pass
+
+    @abstractmethod
+    def write_var(self, var, **kwargs) -> None:
+        """
+        Write a variable to the model output.
+
+        Args:
+            var (np.ndarray): The variable to write.
+            **kwargs: Keyword arguments for writing the variable.
+        """
+        pass
+
+    @abstractmethod
+    def z_coords(self, **kwargs) -> np.ndarray:
+        """
+        Get the vertical coordinates of the model.
+
+        Args:
+            **kwargs: Keyword arguments for getting the vertical coordinates.
+
+        Returns:
+            np.ndarray: The vertical coordinates.
+        """
+        pass
+
+    @abstractmethod
+    def preprocess(self, **kwargs) -> None:
+        """
+        Preprocess the model data.
+
+        Args:
+            **kwargs: Keyword arguments for preprocessing.
+        """
+        pass
+
+    @abstractmethod
+    def postprocess(self, **kwargs) -> None:
+        """
+        Postprocess the model data.
+
+        Args:
+            **kwargs: Keyword arguments for postprocessing.
+        """
+        pass
+
+    @abstractmethod
+    def run(self, **kwargs) -> None:
+        """
+        Run the model.
+
+        Args:
+            **kwargs: Keyword arguments for running the model.
+        """
+        pass

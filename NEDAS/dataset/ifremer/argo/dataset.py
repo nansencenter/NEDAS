@@ -3,9 +3,9 @@ import glob
 import numpy as np
 from datetime import datetime, timedelta
 from NEDAS.utils.conversion import dt1h
-from NEDAS.dataset.dataset_config import DatasetConfig
+from NEDAS.dataset.base import DatasetBase
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)

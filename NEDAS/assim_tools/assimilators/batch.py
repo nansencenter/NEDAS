@@ -1,4 +1,5 @@
 import copy
+from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.utils.progress import progress_bar
@@ -104,8 +105,8 @@ class BatchAssimilator(Assimilator):
             ##observations within the bounding box + halo region of width hroi will be assigned to
             ##this partition. Although this will include some observations near the corner that are
             ##not within hroi of any grid points, this is favorable for the efficiency in finding subset
-            obs_inds[par_id] = np.where(np.logical_and(c.grid.distance_in_x(xc, xo) <= Dx+hroi,
-                                                       c.grid.distance_in_y(yc, yo) <= Dy+hroi))[0]
+            obs_inds[par_id] = np.where(np.logical_and(c.grid.distance(xc, xo, yc, yc, p=1) <= Dx+hroi,
+                                                       c.grid.distance(xc, xc, yc, yo, p=1) <= Dy+hroi))[0]
 
         return obs_inds
 
@@ -224,7 +225,8 @@ class BatchAssimilator(Assimilator):
             obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
+    @abstractmethod
     def local_analysis(self):
         """Local analysis scheme for each model state variable (grid point)
         to be implemented by derived classes"""
-        raise NotImplementedError
+        pass

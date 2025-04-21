@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import netCDF4
 import pyproj
 from NEDAS.grid import Grid
-from NEDAS.dataset.dataset_config import DatasetConfig
+from NEDAS.dataset.base import DatasetBase
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)

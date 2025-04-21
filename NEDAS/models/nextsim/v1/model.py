@@ -11,9 +11,9 @@ from NEDAS.models.nextsim.v1.gmshlib import read_mshfile, proj
 from NEDAS.models.nextsim.v1.bin_io import read_data, write_data
 from NEDAS.models.nextsim.v1.drift_utils import get_deformation_nodes
 from NEDAS.models.nextsim.v1.namelist import namelist
-from NEDAS.models.model_config import ModelConfig
+from NEDAS.models.base import ModelBase
 
-class NextsimModel(ModelConfig):
+class NextsimModel(ModelBase):
     """
     Class for configuring and running the nextsim v1 model (lagrangian version)
     """

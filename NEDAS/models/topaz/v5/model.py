@@ -13,9 +13,9 @@ from NEDAS.models.topaz.v5.cice_utils import thickness_upper_limit, adjust_ice_v
 from NEDAS.models.topaz.time_format import dayfor
 from NEDAS.models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileForcing
 from NEDAS.models.topaz.model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
-from NEDAS.models.model_config import ModelConfig
+from NEDAS.models.base import ModelBase
 
-class Topaz5Model(ModelConfig):
+class Topaz5Model(ModelBase):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 

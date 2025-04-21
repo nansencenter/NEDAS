@@ -6,9 +6,9 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
 # from .namelist import namelist
 # from .bin_io import read_
-from NEDAS.models.model_config import ModelConfig
+from NEDAS.models.base import ModelBase
 
-class Model(ModelConfig):
+class Model(ModelBase):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)

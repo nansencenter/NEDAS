@@ -1,9 +1,11 @@
 import os
 import inspect
+from abc import ABC, abstractmethod
+import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 
-class DatasetConfig:
+class DatasetBase(ABC):
     """
     Dataset class (template for specific dataset sources)
     """
@@ -55,10 +57,10 @@ class DatasetConfig:
 
         return kwargs
 
-    def read_obs(self, **kwargs):
+    @abstractmethod
+    def read_obs(self, **kwargs) -> dict:
         """
         Return observation sequence matching the given kwargs
         """
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
         return obs_seq
-

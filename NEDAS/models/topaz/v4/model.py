@@ -8,9 +8,9 @@ from NEDAS.utils.shell_utils import run_job
 from NEDAS.models.topaz.v4.namelist import namelist
 from NEDAS.models.topaz.abfile import ABFileRestart, ABFileArchv, ABFileBathy, ABFileGrid, ABFileForcing
 from NEDAS.models.topaz.model_grid import get_topaz_grid, stagger, destagger
-from NEDAS.models.model_config import ModelConfig
+from NEDAS.models.base import ModelBase
 
-class Model(ModelConfig):
+class Model(ModelBase):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 

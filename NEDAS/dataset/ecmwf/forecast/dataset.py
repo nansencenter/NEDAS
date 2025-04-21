@@ -5,12 +5,12 @@ import numpy as np
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert, s2t, dt1h
 from NEDAS.dataset.ecmwf import atmos_utils
-from NEDAS.dataset.dataset_config import DatasetConfig
-from NEDAS.dataset.ecmwf.era5 import Dataset
+from NEDAS.dataset.base import DatasetBase
 
-era5 = Dataset()
+from NEDAS.dataset.ecmwf.era5 import Dataset as ERA5Dataset
+era5 = ERA5Dataset()
 
-class Dataset(DatasetConfig):
+class Dataset(DatasetBase):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
         self.variables = {
