@@ -107,20 +107,20 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     parser = argparse.ArgumentParser()
 
     for key, value in config_dict.items():
-
+        key_rec = {}
         value = convert_notation(value)
-
-        ##bool variable type needs special treatment for parsing runtime input string
-        if isinstance(value, bool):
-            key_type = lambda x: bool(str2bool(x))
-        else:
-            key_type = type(value)
-
-        ##help message shows the default value and type for this argument
-        key_help = f"type: {type(value).__name__}, default: {value}"
+        key_rec['default'] = value
+        if value is not None:
+            ##bool variable type needs special treatment for parsing runtime input string
+            if isinstance(value, bool):
+                key_rec['type'] = lambda x: bool(str2bool(x))
+            else:
+                key_rec['type'] = type(value)
+            ##help message shows the default value and type for this argument
+            key_rec['help'] = f"type: {type(value).__name__}, default: {value}".replace('%','%%')
 
         ##add the argument to parser
-        parser.add_argument('--'+key, default=value, type=key_type, help=key_help)
+        parser.add_argument('--'+key, **key_rec)
 
     ##show help message
     if args.help:
@@ -139,5 +139,3 @@ Furthermore, you can also overwrite some configuration variables by specifying t
 
     ##return the dict with config variables
     return vars(config)
-
-
