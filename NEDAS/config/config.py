@@ -96,21 +96,40 @@ class Config:
                 self.keys.append('time')
 
     def set_comm(self):
-        ##initialize mpi communicator
+        ##initialize mpi communicator (could be size 1 for serial program)
         self.comm = Comm()
-        if not hasattr(self, 'nproc'):
-            self.nproc = self.comm.Get_size()  ##number of available processors
+        comm_size = self.comm.Get_size()
         self.pid = self.comm.Get_rank()  ##current processor id
 
+        ##self.nproc is the total number of processors
+        if hasattr(self, 'nproc') and self.nproc is not None:
+            ##if it is set in config file, check if it matches the actual comm size
+            if comm_size > 1 and self.nproc != comm_size:
+                raise ValueError(f"Config nproc={self.nproc} does not match MPI comm size={comm_size}.")
+        else:
+            ##if not set, figure out the available number of processors
+            if comm_size == 1:
+                ##serial program, set nproc to available processors (scheduler can spawn tasks to them)
+                self.nproc = os.cpu_count()
+            else:
+                ##mpi program, set nproc to comm size
+                self.nproc = comm_size
+
         ##divide processors into mem/rec groups
-        if not hasattr(self, 'nproc_mem'):
+        if not hasattr(self, 'nproc_mem') or self.nproc_mem is None:
             self.nproc_mem = self.nproc
         assert self.nproc % self.nproc_mem == 0, f"nproc={self.nproc} is not evenly divided by nproc_mem={self.nproc_mem}"
         self.nproc_rec = int(self.nproc/self.nproc_mem)
         self.pid_mem = self.pid % self.nproc_mem
         self.pid_rec = self.pid // self.nproc_mem
-        self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
-        self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
+
+        ##split comm if in mpi program
+        if comm_size > 1:
+            self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
+            self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
+        else:
+            self.comm_mem = self.comm
+            self.comm_rec = self.comm
 
     def set_analysis_grid(self):
         ##initialize analysis grid
@@ -122,9 +141,9 @@ class Config:
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
-            centered = self.grid_def.get('centered', False)
-            distance_type = self.grid_def.get('distance_type', 'cartesian')
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, centered=centered, distance_type=distance_type)
+            known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx'}
+            other_opts = {k: v for k, v in self.grid_def.items() if k not in known_keys}
+            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
             ##mask for invalid grid points (none for now, add option later)
             if 'mask' in self.grid_def:
