@@ -1,6 +1,6 @@
 import os
 import subprocess
-from NEDAS.utils.job_submitters import get_job_submitter
+from NEDAS.job_submitters import get_job_submitter
 
 def makedir(dirname):
     try:

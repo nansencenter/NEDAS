@@ -1,7 +1,7 @@
 from typing import Optional
-from NEDAS.utils.job_submitters.base import JobSubmitter
-from NEDAS.utils.job_submitters.slurm import SLURMJobSubmitter
-from NEDAS.utils.job_submitters.oar import OARJobSubmitter
+from NEDAS.job_submitters.base import JobSubmitter
+from NEDAS.job_submitters.slurm import SLURMJobSubmitter
+from NEDAS.job_submitters.oar import OARJobSubmitter
 
 def get_job_submitter(scheduler:Optional[str]=None, **kwargs) -> JobSubmitter:
     """
@@ -21,4 +21,3 @@ def get_job_submitter(scheduler:Optional[str]=None, **kwargs) -> JobSubmitter:
         if not submitter:
             raise ValueError(f"Unsupported scheduler type: {scheduler}")
         return submitter(**kwargs)
-
