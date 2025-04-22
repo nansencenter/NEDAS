@@ -10,5 +10,8 @@ NEDAS documentation
    :maxdepth: 2
    :caption: Contents:
 
-   installation
+   overview
+   quick_start_guide
    modules
+   develop_guide
+   acknowledgements

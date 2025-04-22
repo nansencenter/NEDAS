@@ -60,3 +60,6 @@ class QGModelEmulator(QGModel):
             for k in range(self.nz):
                 fld = state_out[m,...,k]
                 self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
+
+    def run(self, task_id=0, **kwargs):
+        raise NotImplementedError

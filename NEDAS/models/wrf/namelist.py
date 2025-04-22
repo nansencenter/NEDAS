@@ -13,6 +13,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     next_time = time + forecast_period * dt1h
 
     ###wps namelist.wps
+    """
     nmlstr = "&share\n"
     nmlstr += "wrf_core = 'ARW',"
     nmlstr += "max_dom = 2,
@@ -182,4 +183,4 @@ def namelist(m, time, forecast_period, run_dir='.'):
 
     with open(os.path.join(run_dir, 'namelist.input'), 'wt') as f:
         f.write(nmlstr)
-
+    """

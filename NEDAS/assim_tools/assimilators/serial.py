@@ -6,6 +6,10 @@ from NEDAS.utils.progress import progress_bar
 from NEDAS.assim_tools.assimilators.base import Assimilator
 
 class SerialAssimilator(Assimilator):
+    """
+    Subclass for serial assimilation algorithms
+    """
+
     def init_partitions(self, c):
         """
         Generate spatial partitioning of the domain
@@ -40,9 +44,14 @@ class SerialAssimilator(Assimilator):
         """
         Assign the observation sequence to each partition par_id
 
-        Returns: obs_inds: dict[obs_rec_id, dict[par_id, inds]]
-                 where inds is np.array with indices in the full obs_seq,
-                 for the subset of obs that belongs to partition par_id
+        Args:
+            c (Config): configuration object
+            state (State): state object
+            obs (Obs): observation object
+
+        Returns:
+            dict[obs_rec_id, dict[par_id, np.ndarray]]:
+               Indices in the full obs_seq for the subset of obs that belongs to partition par_id
         """
         obs_inds_pid = {}
         for obs_rec_id in obs.obs_rec_list[c.pid_rec]:
@@ -70,9 +79,12 @@ class SerialAssimilator(Assimilator):
 
     def assimilation_algorithm(self, c, state, obs):
         """
-        serial assimilation goes through the list of observations one by one
-        for each obs the near by state variables are updated one by one.
-        so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
+        Implementation of the serial assimilation algorithm.
+
+        Notes:
+            serial assimilation goes through the list of observations one by one
+            for each obs the near by state variables are updated one by one.
+            so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
         """
         state.state_post = copy.deepcopy(state.state_prior)
         obs.lobs_post =copy.deepcopy(obs.lobs_prior)
@@ -136,13 +148,46 @@ class SerialAssimilator(Assimilator):
         c.print_1p(' done.\n')
 
     @abstractmethod
-    def obs_increment(self):
+    def obs_increment(self, obs_prior, obs, obs_err) -> np.ndarray:
+        """
+        Compute observation-space analysis increments.
+
+        Args:
+            obs_prior (np.ndarray): Observation priors, 1D array of type int size nens
+            obs (float): The real observation value
+            obs_err (float): Observation error std
+
+        Returns:
+            ndarray: observation-space analysis increments
+        """
         pass
 
     @abstractmethod
-    def update_local_state(self):
+    def update_local_state(self, state_prior, obs_prior, obs_incr,
+                           state_h_dist, state_v_dist, state_t_dist,
+                           hroi, vroi, troi,
+                           h_local_func, v_local_func, t_local_func) -> None:
+        """
+        Update the local state vector with the analysis increments.
+
+        Args:
+            state_data (np.ndarray[(nens, nfld, nloc), float]): Local state vector
+            obs_prior (np.ndarray[nens, float]): Observation priors
+            obs_incr (np.ndarray[nens, float]): Analysis increments
+
+        """
         pass
 
     @abstractmethod
-    def update_local_obs(self):
+    def update_local_obs(self, obs_data_prior, obs_used, obs_prior, obs_incr,
+                         obs_h_dist, obs_v_dist, obs_t_dist,
+                         hroi, vroi, troi,
+                         h_local_func, v_local_func, t_local_func) -> None:
+        """
+        Update the local observations with analysis increments.
+
+        Args:
+            obs_data_prior (np.ndarray):
+            obs_used (np.nd
+        """
         pass

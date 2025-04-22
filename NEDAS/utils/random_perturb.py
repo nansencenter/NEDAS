@@ -10,18 +10,19 @@ from NEDAS.utils.fft_lib import fft2, ifft2, get_wn
 def random_perturb(grid, fields, prev_perturb, dt=1, n=0, seed=None, **kwargs):
     """
     Add random perturbation to the given 2D field
-    Input:
-        - grid: Grid object describing the 2d domain
-        - fields: list of np.array shape[...,ny,nx]
-        - prev_perturb; list of np.array from previous perturbation data, None if unavailable
-        - dt: float, interval (hours) between time steps
-        - n: int, current time step index
-        - kwargs:
-            variable: str, or list of str
-            type: str: 'gaussian', 'powerlaw', or 'displace'
-            amplitude: float, (or list of floats, in multiscale approach)
-            hcorr: float, or list of float, horizontal corr length (meters)
-            tcorr: float, or list of float, time corr length (hours)
+
+    Args:
+        grid: Grid object describing the 2d domain
+        fields: list of np.array shape[...,ny,nx]
+        prev_perturb; list of np.array from previous perturbation data, None if unavailable
+        dt: float, interval (hours) between time steps
+        n: int, current time step index
+        variable: str, or list of str
+        type: str: 'gaussian', 'powerlaw', or 'displace'
+        amplitude: float, (or list of floats, in multiscale approach)
+        hcorr: float, or list of float, horizontal corr length (meters)
+        tcorr: float, or list of float, time corr length (hours)
+        **kwargs: other arguments
     """
     if seed is None:
         ##try to randomize using system entropy

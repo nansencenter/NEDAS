@@ -94,33 +94,6 @@ def local_analysis_main(state_prior, obs_prior,
 
 @njit
 def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
-    """
-    Compute the transform weights for the local ensemble
-
-    Inputs:
-    - obs: np.array[nlobs]
-    The local observation sequence
-
-    - obs_err: np.array[nlobs]
-    The observation error, sqrt(R) vector
-
-    - obs_prior: np.array[nens, nlobs]
-    The observation priors
-
-    - filter_type: str
-    Type of filter to use: "ETKF", or "DEnKF"
-
-    - local_factor: np.array[nlobs]
-    Localization/impact factor for each observation
-    
-    - rfactor: float
-
-    - kfactor: float
-
-    Return:
-    - weights: np.array[nens, nens]
-    The ensemble transform weights
-    """
     nens, nlobs = obs_prior.shape
 
     ##ensemble weight matrix, weights[:, m] is for the m-th member
@@ -137,7 +110,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     for m in range(nens):
         obs_prior_var += (obs_prior[m, :] - obs_prior_mean)**2
     obs_prior_var /= nens-1
-    
+
     innov = obs - obs_prior_mean
     obs_var = obs_err**2
 
@@ -159,7 +132,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     ##note: the added I actually helps prevent issues if S^T S is not full rank
     ##      when nlobs<nens, there will be singular values of 0, but the full matrix
     ##      can still be inverted with singular values of 1.
-    if nlobs >= nens:   
+    if nlobs >= nens:
         var_ratio_inv = np.eye(nens) + S.T @ S
 
         try:
@@ -169,7 +142,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
             ##if svd failed just return equal weights (no update)
             print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
             return np.eye(nens)
-        
+
     else:
         var_ratio_inv = S @ S.T + np.eye(nlobs)
 
@@ -184,7 +157,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
     ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
     var_ratio = L_inv.T @ L_inv
-    
+
     ##the gain matrix
     gain = var_ratio @ S.T
 
@@ -213,7 +186,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
 
 @njit
 def apply_ensemble_transform(ens_prior, weights):
-    """Apply the weights to transform local ensemble"""
 
     nens = ens_prior.size
     ens_post = ens_prior.copy()

@@ -12,14 +12,6 @@ NEDAS.schemes.base module
    :show-inheritance:
    :undoc-members:
 
-NEDAS.schemes.ensemble\_forecast module
----------------------------------------
-
-.. automodule:: NEDAS.schemes.ensemble_forecast
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 NEDAS.schemes.get\_analysis\_scheme module
 ------------------------------------------
 

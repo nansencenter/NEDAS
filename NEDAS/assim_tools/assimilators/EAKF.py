@@ -2,128 +2,75 @@ import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
 
-class EAKFAssimilator(SerialAssimilator):
-    @classmethod
-    def obs_increment(cls, *args, **kwargs):
-        return cls._obs_increment(*args, **kwargs)
+@njit
+def obs_increment_eakf(obs_prior, obs, obs_err) -> np.ndarray:
+    nens = obs_prior.size
 
-    @staticmethod
-    @njit
-    def _obs_increment(obs_prior, obs, obs_err):
-        """
-        Compute analysis increment in observation space
+    ##obs error variance
+    obs_var = obs_err**2
 
-        Inputs:
-        - obs_prior: np.array[nens]
-        The observation prior ensemble
+    ##obs_prior separate into mean+perturbation
+    obs_prior_mean = np.mean(obs_prior)
+    obs_prior_pert = obs_prior - obs_prior_mean
 
-        - obs: float
-        The real observation
+    ##compute prior error variance
+    obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
 
-        - obs_err: float
-        The observation error standard deviation
+    """ensemble adjustment Kalman filter (Anderson 2003)"""
+    var_ratio = obs_var / (obs_prior_var + obs_var)
 
-        Return:
-        - obs_incr: np.array[nens]
-        Analysis increments in observation space
-        """
-        nens = obs_prior.size
+    ##new mean is weighted average between obs_prior_mean and obs
+    obs_post_mean = var_ratio * obs_prior_mean + (1 - var_ratio) * obs
 
-        ##obs error variance
-        obs_var = obs_err**2
+    ##new pert is adjusted by sqrt(var_ratio), a deterministic square-root filter
+    obs_post_pert = np.sqrt(var_ratio) * obs_prior_pert
 
-        ##obs_prior separate into mean+perturbation
-        obs_prior_mean = np.mean(obs_prior)
-        obs_prior_pert = obs_prior - obs_prior_mean
+    ##assemble the increments
+    obs_incr = obs_post_mean + obs_post_pert - obs_prior
 
-        ##compute prior error variance
-        obs_prior_var = np.sum(obs_prior_pert**2) / (nens-1)
+    return obs_incr
 
-        """ensemble adjustment Kalman filter (Anderson 2003)"""
-        var_ratio = obs_var / (obs_prior_var + obs_var)
+@njit
+def update_local_state_linear(state_data, obs_prior, obs_incr,
+                              h_dist, v_dist, t_dist,
+                              hroi, vroi, troi,
+                              h_local_func, v_local_func, t_local_func) -> None:
 
-        ##new mean is weighted average between obs_prior_mean and obs
-        obs_post_mean = var_ratio * obs_prior_mean + (1 - var_ratio) * obs
+    nens, nfld, nloc = state_data.shape
 
-        ##new pert is adjusted by sqrt(var_ratio), a deterministic square-root filter
-        obs_post_pert = np.sqrt(var_ratio) * obs_prior_pert
+    h_lfactor = h_local_func(h_dist, hroi)
+    v_lfactor = v_local_func(v_dist, vroi)
+    t_lfactor = t_local_func(t_dist, troi)
 
-        ##assemble the increments
-        obs_incr = obs_post_mean + obs_post_pert - obs_prior
+    nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
-        return obs_incr
+    lfactor = np.zeros((nfld, nloc))
+    for l in nloc_sub:
+        for n in range(nfld):
+            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
 
-    @classmethod
-    def update_local_state(cls, *args, **kwargs):
-        return cls._update_local_state(*args, **kwargs)
+    state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
 
-    @staticmethod
-    @njit
-    def _update_local_state(state_data, obs_prior, obs_incr,
+@njit
+def update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
                             h_dist, v_dist, t_dist,
                             hroi, vroi, troi,
                             h_local_func, v_local_func, t_local_func):
 
-        nens, nfld, nloc = state_data.shape
+    ##distance between local obs_data and the obs being assimilated
+    h_lfactor = h_local_func(h_dist, hroi)
+    v_lfactor = v_local_func(v_dist, vroi)
+    t_lfactor = t_local_func(t_dist, troi)
 
-        h_lfactor = h_local_func(h_dist, hroi)
-        v_lfactor = v_local_func(v_dist, vroi)
-        t_lfactor = t_local_func(t_dist, troi)
+    lfactor = h_lfactor * v_lfactor * t_lfactor
 
-        nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
+    ##update the unused obs within roi
+    ind = np.where(np.logical_and(~used, lfactor>0))[0]
 
-        lfactor = np.zeros((nfld, nloc))
-        for l in nloc_sub:
-            for n in range(nfld):
-                lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
-
-        state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
-
-    @classmethod
-    def update_local_obs(cls, *args, **kwargs):
-        return cls._update_local_obs(*args, **kwargs)
-
-    @staticmethod
-    @njit
-    def _update_local_obs(obs_data, used, obs_prior, obs_incr,
-                          h_dist, v_dist, t_dist,
-                          hroi, vroi, troi,
-                          h_local_func, v_local_func, t_local_func):
-
-        ##distance between local obs_data and the obs being assimilated
-        h_lfactor = h_local_func(h_dist, hroi)
-        v_lfactor = v_local_func(v_dist, vroi)
-        t_lfactor = t_local_func(t_dist, troi)
-
-        lfactor = h_lfactor * v_lfactor * t_lfactor
-
-        ##update the unused obs within roi
-        ind = np.where(np.logical_and(~used, lfactor>0))[0]
-
-        obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind])
+    obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_prior, obs_incr, lfactor[ind])
 
 @njit
-def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
-    """
-    Update the ensemble variable using the obs increments
-
-    Inputs:
-    - ens_prior: np.array[nens, ...]
-    The prior ensemble variables to be updated to posterior, dimension 0 is ensemble members
-
-    - obs_prior: np.array[nens]
-    Observation prior ensemble
-
-    - obs_incr: np.array[nens]
-    Observation space analysis increment
-
-    - local_factor: float
-    The localization factor to reduce spurious correlation in regression
-
-    Output:
-    - ens_post: np.array[nens, ...]
-    Updated ensemble
-    """
+def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor) -> np.ndarray:
     nens = ens_prior.shape[0]
     ens_post = ens_prior.copy()
 
@@ -146,3 +93,26 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
         ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
 
     return ens_post
+
+class EAKFAssimilator(SerialAssimilator):
+    def obs_increment(self, obs_prior, obs, obs_err):
+        return obs_increment_eakf(obs_prior, obs, obs_err)
+
+    def update_local_state(self, state_prior, obs_prior, obs_incr,
+                        state_h_dist, state_v_dist, state_t_dist,
+                        hroi, vroi, troi,
+                        h_local_func, v_local_func, t_local_func) -> None:
+        return update_local_state_linear(state_prior, obs_prior, obs_incr,
+                                         state_h_dist, state_v_dist, state_t_dist,
+                                         hroi, vroi, troi,
+                                         h_local_func, v_local_func, t_local_func)
+
+    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
+                         h_dist, v_dist, t_dist,
+                         hroi, vroi, troi,
+                         h_local_func, v_local_func, t_local_func) -> None:
+        return update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
+                                       h_dist, v_dist, t_dist,
+                                       hroi, vroi, troi,
+                                       h_local_func, v_local_func, t_local_func)
+

@@ -1,14 +1,6 @@
 NEDAS.utils package
 ===================
 
-Subpackages
------------
-
-.. toctree::
-   :maxdepth: 4
-
-   NEDAS.utils.job_submitters
-
 Submodules
 ----------
 

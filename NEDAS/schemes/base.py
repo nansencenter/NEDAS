@@ -1,10 +1,25 @@
+"""
+The schemes module contain workflows known as analysis schemes.
+
+Functions:
+    get_analysis_scheme: Factory function to get the right AnalysisScheme subclass based on configuration.
+
+Classes:
+    AnalysisScheme:
+        Base class for setting up and running the analysis scheme.
+
+    OfflineFilterAnalysisScheme:
+        Subclass for offline filter analysis scheme.
+        Running the filter at each time step (analysis cycle), and run the ensemble forecast
+        forward in time, reaching the next cycle, then repeat the process.
+"""
 import os
 from abc import ABC, abstractmethod
 from NEDAS.utils.shell_utils import makedir
 
 class AnalysisScheme(ABC):
     """
-    Class for setting up and running the analysis scheme
+    Base class for setting up and running the analysis scheme.
 
     Based on runtime config object, choose the right version of algorithm components:
     state, obs, assimilator, updator, covariance, localization and inflation.
@@ -13,22 +28,47 @@ class AnalysisScheme(ABC):
     state.prepare_obs, obs.prepare_obs, obs.prepare_obs_from_state, assimilator.assimilate, updator.update
     """
     def validate_mpi_environment(self, c):
+        """
+        Validate the MPI environment and ensure the number of processes is consistent.
+        """
         nproc = c.nproc
         nproc_actual = c.comm.Get_size()
         if nproc != nproc_actual:
             raise RuntimeError(f"Error: nproc {nproc} != mpi size {nproc_actual}")
 
-    def init_analysis_dir(self, c):
+    def init_analysis_dir(self, c) -> None:
+        """
+        Initialize the analysis directory.
+        """
         self._analysis_dir = c.analysis_dir(c.time, c.scale_id)
         if c.pid == 0:
             makedir(self._analysis_dir)
             print(f"\nRunning assimilation step in {self._analysis_dir}\n", flush=True)
 
     def get_state(self, c):
+        """
+        Get the State class instance
+
+        Args:
+            c (Config): Config class instance.
+
+        Returns:
+            State: An instance of the State class.       
+        """
         from NEDAS.assim_tools.state import State
         return State(c)
 
     def get_obs(self, c, state):
+        """
+        Get the Obs class instance
+
+        Args:
+            c (Config): Config class instance.
+            state (State): State class instance.
+
+        Returns:
+            Obs: An instance of the Obs class.
+        """
         from NEDAS.assim_tools.obs import Obs
         return Obs(c, state)
 
@@ -37,6 +77,15 @@ class AnalysisScheme(ABC):
     #     return Covariance()
 
     def get_assimilator(self, c):
+        """
+        Get the Assimilator class instance based on the configuration.
+
+        Args:
+            c (Config): Config class instance.
+
+        Returns:
+            Assimilator: An instance of the Assimilator class.
+        """
         if c.assim_mode == 'batch':
             if c.filter_type == 'TopazDEnKF':
                 from NEDAS.assim_tools.assimilators.TopazDEnKF import TopazDEnKFAssimilator as Assimilator

@@ -25,19 +25,14 @@ class QGModel(ModelBase):
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
 
-        ##the model is nondimensionalized, but it's convenient to introduce
-        ##a scaling for time control in cycling experiments:
-        ##0.1 nondimensional time units ~ 1 day
-        self.tscale
-
         self.variables = {
-            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':12, 'levels':levels, 'units':'*'},
-            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
-            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
-            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':12, 'levels':levels, 'units':'*'},
+            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':1},
+            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
+            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
+            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
             }
 
-        self.z_units = '*'
+        self.z_units = 1
 
         self.run_process = None
         self.run_status = 'pending'

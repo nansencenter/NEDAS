@@ -19,8 +19,12 @@ def namelist(conf_dict, time, forecast_period, psi_init_type, member=0, dt_ratio
     - m: Model class object with model configurations
     - dt_ratio: factor to multiply dt with
     """
+    # model time step
     dt = conf_dict['dt'] * dt_ratio
-    total_counts = forecast_period / dt / 240.
+    forecast_days = forecast_period / 24
+    dt_days = dt / conf_dict['tscale']
+    # number of time steps to run
+    total_counts = forecast_days / dt_days
 
     #random number based on member and time
     idum = 1000*member + 100*time.month + 10*time.day + time.hour

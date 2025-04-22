@@ -2,29 +2,6 @@ import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
-class ETKFAssimilator(BatchAssimilator):
-
-    def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
-        state_var_id = state_data['var_id']  ##variable id for each field (nfld)
-        state_z = state_data['z'][:, loc_id]
-        state_t = state_data['t'][:]
-
-        ##vertical, time and cross-variable (impact_on_state) localization
-        obs_value = obs_data['obs'][ind]
-        obs_err = obs_data['err_std'][ind]
-        obs_z = obs_data['z'][ind]
-        obs_t = obs_data['t'][ind]
-        obs_rec_id = obs_data['obs_rec_id'][ind]
-        vroi = obs_data['vroi'][obs_rec_id]
-        troi = obs_data['troi'][obs_rec_id]
-        impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
-
-        local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
-                            obs_value, obs_err, hlfactor,
-                            state_z, obs_z, vroi, c.localization_funcs['vertical'],
-                            state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
-
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
@@ -94,30 +71,6 @@ def local_analysis_main(state_prior, obs_prior,
 
 @njit
 def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
-    """
-    Compute the transform weights for the local ensemble
-
-    Inputs:
-    - obs: np.array[nlobs]
-    The local observation sequence
-
-    - obs_err: np.array[nlobs]
-    The observation error, sqrt(R) vector
-
-    - obs_prior: np.array[nens, nlobs]
-    The observation priors
-
-    - local_factor: np.array[nlobs]
-    Localization/impact factor for each observation
-    
-    - rfactor: float
-
-    - kfactor: float
-
-    Return:
-    - weights: np.array[nens, nens]
-    The ensemble transform weights
-    """
     nens, nlobs = obs_prior.shape
 
     ##ensemble weight matrix, weights[:, m] is for the m-th member
@@ -216,3 +169,27 @@ def apply_ensemble_transform(ens_prior, weights):
         ens_post[m] = np.sum(ens_prior * weights[:, m])
 
     return ens_post
+
+class ETKFAssimilator(BatchAssimilator):
+
+    def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
+        state_var_id = state_data['var_id']  ##variable id for each field (nfld)
+        state_z = state_data['z'][:, loc_id]
+        state_t = state_data['t'][:]
+
+        ##vertical, time and cross-variable (impact_on_state) localization
+        obs_value = obs_data['obs'][ind]
+        obs_err = obs_data['err_std'][ind]
+        obs_z = obs_data['z'][ind]
+        obs_t = obs_data['t'][ind]
+        obs_rec_id = obs_data['obs_rec_id'][ind]
+        vroi = obs_data['vroi'][obs_rec_id]
+        troi = obs_data['troi'][obs_rec_id]
+        impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
+
+        local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+                            obs_value, obs_err, hlfactor,
+                            state_z, obs_z, vroi, c.localization_funcs['vertical'],
+                            state_t, obs_t, troi, c.localization_funcs['temporal'],
+                            impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
+

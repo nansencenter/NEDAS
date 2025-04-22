@@ -1,5 +1,5 @@
 ##working directory for your experiment
-work_dir: ~/work
+work_dir: /home/yingyue/work
 
 directories:
   cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
@@ -18,7 +18,9 @@ job_submit:
                             ##otherwise jobs will be run as steps in a shared job allocation
 
 ##number of processors to use for assimilation
-nproc: 16
+nproc: 10
+nproc_mem:
+nproc_util:
 
 ##some experiment design parameters
 nens: 20            ##ensemble size
@@ -31,9 +33,9 @@ timer: True         ##if true, output information on function runtime
 
 ##time control of the experiment
 time_start: '200101010000'          ## start time of the experiment, format ccyymmddHHMM
-time_end: '200102180000'            ## end time of the experiment
-time_analysis_start: '200101010000' ## start time of the first analysis cycle
-time_analysis_end: '200102180000'   ## end time of the last analysis cycle
+time_end: '200101300000'            ## end time of the experiment
+time_analysis_start: '200101070000' ## start time of the first analysis cycle
+time_analysis_end: '200101280000'   ## end time of the last analysis cycle
 cycle_period: 12                    ## cycle period, in hours
 
 obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time
@@ -51,8 +53,9 @@ grid_def:
   xmax: 257
   ymin: -1
   ymax: 257
-  dx: 0.1                  ##grid spacing in coordinate units (resolution)
+  dx: 1                    ##grid spacing in coordinate units (resolution)
   centered: False
+  cyclic_dim: xy
   distance_type: cartesian    ## type of distance function (default: cartesian; or spherical from lat/lon coords)
 
 z_coords_from: mean       ##use ensemble 'mean' or 'member' z coords as reference of obs z location
@@ -100,8 +103,8 @@ dataset_def:
 model_def:
   qg:
     config_file:  ##configuration file
-    model_env: ~/setup.src  ##source file to enter environment
-    model_code_dir: ~/code/qg/src  ##where to find model executable
+    model_env: /home/yingyue/work/setup.src  ##source file to enter environment
+    model_code_dir: /home/yingyue/code/NEDAS/NEDAS/models/qg  ##where to find model executable
     nproc_per_run: 1    ## number of processors for one model.run
     nproc_per_util: 1   ## number of processors for other utility funcs, model.preprocess, etc.
     walltime: 1000      ## walltime in seconds
@@ -109,17 +112,18 @@ model_def:
     forcing_dt: 12      ## boundary forcing interval
     ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
     use_job_array: False       ##if true, use job array in scheduler for ensemble runs
-    ens_init_dir: ~/work/qg_ens_runs   ##path to the initial ensemble restart files
-    truth_dir: ~/work/truth         ##path to the truth files (for synthetic obs)
+    ens_init_dir: /home/yingyue/work/qg_ens_runs   ##path to the initial ensemble restart files
+    truth_dir: /home/yingyue/work/truth         ##path to the truth files (for synthetic obs)
 
 ##perturbatio scheme (a list of individual perturbation methods can be set here)
+#leave blank if no perturbation added
 perturb:
-- variable: streamfunc   ## which variable, or a list of variables to perturb
-  model_src: qg          ## which model the variable(s) come from
-  type: gaussian         ## type of perturbation (gaussian, powerlaw, displace, ...)
-  amp: 1                   ## amplitude
-  hcorr: 10                ## horizontal correlation length (in grid.x,y coordinate units)
-  tcorr: 12                ## temporal correlation length (in hours)
+#- variable: streamfunc   ## which variable, or a list of variables to perturb
+#  model_src: qg          ## which model the variable(s) come from
+#  type: gaussian         ## type of perturbation (gaussian, powerlaw, displace, ...)
+#  amp: 0.1               ## amplitude
+#  hcorr: 10              ## horizontal correlation length (in grid.x,y coordinate units)
+#  tcorr: 48              ## temporal correlation length (in hours)
 
 ##more details in assimilation algorithm
 analysis_type: offline_filter  ##type of analysis to perform online/offline, filter/smoother/etc.
@@ -167,13 +171,12 @@ localization:               ## localization is configured separately for horizon
 diag:
 - method: misc.convert_output  ## method name
   is_ensemble: False           ## if True, the method is applied to ensemble members
-  config_file:                 ## configuration file
+  config_file:                 ## configuration file, leave blank to use default
   model_src: qg                ## which model the method is applied to
-  variables: ['vorticity']       ## which variables the method is applied to
-  grid_def:                      ## output grid definition, leave blank to use default.yml settings
-  file: '~/work/output/mem{member:03}_{time:%Y-%m-%dT%H}.nc'  ## output file format
+  variables: ['streamfunc', 'temperature', 'vorticity']   ## which variables the method is applied to
+  grid_def:                    ## output grid definition, leave blank to use model grid
+  file: '/home/yingyue/work/output/mem{member:03}_{time:%Y-%m-%dT%H}.nc'  ## output file format
 
 ##runtime arguments
 time:
 step:
-
