@@ -1,0 +1,4 @@
+ulimit -s 2000000
+
+export FFTW_DIR=/lib/x86_64-linux-gnu
+export LIBM_DIR=/lib/x86_64-linux-gnu
