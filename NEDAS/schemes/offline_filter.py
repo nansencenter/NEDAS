@@ -25,10 +25,14 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         script_file = os.path.abspath(__file__)
 
         # create a temporary config yaml file to hold c, and pass into program through runtime arg
-        with tempfile.NamedTemporaryFile() as tmp_config_file:
+        with tempfile.NamedTemporaryFile(dir=c.work_dir,
+                                         prefix='config',
+                                         suffix='.yml') as tmp_config_file:
             c.dump_yaml(tmp_config_file.name)
 
-            print(f"\n\033[1;33mRUNNING\033[0m {step}")
+            print(f"\n\033[1;33mRUNNING\033[0m {step} step")
+            if c.debug:
+                print(f"config file: {tmp_config_file.name}")
 
             ##build run commands for the ensemble forecast script
             commands = ""
@@ -43,6 +47,9 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
             else:
                 commands += f"{sys.executable} {script_file} -c {tmp_config_file.name}"
             commands += f" --step {step}"
+
+            if c.debug:
+                print(commands)
 
             if mpi:
                 job_opts = {

@@ -69,6 +69,7 @@ def run(c, **kwargs) -> None:
         fdir = kwargs['forecast_dir'].format(time=c.time)
     else:
         fdir = c.forecast_dir(c.time, model_src)
+    model.read_grid(path=fdir, name=vname, k=k, member=member, time=time)
     var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
 
@@ -112,7 +113,7 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"
         times_by_variable += f"'{vname}': ["
-        for t in np.arange(t2h(c.time), t2h(c.next_time), model.variables[vname]['dt']):
+        for t in np.arange(t2h(c.time_start), t2h(c.time_end), model.variables[vname]['dt']):
             times_by_variable += f"'{h2t(t):%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
     html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_by_variable)

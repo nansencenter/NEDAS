@@ -141,7 +141,7 @@ class Config:
             xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
             ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
             dx = self.grid_def['dx']
-            known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx'}
+            known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx', 'mask'}
             other_opts = {k: v for k, v in self.grid_def.items() if k not in known_keys}
             self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
