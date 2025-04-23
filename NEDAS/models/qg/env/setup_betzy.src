@@ -1,0 +1,11 @@
+ulimit -s 2000000
+
+# Load the right modules
+module --force purge
+ml load StdEnv
+ml load intel-compilers/2023.2.1
+ml load FFTW/3.3.10-GCC-13.2.0
+ml load impi/2021.10.0-intel-compilers-2023.2.1
+
+export FFTW_DIR=/cluster/software/FFTW/3.3.10-GCC-13.2.0
+export LIBM_DIR=/usr/lib64

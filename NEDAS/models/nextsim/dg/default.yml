@@ -1,0 +1,205 @@
+# model config parameters
+#grid definition
+proj: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90. +lon_0=-45. +lat_ts=60.'
+xstart: -2.5e6
+xend: 2.498e6
+ystart: -2e6
+yend: 2.5e6
+dx: 3e3
+
+restart_dt: 24  ##model restart interval (hours)
+
+##physical parameters
+dg_comp: 6
+
+# here, we specify the required files
+files:
+  # the restart file for the model
+  # you can ignore this section if you don't use restart files at all
+  restart:
+    # at the moment we only consider two possible formats
+    # 1. having argument of i and time
+    #    where i is the ensemble member index starting from 0
+    #    and time is the time of the restart file
+    #    this is for the case where the restart file is different for each
+    #    ensemble member without any NEDAS manipulations
+    # 2. having argument of time
+    #    This is used for the case where we only have one restart file
+    #    We can either run the model without perturbing restart file,
+    #    or perturb it using NEDAS with optiosn specified in the perturb section
+    # 3. otherwise, change the way we obtain filenames in
+    #    function get_restart_filename
+    #    in models/nextsim/dg/model/restart.py
+    format: '/bettik/yumengch-ext/DATA/restart{time}.nc'
+    # this is the time_format used to derive the time string in restart filename
+    # this follows the strftime format
+    # See `https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes`_
+    time_format: '%Y-%m-%dT%H:%M:%SZ'
+    # the lon_name and lat_name are used only if we perturb the restart file
+    # in perturb section.
+    lon_name: 'data/longitude'
+    lat_name: 'data/latitude'
+  # the forcing filenames for the model
+  forcing:
+    atmosphere:
+      # at the moment we only consider two possible formats
+      # 1. having argument of i, start and end
+      #    where i is the ensemble member index starting from 0
+      #    and start and end is the start time and end time of the restart file
+      #    this is for the case where the forcing file is different for each
+      #    ensemble member without any NEDAS manipulations
+      # 2. having argument of start and end
+      #    This is used for the case where we only have one forcing file
+      #    We can either run the model without perturbing forcing file,
+      #    or perturb it using NEDAS with optiosn specified in the perturb section
+      # 3. otherwise, change the way we obtain filenames in
+      #    function get_forcing_filename
+      #    in models/nextsim/dg/model/forcing.py
+      format: '/bettik/yumengch-ext/DATA/25km_NH.ERA5_{start}_{end}.nc'
+      # datetime format to fill start and end date of the forcing file format
+      datetime_format: '%Y-%m-%d'
+      # initial start date of all the forcing file
+      # this will help us identify the current forcing file
+      initial_date: '2010-01-01'
+      # length of the forcing file given with units (year ['y'], month ['m'], day ['d'])
+      interval: '1y'
+      # This is the time variable in the file used to locate the current forcing time
+      # data is the group name in the file
+      time_name: 'data/time'
+      # time metadata in the file used to locate the current forcing time
+      # this avoids the need to search the time variable and their unit in the file
+      # todo: add support for changing time units
+      time_units_name: 'metadata/time/time'
+      lon_name: 'data/longitude'
+      lat_name: 'data/latitude'
+    ocean:
+      # at the moment we only consider two possible formats
+      # 1. having argument of i, start and end
+      #    where i is the ensemble member index starting from 0
+      #    and start and end is the start time and end time of the restart file
+      #    this is for the case where the forcing file is different for each
+      #    ensemble member without any NEDAS manipulations
+      # 2. having argument of start and end
+      #    This is used for the case where we only have one forcing file
+      #    We can either run the model without perturbing forcing file,
+      #    or perturb it using NEDAS with optiosn specified in the perturb section
+      # 3. otherwise, change the way we obtain filenames in
+      #    function get_forcing_filename
+      #    in models/nextsim/dg/model/forcing.py
+      format: '/bettik/yumengch-ext/DATA/25km_NH.TOPAZ4_{start}_{end}.nc'
+      # datetime format to fill start and end date of the forcing file format
+      datetime_format: '%Y-%m-%d'
+      # initial start date of all the forcing file
+      # this will help us identify the forcing file at specific time
+      initial_date: '2010-01-01'
+      # length of the forcing file given with units (year ['y'], month ['m'], day ['d'])
+      interval: '1y'
+      # This is the time variable in the file used to locate the current forcing time
+      time_name: 'data/time'
+      # time metadata in the file used to locate the current forcing time
+      # this avoids the need to search the time variable and their unit in the file
+      time_units_name: 'metadata/time/time'
+      lon_name: 'data/longitude'
+      lat_name: 'data/latitude'
+perturb:
+  restart:
+    variables:
+        # the lists have 1-1 correspondence with other lists in this section
+        # if geostrophic_wind_adjust is true, pressure field must be in names
+        # and it should not have wind fields here (it will be useless anyway as the wind perturbation is from pressure perturbations)
+        # if the variable is in the netCDF group of 'data', we need to provide the full path
+        names: ['data/cice', 'data/hice', 'data/hsnow', 'data/tice', 'data/sss', 'data/sst', ]
+        # type of perturbation:
+        # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
+        # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
+        # displace: generate a random wavenumber-1 displacement for the whole domain
+        # gaussian_evensen: perturbation method strictly following Evensen 1994
+        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        # amplitude of the perturbation
+        # sqrt(10), sqrt(50),
+        amp: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        # horizontal correlation length scale in meters
+        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
+        # time decorrelation scale in hours
+        tcorr: [48, 48, 48, 48, 48, 48]
+        # the content of the bound list can either be a float or None
+        # if it is None, the bound is not set
+        # lower bounds of the data
+        lower_bounds: [0., 0., 0., None, None, None]
+        # upper bounds of the data
+        upper_bounds: [None, None, None, None, None, None]
+  forcing:
+    # this is used to save the perturbation files (.npy format)
+    path: '/bettik/yumengch-ext/DATA/nextsim.dg/ndg_02/perturb'
+    # section names must correspond to section names under files
+    # e.g., atmosphere, ocean
+    # atmosphere perturbation settings
+    atmosphere:
+      # if we use this option, the wind perturbation is generated by the pressure perturbation
+      # based on geostrophic balance
+      geostrophic_wind_adjust:
+        do_adjust: True
+        # when press_wind_relate is True,
+        # we need explicit specification of atmospehre wind and pressure variables
+        # varname of u-component wind in forcing file
+        u_name: 'data/u'
+        # varname of v-component wind in forcing file
+        v_name: 'data/v'
+        # varname of pressure in forcing file
+        pres_name: 'data/pair'
+        # varname of ||u|| wind in forcing file
+        # if not such variable, set to None
+        wind_amp_name: 'data/wind_speed'
+        # perturbation amplitude for wind (sqrt(3))
+        wind_pert_amp: 1.732050808
+        type: 'gaussian_evensen'
+        # perturbation amplitude for pressure this should consistent with the amplitude in 'all' section
+        pres_pert_amp: 1.
+        # horizontal and time scale of perturbation when press_wind_relate is True
+        hcorr: 2.5e5
+      # other variables being perturbed
+      variables:
+        # the lists have 1-1 correspondence with other lists in this section
+        # if geostrophic_wind_adjust is true, pressure field must be in names
+        # and it should not have wind fields here (it will be useless anyway as the wind perturbation is from pressure perturbations)
+        # if the variable is in the netCDF group of 'data', we need to provide the full path
+        names: ['data/pair', 'data/sw_in', 'data/lw_in', 'data/dew2m', 'data/tair', ]
+        # type of perturbation:
+        # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
+        # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
+        # displace: generate a random wavenumber-1 displacement for the whole domain
+        # gaussian_evensen: perturbation method strictly following Evensen 1994
+        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        # amplitude of the perturbation
+        # sqrt(10), sqrt(50),
+        amp: [3.16227766, 7.071067812, 7.071067812, 3., 3.]
+        # horizontal correlation length scale in meters
+        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
+        # time decorrelation scale in hours
+        tcorr: [48, 48, 48, 48, 48]
+        # the content of the bound list can either be a float or None
+        # if it is None, the bound is not set
+        # lower bounds of the data
+        lower_bounds: [None, None, None, None, None]
+        # upper bounds of the data
+        upper_bounds: [None, None, None, None, None]
+    ocean:
+      variables:
+        # the lists have 1-1 correspondence with other lists in this section
+        names: ['data/mld', 'data/sss', 'data/sst', 'data/u', 'data/v']
+        # type of perturbation:
+        # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
+        # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
+        # displace: generate a random wavenumber-1 displacement for the whole domain
+        # gaussian_evensen: perturbation method strictly following Evensen 1994
+        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        amp: [0.001, 0.001, 0.001, 0.001, 0.001]
+        # horizontal correlation length scale in meters
+        hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]
+        # time decorrelation scale in hours
+        tcorr: [48, 48, 48, 48, 48]
+        # lower bounds of the data
+        lower_bounds: [None, 0., None, None, None]
+        # upper bounds of the data
+        upper_bounds: [None, None, None, None, None]
+

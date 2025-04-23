@@ -1,0 +1,113 @@
+work_dir: /work
+
+directories:
+  cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
+  forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
+  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
+
+python_env: /app/python.src
+
+job_submit:
+  host: docker
+  ppn: 16
+  run_separate_jobs: False
+
+nproc: 5
+
+nens: 20
+run_forecast: True
+run_analysis: True
+run_diagnose: True
+debug: False
+
+time_start: '200101010000'
+time_end: '200101140000'
+time_analysis_start: '200101030000'
+time_analysis_end: '200101090000'
+cycle_period: 24
+
+time: '200101010000'
+step: preprocess
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: qg
+
+state_def:
+- name: streamfunc
+  model_src: qg
+  var_type: field
+  err_type: normal
+
+obs_def:
+- name: streamfunc
+  dataset_src: qg
+  model_src: qg
+  nobs: 3000
+  err:
+    type: normal
+    std: 0.2
+  hroi: 100
+  vroi: inf
+  troi: inf
+
+use_synthetic_obs: True
+
+dataset_def:
+  qg:
+    obs_window_min: -6
+    obs_window_max: 0
+
+model_def:
+  qg:
+    config_file: /app/NEDAS/NEDAS/models/qg/default.yml
+    model_code_dir: /app/NEDAS/NEDAS/models/qg
+    model_env: /work/setup_docker.src
+    ens_run_type: scheduler
+    ens_init_dir: /work/init_ens
+    truth_dir: /work/truth
+
+perturb:
+
+assim_mode: batch
+filter_type: ETKF
+rfactor: 1
+kfactor: 1
+nlobs_max:
+
+nscale: 1
+scale_id: 0
+decompose_obs: False
+character_length: [150, 50, 10]
+localize_scale_fac: [1, 1, 1]
+obs_err_scale_fac: [1, 1, 1]
+
+run_alignment: False
+alignment:
+  option: optical_flow
+  variable: streamfunc
+  nlevel: 5
+  smoothness_weight: 1
+
+inflation:
+  type: posterior,RTPP
+  adaptive: True
+  coef: 1.0
+
+localization:
+  horizontal: GC
+  vertical: GC
+  temporal: exp
+
+diag:
+- method: misc.convert_output
+  is_ensemble: False
+  config_file: /app/NEDAS/NEDAS/diag/misc/convert_output/default.yml
+  model_src: qg
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '/work/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

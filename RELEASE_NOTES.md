@@ -1,3 +1,6 @@
+# v1.1.0
+    Refactor the code to use Classes
+
 # v1.0.1
 
     Use fully yaml-file-based configuration, no need for linux environment variables anymore.
