@@ -19,7 +19,9 @@ release = '1.1.0'
 
 extensions = [
     "myst_parser",
+    "sphinx_rtd_theme",
     "sphinx.ext.autodoc",
+    "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
 ]
@@ -27,9 +29,17 @@ extensions = [
 templates_path = ['_templates']
 exclude_patterns = []
 
+autodoc_member_order = 'bysource'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
+html_show_sphinx = False
+html_logo = '../imgs/nedas_logo.png'
+html_theme_options = {
+    'logo_only': True,
+    'includehidden': False,
+}
+
 html_static_path = ['_static']
