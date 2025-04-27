@@ -7,6 +7,18 @@ import argparse
 import yaml
 
 def convert_notation(data):
+    """
+    Parse values in data, convert strings to appropriate types if possible.
+
+    Goes through the data recursively if it is a list or a dictionary. If the string can be interpreted as a
+    scientific notation, inf, or boolean flag, convert it to the appropriate type.
+
+    Args:
+        data (any): The data to be converted.
+
+    Returns:
+        any: The converted data.
+    """
     if isinstance(data, dict):
         return {key: convert_notation(value) for key, value in data.items()}
     elif isinstance(data, list):
@@ -30,10 +42,13 @@ def convert_notation(data):
     else:
         return data
 
-def str2bool(data):
-    if data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.', '1']:
+def str2bool(data:str) -> int:
+    """
+    Convert a string to a boolean value (0 or 1).
+    """
+    if data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.']:
         return 1
-    elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.', '0']:
+    elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.']:
         return 0
     else:
         raise ValueError(f"Invalid input value for str2bool: {data}")
@@ -42,26 +57,22 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     """
     Load configuration from YAML files and runtime arguments.
 
-    This function loads configuration settings from a default YAML file,
-    optionally overridden by a user-specified YAML file and/or runtime arguments.
+    This function loads configuration settings from a default YAML file, located in `code_dir/default.yml`.
+    If `config_file` is provided, then values defined in that file will overwrite those in the default YAML file.
+    If additional key=value pairs are provided, either through runtime command-line arguments or as `kwargs`,
+    those will also overwrite the existing values.
+
+    The default YAML file also serves as a template for the ArgumentParser, which parses the key-value pairs,
+    if the value is not None, parser will add the argument with type and default value in the help message.
 
     Args:
-        code_dir (str): Path to the `default.yml` file.
-        config_file (str): Alternative YAML config file to overwrite default settings.
-        parse_args (bool): If True, parse runtime arguments with argparse.
-            Only enable this once in a program to avoid namespace confusion.
-        **kwargs: Additional configuration key-value pairs that can override existing settings.
+        code_dir (str, optional): Directory containing the `default.yml` file. Default is the current directory.
+        config_file (str, optional): Alternative YAML config file to overwrite default settings.
+        parse_args (bool, optional): If True, parse runtime arguments with argparse. Default is False.
+        **kwargs: Additional configuration key-value pairs that can overwrite existing settings.
 
     Returns:
         dict: A dictionary containing all configuration variables.
-
-    Notes:
-        - If the user provides `--config_file=file.yml`, then values defined in `file.yml`
-          will overwrite those in the default YAML file.
-        - The `default.yml` defines the list of configuration variables.
-        - An ArgumentParser is created to parse these variables.
-        - If the user provides a runtime argument like `--variable=value`,
-          that value will replace the default for the specified variable.
     """
     if parse_args:
         input_args = sys.argv[1:]

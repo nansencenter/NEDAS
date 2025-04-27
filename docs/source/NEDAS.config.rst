@@ -1,9 +1,6 @@
 NEDAS.config package
 ====================
 
-Submodules
-----------
-
 NEDAS.config.config module
 --------------------------
 
@@ -20,10 +17,3 @@ NEDAS.config.parse\_config module
    :show-inheritance:
    :undoc-members:
 
-Module contents
----------------
-
-.. automodule:: NEDAS.config
-   :members:
-   :show-inheritance:
-   :undoc-members:

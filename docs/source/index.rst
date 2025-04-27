@@ -1,17 +1,38 @@
-.. NEDAS documentation master file, created by
-   sphinx-quickstart on Fri Apr 18 11:26:49 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+NEDAS : Next-generation Ensemble Data Assimilation System
 
-NEDAS documentation
-===================
+Introduction
+============
+
+Data assimilation is a 
+
+NEDAS provides a light-weight Python solution to the ensemble data assimilation problem for geophysical models. 
+It allows DA researchers to test and develop new DA ideas early-on in real models, 
+before committing resources to full implementation in operational systems. 
+NEDAS is armed with parallel computation (mpi4py) and pre-compiled numerical libraries (numpy, numba.njit) to ensure runtime efficiency. 
+The modular design allows the user to add customized algorithmic components to enhance the DA performance. 
+NEDAS offers a collection of state-of-the-art DA algorithms, including serial assimilation approaches (similar to DART), 
+and batch assimilation approaches (similar to the LETKF in PDAF),
+making it easy to benchmark new methods with the classic methods in the literature.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Getting started
 
-   overview
-   quick_start_guide
-   modules
-   develop_guide
-   acknowledgements
+   installation
+   config_file
+   examples
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User interfaces
+
+   models
+   dataset
+   job_submitters
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API documentation
+
+   NEDAS.config
+   NEDAS.grid
