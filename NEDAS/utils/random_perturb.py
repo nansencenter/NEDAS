@@ -187,19 +187,16 @@ def get_velocity_from_press(grid, pres, scale_wind=False, press_amp=None, press_
 
 def random_field_gaussian(nx, ny, amp, hcorr):
     """
-    Random field with a Gaussian spectrum
+    Random field with a Gaussian spectrum.
 
-    Inputs
-    - nx, ny: int
-      Grid size in x and y (number of grid points)
-    - amp: float
-      Amplitude (standard deviation) of the random field
-    - hcorr: float
-      Horizontal decorrelation length (number of grid points)
+    Args:
+        nx (int): Number of grid points in x direction.
+        ny (int): Number of grid points in y direction.
+        amp (float): Amplitude (standard deviation) of the random field.
+        hcorr (float): Horizontal decorrelation length (number of grid points).
 
-    Output:
-    - fld: np.array, [ny,nx]
-      The random 2D field
+    Returns:
+        np.ndarray: The output random field with shape (ny, nx).
     """
     fld = np.zeros((ny, nx))
     kx, ky = get_wn(fld)
@@ -286,7 +283,7 @@ def random_displacement(grid, mask, amp, hcorr):
     ##the displacement vector field from a random streamfunction
     psi = random_field_gaussian(grid.nx, grid.ny, 1, hcorr)
 
-    du, dv = -grady(psi, 1), gradx(psi, 1)
+    du, dv = -grady(psi, 1, grid.cyclic_dim), gradx(psi, 1, grid.cyclic_dim)
     norm = np.hypot(du, dv).max()
     du *= amp / norm
     dv *= amp / norm
