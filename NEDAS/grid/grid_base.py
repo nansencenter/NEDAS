@@ -10,20 +10,30 @@ from NEDAS.utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_refer
 
 class GridBase(ABC):
     """
-    A class to handle 2D fields defined on regular grids or unstructured meshes.
-
-    This class supports:
-
-    - Regular grids with cyclic boundary conditions (e.g., longitude) and poles (e.g., latitude).
-    - Irregular meshes with variables defined on nodal points (triangle vertices) or elements (triangles themselves).
+    Base class to handle 2D fields defined on regular grids or unstructured meshes.
 
     Args:
-        proj (pyproj.Proj or custom func): Projection from lon,lat to x,y.
-        x, y (np.array): x, y coordinates for each element in the field.
-        bounds (list[float], optional): [xmin, xmax, ymin, ymax] boundary limits
-        regular (bool, optional): Whether grid is regular or unstructured. Default is True (regular).
-        cyclic_dim (str, optional): Cyclic dimension(s): 'x', 'y', or 'xy'.
-        dst_grid (GridBase, optional): Grid object to convert a field towards.
+        proj (pyproj.Proj, custom func, None):
+            Projection function mapping from longitude,latitude to x,y coordinates.
+            If None, a default Mercator projection will be used.
+        x (np.ndarray): X-coordinates for each grid point.
+        y (np.ndarray): Y-coordinates for each grid point.
+        bounds (list, optional):
+            Grid boundary limits, [xmin, xmax, ymin, ymax], all float numbers.
+            If not specified, will use min/max value of the coordinates.
+        regular (bool, optional):
+            Whether grid is regular or unstructured. Default is True (regular grid).
+        cyclic_dim (str, optional):
+            Cyclic dimension(s): ``'x'``, ``'y'``, ``'xy'``, or ``None`` if noncyclic.
+        distance_type (str, optional): Type of distance functions: `cartesian` (default) or `spherical`.
+        dst_grid (GridBase, optional): Destination grid object to convert to.
+
+    Attributes:
+        proj (pyproj.Proj or custom function): Projection function.
+        proj_name (str): Name of the projection, empty if not available.
+        bounds (list): Grid boundary limits [xmin, xmax, ymin, ymax].
+        mask (np.ndarray):
+            Mask (bool) for points that are not participating the analysis,same shape as :code:`x`, default is all False.
     """
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian', dst_grid=None):
         assert x.shape == y.shape, "x, y shape does not match"

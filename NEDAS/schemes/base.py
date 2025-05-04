@@ -2,13 +2,13 @@
 The schemes module contain workflows known as analysis schemes.
 
 Functions:
-    get_analysis_scheme: Factory function to get the right AnalysisScheme subclass based on configuration.
+    :func:`get_analysis_scheme`: Factory function to get the right AnalysisScheme subclass based on configuration.
 
 Classes:
-    AnalysisScheme:
+    :class:`AnalysisScheme`:
         Base class for setting up and running the analysis scheme.
 
-    OfflineFilterAnalysisScheme:
+    :class:`OfflineFilterAnalysisScheme`:
         Subclass for offline filter analysis scheme.
         Running the filter at each time step (analysis cycle), and run the ensemble forecast
         forward in time, reaching the next cycle, then repeat the process.

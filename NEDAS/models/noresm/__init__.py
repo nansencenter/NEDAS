@@ -16,7 +16,6 @@ variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':
 ##staggering types for native model variables: 'p','u','v','q'
 stagger = {'u':'u', 'v':'v', 'temp':'p', 'saln':'p'}
 
-
 def filename(path, **kwargs):
     """
     Parse kwargs and find matching filename
@@ -42,36 +41,26 @@ def filename(path, **kwargs):
     ##if there is a list of matching files, we return the first one
     return flist[0]
 
-
 def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
     """
-    Fetch grid info from a given grid_file, or generate from locally stored data
+    Fetch grid info from a given grid_file, or generate from locally stored data.
 
-    Inputs:
-    - grid_file: str
-      The path to the grid.nc file containing plat,plon...
-
-    - grid_type: str
-      Type of grid, 'bipolar' or 'tripolar'
-
-    - scale_x, scale_y: float
-      Resolution scaling in x and y directions
-
-    - stagger: str
-      Staggering type, 'p', 'u', 'v', or 'q'
+    Args:
+        grid_file (str): The path to the grid.nc file containing plat,plon...
+        grid_type (str): Type of grid, 'bipolar' or 'tripolar'.
+        scale_x (float): Resolution scaling in x direction.
+        scale_y (float): Resolution scaling in y direction.
+        stagger (str): Staggering type, 'p', 'u', 'v', or 'q'.
 
     Returns:
-    - grid_lon, grid_lat: float, np.array[ny, nx]
-      Longitude and latitude defined on grid points
-
-    - grid_x, grid_y: np.array[ny, nx]
-      The local x,y coordinates on the grid
-
-    - grid_neighbors: np.array[2, 4, ny, nx]
-      Neighbor indices. For each point j,i in [ny,nx],
-      grid_neighbors[0,:,j,i] are the j-indices for the
-      4 neighbors (east, north, west and south) to point [j,i]; and
-      grid_neighbors[1,:,j,i] are the i-indices
+        tuple: A tuple containing:
+            - lon (np.ndarray): Longitude defined on the grid points, of shape (ny, nx).
+            - lat (np.ndarray): Latitude defined on the grid points
+            - x (np.ndarray): X-coordinates of the grid points.
+            - y (np.ndarray): Y-coordinates of the grid points.
+            - neighbor (np.ndarray): Neighbor indices of shape (2, 4, ny, nx).
+                For each point (:code:`j`, :code:`i`) in (ny,nx), :code:`grid_neighbors[0,:,j,i]` are the :code:`j`-indices for the
+                4 neighbors (east, north, west and south) to point (:code:`j`, :code:`i`) and :code:`grid_neighbors[1,:,j,i]` are the corresponding :code:`i`-indices
     """
     ##if provided grid_file doesn't exist, try use locally stored file
     if os.path.exists(grid_file):
@@ -195,7 +184,6 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
 
     return grid_lon, grid_lat, grid_x, grid_y, grid_neighbors
 
-
 def read_grid(path, **kwargs):
     """ Generate a Grid object for the NorESM model grid """
 
@@ -244,16 +232,12 @@ def read_grid(path, **kwargs):
 
     return Grid(proj, x, y, neighbors=neighbors)
 
-
 def write_grid(path, **kwargs):
     pass
-
 
 def read_var(path, grid, **kwargs):
     pass
 
-
 def write_var():
     pass
-
 

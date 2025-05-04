@@ -6,8 +6,13 @@ from concurrent.futures import ProcessPoolExecutor
 import threading
 from NEDAS.utils.progress import print_with_cache, progress_bar
 
-def check_parallel_io():
-    ##check if netcdf is built with parallel support
+def check_parallel_io() -> bool:
+    """
+    Check if netCDF4 is built with parallel I/O support.
+
+    Returns:
+        bool: True if netCDF4 module support parallel I/O mode.
+    """
     try:
         from netCDF4 import Dataset
         with Dataset('dummy.nc', mode='w', parallel=True):
@@ -16,7 +21,24 @@ def check_parallel_io():
         return False
 
 class Comm:
-    """Communicator class with MPI support"""
+    """
+    Communicator class supporting both serial and MPI programs.
+
+    When the python program is started with MPI environment, for example::
+
+    $ mpirun -n 10 python -m mpi4py program.py
+
+    A communicator can be obtained from the mpi4py package:
+
+    >>> from mpi4py import MPI
+    >>> comm = MPI.COMM_WORLD
+
+    However, when the program is run in 
+
+    Attributes:
+        parallel_io (bool): If netCDF4.Dataset is built with parallel I/O support.
+
+    """
 
     def __init__(self):
         ##detect if mpi environment exists
@@ -50,6 +72,12 @@ class Comm:
         raise AttributeError
 
     def init_file_lock(self, filename):
+        """
+        Initialize file locks for thread-safe I/O.
+
+        Args:
+            filename (str): Path to the file.
+        """
         if self._MPI is None:
             return
         if not filename:
@@ -172,20 +200,16 @@ def distribute_tasks(comm, tasks, load=None):
     """
     Divide a list of task indices and assign a subset to each rank in comm
 
-    Inputs:
-    - comm: mpi communicator
+    Args:
+        comm (Comm): MPI communicator
+        tasks (list): List of task indices (to be distributed over the processors)
+        load (np.ndarray, optional):
+            Amount of workload for each task element
+            The default is None, we will let tasks have equal workload
 
-    - tasks: list
-      List of indices (to be used in a for loop)
-
-    - load: np.array, optional
-      Amount of workload for each task element
-      The default is None, we will let tasks have equal workload
-
-    Return:
-    - task_list: dict
-      Dictionary {rank:list}, list is the subset of tasks for the processor rank
-      calling this function to work on
+    Returns:
+        dict: Dictionary {rank:list}, list is the subset of tasks for the processor rank
+            calling this function to work on
     """
     nproc = comm.Get_size()  ##number of processors
     ntask = len(tasks)       ##number of tasks

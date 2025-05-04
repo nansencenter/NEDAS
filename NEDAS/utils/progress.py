@@ -1,14 +1,18 @@
-import numpy as np
 import os
 import subprocess
 import time
+from typing import Optional
+import numpy as np
 from functools import wraps
 
 def timer(c=None):
     """
-    Decorator to show the time spent on a function
-    Input: -c: config object
-    only processor c.pid_show in c.comm will show the timer message
+    Decorator to show the time spent on a function.
+
+    Args:
+        c (Config, optional): config object
+        
+    Once decorated, only processor with ID :code:`c.pid_show` in :code:`c.comm` will run the timer in the function.
     """
     def decorator(func):
         if c is not None and not getattr(c, 'timer', True):
@@ -28,23 +32,20 @@ def timer(c=None):
 
     return decorator
 
-def progress_bar(task_id, ntask, width=50):
+def progress_bar(task_id: int, ntask: int, width: Optional[int]=50):
     """
-    Generate a progress bar based on task_id and ntask
+    Generate a progress bar based on task_id and ntask.
 
-    Inputs:
-    - task_id: int
-      Current task index, from 0 to ntask-1
-
-    - ntask: int
-      Total number of tasks
+    Args:
+        task_id (int): Current task index, from 0 to ntask-1
+        ntask (int): Total number of tasks
 
     - width: int, optional
       The length of the progress bar (number of characters)
 
     Return:
-    - pstr: str
-      The progress bar msg to be shown
+        str: The progress bar msg to be shown.
+            Will require the print command with end="" option so that new line updated is overwritting the old line.
     """
     if ntask==0:
         progress = 1

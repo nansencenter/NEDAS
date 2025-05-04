@@ -1,5 +1,5 @@
-NEDAS.config package
-====================
+Configuration
+=============
 
 NEDAS.config.config module
 --------------------------

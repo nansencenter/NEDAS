@@ -1,8 +1,5 @@
-NEDAS.utils package
-===================
-
-Submodules
-----------
+Other utility modules
+=====================
 
 NEDAS.utils.conversion module
 -----------------------------
@@ -12,34 +9,10 @@ NEDAS.utils.conversion module
    :show-inheritance:
    :undoc-members:
 
-NEDAS.utils.distribution module
+NEDAS.utils.shell\_utils module
 -------------------------------
 
-.. automodule:: NEDAS.utils.distribution
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.utils.fft\_lib module
----------------------------
-
-.. automodule:: NEDAS.utils.fft_lib
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.utils.graphics module
----------------------------
-
-.. automodule:: NEDAS.utils.graphics
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.utils.multiscale module
------------------------------
-
-.. automodule:: NEDAS.utils.multiscale
+.. automodule:: NEDAS.utils.shell_utils
    :members:
    :show-inheritance:
    :undoc-members:
@@ -48,6 +21,14 @@ NEDAS.utils.netcdf\_lib module
 ------------------------------
 
 .. automodule:: NEDAS.utils.netcdf_lib
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+NEDAS.utils.fft\_lib module
+---------------------------
+
+.. automodule:: NEDAS.utils.fft_lib
    :members:
    :show-inheritance:
    :undoc-members:
@@ -84,14 +65,6 @@ NEDAS.utils.random\_perturb module
    :show-inheritance:
    :undoc-members:
 
-NEDAS.utils.shell\_utils module
--------------------------------
-
-.. automodule:: NEDAS.utils.shell_utils
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 NEDAS.utils.spatial\_operation module
 -------------------------------------
 
@@ -100,10 +73,19 @@ NEDAS.utils.spatial\_operation module
    :show-inheritance:
    :undoc-members:
 
-Module contents
----------------
+NEDAS.utils.multiscale module
+-----------------------------
 
-.. automodule:: NEDAS.utils
+.. automodule:: NEDAS.utils.multiscale
    :members:
    :show-inheritance:
    :undoc-members:
+
+NEDAS.utils.graphics module
+---------------------------
+
+.. automodule:: NEDAS.utils.graphics
+   :members:
+   :show-inheritance:
+   :undoc-members:
+

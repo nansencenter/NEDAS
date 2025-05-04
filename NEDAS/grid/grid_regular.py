@@ -6,6 +6,17 @@ from NEDAS.grid.grid_base import GridBase
 class RegularGrid(GridBase):
     """
     Regular 2D grid class
+
+    Args:
+        pole_dim (str, optional):
+            `None` (default), if one of the dimension has poles, :code:`'x'` or :code:`'y'`
+        pole_index (str, optional):
+            `None` (default), tuple of the pole index(s) in `pole_dim`
+        neighbors (np.ndarray, optional):
+            `None` (default), for regular grid with special geometry (e.g. tripolar ocean grid),
+            `neighbors` stores the j,i index of 4 neighors (east, north, west, and south) on each grid point.
+            Since specifying neighbors already take care of cyclic boundary conditions, `cyclic_dim` will be discarded if `neighbors` is set.
+
     """
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian',
                  pole_dim=None, pole_index=None, neighbors=None, dst_grid=None,):
