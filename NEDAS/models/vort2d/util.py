@@ -4,33 +4,19 @@ from NEDAS.utils.fft_lib import fft2, ifft2, get_wn
 
 def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
     """
-    Initialize the 2d vortex model
-    initial condition: a rankine vortex embedded in a random wind flow
+    Initialize the 2d vortex model with a Rankine vortex embedded in a random wind flow.
 
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
-
-    - Vmax: float
-      Maximum wind speed (vortex intensity), m/s
-
-    - Rmw: float
-      Radius of maximum wind (vortex size), m
-
-    - Vbg: float
-      Background flow average wind speed, m/s
-
-    - Vslope: int
-      Background flow kinetic energy spectrum power law (typically -2)
-
-    - loc_sprd: float, optional
-      The ensemble spread in vortex center position, m
+    Args:
+        grid (Grid): The model domain, doubly periodic, described by a Grid obj
+        Vmax (float): Maximum wind speed (vortex intensity), m/s
+        Rmw (float): Radius of maximum wind (vortex size), m
+        Vbg (float): Background flow average wind speed, m/s
+        Vslope (int): Background flow kinetic energy spectrum power law (typically -2)
+        loc_sprd (float, optional): The ensemble spread in vortex center position, m
 
     Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field, u- and v-component in first dimension.
+        np.ndarray: The vector velocity field, shape (2, ny, nx).
     """
-
     ##the vortex is randomly placed in the domain
     center_x = 0.5*(grid.xmin+grid.xmax) + np.random.normal(0, loc_sprd)
     center_y = 0.5*(grid.ymin+grid.ymax) + np.random.normal(0, loc_sprd)
@@ -44,26 +30,18 @@ def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
 
 def rankine_vortex(grid, Vmax, Rmw, center_x, center_y):
     """
-    Generate a Rankine vortex velocity field
+    Generate a Rankine vortex velocity field.
 
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
-
-    - Vmax: float
-      Maximum wind speed (vortex intensity), m/s
-
-    - Rmw: float
-      Radius of maximum wind (vortex size), m
-
-    - center_x, center_y: float
-      Vortex center coordinates x,y
+    Args:
+        grid (Grid): The model domain, doubly periodic
+        Vmax (float): Maximum wind speed (vortex intensity), m/s
+        Rmw (float): Radius of maximum wind (vortex size), m
+        center_x (float): Vortex center X-coordinate.
+        center_y (float): Vortex center Y-coordinate.
 
     Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field
+        np.ndarray: The vector velocity field with shape (2, ny, nx)
     """
-
     ##radius from vortex center
     r = np.hypot(grid.x - center_x, grid.y - center_y)
     r[np.where(r==0)] = 1e-10  ##avoid divide by 0
@@ -85,19 +63,13 @@ def random_flow(grid, amp, power_law):
     """
     Generate a random velocity field as the background flow
 
-    Inputs:
-    - grid: Grid obj
-      The model domain, doubly periodic, described by a Grid obj
-
-    - amp: float
-      wind speed amplitude, m/s
-
-    - power_law: int
-      wind kinetic energy spectrum power law (typically -2)
+    Args:
+        grid (Grid): The model domain, doubly periodic, described by a Grid obj
+        amp (float): wind speed amplitude, m/s
+        power_law (int): wind kinetic energy spectrum power law (typically -2)
 
     Returns:
-    - vec_fld: np.array[2, :, :]
-      The vector velocity field
+        np.ndarray: The vector velocity field with shape (2, ny, nx)
     """
     ny, nx = grid.x.shape
     fld = np.zeros((2, ny, nx))
@@ -121,28 +93,16 @@ def advance_time(fld, dx, t_intv, dt, gen, diss):
     """
     Advance forward in time to integrate the model (forecasting)
 
-    Inputs:
-    - fld: np.array(2,ny,nx)
-      The prognostic velocity field
-
-    - dx: float
-      Model grid spacing, meter
-
-    - t_intv: float
-      Integration time period, hour
-
-    - dt: float
-      Model time step, second
-
-    - gen: float
-      Vorticity generation rate
-
-    - diss: float
-      Dissipation rate
+    Args:
+        fld (np.ndarray): The prognostic velocity field with shape (2,ny,nx)
+        dx (float): Model grid spacing, meter
+        t_intv (float): Integration time period, hour
+        dt (float): Model time step, second
+        gen (float): Vorticity generation rate
+        diss (float): Dissipation rate
 
     Returns:
-    - fld: np.array(2,ny,nx)
-      The forecast velocity field
+        np.ndarray: The forecast velocity field
     """
     ##input wind components, convert to spectral space
     uh = fft2(fld[0, :, :])

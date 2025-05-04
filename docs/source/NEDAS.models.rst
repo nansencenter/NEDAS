@@ -1,8 +1,18 @@
-NEDAS.models package
-====================
+Models interface
+================
 
-Subpackages
------------
+To use the NEDAS to perform data assimilation for specific model components,
+
+NEDAS.models.base module
+------------------------
+
+.. automodule:: NEDAS.models.base
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Supported models
+----------------
 
 .. toctree::
    :maxdepth: 4
@@ -13,21 +23,4 @@ Subpackages
    NEDAS.models.vort2d
    NEDAS.models.wrf
 
-Submodules
-----------
 
-NEDAS.models.base module
-------------------------
-
-.. automodule:: NEDAS.models.base
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-Module contents
----------------
-
-.. automodule:: NEDAS.models
-   :members:
-   :show-inheritance:
-   :undoc-members:

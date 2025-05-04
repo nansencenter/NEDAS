@@ -4,9 +4,17 @@ try:
     ###fft implementation using FFTW
     import pyfftw
 
-    def fft2(f):
+    def fft2(f: np.ndarray) -> np.ndarray:
         """
-        2D FFT implemented by pyFFTW
+        2D FFT implemented by pyFFTW. If pyFFTW is not available, will switch to np.fft.fft2
+
+        Args:
+            f (np.ndarray):
+                Input field, of shape (..., ny, nx), of float32 type,
+                the last two dimensions will be transformed by the 2D FFT.
+
+        Returns:
+            np.ndarray: Output field in spectral space, of complex64 type.
         """
         ##prepare fftw plan
         a = pyfftw.empty_aligned(f.shape, dtype='float32')
@@ -32,9 +40,17 @@ try:
 
         return fh
 
-    def ifft2(fh):
+    def ifft2(fh: np.ndarray) -> np.ndarray:
         """
-        Inverse 2D FFT implemented by pyFFTW
+        Inverse 2D FFT implemented by pyFFTW. If pyFFTW is not available, will switch to np.fft.ifft2
+
+        Args:
+            fh (np.ndarray):
+                Input field, of shape (..., nky, nkx), of complex64 type,
+                the last two dimensions will be inverse transformed by 2D FFT.
+
+        Returns:
+            np.ndarray: Output field in physical space, of float32 type.
         """
         ##prepare fftw plan
         b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
@@ -55,15 +71,13 @@ except ImportError:
 
 def fftwn(n):
     """
-    Wavenumber sequence for FFT output in 1 dimension
+    Wavenumber sequence corresponding to the FFT output in 1 dimension.
 
-    Input:
-    - n: int
-      The size of the dimension
+    Args:
+        n (int): The size of the dimension
 
-    Output:
-    - wn: np.array
-      The sequence of wavenumber (0,1,2,...-2,-1) for this dimension
+    Returns:
+        np.ndarray: The sequence of wavenumber (0,1,2,...-2,-1) for this dimension
     """
     nup = int(np.ceil((n+1)/2))
     if n%2 == 0:
@@ -74,15 +88,16 @@ def fftwn(n):
 
 def get_wn(fld):
     """
-    Generate meshgrid wavenumber for the input field
+    Generates a meshgrid of wavenumbers corresponding to the input field dimensions.
 
-    Input:
-    - fld: np.array
-      n-dimensional field, the last two dimensions are the horizontal directions (y, x)
+    Args:
+        fld (np.ndarray):
+            Input field, the last two dimensions are the horizontal directions (ny, nx)
 
-    Return:
-    - wnx, wny: np.array, same dimensions as fld
-      The wavenumber in x, y directions, according to the dimension (nx or ny, whichever is larger)
+    Returns:
+        np.ndarray:
+            Wavenumbers corresponding to the input fields dimensions,
+            relative to the domain size (nx or ny, whichever is larger).
     """
     ny, nx = fld.shape[-2:]
 

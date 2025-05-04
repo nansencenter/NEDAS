@@ -11,7 +11,6 @@ def lonlat2sxy(lon, lat):
     y = r * np.sin(lon*invrad)
     return x, y
 
-
 @njit
 def sxy2lonlat(sx, sy):
     """convert stereographic plane x,y to lon,lat"""
@@ -20,7 +19,6 @@ def sxy2lonlat(sx, sy):
     lat = 2 * rad * np.arccos(r) - 90
     lon = rad * np.arctan2(sy, sx)
     return lon, lat
-
 
 @njit
 def spherdist(lon1, lat1, lon2, lat2):
@@ -47,7 +45,6 @@ def spherdist(lon1, lat1, lon2, lat2):
 
     return dist
 
-
 @njit
 def tri_area(a, b, c):
     """compute triangle area given edge lengths"""
@@ -57,7 +54,6 @@ def tri_area(a, b, c):
         return 0  ##the triangle is not well defined
     else:
         return np.sqrt(d)
-
 
 @njit
 def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
@@ -78,9 +74,7 @@ def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
         ##stop if no progress are made
         if ipiv==i_c and jpiv==j_c:
             break
-
     return ipiv, jpiv
-
 
 @njit
 def find_grid_index(glon, glat, gx, gy, neighbors, lon, lat, ipiv, jpiv):
@@ -151,7 +145,6 @@ def find_grid_index(glon, glat, gx, gy, neighbors, lon, lat, ipiv, jpiv):
 
     return np.nan, np.nan
 
-
 def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat):
     """ convert from lon,lat to grid space index x,y """
     x, y = np.full(lon.size, np.nan), np.full(lon.size, np.nan)
@@ -160,7 +153,6 @@ def lonlat2xy(glon, glat, gx, gy, neighbors, lon, lat):
         ipiv, jpiv = pivotp(glon, glat, neighbors, lon[i], lat[i], ipiv, jpiv)
         x[i], y[i] = find_grid_index(glon, glat, gx, gy, neighbors, lon[i], lat[i], ipiv, jpiv)
     return x, y
-
 
 def xy2lonlat(glon, glat, gx, gy, neighbors, x, y):
     """ convert from grid space index x,y to lon,lat """
@@ -235,5 +227,4 @@ def xy2lonlat(glon, glat, gx, gy, neighbors, x, y):
 
     # else:
     #     return np.nan, np.nan
-
 

@@ -1,2 +1,4 @@
-Configuration file entries
-==========================
+Configuration file
+==================
+
+

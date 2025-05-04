@@ -8,19 +8,24 @@ from NEDAS.utils.progress import progress_bar
 class State:
     """
     The State class manages the state variables for the assimilation system.
-    Note: The analysis is performed on a regular grid.
+    
+    The analysis is performed on a regular grid.
+    
     The entire state has dimensions: member, variable, time,  z,  y,  x
-                        indexed by: mem_id,        v,    t,  k,  j,  i
-                        with size:   nens,       nv,   nt, nz, ny, nx
+    indexed by: mem_id,        v,    t,  k,  j,  i
+    with size:   nens,       nv,   nt, nz, ny, nx
 
     To parallelize workload, we group the dimensions into 3 indices:
+    
     mem_id indexes the ensemble members
+    
     rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
-            for different variables, we stack these dimensions in the 'record'
-            dimension with size nrec
+    for different variables, we stack these dimensions in the 'record'
+    dimension with size nrec
+    
     par_id indexes the spatial partitions, which are subset of the 2D grid
-            given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
-            the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
+    given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
+    the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
 
     The entire state is distributed across the memory of many processors,
     at any moment, a processor only stores a subset of state in its memory:
@@ -60,16 +65,15 @@ class State:
         self.fields_prior, self.z_fields = self.collect_fields_from_restartfiles(c)
         self.output_z_coords(c)
 
-    def parse_state_info(self, c):
+    def parse_state_info(self, c) -> dict:
         """
         Parses info for the nrec fields in the state.
 
-        Input:
-        - c: config obj with the environment variables
+        Args:
+            c (Config): config obj
 
         Returns:
-        - info: dict
-        A dictionary with some dimensions and list of unique field records
+            dict: A dictionary with some dimensions and list of unique field records
         """
         info = {}
         info['size'] = 0
@@ -131,13 +135,12 @@ class State:
 
         return info
 
-    def write_state_info(self, binfile):
+    def write_state_info(self, binfile: str):
         """
         Write state_info to a .dat file accompanying the .bin file
 
-        Inputs:
-        - binfile: str
-        File path for the .bin file
+        Args:
+            binfile (str): File path for the .bin file
         """
         with open(binfile.replace('.bin','.dat'), 'wt') as f:
             ##first line: grid dimension
@@ -163,16 +166,15 @@ class State:
                 pos = rec['pos']
                 f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(name, model_src, dtype, is_vector, units, err_type, time, dt, k, pos))
 
-    def read_state_info(self, binfile):
+    def read_state_info(self, binfile: str) -> dict:
         """
         Read .dat file accompanying the .bin file and obtain state_info
 
-        Input:
-        - binfile: str
-        File path for the .bin file
+        Args:
+            binfile (str): File path for the .bin file
 
         Returns:
-        - info: dict
+            dict: state info dictionary
         """
         with open(binfile.replace('.bin','.dat'), 'r') as f:
             lines = f.readlines()
@@ -205,26 +207,18 @@ class State:
                 rec_id += 1
             return info
 
-    def write_field(self, binfile, mask, mem_id, rec_id, fld):
+    def write_field(self, binfile: str, mask: np.ndarray, mem_id: int, rec_id: int, fld: np.ndarray) -> None:
         """
         Write a field to a binary file
 
-        Inputs:
-        - binfile: str
-        File path for the .bin file
-
-        - mask: bool, np.array with grid.x.shape
-        True if the grid point is masked (for example land grid point in ocean models).
-        The masked points will not be stored in the binfile to reduce disk usage.
-
-        - mem_id: int
-        Member index, from 0 to nens-1
-
-        - rec_id: int
-        Field record index, info['fields'][rec_id] gives the record information
-
-        - fld: float, np.array
-        The field to be written to the file
+        Args:
+            binfile (str): File path for the .bin file
+            mask (np.ndarray):  Array of bool with same shape as grid.x.
+                True if the grid point is masked (for example land grid point in ocean models).
+                The masked points will not be stored in the binfile to reduce disk usage.
+            mem_id (int): Member index, from 0 to nens-1
+            rec_id (int): Field record index, info['fields'][rec_id] gives the record information
+            fld (np.ndarray):  The field to be written to the file
         """
         rec = self.info['fields'][rec_id]
 
@@ -240,27 +234,18 @@ class State:
             f.seek(mem_id*self.info['size'] + rec['pos'])
             f.write(struct.pack(fld_.size*type_dic[rec['dtype']], *fld_))
 
-    def read_field(self, binfile, mask, mem_id, rec_id):
+    def read_field(self, binfile: str, mask: np.ndarray, mem_id: int, rec_id: int) -> np.ndarray:
         """
         Read a field from a binary file
 
-        Inputs:
-        - binfile: str
-        File path for the .bin file
-
-        - mask: bool, np.array with grid.x.shape
-        True if the grid point is masked (for example land grid point in ocean models).
-        The masked points will not be stored in the binfile to reduce disk usage.
-
-        - mem_id: int
-        Member index from 0 to nens-1
-
-        - rec_id: int
-        Field record index, info['fields'][rec_id] gives the record information
+        Args:
+        binfile (str): File path for the .bin file
+        mask (np.ndarray): Mask of grid points.
+        mem_id (int): Member index from 0 to nens-1
+        rec_id (int): Field record index, info['fields'][rec_id] gives the record information
 
         Returns:
-        - fld: float, np.array
-        The field read from the file
+            np.ndarray: The field read from the file
         """
         rec = self.info['fields'][rec_id]
 
@@ -283,12 +268,12 @@ class State:
         """
         Distribute mem_id and rec_id across processors
 
-        Inputs:
-        - c: config module
+        Args:
+        c (Config): config obj
 
         Returns:
-        - mem_list: dict[pid_mem, list[mem_id]]
-        - rec_list: dict[pid_rec, list[rec_id]]
+            dict: mem_list {pid_mem: list[mem_id]}
+            dict: rec_list {pid_rec: list[rec_id]}
         """
         ##list of mem_id as tasks
         mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.nens)])
@@ -304,12 +289,12 @@ class State:
         """
         Parallel output the fields to the binary state_file
 
-        Inputs:
-        - c: config module
-        - fields: dict[(mem_id, rec_id), fld]
-        the locally stored field-complete fields for output
-        - state_file: str
-        path to the output binary file
+        Args:
+            c (Config): config obj
+            fields (dict): the locally-stored field-complete fields for output, [(mem_id, rec_id), fld]
+            state_file (str): path to the output binary file.
+            mem_id_out (int, optional): member id to be output, if None all available ids will output.
+            rec_id_out (int, optional): record id to be output, if None all available ids will output.
         """
         c.print_1p('>>> save state to '+state_file+'\n')
 
@@ -349,12 +334,10 @@ class State:
         Compute ensemble mean of a field stored distributively on all pid_mem
         collect means on pid_mem=0, and output to mean_file
 
-        Inputs:
-        - c: config module
-        - fields, dict[(mem_id, rec_id), fld]
-        the locally stored field-complete fields for output
-        - mean_file: str
-        path to the output binary file for the ensemble mean
+        Args:
+            c (Config): config obj
+            fields (dict): the locally stored field-complete fields for output
+            mean_file (str): path to the output binary file for the ensemble mean
         """
         c.print_1p('>>> compute ensemble mean, save to '+mean_file+'\n')
 
@@ -406,14 +389,14 @@ class State:
         Collects fields from model restart files, convert them to the analysis grid,
         preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
 
-        Inputs:
-        - c: config object
+        Args:
+            c (Config): config object
 
         Returns:
-        - fields: dict[(mem_id, rec_id), fld]
-        where fld is np.array defined on c.grid, it's one of the state variable field
-        - z_fields: dict[(mem_id, rec_id), zfld]
-        where zfld is same shape as fld, it's he z coordinates corresponding to each field
+            dict: fields dictionary [(mem_id, rec_id), fld]
+                where fld is np.array defined on c.grid, it's one of the state variable field
+            dict: z_fields dictionary [(mem_id, rec_id), zfld]
+                where zfld is same shape as fld, it's he z coordinates corresponding to each field
         """
         pid_mem_show = [p for p,lst in self.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.rec_list.items() if len(lst)>0][0]
@@ -522,14 +505,12 @@ class State:
         so that the field-complete fields get transposed into ensemble-complete state
         with keys (mem_id, rec_id) pointing to the partition in par_list
 
-        Inputs:
-        - c: config module
-        - fields: dict[(mem_id, rec_id), fld]
-        The locally stored field-complete fields with subset of mem_id,rec_id
+        Args:
+            c (Config): config obj
+            fields (dict): The locally stored field-complete fields with subset of mem_id,rec_id
 
         Returns:
-        - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
-        The locally stored ensemble-complete field chunks on partitions.
+            dict: The locally stored ensemble-complete field chunks on partitions, dict[(mem_id, rec_id), dict[par_id, fld_chk]]
         """
         c.print_1p('transpose field-complete to ensemble-complete\n')
         state = {}
@@ -593,14 +574,12 @@ class State:
         """
         Transposes back the state to field-complete fields
 
-        Inputs:
-        - c: config module
-        - state: dict[(mem_id, rec_id), dict[par_id, fld_chk]]
-        the locally stored ensemble-complete field chunks for subset of par_id
+        Args:
+            c (Config): config obj
+            state (dict): the locally stored ensemble-complete field chunks for subset of par_id
 
         Returns:
-        - fields: dict[(mem_id, rec_id), fld]
-        the locally stored field-complete fields for subset of mem_id,rec_id.
+            dict: the locally stored field-complete fields for subset of mem_id,rec_id.
         """
         c.print_1p('transpose ensemble-complete to field-complete\n')
         fields = {}

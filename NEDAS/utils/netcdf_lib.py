@@ -1,8 +1,22 @@
+from typing import Optional, Dict
 import numpy as np
 from netCDF4 import Dataset
-import time
+from NEDAS.utils.parallel import Comm
 
-def nc_open(filename, mode, comm):
+def nc_open(filename: str, mode: str, comm: Optional[Comm]=None) -> Dataset:
+    """
+    Open a netCDF file.
+
+    Args:
+        filename (str): Path to the netCDF file.
+        mode (str): Open mode, (e.g. :code:`'r'`, :code:`'w'`).
+        comm (Comm, optional): MPI communicator object. If None, open the netCDF4.Dataset normally.
+            If communicator is available, try :code:`parallel=True` open when opening the file.
+            If that's not supported, acquire a file lock in communicator for blocking serial access of the file.
+
+    Returns:
+        netCDF4.Dataset: netCDF file handle.
+    """
     if comm is None:
         return Dataset(filename, mode, format='NETCDF4')
     else:
@@ -16,41 +30,38 @@ def nc_open(filename, mode, comm):
                 comm.release_file_lock(filename)
                 raise
 
-def nc_close(filename, f, comm):
+def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
+    """
+    Close the netCDF file handle.
+
+    Args:
+        filename (str): Path to the opened netCDF file.
+        f (netCDF4.Dataset): netCDF4 Dataset file handle.
+        comm (Comm, optional): MPI communicator object. If None, just close the file directly.
+            If communicator is specified, release the file lock after closing it.
+    """
     f.close()
     if comm is not None and not comm.parallel_io:
         comm.release_file_lock(filename)
 
-def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None, comm=None):
+def nc_write_var(filename: str, dim: Dict[str,int], varname: str, dat: np.ndarray,
+                 dtype: Optional[str]=None, recno: Optional[Dict[str,int]]=None,
+                 attr: Optional[Dict]=None, comm: Optional[Comm]=None) -> None:
     """
-    Write a variable to a netcdf file
+    Write a variable to a netCDF file.
 
-    Inputs:
-    - filename: str
-      Path to the output nc file
-
-    - dim: dict(str:int)
-      Dimension definition for the variable, 'dimension name':length of dimension (int)
-      The dimension length can be None if it is "unlimited" dimension (record dimension)
-
-    - varname: str
-      Name of the output variable
-
-    - dat: np.array
-      Data for output, number of its dimensions must match dim (excluding unlimited dims)
-
-    - dtype:
-      Data type, if not None will convert input dat to dtype
-
-    - recno: dict, optional
-      Dictionary {'dimension name': record_number}, each unlimited dimension defined in dim
-      should have a corresponding recno entry to note which record to write to.
-
-    - attr: dict, optional
-      Additional attribute to output to the variable
-      Dictionary {'name of attr':'value of attr'}
-
-    - comm: Comm object
+    Args:
+        filename (str): Path to the output netCDF file.
+        dim (dict): Dictionary {dimension name (str): dimension size (int)} of each dimension.
+            The dimension size can be None if it is `unlimited` dimension (can append more records afterwards)
+        varname (str): Name of the output variable. Variable groups are supported, use :code:`'group/varname'` as varname.
+        dat (np.ndarray): Data for output, number of its dimensions must match :code:`dim` (excluding unlimited dimensions).
+        dtype (str, optional): Data type to convert the input data to.
+        recno (dict, optional): Dictionary {dimension name (str): record number (int)}, indicating the index in unlimited dimensions
+            for the data to be written to. Each unlimited dimension defined in :code:`dim` should have
+            a corresponding :code:`recno` entry.
+        attr (dict, optional): Dictionary {name of attribute (str): value (str)}, additional attributes to be added.
+        comm (Comm, optional): MPI communicator object, handling parallel I/O and make sure thread-safe writing of data.
     """
     f = nc_open(filename, 'a', comm)
 
@@ -107,24 +118,20 @@ def nc_write_var(filename, dim, varname, dat, dtype=None, recno=None, attr=None,
 
     nc_close(filename, f, comm)
 
-def nc_read_var(filename, varname, comm=None):
+def nc_read_var(filename: str, varname: str, comm: Optional[Comm]=None) -> np.ndarray:
     """
-    Read a variable from an netcdf file
+    Read a variable from a netCDF file.
 
-    This reads the entire variable, if you only want a slice, it is more efficient to use
-    netCDF4.Dataset directly.
+    This function by default reads the entire variable, if you only want a slice, it is more efficient to use
+    netCDF4.Dataset handle directly.
 
-    Inputs:
-    - filename: str
-      Path to the netcdf file for reading
+    Args:
+        filename (str): Path to the netCDF file for reading.
+        varname (str): Name of the variable to read.
+        comm (Comm, optional): MPI communicator object.
 
-    - varname: str
-      Name of the variable to read
-
-    - comm: Comm object
-    Return:
-    - dat: np.array
-      The variable read from the file
+    Returns:
+        np.ndarray: Variable read from the file.
     """
     f = nc_open(filename, 'r', comm)
 

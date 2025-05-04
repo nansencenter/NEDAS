@@ -1,23 +1,18 @@
 import numbers
 import numpy as np
+from datetime import datetime
 
-def units_convert(units_from, units_to, var):
+def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray:
     """
-    units converter function
+    Convert units for a given variable.
 
-    Inputs:
-    - units_from: str
-      Source units for the input variable var
+    Args:
+        units_from (str): Source units for the input variable
+        units_to (str): Target units to convert to
+        var (np.ndarray): The input variable
 
-    - units_to: str
-      Target units to convert var to
-
-    - var: np.array
-      The input variable
-
-    Return:
-    - var: np.array
-      Variable with converted units
+    Returns:
+        np.ndarray: Variable with converted units
     """
     # if input units are numerics just apply the scaling factor
     if isinstance(units_to, numbers.Number) and isinstance(units_from, numbers.Number):
@@ -113,7 +108,7 @@ def units_convert(units_from, units_to, var):
 
     if units_to == units_from:
         return var
-    
+
     # Find the group containing the units
     for group, definitions in unit_groups.items():
         base = definitions["base"]
@@ -134,15 +129,23 @@ def units_convert(units_from, units_to, var):
 
     raise ValueError(f"Conversion of unit from '{units_from}' to '{units_to}' not supported.")
 
-
 ##binary file io type conversion
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}
 
-##map projection name in pyproj
 from pyproj import Proj
-def proj2dict(proj:Proj) -> dict:
+def proj2dict(proj: Proj) -> dict:
+    """
+    Convert map projection name in pyproj.Proj to a dictionary of human-readable parameters
+
+    Args:
+        proj (pyproj.Proj): Map projection object.
+
+    Returns:
+        dict: A dictionary of projection parameters, such as :code:`name`, :code:`lat_0`, :code:`lon_0`, etc.
+
+    """
     proj_names = {
         "stere": "stereographic",
         "merc": "mercator",
@@ -186,30 +189,43 @@ from datetime import datetime, timedelta
 
 dt1h = timedelta(hours=1)
 
-def t2h(t):
-    """convert datetime obj to hours since 1900-1-1 00:00"""
+def t2h(t: datetime) -> float:
+    """
+    Convert datetime object to hours since 1900-1-1 00:00
+    """
     return (t - datetime(1900,1,1))/timedelta(hours=1)
 
-def h2t(h):
-    """convert hours since 1900-1-1 00:00 to datetime obj"""
+def h2t(h: float) -> datetime:
+    """
+    Convert hours since 1900-1-1 00:00 to datetime object
+    """
     return datetime(1900,1,1) + timedelta(hours=1) * h
 
-def t2s(t):
-    """convert datetime obj to a time string 'ccyymmddHHMM'"""
+def t2s(t: datetime) -> str:
+    """
+    Convert datetime object to a time string :code:`'ccyymmddHHMM'`
+    """
     return t.strftime('%Y%m%d%H%M')
 
-def s2t(s):
-    """convert a time string 'ccyymmddHHMM' to a datetime obj"""
+def s2t(s: str) -> datetime:
+    """
+    Convert a time string :code:`'ccyymmddHHMM'` to a datetime object
+    """
     return datetime.strptime(s, '%Y%m%d%H%M')
 
-def seconds_to_timestr(seconds):
-    """convert from seconds to time duration string"""
+def seconds_to_timestr(seconds: int) -> str:
+    """
+    Convert from seconds to time duration string 'HH:MM:SS'
+    """
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     seconds = seconds % 60
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-def ensure_list(v):
+def ensure_list(v) -> list:
+    """
+    If the input :code:`v` is a list, return itself; if not, return :code:`[v]`.
+    """
     if isinstance(v, list):
         return v
     return [v]

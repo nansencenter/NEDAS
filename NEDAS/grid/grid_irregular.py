@@ -7,6 +7,11 @@ from NEDAS.grid.grid_base import GridBase
 class IrregularGrid(GridBase):
     """
     Class for handling irregular grids.
+
+    Args:
+        triangles (np.ndarray, optional):
+            `None` (default), if the triangle indices `ind[grid.x.size, 3]` for the unstructured mesh are given here, the grid will skip computing triangulation.
+
     """
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian',
                  triangles=None, dst_grid=None):

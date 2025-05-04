@@ -7,14 +7,17 @@ from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 class Obs:
     """
     Class for handling observations.
-    Note: The observation has dimensions: variable, time, z, y, x
+    
+    The observation has dimensions: variable, time, z, y, x
     Since the observation network is typically irregular, we store the obs record
     for each variable in a 1d sequence, with coordinates (t,z,y,x), and size nobs
 
     To parallelize workload, we distribute each obs record over all the processors
-    - for batch assimilation mode, each pid stores the list of local obs within the
+
+    for batch assimilation mode, each pid stores the list of local obs within the
     hroi of its tiles, with size nlobs (number of local obs)
-    - for serial mode, each pid stores a non-overlapping subset of the obs list,
+    
+    for serial mode, each pid stores a non-overlapping subset of the obs list,
     here 'local' obs (in storage sense) is broadcast to all pid before computing
     its update to the state/obs near that obs.
 
@@ -45,13 +48,12 @@ class Obs:
         """
         Parse info for the observation records defined in config.
 
-        Input:
-        - c: config module with the environment variables
-        - state: State object
+        Args:
+            c (Config): Configuration object.
+            state (State): State object.
 
         Returns:
-        - info: dict
-        A dictionary with some dimensions and list of unique obs records
+            dict: A dictionary with some dimensions and list of unique obs records
         """
         info = {'size':0, 'records':{}}
         obs_variables = set()
@@ -138,9 +140,11 @@ class Obs:
         """
         Distribute obs_rec_id across processors
 
-        Inputs: c: config module
+        Args:
+            c (Config): Configuration object.
 
-        Returns: obs_rec_list: dict[pid_rec, list[obs_rec_id]]
+        Returns:
+            dict: Dictionary {pid_rec (int): list[obs_rec_id (int)]}
         """
         obs_rec_list_full = [i for i in self.info['records'].keys()]
         obs_rec_size = np.array([2 if r['is_vector'] else 1 for i,r in self.info['records'].items()])
@@ -153,13 +157,12 @@ class Obs:
         Read the ensemble-mean z coords from z_file at obs time
 
         Inputs:
-        - c: config module
-        - state: state obj
-        - time: datetime obj
+            c (Config): Configuration object.
+            state (State): State object.
+            time (datetime): observation time.
 
-        Return:
-        - z: np.array[nz, grid.x.shape]
-        z coordinate fields for all unique level k defined in state_info
+        Returns:
+            np.ndarray: Z-coordinate fields of shape (nz, c.grid.x.shape) for all unique levels defined in state.info
         """
         ##first, get a list of indices k
         k_list = list(set([r['k'] for i,r in state.info['fields'].items() if r['time']==time]))
@@ -188,15 +191,19 @@ class Obs:
         """
         Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
         This function includes several ways to compute the obs_prior:
+
         1, If obs_name is one of the variables provided by the model_src module, then
         model_src.read_var shall be able to provide the obs field defined on model native grid.
         Then we convert the obs field to the analysis grid and do vertical interpolation.
 
         Note that there are options to obtain the obs fields to speed things up:
+        
         1.1, If the obs field can be found in the locally stored fields[mem_id, rec_id],
                 we can just access it from memory (quickest)
+        
         1.2, If the obs field is not in local memory, but still one of the state variables,
                 we can get it through read_field() from the state_file
+        
         1.3, If the obs is not one of the state variable, we get it through model_src.read_var()
 
         2, If obs_name is one of the variables provided by obs.obs_operator, we call it to
@@ -208,23 +215,21 @@ class Obs:
         indicates that we are trying to generate synthetic observations. Since the state variables
         won't include the true state, the only options above are 1.3 or 2 for this case.
 
-        Inputs:
-        - c: config object
-        - state: state object
-        - flag: 'prior' or 'posterior'
+        Args:
+            c (Config): config object
+            state (State): state object
+            flag (str): 'prior' or 'posterior'
+            **kwargs: Additional parameters
+                - member: int, member index; or None if dealing with synthetic obs
+                - name: str, obs variable name
+                - time: datetime obj, time of the obs window
+                - is_vector: bool, if True the obs is a vector measurement
+                - dataset_src: str, dataset source module name providing the obs
+                - model_src: str, model source module name providing the state
+                - x, y, z, t: np.array, coordinates from obs_seq
 
-        Some kwargs:
-        - member: int, member index; or None if dealing with synthetic obs
-        - name: str, obs variable name
-        - time: datetime obj, time of the obs window
-        - is_vector: bool, if True the obs is a vector measurement
-        - dataset_src: str, dataset source module name providing the obs
-        - model_src: str, model source module name providing the state
-        - x, y, z, t: np.array, coordinates from obs_seq
-
-        Return:
-        - seq: np.array
-        values corresponding to the obs_seq but from the state identified by kwargs
+        Returns:
+            np.ndarray: Values corresponding to the obs_seq but from the state identified by kwargs
         """
         mem_id = kwargs['member']
         synthetic = True if mem_id is None else False
@@ -377,17 +382,17 @@ class Obs:
 
         Since this is the actual obs (1 copy), only 1 processor needs to do the work
 
-        Inputs:
-        - c: config module
+        Argss:
+            c (Config): Configuration object.
+            state (State): State object.
 
         Returns:
-        - obs_seq: dict[obs_rec_id, record]
-        where each record is dict[key, np.array], the mandatory keys are
-            'obs' the observed values (measurements)
-            'x', 'y', 'z', 't' the coordinates for each measurement
-            'err_std' the uncertainties for each measurement
-            there can be other optional keys provided by read_obs() but we don't use them
-        - self.info with updated nobs
+            dict: observation sequence. Dictionary {obs_rec_id (int): record}
+                where each record is a dictionary {key: np.ndarray}, the mandatory keys are
+                'obs' the observed values (measurements)
+                'x', 'y', 'z', 't' the coordinates for each measurement
+                'err_std' the uncertainties for each measurement
+                there can be other optional keys provided by read_obs() but we don't use them
         """
         if c.pid == 0:
             print('>>> read observation sequence from datasets', flush=True)
@@ -445,13 +450,14 @@ class Obs:
         """
         Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
-        Inputs:
-        - c: config module
-        - state: state object
+        Args:
+            c (Config): config object
+            state (State): state object
+            flag (str): 'prior' or 'posterior'
 
         Returns:
-        - obs_prior_seq: dict[(mem_id, obs_rec_id), seq]
-        where seq is np.array with values corresponding to obs_seq['obs']
+            dict: obs_prior_seq, Dictionary {(mem_id, obs_rec_id): seq}
+                where seq is np.array with values corresponding to obs_seq['obs']
         """
         pid_mem_show = [p for p,lst in state.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -560,26 +566,23 @@ class Obs:
         """
         Transpose obs from field-complete to ensemble-complete
 
-        Step 1: Within comm_mem, send the subset of input_obs with mem_id and par_id
-                from the source proc (src_pid) to the destination proc (dst_pid), store the
-                result in tmp_obs with all the mem_id (ensemble-complete)
-        Step 2: Gather all obs_rec_id within comm_rec, so that each pid_rec will have the
-                entire obs record for assimilation
+        Step 1, Within comm_mem, send the subset of input_obs with mem_id and par_id
+        from the source proc (src_pid) to the destination proc (dst_pid), store the
+        result in tmp_obs with all the mem_id (ensemble-complete)
 
-        Requires attributes in config:
-        - c: config obj
-        - input_obs: obs_seq from process_all_obs() or obs_prior_seq from process_all_obs_priors()
-        - ensemble: bool
+        Step 2, Gather all obs_rec_id within comm_rec, so that each pid_rec will have the
+        entire obs record for assimilation
 
-        Returns:
-        - output_obs:
-        If ensemble: the input_obs is the obs_prior_seq: dict[(mem_id, obs_rec_id), np.array]
-        output_obs: dict[(mem_id, obs_rec_id), dict[par_id, np.array]]
-        is the local observation priors sequence
+        Args:
+            c (Config): config obj
+            input_obs (dict): obs_seq from process_all_obs() or obs_prior_seq from process_all_obs_priors()
+            ensemble (bool): If True, the input_obs is the obs_prior_seq, dict[(mem_id, obs_rec_id), np.array];
+                If False (default), the input_obs is the obs_seq, dict[obs_rec_id, dict[key, np.array]]     
 
-        If not ensemble: the input_obs is the obs_seq: dict[obs_rec_id, dict[key, np.array]]
-        output_obs: dict[obs_rec_id, dict[par_id, dict[key, np.array]]]
-        is the local observation sequence, key = 'obs','x','y','z','t'...
+        Returns,
+            dict: output_obs
+                If ensemble, returns the lobs_prior dict[(mem_id, obs_rec_id), dict[par_id, np.array]]
+                If not ensemble, returns the lobs dict[obs_rec_id, dict[par_id, dict[key, np.array]]], key = 'obs','x','y','z','t'...
         """
         pid_mem_show = [p for p,lst in state.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -695,13 +698,13 @@ class Obs:
         """
         Transpose obs from ensemble-complete to field-complete
 
-        Requires attributes in config:
-        - c: config obj
-        - lobs_post after analysis
+        Args:
+            c (Config): config obj
+            state (State): state obj
+            lobs (dict): local obs seq
 
         Returns:
-        - obs_post_seq:
-        dict[(mem_id, obs_rec_id), np.array]
+            dict: obs_seq, dictionary {(mem_id, obs_rec_id): np.ndarray}
         """
         pid_mem_show = [p for p,lst in state.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]

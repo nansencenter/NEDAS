@@ -1,5 +1,5 @@
-NEDAS.diag package
-==================
+Diagnostic tools
+================
 
 Module contents
 ---------------
