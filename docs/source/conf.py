@@ -31,6 +31,8 @@ exclude_patterns = []
 
 autodoc_member_order = 'bysource'
 
+autodoc_mock_imports = ["tensorflow", "opencv", "pygrib"]
+
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
