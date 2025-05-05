@@ -1,10 +1,10 @@
 FROM ubuntu:22.04
 
-# Install basic build tools, MPICH, Python, and MPI4Py dependencies
+# Install basic build tools, MPICH, FFTW, Python, and dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     vim git wget gnupg2 ca-certificates build-essential \
-    mpich libmpich-dev \
+    mpich libmpich-dev libfftw3-dev\
     python3 python3-pip python3-dev python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
@@ -37,8 +37,8 @@ ENV PATH=/app/pyenv/bin:$PATH
 # Install NEDAS and required Python packages
 RUN git clone https://github.com/nansencenter/NEDAS.git /app/NEDAS
 WORKDIR /app/NEDAS
-RUN git checkout -b other_features origin/other_features
-ENV PYTHONPATH=/app/NEDAS:$PYTHONPATH
+RUN git checkout -b develop origin/develop
+ENV PYTHONPATH=/app/NEDAS
 
 RUN pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
@@ -47,10 +47,17 @@ RUN pip3 install --upgrade pip && \
 
 # Set up environment variables for IFX
 ENV PATH=/opt/intel/oneapi/compiler/latest/bin:${PATH}
-ENV LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/latest/lib:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/latest/lib
+
+# Build qg model
+WORKDIR /app/NEDAS/NEDAS/models/qg/src
+RUN bash -c ". /app/NEDAS/examples/qgmodel_benchmark/setup_docker.src && make"
+
+# Set up .bashrc
+RUN echo ". /app/python.src" >> /app/.bashrc
 
 # Create working directory
 WORKDIR /work
 
 # Default command
-CMD ["/bin/bash"]
+CMD ["bash"]

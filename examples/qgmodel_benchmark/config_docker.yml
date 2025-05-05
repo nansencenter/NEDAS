@@ -20,14 +20,11 @@ run_analysis: True
 run_diagnose: True
 debug: False
 
-time_start: '200101010000'
-time_end: '200101140000'
-time_analysis_start: '200101030000'
-time_analysis_end: '200101090000'
+time_start: 2001-01-01 00:00:00
+time_end: 2001-01-14 00:00:00
+time_analysis_start: 2001-01-03 00:00:00
+time_analysis_end: 2001-01-09 00:00:00
 cycle_period: 24
-
-time: '200101010000'
-step: preprocess
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -66,7 +63,7 @@ model_def:
   qg:
     config_file: /app/NEDAS/NEDAS/models/qg/default.yml
     model_code_dir: /app/NEDAS/NEDAS/models/qg
-    model_env: /work/setup_docker.src
+    model_env: /app/NEDAS/examples/qgmodel_benchmark/setup_docker.src
     ens_run_type: scheduler
     ens_init_dir: /work/init_ens
     truth_dir: /work/truth

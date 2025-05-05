@@ -1,20 +1,20 @@
-work_dir: '/cluster/work/users/yingyue/qg.emulator'   ##working directory for the experiment
+work_dir: '/cluster/work/users/yingyue/qg.emulator'
 
 job_submit:
 
-nproc: 1          ##total number of processors
+nproc: 1
 
-nens: 100         ##ensemble size
+nens: 100
 run_forecast: True
-run_analysis: True   ##if true, run the assimilation steps
+run_analysis: True
 run_diagnose: False
-debug: False      ##if true, output debug data/message
+debug: False
 
-time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '202302180000'         ##end time of the experiment
-time_analysis_start: '202301010000' ##start time of the first analysis cycle
-time_analysis_end: '202302180000'   ##end time of the last analysis cycle
-cycle_period: 12                 ##cycle period, in hours
+time_start: 2001-01-01 00:00:00
+time_end: 2001-01-14 00:00:00
+time_analysis_start: 2001-01-03 00:00:00
+time_analysis_end: 2001-01-09 00:00:00
+cycle_period: 12
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -54,7 +54,7 @@ use_synthetic_obs: True
 model_def:
   qg.emulator:
     config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/emulator/default.yml'
-    nproc_per_run: 1    ##number of processors to run a forecast
+    nproc_per_run: 1
     ens_run_type: batch
     ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
     truth_dir: '/cluster/work/users/yingyue/qg/truth'
