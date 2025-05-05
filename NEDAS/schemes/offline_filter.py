@@ -116,7 +116,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
             ##build run commands for the ensemble forecast script
             commands = ""
             if c.python_env:
-                commands = f"source {c.python_env}; "
+                commands = f". {c.python_env}; "
             if mpi:
                 if importlib.util.find_spec("mpi4py") is not None:
                     commands += f"JOB_EXECUTE {sys.executable} -m mpi4py {script_file} -c {tmp_config_file.name}"

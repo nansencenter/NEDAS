@@ -1,21 +1,21 @@
-work_dir: '/cluster/work/users/yingyue/qg'   ##working directory for the experiment
+work_dir: '/cluster/work/users/yingyue/qg'
 
 job_submit:
   ppn: 16
 
-nproc: 5        ##total number of processors
+nproc: 5
 
-nens: 20         ##ensemble size
+nens: 20
 run_forecast: True
-run_analysis: True  ##if true, run the assimilation steps
+run_analysis: True
 run_diagnose: True
-debug: False      ##if true, output debug data/message
+debug: False
 
-time_start: '202301010000'       ##start time of the experiment, format ccyymmddHHMM
-time_end: '202302180000'         ##end time of the experiment
-time_analysis_start: '202301010000' ##start time of the first analysis cycle
-time_analysis_end: '202302180000'   ##end time of the last analysis cycle
-cycle_period: 12                 ##cycle period, in hours
+time_start: 2001-01-01 00:00:00
+time_end: 2001-01-14 00:00:00
+time_analysis_start: 2001-01-03 00:00:00
+time_analysis_end: 2001-01-09 00:00:00
+cycle_period: 12
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -70,19 +70,19 @@ kfactor: 1
 nlobs_max:
 
 ##multiscale approach
-nscale: 1                    ## number of scale components
-scale_id: 0                  ## current scale index
-decompose_obs: False         ## if true, decompose observations as well
-character_length: [150, 50, 10]   ## characteristic length (in grid coord unit) for each scale (large to small)
-localize_scale_fac: [1, 1, 1]   ## scale factor for localization distances
-obs_err_scale_fac: [1, 1, 1]    ## scale factor for observation error variances
+nscale: 1
+scale_id: 0
+decompose_obs: False
+character_length: [150, 50, 10]
+localize_scale_fac: [1, 1, 1]
+obs_err_scale_fac: [1, 1, 1]
 
-run_alignment: False  ## if true, run alignment technique
+run_alignment: False
 alignment:
-  option: 'optical_flow'     ## which alignment algorithm to use
-  variable: 'streamfunc'     ## which variable the alignment is based on
-  nlevel: 5                  ## number of resolution levels used in pyramid method
-  smoothness_weight: 1       ## strength of the smoothness constraint
+  option: 'optical_flow'
+  variable: 'streamfunc'
+  nlevel: 5
+  smoothness_weight: 1
 
 inflation:
   type: 'posterior,RTPP'

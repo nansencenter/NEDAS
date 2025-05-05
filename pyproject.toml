@@ -19,17 +19,21 @@ classifiers = [
 dependencies = [
   "numpy",
   "scipy",
-  "netCDF4",
-  "pygrib",
+  "matplotlib",
   "pyproj",
   "pyshp",
-  "matplotlib",
+  "netCDF4",
+  "PyYAML",
 ]
 
 [project.optional-dependencies]
+all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv", "tensorflow", "torch"]
 mpi = ["mpi4py"]
-numba = ["numba"]
+jit = ["numba"]
 fftw = ["pyFFTW"]
+grib = ["pygrib"]
+alignment = ["opencv"]
+emulator = ["tensorflow", "torch"]
 
 [project.scripts]
 nedas-run = "NEDAS.__main__:main"

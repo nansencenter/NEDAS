@@ -35,13 +35,13 @@ dependencies:
       - kiwisolver==1.4.7
       - llvmlite==0.43.0
       - matplotlib==3.9.3
-      - mpi4py==4.0.1        ##this is optional, will require the MPI library
+      #- mpi4py==4.0.1        ##this is optional, will require the MPI library
       - netcdf4==1.7.2
-      - numba==0.60.0        ##this is optional
+      #- numba==0.60.0        ##this is optional
       - numpy==2.0.2
       - packaging==24.2
       - pillow==11.0.0
-      - pyfftw==0.15.0       ##this is optional, requires FFTW
+      #- pyfftw==0.15.0       ##this is optional, requires FFTW
       - pyparsing==3.2.0
       - pyproj==3.7.0
       - pyshp==2.3.1
