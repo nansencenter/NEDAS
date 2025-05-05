@@ -72,8 +72,15 @@ class Config:
 
     def __getattr__(self, key):
         # get values from config_dict if defined, otherwise will get the attr from the instance directly.
-        if key in self.config_dict:
+        if 'config_dict' in self.__dict__ and key in self.config_dict:
             return self.config_dict[key]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{key}'")
+
+    def __setattr__(self, key, value):
+        if key != 'config_dict' and 'config_dict' in self.__dict__ and key in self.config_dict:
+            self.config_dict[key] = value
+        else:
+            super().__setattr__(key, value)
 
     @property
     def time(self):
