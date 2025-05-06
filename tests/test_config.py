@@ -1,7 +1,7 @@
 import unittest
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from NEDAS.config import Config
 
 class TestConfig(unittest.TestCase):
@@ -37,8 +37,12 @@ class TestConfig(unittest.TestCase):
             c.time='2023-01-01'
 
     def test_argparse_time_str(self):
-        c = Config(time='2001-01-01T00:00:00Z')
+        c = Config(time='2001-01-01 00:00:00')
         self.assertEqual(c.time, datetime(2001,1,1))
+        c = Config(time='20010101000000')
+        self.assertEqual(c.time, datetime(2001,1,1))
+        c = Config(time='2001-01-01T00:00:00Z')
+        self.assertEqual(c.time, datetime(2001,1,1,tzinfo=timezone.utc))
 
     def test_directory_names(self):
         dir_def = {'cycle_dir': '{work_dir}/cycle/{time:%Y%m%d}',
