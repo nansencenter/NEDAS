@@ -1,4 +1,6 @@
-work_dir: '/cluster/work/users/yingyue/qg'
+work_dir: /cluster/work/users/yingyue/qg
+
+python_env: /cluster/home/yingyue/python.src
 
 job_submit:
   ppn: 16

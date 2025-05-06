@@ -5,8 +5,6 @@ directories:
   forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
   analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
 
-python_env: /app/python.src
-
 job_submit:
   host: docker
   ppn: 16

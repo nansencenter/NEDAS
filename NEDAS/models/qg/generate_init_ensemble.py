@@ -1,4 +1,5 @@
 import os
+import subprocess
 from datetime import timedelta
 from NEDAS.config import Config
 from NEDAS.schemes.offline_filter import OfflineFilterAnalysisScheme
@@ -29,8 +30,8 @@ def main():
         src_file = os.path.join(fcst_dir, mstr, basename)
         init_file = os.path.join(ens_init_dir, mstr, basename)
 
-        os.system(f"mkdir -p {os.path.dirname(init_file)}")
-        os.system(f"mv -v {src_file} {init_file}")
+        os.makedirs(os.path.dirname(init_file), exist_ok=True)
+        subprocess.run(f"mv -v {src_file} {init_file}", shell=True, check=True)
 
     print(f"removing temporary run directory: {cycle_dir}")
     os.system(f"rm -rf {cycle_dir}")

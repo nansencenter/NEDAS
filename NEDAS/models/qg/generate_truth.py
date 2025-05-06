@@ -1,4 +1,5 @@
 import os
+import subprocess
 from datetime import timedelta
 from NEDAS.config import Config
 
@@ -31,13 +32,14 @@ def main():
         opt['forecast_period'] = c.cycle_period
 
         file = f"output_{c.time:%Y%m%d_%H}.bin"
-        print(f"Running the model from condition {file}")
+        next_file = f"output_{c.next_time:%Y%m%d_%H}.bin"
+        print(f"Running the model from condition {file} to reach {next_file}")
         model.run(**opt)
 
         c.time = c.next_time
     print("done.")
 
-    os.system(f"mv -v {run_dir}/*/output*.bin {truth_dir}/.")
+    subprocess.run(f"mv -v {run_dir}/*/output*.bin {truth_dir}/.", shell=True, check=True)
     print(f"removing temporary run directory: {run_dir}")
     os.system(f"rm -rf {run_dir}")
 
