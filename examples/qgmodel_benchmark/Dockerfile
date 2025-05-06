@@ -1,9 +1,10 @@
-FROM ubuntu:22.04
+FROM debian:bookworm-slim AS builder
 
+# Stage 1: build environment
 # Install basic build tools, MPICH, FFTW, Python, and dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    vim git wget gnupg2 ca-certificates build-essential \
+    bash wget git gnupg2 ca-certificates build-essential \
     mpich libmpich-dev libfftw3-dev\
     python3 python3-pip python3-dev python3-venv && \
     rm -rf /var/lib/apt/lists/*
@@ -16,48 +17,64 @@ RUN wget -qO - https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-P
     intel-oneapi-compiler-fortran && \
     rm -rf /var/lib/apt/lists/*
 
-# Accept build arguments (fallback to 1000 if not provided)
-ARG USER_ID=1000
-ARG GROUP_ID=1000
+# Install NEDAS and required Python packages
+RUN git clone https://github.com/nansencenter/NEDAS.git /opt/NEDAS
+WORKDIR /opt/NEDAS
+RUN git checkout -b develop origin/develop
+
+RUN python3 -m venv /opt/pyenv
+ENV PATH=/opt/pyenv/bin:$PATH
+RUN pip3 install --upgrade --no-cache-dir pip && \
+    pip3 install  --no-cache-dir -r requirements.txt && \
+    pip3 install  --no-cache-dir numba pyFFTW && \
+    MPICC=mpicc pip3 install --no-cache-dir --no-binary=mpi4py mpi4py
+
+# Build qg model
+ENV PATH=/opt/intel/oneapi/compiler/latest/bin:$PATH
+ENV LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/latest/lib
+ENV FFTW_DIR=/lib/x86_64-linux-gnu
+ENV LIBM_DIR=/lib/x86_64-linux-gnu
+WORKDIR /opt/NEDAS/NEDAS/models/qg/src
+RUN make
+
+# Stage 2: runtime environment
+FROM debian:bookworm-slim
+
+# install the dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    mpich python3 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/NEDAS /app/NEDAS
+COPY --from=builder /opt/pyenv /opt/pyenv
+COPY --from=builder \
+    /opt/intel/oneapi/compiler/latest/lib/libimf.so* \
+    /opt/intel/oneapi/compiler/latest/lib/libintlc.so* \
+    /usr/local/lib
+COPY --from=builder /lib/x86_64-linux-gnu/libfftw3.so* /lib/x86_64-linux-gnu
+
+ENV PYTHONPATH=/app/NEDAS
+ENV PATH=/opt/pyenv/bin:$PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib:/lib/x86_64-linux-gnu
+
+WORKDIR /app
+COPY setup_docker.src /app
+COPY config_docker.yml /app/config.yml
+COPY *sh /app
 
 # Create a non-root user with the same UID/GID as the host user
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 RUN groupadd -g ${GROUP_ID} appgroup && \
     useradd -u ${USER_ID} -g appgroup -d /app -s /bin/bash appuser && \
-    mkdir -p /app && \
     chown -R ${USER_ID}:${GROUP_ID} /app
 
 # Switch to the new user
 USER appuser
 
-# Python environment
-RUN python3 -m venv /app/pyenv
-RUN echo '. /app/pyenv/bin/activate' > /app/python.src
-ENV PATH=/app/pyenv/bin:$PATH
-
-# Install NEDAS and required Python packages
-RUN git clone https://github.com/nansencenter/NEDAS.git /app/NEDAS
-WORKDIR /app/NEDAS
-RUN git checkout -b develop origin/develop
-ENV PYTHONPATH=/app/NEDAS
-
-RUN pip3 install --upgrade pip && \
-    pip3 install -r requirements.txt && \
-    pip3 install numba pyFFTW cmocean jupyter && \
-    MPICC=mpicc pip3 install --no-binary=mpi4py mpi4py
-
-# Set up environment variables for IFX
-ENV PATH=/opt/intel/oneapi/compiler/latest/bin:${PATH}
-ENV LD_LIBRARY_PATH=/opt/intel/oneapi/compiler/latest/lib
-
-# Build qg model
-WORKDIR /app/NEDAS/NEDAS/models/qg/src
-RUN bash -c ". /app/NEDAS/examples/qgmodel_benchmark/setup_docker.src && make"
-
-# Set up .bashrc
-RUN echo ". /app/python.src" >> /app/.bashrc
-
 # Create working directory
-WORKDIR /work
+WORKDIR /app
 
 # Default command
 CMD ["bash"]

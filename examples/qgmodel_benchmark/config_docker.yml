@@ -61,7 +61,7 @@ model_def:
   qg:
     config_file: /app/NEDAS/NEDAS/models/qg/default.yml
     model_code_dir: /app/NEDAS/NEDAS/models/qg
-    model_env: /app/NEDAS/examples/qgmodel_benchmark/setup_docker.src
+    model_env: /app/setup_docker.src
     ens_run_type: scheduler
     ens_init_dir: /work/init_ens
     truth_dir: /work/truth
