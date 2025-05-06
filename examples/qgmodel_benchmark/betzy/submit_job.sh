@@ -14,7 +14,4 @@ config_file=config/samples/$model.yml
 source $HOME/.bashrc
 source $HOME/python.src
 
-cd $HOME/code/NEDAS
-
-python scripts/run_exp.py --config_file=$config_file --nproc=$SLURM_NTASKS --nens=$nens --work_dir=$SCRATCH/$model.n$nens
-
+python -m NEDAS --config_file=$config_file --nproc=$SLURM_NTASKS --nens=$nens --work_dir=$SCRATCH/$model.n$nens

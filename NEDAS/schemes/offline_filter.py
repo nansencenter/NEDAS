@@ -105,7 +105,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
 
         # create a temporary config yaml file to hold c, and pass into program through runtime arg
         with tempfile.NamedTemporaryFile(dir=c.work_dir,
-                                         prefix='config',
+                                         prefix='config-',
                                          suffix='.yml') as tmp_config_file:
             c.dump_yaml(tmp_config_file.name)
 

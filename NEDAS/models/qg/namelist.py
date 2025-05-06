@@ -21,7 +21,7 @@ def namelist(conf_dict, time, forecast_period, psi_init_type, member=0, dt_ratio
     """
     # model time step
     dt = conf_dict['dt'] * dt_ratio
-    forecast_days = forecast_period / 24
+    forecast_days = float(forecast_period) / 24
     dt_days = dt / conf_dict['tscale']
     # number of time steps to run
     total_counts = forecast_days / dt_days
