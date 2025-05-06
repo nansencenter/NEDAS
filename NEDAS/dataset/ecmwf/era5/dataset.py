@@ -2,7 +2,7 @@
 
 import os
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pyproj import Proj
 import netCDF4
 from NEDAS.grid import Grid
@@ -59,7 +59,7 @@ class Dataset(DatasetBase):
 
     ##find the nearest index in data for the given t
     def find_time_index(self, time_series, time):
-        t_ = (time - datetime(1900,1,1)) / timedelta(hours=1)
+        t_ = (time - datetime(1900,1,1,tzinfo=timezone.utc)) / timedelta(hours=1)
         ind = np.abs(time_series - t_).argmin()
         return ind
 

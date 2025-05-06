@@ -1,7 +1,7 @@
 import os
 import glob
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from NEDAS.utils.conversion import dt1h
 from NEDAS.dataset.base import DatasetBase
 
@@ -204,7 +204,7 @@ class Dataset(DatasetBase):
                     continue
 
                 ##time of the profile given by julian day
-                t_prof = datetime(1950,1,1) + juld[p]*timedelta(days=1)
+                t_prof = datetime(1950,1,1,tzinfo=timezone.utc) + juld[p]*timedelta(days=1)
 
                 for l in range(nlev):
                     if flag2[p,l] == 0:
