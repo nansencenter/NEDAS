@@ -1,6 +1,6 @@
 import numbers
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 
 def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray:
     """
@@ -188,18 +188,19 @@ def proj2dict(proj: Proj) -> dict:
 from datetime import datetime, timedelta
 
 dt1h = timedelta(hours=1)
+ref_time = datetime(1900, 1, 1, tzinfo=timezone.utc)
 
 def t2h(t: datetime) -> float:
     """
     Convert datetime object to hours since 1900-1-1 00:00
     """
-    return (t - datetime(1900,1,1))/timedelta(hours=1)
+    return (t - ref_time)/timedelta(hours=1)
 
 def h2t(h: float) -> datetime:
     """
     Convert hours since 1900-1-1 00:00 to datetime object
     """
-    return datetime(1900,1,1) + timedelta(hours=1) * h
+    return ref_time + timedelta(hours=1) * h
 
 def t2s(t: datetime) -> str:
     """

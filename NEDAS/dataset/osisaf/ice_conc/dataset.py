@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import glob
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import netCDF4
 import pyproj
 from NEDAS.grid import Grid
@@ -67,7 +67,7 @@ class Dataset(DatasetBase):
 
             ntime = f.dimensions['time'].size
             for n in range(ntime):
-                t = f['time'][n].data * timedelta(seconds=1) + datetime(1978, 1, 1)
+                t = f['time'][n].data * timedelta(seconds=1) + datetime(1978, 1, 1, tzinfo=timezone.utc)
                 qc_flag = f['status_flag'][n,...].data.flatten()
                 obs = f['ice_conc'][n,...].data.flatten()
                 if 'total_uncertainty' in f.variables:

@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import glob
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import netCDF4
 import pyproj
 from NEDAS.grid import Grid
@@ -102,7 +102,7 @@ class Dataset(DatasetBase):
 
                     dt0 = obs_dt0[p] if ~np.isnan(obs_dt0[p]) else 0.
                     dt1 = obs_dt1[p] if ~np.isnan(obs_dt1[p]) else 0.
-                    obs_t = (t1+dt1) * timedelta(seconds=1) + datetime(1978, 1, 1)
+                    obs_t = (t1+dt1) * timedelta(seconds=1) + datetime(1978, 1, 1, tzinfo=timezone.utc)
                     obs_dt = (t1+dt1 - t0-dt0)*timedelta(seconds=1) / timedelta(days=1)
                     obs_u = obs_dx[p] / obs_dt
                     obs_v = obs_dy[p] / obs_dt
