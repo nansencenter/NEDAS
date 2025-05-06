@@ -3,13 +3,13 @@ import os
 import inspect
 import yaml
 import importlib
+import dateutil
 from datetime import datetime, timedelta
 from pyproj import Proj
 import NEDAS
 from NEDAS.grid import Grid
 from NEDAS.utils.parallel import Comm, by_rank
 from NEDAS.utils.progress import print_with_cache
-from NEDAS.utils.conversion import s2t, t2s, dt1h
 from NEDAS.config.parse_config import parse_config
 
 class Config:
@@ -77,26 +77,11 @@ class Config:
 
     def __setattr__(self, key, value):
         if key != 'config_dict' and 'config_dict' in self.__dict__ and key in self.config_dict:
+            if key == 'time' and not isinstance(value, datetime):
+                raise TypeError("Time must be a datetime object.")
             self.config_dict[key] = value
         else:
             super().__setattr__(key, value)
-
-    @property
-    def time(self):
-        """
-        Time of the current analysis cycle.
-
-        Returns:
-            datetime: Current analysis time.
-        """
-        return self.config_dict['time']
-
-    @time.setter
-    def time(self, value):
-        if value:
-            if not isinstance(value, datetime):
-                raise TypeError("Time must be a datetime object.")
-            self.config_dict['time'] = value
 
     @property
     def prev_time(self):
@@ -107,7 +92,7 @@ class Config:
             datetime: Previous analysis time.
         """
         if self.time > self.time_start:
-            return self.time - self.cycle_period * dt1h
+            return self.time - self.cycle_period * timedelta(hours=1)
         else:
             return self.time
 
@@ -119,7 +104,7 @@ class Config:
         Returns:
             datetime: Next analysis time.
         """
-        return self.time + self.cycle_period * dt1h
+        return self.time + self.cycle_period * timedelta(hours=1)
 
     @property
     def pid_show(self):
@@ -207,11 +192,18 @@ class Config:
 
         Checks if the mandatory :code:`time_*` entries are defined in the config file.
         If :code:`time` is not set, set it to :code:`time_start` by default.
+        YAML file recognizes 2001-01-01T00:00:00Z format and convert directly to datetime object.
+        If time is a formatted string, will try to parse it using dateutil.parser.
         """
         # check if mandatory time keys are defined in config file
-        for key in ['time_start', 'time_end', 'time_analysis_start', 'time_analysis_end']:
+        for key in ['time', 'time_start', 'time_end', 'time_analysis_start', 'time_analysis_end']:
             if key not in self.config_dict:
                 raise KeyError(f"'{key}' is missing in config file")
+            if isinstance(self.config_dict[key], str):
+                try:
+                    self.config_dict[key] = dateutil.parser.parse(self.config_dict[key])
+                except Exception:
+                    raise ValueError(f"Failed to convert string {key}={self.config_dict[key]} to datetime")
 
         if self.time is None:
             ##initialize current time to start time, if not available

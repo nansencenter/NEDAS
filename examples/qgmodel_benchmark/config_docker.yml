@@ -20,10 +20,10 @@ run_analysis: True
 run_diagnose: True
 debug: False
 
-time_start: 2001-01-01 00:00:00
-time_end: 2001-01-14 00:00:00
-time_analysis_start: 2001-01-03 00:00:00
-time_analysis_end: 2001-01-09 00:00:00
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-14T00:00:00Z
+time_analysis_start: 2001-01-03T00:00:00Z
+time_analysis_end: 2001-01-09T00:00:00Z
 cycle_period: 24
 
 obs_time_steps: [0]
