@@ -32,10 +32,10 @@ debug: False        ##if true, output debug data/message
 timer: True         ##if true, output information on function runtime
 
 ##time control of the experiment
-time_start: 2001-01-01 00:00:00          ## start time of the experiment
-time_end: 2001-01-30 00:00:00            ## end time of the experiment
-time_analysis_start: 2001-01-07 00:00:00 ## start time of the first analysis cycle
-time_analysis_end: 2001-01-28 00:00:00   ## end time of the last analysis cycle
+time_start: 2001-01-01T00:00:00Z          ## start time of the experiment
+time_end: 2001-01-30T00:00:00Z            ## end time of the experiment
+time_analysis_start: 2001-01-07T00:00:00Z ## start time of the first analysis cycle
+time_analysis_end: 2001-01-28T00:00:00Z   ## end time of the last analysis cycle
 cycle_period: 12                    ## cycle period, in hours
 
 obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time

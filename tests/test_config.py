@@ -36,6 +36,10 @@ class TestConfig(unittest.TestCase):
             c = Config()
             c.time='2023-01-01'
 
+    def test_argparse_time_str(self):
+        c = Config(time='2001-01-01T00:00:00Z')
+        self.assertEqual(c.time, datetime(2001,1,1))
+
     def test_directory_names(self):
         dir_def = {'cycle_dir': '{work_dir}/cycle/{time:%Y%m%d}',
                    'analysis_dir': '{work_dir}/cycle/{time:%Y%m%d}/analysis',
