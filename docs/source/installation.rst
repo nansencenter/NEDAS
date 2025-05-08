@@ -1,102 +1,148 @@
 Installation
 ============
 
+.. contents::
+   :local:
+   :depth: 2
+
 Dependencies
 ------------
 
+NEDAS requires Python >=3.8, the following packages are mandatory:
 
-numba.njit is required for some bottom-level assimilation algorithms to be compiled in order to improve runtime computational efficiency.
+- `numpy <https://numpy.org>`_
+- `scipy <https://scipy.org>`_
+- `matplotlib <https://matplotlib.org/>`_
+- `pyproj <https://pyproj4.github.io/pyproj/stable/>`_
+- `pyshp <https://github.com/GeospatialPython/pyshp>`_
+- `netCDF4 <https://unidata.github.io/netcdf4-python/>`_
+- `pyYAML <https://pyyaml.org/>`_
 
-pyFFTW optional, numpy.fft instead
+The dynamical model, unless directly implemented in Python, needs to be installed separately.
+Check its own documentation for details on installation.
 
-pygrib
+Optional Features
+-----------------
 
-tensorflow
-opencv
+To enable MPI support for parallel processing, make sure to install the MPI library
+(e.g. MPICH or intel OpenMP) and install the `mpi4py <https://mpi4py.readthedocs.io/en/stable/>`_ package.
+If mpi4py is not available, NEDAS will automatically fall back to serial processing mode.
 
+If `numba <https://numba.pydata.org/>`_ is installed,
+some core algorithms within NEDAS will be JIT-compiled to machine code at runtime to improve efficiency.
 
-Using pip
+An alternative FFT implementation is enabled by `pyFFTW <https://pyfftw.readthedocs.io/en/latest/>`_.
+If pyFFTW is not available, NEDAS will fall back to the numpy.fft package.
+
+Some NEDAS submodules may also require additional packages to be installed.
+See the submodule documentation for more details.
+
+Install via pip
+---------------
+
+NEDAS is available from the PyPI platform. To install the latested version:
+
+.. code-block:: bash
+
+   pip install NEDAS
+
+You can install NEDAS with optional features by using **extras** in your pip command.
+For example, to install **all** the optional dependencies:
+
+.. code-block:: bash
+
+   pip install NEDAS[all]
+
+To install dependencies related to specific features, use one or more ``tag`` listed in the table below:
+
+.. code-block:: bash
+
+   # replace tag with one listed in the table below
+   pip install NEDAS[tag]
+
++---------------+---------------------+-------------------------------------------------+
+| Tag           | Additional packages | Purpose                                         |
++===============+=====================+=================================================+
+| ``mpi``       | mpi4py              | MPI-based parallel processing                   |
++---------------+---------------------+-------------------------------------------------+
+| ``jit``       | numba               | JIT compilation                                 |
++---------------+---------------------+-------------------------------------------------+
+| ``fftw``      | pyFFTW              | Alternative implementation of FFT               |
++---------------+---------------------+-------------------------------------------------+
+| ``grib``      | pygrib              | Support for GRIB data format                    |
++---------------+---------------------+-------------------------------------------------+
+| ``alignment`` | opencv-python       | Optical flow algorithms in alignment technique  |
++---------------+---------------------+-------------------------------------------------+
+| ``emulator``  | tensorflow, torch   | Machine learning algorithms for model emulators |
++---------------+---------------------+-------------------------------------------------+
+
+Install via Conda
+-----------------
+
+If you prefer using Conda, we provide an ``environment.yml`` file to help you set up everything in a controlled environment:
+
+.. code-block:: bash
+
+   conda env create -f environment.yml
+   conda activate nedas
+
+The ``environment.yml`` file only contains the miminal dependencies,
+you can modify the file to include additional features, such as mpi4py, numba, etc.
+You can also install them via pip in the conda environment afterwards.
+
+Manual installation
+-------------------
+
+You can also download NEDAS from the Github repository and install it manually,
+especially if you plan to contribute or develop your own features.
+
+To do so, first you can fork the `NEDAS repository <https://github.com/nansencenter/NEDAS>`_ on GitHub to your own account,
+then clone your fork and create a new development branch:
+
+.. code-block:: bash
+
+   # clone your fork (replace USERNAME with your GitHub username)
+   git clone https://github.com/USERNAME/NEDAS.git`
+   cd NEDAS
+
+   # create and switch to a new development branch called 'my-feature'
+   git checkout -b my-feature
+
+You can install the NEDAS package in editable mode for development.
+
+.. code-block:: bash
+
+   pip install -e .
+
+Or just specify the ``PYTHONPATH`` without even installing
+(of course you need to install the dependencies in ``requirements.txt``).
+
+.. code-block:: bash
+
+   # add NEDAS package to python search path
+   # replace INSTALL_PATH to the directory containing the cloned NEDAS package
+   export PYTHONPATH=$PYTHONPATH:INSTALL_PATH/NEDAS
+
+Now any changes you make in the code will immediately reflect in your Python environment.
+
+Run NEDAS
 ---------
 
+Once installed, the NEDAS analysis scheme can be run as:
 
+.. code-block:: bash
 
-Using conda
------------
+   python -m NEDAS -c CONFIG_FILE.yml
 
+``CONFIG_FILE.yml`` is the YAML configuration file, see :doc:`config_file` for more details.
 
-Docker container
-----------------
+Run in Docker containers
+------------------------
 
+If you don't want to deal with installation and just want to see NEDAS in action,
+several examples come with Docker images that you can run immediately
+if `docker <https://www.docker.com/>`_ is available on your machine.
 
-# Quick Start Guide
-
-- Create a python environment for your experiment (optional but recommended)
-
-    Install Python then create environment named `<my_python_env>`
-
-    `python -m venv <my_python_env>`
-
-    Enter the environment by
-
-    `source <my_python_env>/bin/activiate`
-
-- Make a copy of the NEDAS code and place it in your `<code_dir>`
-
-    `cd <code_dir>`
-
-    `git clone git@github.com:nansencenter/NEDAS.git`
-
-- Install the required libraries, as listed in `requirements.txt`
-
-    Using a package manager such as pip, you can install them by
-
-    `pip install -r requirements.txt`
-
-- Add NEDAS directory to the Python search path
-
-    To let Python find NEDAS modules, you can add the NEDAS directory to the search paths. In your .bashrc (or other system configuration files), add the following line and then source:
-
-    `export PYTHONPATH=$PYTHONPATH:<code_dir>/NEDAS`
-
-- Make the yaml configuration file for your experiment
-
-    A full list of configuration variables and their default values are stored in `config/default.yml`. There are sample configuration files in `config/samples/*`, you can make a copy to `<my_config_file>` and make changes.
-
-- Setup runtime environment for the host machine
-
-    In `<my_config_file>`:
-
-    Set `work_dir` to the working directory for the experiment.
-
-    Set `job_submit_cmd` to the parallel job submit command/script on the host machine, see example `config/samples/job_submit_betzy.sh` for more details.
-
-    Set `nproc` to the number of processors to be used for the experiment.
-
-- Setup models and datasets
-
-    In `models/<model_name>`, edit `setup.src` to provide environment for running the model. `model_code_dir` is where the model code is; `model_data_dir` is where the static input files are that the model requires during runtime; `ens_init_dir` is where the initial restart files are for the first cycle of the experiment.
-
-    When you are trying out NEDAS for the first time, you can start from the `vort2d` model (written in Python), its setup is easy and `vort2d.yml` is a sample config file. The `qg` model is another toy model, it is written in Fortran and requires installation, it is a good next step to get to know the details of NEDAS and working towards adding your own model class.
-
-    For the datasets that provide observations to be assimilated, setup their directories in config file, and make sure you implemented the `dataset.<dataset_name>` module.
-
-- Start the experiment
-
-    In `tutorials` there are some jupyter notebooks to demonstrate the DA workflow for some supported models.
-
-    On <my_host_machine>, you can start a notebook by
-
-    `jupyter-notebook --ip=0.0.0.0 --no-browser --port=<port>`
-
-    then create another ssh connection to the machine
-
-    `ssh -L <port>:localhost:<port> <my_host_machine>`
-
-    once the connection is established, you can access the notebook from your local browser via `localhost:<port>/tree?`
-
-    In jupyter notebooks you can quickly check the status of model states, observations, and diagnosing the DA performance, you can play with the DA workflow, modify it and create your own approach.
-
-    Once you finished debugging and are happy with the new workflow, you can run the experiments without the jupyter notebooks. In `scripts` the `run_expt.py` gives an example of the top-level control workflow to perform cycling DA experiments. Run the experiment by `python run_expt.py --config_file=<my_config_file>`
-
-    On betzy, the `sbatch submit_job.sh` command submits a run to the job queue, so that many experiments can be run simultaneously.
-
+For example, the :doc:`examples.qg` case provides a
+`Docker image <https://hub.docker.com/r/myying/nedas-qgmodel-benchmark>`_.
+You can directly pull it from DockerHub and give it a try.

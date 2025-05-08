@@ -68,11 +68,12 @@ model_def:
 
 perturb:
 
+analysis_type: offline_filter
 assim_mode: batch
 filter_type: ETKF
-rfactor: 1
-kfactor: 1
-nlobs_max:
+
+filter:
+  config_file:
 
 nscale: 1
 scale_id: 0
@@ -81,12 +82,7 @@ character_length: [150, 50, 10]
 localize_scale_fac: [1, 1, 1]
 obs_err_scale_fac: [1, 1, 1]
 
-run_alignment: False
 alignment:
-  option: optical_flow
-  variable: streamfunc
-  nlevel: 5
-  smoothness_weight: 1
 
 inflation:
   type: posterior,RTPP
@@ -100,7 +96,6 @@ localization:
 
 diag:
 - method: misc.convert_output
-  is_ensemble: False
   config_file: /app/NEDAS/NEDAS/diag/misc/convert_output/default.yml
   model_src: qg
   variables: ['streamfunc', 'temperature', 'vorticity']

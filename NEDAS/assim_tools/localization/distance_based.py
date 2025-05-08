@@ -4,18 +4,14 @@ from NEDAS.utils.njit import njit
 @njit
 def local_func_GC(dist, roi):
     """
-    Localization factor based on distance and radius of influence (roi)
+    Gaspari-Cohn localization function.
 
-    Inputs:
-    - dist: np.array
-      Distance between observation and state (being updated)
+    Args:
+        dist (np.ndarray): Distance between observation and state (being updated)
+        roi (float or np.ndarray): The radius of influence, distance beyond which local_factor is tapered to 0
 
-    - roi: float or np.array same shape as dist
-      The radius of influence, distance beyond which local_factor is tapered to 0
-
-    Return:
-    - lfactor: np.array
-      The localization factor, same shape as dist
+    Returns:
+        np.ndarray: The localization factor, same shape as dist
     """
     shape = dist.shape
     dist = dist.flatten()
@@ -35,6 +31,9 @@ def local_func_GC(dist, roi):
 
 @njit
 def local_func_step(dist, roi):
+    """
+    Step function for localization.
+    """
     shape = dist.shape
     dist = dist.flatten()
     lfactor = np.zeros(dist.shape)
@@ -43,6 +42,9 @@ def local_func_step(dist, roi):
 
 @njit
 def local_func_exp(dist, roi):
+    """
+    Exponential decay localization function.
+    """
     shape = dist.shape
     dist = dist.flatten()
     lfactor = np.exp(-dist/roi)
