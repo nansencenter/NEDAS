@@ -1,0 +1,6 @@
+FC = ifx
+LD = ifx
+FFLAGS =  -O3 -real-size 64 -integer-size 32 -assume byterecl -free -no-ipo -traceback
+LIBS = -L$(FFTW_DIR) -lfftw3 -L$(LIBM_DIR) -lm
+LDFLAGS = $(LIBS)
+TMPFILES = *.mod
