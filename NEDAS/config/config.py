@@ -22,23 +22,6 @@ class Config:
         parse_args (bool, optional): If true, parse command line arguments to collect configuration. Default is False.
         **kwargs: Additional key-value pairs to be passed to parse_config. Can be used to override values in the config file.
 
-    Examples:
-        Typically one include the following in a python script::
-
-            >>> from NEDAS.config import Config
-            >>> c = Config(parse_args=True)
-
-        Then run the script with::
-
-            $ python script.py -c path/to/config.yaml --key value
-
-        In an interactive environment, one can initialize directly with input arguments::
-
-            >>> c = Config(config_file='path/to/config.yaml', key=value)
-
-        Both methods will read config.yaml and store the settings as attributes in :code:`c`.
-        If additional :code:`key=value` pairs are provided, they will overwrite the values defined in the file.
-
     Attributes:
         nproc (int): Number of processors to use for the analysis step.
         comm (Comm): MPI communicator, set by :meth:`set_comm`.
@@ -275,7 +258,7 @@ class Config:
             self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
             ##mask for invalid grid points (none for now, add option later)
-            if 'mask' in self.grid_def:
+            if 'mask' in self.grid_def and self.grid_def['mask'] is not None:
                 model_name = self.grid_def['mask']
                 module = importlib.import_module('NEDAS.models.'+model_name)
                 model = getattr(module, 'Model')()

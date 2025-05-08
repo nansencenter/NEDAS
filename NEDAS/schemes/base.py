@@ -110,8 +110,8 @@ class AnalysisScheme(ABC):
         return Assimilator(c)
 
     def get_updator(self, c):
-        if c.run_alignment and c.scale_id < c.nscale-1:
-            if c.interp_displace:
+        if c.alignment and c.scale_id < c.nscale-1:
+            if c.alignment['interp_displace']:
                 from NEDAS.assim_tools.updators.alignment_interp import AlignmentUpdator as Updator
             else:
                 from NEDAS.assim_tools.updators.alignment import AlignmentUpdator as Updator
