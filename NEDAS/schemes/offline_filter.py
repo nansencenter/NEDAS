@@ -9,11 +9,11 @@ from NEDAS.utils.progress import timer, progress_bar
 from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.utils.random_perturb import random_perturb
-from NEDAS.schemes.base import AnalysisScheme
+from NEDAS.schemes import AnalysisScheme
 
 class OfflineFilterAnalysisScheme(AnalysisScheme):
     """
-    Offline filtering analysis scheme subclass.
+    Offline filtering analysis scheme class.
 
     This scheme runs the 4D analysis by cycling through time steps. Running the ensemble forecast first,
     pause the model and write model states (the `prior`) to restart files at a certain time step (`analysis cycle`),
@@ -22,6 +22,46 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
     is run again to reach the next analysis cycle, until the end of the period of interest. The length of
     forecasts between cycles is called the `cycling period`.
     """
+    def run(self, c) -> None:
+        c.show_summary()
+
+        if c.step:
+            ##if --step=STEP is specified at runtime, just run STEP and quit
+            if c.step in ['perturb', 'filter', 'diagnose']:
+                mpi = True
+            else:
+                mpi = False
+            self.run_step(c, c.step, mpi)
+            return
+
+        print("Cycling start...", flush=True)
+        while c.time < c.time_end:
+            print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
+
+            os.system("mkdir -p "+c.cycle_dir(c.time))
+
+            if c.run_preproc:
+                self.run_step(c, 'preprocess', mpi=False)
+                self.run_step(c, 'perturb', mpi=True)
+
+            ##assimilation step
+            if c.run_analysis and c.time >= c.time_analysis_start and c.time <= c.time_analysis_end:
+                self.run_step(c, 'filter', mpi=True)
+                self.run_step(c, 'postprocess', mpi=False)
+
+            ##advance model state to next analysis cycle
+            if c.run_forecast:
+                self.run_step(c, 'ensemble_forecast', mpi=False)
+
+            ##compute diagnostics
+            if c.run_diagnose:
+                self.run_step(c, 'diagnose', mpi=True)
+
+            ##advance to next cycle
+            c.time = c.next_time
+
+        print("Cycling complete.", flush=True)
+
     def filter(self, c):
         """
         Main method for performing the analysis step
@@ -173,6 +213,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
                     perturb[vname] = None
 
             ##perturb all sub time steps for variables within this cycle
+            ##TODO： LBC vs IC perturb time steps are different
             dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
             nstep = c.cycle_period // dt + 1
             for n in range(nstep):
@@ -395,46 +436,6 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
             for file in files:
                 ##create the file lock across mpi ranks for this file
                 c.comm.init_file_lock(file)
-
-    def __call__(self, c):
-        c.show_summary()
-
-        if c.step:
-            ##if --step=STEP is specified at runtime, just run STEP and quit
-            if c.step in ['perturb', 'filter', 'diagnose']:
-                mpi = True
-            else:
-                mpi = False
-            self.run_step(c, c.step, mpi)
-            return
-
-        print("Cycling start...", flush=True)
-        while c.time < c.time_end:
-            print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
-
-            os.system("mkdir -p "+c.cycle_dir(c.time))
-
-            if c.run_preproc:
-                self.run_step(c, 'preprocess', mpi=False)
-                self.run_step(c, 'perturb', mpi=True)
-
-            ##assimilation step
-            if c.run_analysis and c.time >= c.time_analysis_start and c.time <= c.time_analysis_end:
-                self.run_step(c, 'filter', mpi=True)
-                self.run_step(c, 'postprocess', mpi=False)
-
-            ##advance model state to next analysis cycle
-            if c.run_forecast:
-                self.run_step(c, 'ensemble_forecast', mpi=False)
-
-            ##compute diagnostics
-            if c.run_diagnose:
-                self.run_step(c, 'diagnose', mpi=True)
-
-            ##advance to next cycle
-            c.time = c.next_time
-
-        print("Cycling complete.", flush=True)
 
 if __name__ == '__main__':
     # get config from runtime args, including the step to run (from --step)

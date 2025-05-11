@@ -1,1 +1,3 @@
-from NEDAS.models.lorenz96.model import L96Model as Model
+from .lorenz96_model import Lorenz96Model
+
+__all__ = ['Lorenz96Model']

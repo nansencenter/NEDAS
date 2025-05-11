@@ -1,23 +1,44 @@
+import importlib
 from typing import Optional
 from NEDAS.job_submitters.base import JobSubmitter
-from NEDAS.job_submitters.slurm import SLURMJobSubmitter
-from NEDAS.job_submitters.oar import OARJobSubmitter
 
-def get_job_submitter(scheduler:Optional[str]=None, **kwargs) -> JobSubmitter:
+registry_by_host = {
+    'macos': 'MacOSJobSubmitter',
+    'betzy': 'BetzyJobSubmitter',
+}
+registry_by_scheduler = {
+    'slurm': 'SLURMJobSubmitter',
+    'oar': 'OARJobSubmitter',
+}
+
+def get_job_submitter(host: Optional[str]=None,
+                      scheduler:Optional[str]=None,
+                      **kwargs) -> JobSubmitter:
     """
-    Return the correct JobSubmitter class instance given the scheduler type
+    Factory function to get the JobSubmitter instance.
+
+    Based on the input args `host` or `scheduler`, if an implemented JobSubmitter
+    subclass can be located, return an instance of that subclass.
+    If not, will use the base JobSubmitter class instance.
+    
+    Args:
+        host (str, optional): Host machine name.
+
+    Returns:
+        JobSubmitter: An instance of the corresponding JobSubmitter subclass.
     """
-    submitters = {
-        'slurm': SLURMJobSubmitter,
-        'oar':   OARJobSubmitter,
-        }
+    if host:
+        host_name = host.lower()
+        if host_name in registry_by_host.keys():
+            module = importlib.import_module('NEDAS.job_submitters.'+host_name)
+            JobSubmitterClass = getattr(module, registry_by_host[host_name])
+            return JobSubmitterClass(**kwargs)
 
-    if scheduler is None:
-        ##use the vanila JobSubmitter if scheduler is not specified
-        return JobSubmitter(**kwargs)
+    if scheduler:
+        scheduler_name = scheduler.lower()
+        if scheduler_name in registry_by_scheduler.keys():
+            module = importlib.import_module('NEDAS.job_submitters.'+scheduler_name)
+            JobSubmitterClass = getattr(module, registry_by_scheduler[scheduler_name])
+            return JobSubmitterClass(**kwargs)
 
-    else:
-        submitter = submitters.get(scheduler.lower())
-        if not submitter:
-            raise ValueError(f"Unsupported scheduler type: {scheduler}")
-        return submitter(**kwargs)
+    return JobSubmitter(**kwargs)

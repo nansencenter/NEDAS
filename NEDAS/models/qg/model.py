@@ -3,12 +3,12 @@ import numpy as np
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
-from NEDAS.models.qg.namelist import namelist
-from NEDAS.models.qg.util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from NEDAS.models.qg.util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
-from NEDAS.models.base import ModelBase
+from NEDAS.models import Model
+from .namelist import namelist
+from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
+from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 
-class QGModel(ModelBase):
+class QGModel(Model):
     """
     Class for configuring and running the qg model
     """

@@ -1,1 +1,2 @@
-from NEDAS.models.topaz.v4.model import Model
+from .topaz4model import Topaz4Model
+__all__ = ['Topaz4Model']

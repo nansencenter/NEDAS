@@ -1,16 +1,14 @@
-import numpy as np
 import os
 import inspect
 import yaml
-import importlib
 import dateutil
-from datetime import datetime, timedelta
+import numpy as np
+from datetime import datetime, timedelta, timezone
 from pyproj import Proj
 import NEDAS
-from NEDAS.grid import Grid
-from NEDAS.utils.parallel import Comm, by_rank
-from NEDAS.utils.progress import print_with_cache
-from NEDAS.config.parse_config import parse_config
+from .parse_config import parse_config
+from NEDAS.utils import parallel
+from NEDAS.assim_tools import state, obs, assimilators, updators, covariance, localization, inflation, misc_transform
 
 class Config:
     """
@@ -50,8 +48,9 @@ class Config:
         self.set_time()
         self.set_comm()
         self.set_analysis_grid()
-        self.set_model_config()
-        self.set_dataset_config()
+        self.set_models()
+        self.set_datasets()
+        self.set_analysis_scheme()
 
     def __getattr__(self, key):
         # get values from config_dict if defined, otherwise will get the attr from the instance directly.
@@ -111,7 +110,8 @@ class Config:
         Only the processor with ID = self.pid_show will show the message,
         this avoids the redundancy if all processors are showing the same message.
         """
-        return by_rank(self.comm, self.pid_show)(print_with_cache)
+        decorator = parallel.by_rank(self.comm, self.pid_show)
+        return decorator(parallel.print_with_cache)
 
     def cycle_dir(self, time: datetime):
         """
@@ -175,7 +175,7 @@ class Config:
 
         Checks if the mandatory :code:`time_*` entries are defined in the config file.
         If :code:`time` is not set, set it to :code:`time_start` by default.
-        YAML file recognizes 2001-01-01T00:00:00Z format and convert directly to datetime object.
+        YAML file recognizes 2001-01-01T00:00:00 format and convert directly to datetime object.
         If time is a formatted string, will try to parse it using dateutil.parser.
         """
         # check if mandatory time keys are defined in config file
@@ -187,6 +187,9 @@ class Config:
                     self.config_dict[key] = dateutil.parser.parse(self.config_dict[key])
                 except Exception:
                     raise ValueError(f"Failed to convert string {key}={self.config_dict[key]} to datetime")
+            # add default tzinfo
+            if self.config_dict[key] and self.config_dict[key].tzinfo is None:
+                self.config_dict[key] = self.config_dict[key].replace(tzinfo=timezone.utc)
 
         if self.time is None:
             ##initialize current time to start time, if not available
@@ -203,7 +206,7 @@ class Config:
         See :mod:`NEDAS.utils.parallel` module for more details.
         """
         ##initialize mpi communicator (could be size 1 for serial program)
-        self.comm = Comm()
+        self.comm = parallel.Comm()
         comm_size = self.comm.Get_size()
         self.pid = self.comm.Get_rank()  ##current processor id
 
@@ -255,13 +258,13 @@ class Config:
             dx = self.grid_def['dx']
             known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx', 'mask'}
             other_opts = {k: v for k, v in self.grid_def.items() if k not in known_keys}
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
+            self.grid = NEDAS.grid.Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
             ##mask for invalid grid points (none for now, add option later)
             if 'mask' in self.grid_def and self.grid_def['mask'] is not None:
                 model_name = self.grid_def['mask']
-                module = importlib.import_module('NEDAS.models.'+model_name)
-                model = getattr(module, 'Model')()
+                Model = NEDAS.models.get_model_class(model_name)
+                model = Model()
                 self.grid.mask = model.prepare_mask(self.grid)
             else:
                 self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
@@ -270,35 +273,60 @@ class Config:
             ##get analysis grid from model module
             model_name = self.grid_def['type']
             kwargs = self.model_def[model_name]
-            module = importlib.import_module('NEDAS.models.'+model_name)
-            model = getattr(module, 'Model')(**kwargs)
+            Model = NEDAS.models.get_model_class(model_name)
+            model = Model(**kwargs)
             self.grid = model.grid
 
-    def set_model_config(self):
+    def set_models(self):
         """
         Initialize model instances based on :code:`model_def[model_name]` settings.
-        Store the model instances in :code:`model_config[model_name]`.
+        Store the model instances in :code:`models[model_name]`.
         """
-        self.model_config = {}
+        self.models = {}
         for model_name, kwargs in self.model_def.items():
-            ##load model class instance
-            module = importlib.import_module('NEDAS.models.'+model_name)
+            Model = NEDAS.models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            self.model_config[model_name] = getattr(module, 'Model')(**kwargs)
+            self.models[model_name] = Model(**kwargs)
 
-    def set_dataset_config(self):
+    def set_datasets(self):
         """
         Initialize dataset instances based on :code:`dataset_def[dataset_name]` settings.
-        Store the dataset instances in :code:`dataset_config[dataset_name]`.
+        Store the dataset instances in :code:`datasets[dataset_name]`.
         """
-        self.dataset_config = {}
+        self.datasets = {}
         for dataset_name, kwargs in self.dataset_def.items():
-            ##load dataset module
-            module = importlib.import_module('NEDAS.dataset.'+dataset_name)
+            Dataset = NEDAS.datasets.get_dataset_class(dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            self.dataset_config[dataset_name] = getattr(module, 'Dataset')(grid=self.grid, mask=self.grid.mask, **kwargs)
+            self.datasets[dataset_name] = Dataset(grid=self.grid, mask=self.grid.mask, **kwargs)
+
+    def set_analysis_scheme(self):
+        """
+        Initialize analysis scheme and its subcomponents:
+        assimilator, updator, covaraince, localization, inflation,
+        """
+        self.scheme = NEDAS.schemes.get_analysis_scheme(self.analysis_scheme)
+
+        if 'type' not in self.assimilator_def:
+            raise KeyError("Config: 'type' must be specified in assimilator_def")
+        self.Assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.assimilator_def['type'])
+
+        if 'type' not in self.updator_def:
+            raise KeyError("Config: 'type' must be specified in updator_def")
+        self.Updator = NEDAS.assim_tools.updators.get_updator_class(self.updator_def['type'])
+
+        # if 'type' not in self.covariance_def:
+        #     raise KeyError("Config: 'type' must be specified in covariance_def")
+        # self.covariance = NEDAS.assim_tools.covariance.get_covariance_class(self.covariance_def['type'])
+
+        # if 'type' not in self.updator_def:
+        #     raise KeyError("Config: 'type' must be specified in updator_def")
+        # self.assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.updator_def['type'])
+
+        # if 'type' not in self.updator_def:
+        #     raise KeyError("Config: 'type' must be specified in updator_def")
+        # self.assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.updator_def['type'])
 
     def show_summary(self):
         """

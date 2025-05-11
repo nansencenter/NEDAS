@@ -5,7 +5,11 @@ from scipy.interpolate import LinearNDInterpolator
 from netCDF4 import Dataset
 from datetime import datetime, timedelta
 from NEDAS.grid import Grid
-from NEDAS.models.noresm.proj import lonlat2xy, xy2lonlat
+from .proj import lonlat2xy, xy2lonlat
+from NEDAS.models import Model
+
+class NorESM(Model):
+    pass
 
 levels = np.arange(1, 31, 1)
 variables = {'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':1440, 'levels':levels, 'units':'m/s'},

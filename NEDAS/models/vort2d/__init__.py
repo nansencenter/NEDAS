@@ -1,1 +1,3 @@
-from NEDAS.models.vort2d.model import Model
+from .vort2d_model import Vort2DModel
+
+__all__ = ['Vort2DModel']

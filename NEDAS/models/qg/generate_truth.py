@@ -3,8 +3,7 @@ import subprocess
 from datetime import timedelta
 from NEDAS.config import Config
 
-def main():
-    c = Config(parse_args=True)
+def generate_truth(c: Config) -> None:
     model = c.model_config['qg']
 
     truth_dir = model.truth_dir
@@ -44,4 +43,5 @@ def main():
     os.system(f"rm -rf {run_dir}")
 
 if __name__ == '__main__':
-    main()
+    c = Config(parse_args=True)
+    generate_truth(c)

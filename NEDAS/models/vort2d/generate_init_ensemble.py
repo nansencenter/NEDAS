@@ -1,9 +1,7 @@
 import os
 from NEDAS.config import Config
 
-def main():
-    c = Config(parse_args=True)
-
+def generate_init_ensemble(c: Config) -> None:
     model = c.model_config['vort2d']
 
     ens_init_dir = model.ens_init_dir
@@ -26,4 +24,5 @@ def main():
     print("done.")
 
 if __name__ == '__main__':
-    main()
+    c = Config(parse_args=True)
+    generate_init_ensemble()
