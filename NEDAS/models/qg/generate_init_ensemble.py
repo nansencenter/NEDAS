@@ -4,9 +4,8 @@ from datetime import timedelta
 from NEDAS.config import Config
 from NEDAS.schemes.offline_filter import OfflineFilterAnalysisScheme
 
-def main():
+def generate_init_ensemble(c: Config) -> None:
     scheme = OfflineFilterAnalysisScheme()
-    c = Config(parse_args=True)
     model = c.model_config['qg']
 
     print(f"Creating initial condition for qg model:")
@@ -37,4 +36,5 @@ def main():
     os.system(f"rm -rf {cycle_dir}")
 
 if __name__ == '__main__':
-    main()
+    c = Config(parse_args=True)
+    generate_init_ensemble()

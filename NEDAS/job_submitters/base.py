@@ -138,12 +138,6 @@ class JobSubmitter:
         assert self.nproc+self.offset <= self.nproc_avail, f"Requested nproc={self.nproc} and offset={self.offset} exceeds nproc_avail={self.nproc_avail}"
         assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
 
-        ##host specific settings
-        ##don't allow more than 6 processors on betzy login node
-        if self.host == 'betzy':
-            p = subprocess.run("hostname", capture_output=True, text=True)
-            if p.stdout.strip()[:5] == 'login':
-                assert self.nproc+self.offset < 6, "Unsafe to run more than 6 processors on Betzy login node, aborting"
 
     def run_job_as_step(self, commands):
         """

@@ -1,1 +1,3 @@
-from NEDAS.models.qg.model import QGModel as Model
+from .model import QGModel
+
+__all__ = ['QGModel']

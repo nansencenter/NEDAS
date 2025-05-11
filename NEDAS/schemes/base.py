@@ -13,9 +13,13 @@ Classes:
         Running the filter at each time step (analysis cycle), and run the ensemble forecast
         forward in time, reaching the next cycle, then repeat the process.
 """
-import os
 from abc import ABC, abstractmethod
+from typing import Type, TYPE_CHECKING
 from NEDAS.utils.shell_utils import makedir
+if TYPE_CHECKING:
+    from NEDAS.config import Config
+from NEDAS.assim_tools.state import get_state_class
+from NEDAS.assim_tools.obs import get_obs_class
 
 class AnalysisScheme(ABC):
     """
@@ -27,7 +31,7 @@ class AnalysisScheme(ABC):
     Run the key steps in the scheme:
     state.prepare_obs, obs.prepare_obs, obs.prepare_obs_from_state, assimilator.assimilate, updator.update
     """
-    def validate_mpi_environment(self, c):
+    def validate_mpi_environment(self, c: Type['Config']):
         """
         Validate the MPI environment and ensure the number of processes is consistent.
         """
@@ -45,69 +49,9 @@ class AnalysisScheme(ABC):
             makedir(self._analysis_dir)
             print(f"\nRunning assimilation step in {self._analysis_dir}\n", flush=True)
 
-    def get_state(self, c):
-        """
-        Get the State class instance
-
-        Args:
-            c (Config): Config class instance.
-
-        Returns:
-            State: An instance of the State class.       
-        """
-        from NEDAS.assim_tools.state import State
-        return State(c)
-
-    def get_obs(self, c, state):
-        """
-        Get the Obs class instance
-
-        Args:
-            c (Config): Config class instance.
-            state (State): State class instance.
-
-        Returns:
-            Obs: An instance of the Obs class.
-        """
-        from NEDAS.assim_tools.obs import Obs
-        return Obs(c, state)
-
     # def get_covariance(c):
     #     from NEDAS.assim_tools.covariance.ensemble import EnsembleCovariance as Covariance
     #     return Covariance()
-
-    def get_assimilator(self, c):
-        """
-        Get the Assimilator class instance based on the configuration.
-
-        Args:
-            c (Config): Config class instance.
-
-        Returns:
-            Assimilator: An instance of the Assimilator class.
-        """
-        if c.assim_mode == 'batch':
-            if c.filter_type == 'TopazDEnKF':
-                from NEDAS.assim_tools.assimilators.TopazDEnKF import TopazDEnKFAssimilator as Assimilator
-            elif c.filter_type == 'ETKF':
-                from NEDAS.assim_tools.assimilators.ETKF import ETKFAssimilator as Assimilator
-            else:
-                raise ValueError(f"Unknown filter_type {c.filter_type} for batch assimilation")
-
-        elif c.assim_mode == 'serial':
-            if c.filter_type == 'EAKF':
-                from NEDAS.assim_tools.assimilators.EAKF import EAKFAssimilator as Assimilator
-    #        elif c.filter_type == 'RHF':
-    #            from NEDAS.assim_tools.assimilators.RHF import RHFAssimilator as Assimilator
-    #        elif c.filter_type == 'QCEF':
-    #            from NEDAS.assim_tools.assimilators.QCEF import QCEFAssimilator as Assimilator
-            else:
-                raise ValueError(f"Unknown filter_type {c.filter_type} for serial assimilation")
-
-        else:
-            raise ValueError(f"Unknown assim_mode {c.assim_mode}")
-
-        return Assimilator(c)
 
     def get_updator(self, c):
         if c.alignment and c.scale_id < c.nscale-1:
@@ -169,7 +113,7 @@ class AnalysisScheme(ABC):
         return Transform(c)
 
     @abstractmethod
-    def __call__(self):
+    def run(self) -> None:
         """
         Main function to run the analysis scheme.
         """

@@ -1,1 +1,3 @@
-from .model import QGModelEmulator as Model
+from .model import QGModelEmulator
+
+__all__ = ['QGModelEmulator']

@@ -6,7 +6,7 @@ from NEDAS.utils.netcdf_lib import nc_write_var
 from NEDAS.models.topaz.abfile import ABFileForcing
 from NEDAS.models.topaz.time_format import dayfor
 from NEDAS.models.topaz.v5 import Model
-from NEDAS.dataset.ecmwf.forecast import Dataset
+from NEDAS.datasets.ecmwf.forecast import Dataset
 
 ##default output path
 forcing_path = "/cluster/work/users/yingyue/data/ecmwf_fcsts"

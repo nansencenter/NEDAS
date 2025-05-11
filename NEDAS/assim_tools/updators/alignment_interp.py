@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from NEDAS.assim_tools.updators.base import Updator
+from NEDAS.assim_tools.updators import Updator
 
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique"""

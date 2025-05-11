@@ -92,7 +92,7 @@ class Assimilator(ABC):
         # obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
 
     @abstractmethod
-    def assimilation_algorithm(self, c, state, obs):
+    def assimilation_algorithm(self, c, state, obs) -> None:
         """
         The main assimilation algorithm will be implemented by subclasses
         """

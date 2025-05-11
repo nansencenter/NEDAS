@@ -1,5 +1,5 @@
-import netCDF4
 import os
+import netCDF4
 import numpy as np
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

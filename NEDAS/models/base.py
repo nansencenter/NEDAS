@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 
-class ModelBase(ABC):
+class Model(ABC):
     """
     Class for configuring and running a model
     """

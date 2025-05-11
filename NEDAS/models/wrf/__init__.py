@@ -1,1 +1,2 @@
-from NEDAS.models.wrf.model import Model
+from .wrf_model import WRFModel
+__all__ = ['WRFModel']

@@ -1,1 +1,2 @@
-from NEDAS.models.nextsim.dg.model import Model
+from .nextsimdg_model import NextsimDGModel
+__all__ = ['NextsimDGModel']

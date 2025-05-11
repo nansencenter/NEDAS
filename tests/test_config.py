@@ -24,12 +24,13 @@ class TestConfig(unittest.TestCase):
         self.assertIsInstance(c.next_time, datetime)
 
     def test_prev_next_time_arithmetic(self):
-        time_start = datetime(2022, 1, 1)
-        time = datetime(2023, 1, 1)
+        tzinfo = timezone.utc
+        time_start = datetime(2022, 1, 1, tzinfo=tzinfo)
+        time = datetime(2023, 1, 1, tzinfo=tzinfo)
         cycle_period = 24
         c = Config(time_start=time_start, time=time, cycle_period=cycle_period)
-        self.assertEqual(c.prev_time, datetime(2022, 12, 31))
-        self.assertEqual(c.next_time, datetime(2023, 1, 2))
+        self.assertEqual(c.prev_time, datetime(2022, 12, 31, tzinfo=tzinfo))
+        self.assertEqual(c.next_time, datetime(2023, 1, 2, tzinfo=tzinfo))
 
     def test_raise_exception_if_time_type_error(self):
         with self.assertRaises(TypeError):
@@ -37,12 +38,13 @@ class TestConfig(unittest.TestCase):
             c.time='2023-01-01'
 
     def test_argparse_time_str(self):
+        tzinfo = timezone.utc
         c = Config(time='2001-01-01 00:00:00')
-        self.assertEqual(c.time, datetime(2001,1,1))
+        self.assertEqual(c.time, datetime(2001,1,1, tzinfo=tzinfo))
         c = Config(time='20010101000000')
-        self.assertEqual(c.time, datetime(2001,1,1))
+        self.assertEqual(c.time, datetime(2001,1,1, tzinfo=tzinfo))
         c = Config(time='2001-01-01T00:00:00Z')
-        self.assertEqual(c.time, datetime(2001,1,1,tzinfo=timezone.utc))
+        self.assertEqual(c.time, datetime(2001,1,1,tzinfo=tzinfo))
 
     def test_directory_names(self):
         dir_def = {'cycle_dir': '{work_dir}/cycle/{time:%Y%m%d}',
