@@ -8,7 +8,7 @@ class TestDatasetInterface(unittest.TestCase):
         c = Config()
         for dataset_name in registry.keys():
             DatasetClass = get_dataset_class(dataset_name)
-            dataset = DatasetClass()
+            dataset = DatasetClass(grid=c.grid, mask=c.grid.mask)
             self.assertIsInstance(dataset, Dataset)
 
 if __name__ == '__main__':

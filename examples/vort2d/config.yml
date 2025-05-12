@@ -1,0 +1,90 @@
+work_dir: 'vort2d'
+
+job_submit:
+  host: macos
+  ppn: 8
+
+nproc: 1
+
+nens: 20
+run_forecast: True
+run_analysis: True
+run_diagnose: False
+debug: False
+
+time_start: 2001-01-01 00:00:00
+time_end: 2001-01-03 00:00:00
+time_analysis_start: 2001-01-01 03:00:00
+time_analysis_end: 2001-01-02 21:00:00
+cycle_period: 3
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: vort2d
+
+state_def:
+- name: velocity
+  model_src: vort2d
+  var_type: field
+  err_type: normal
+
+model_def:
+  vort2d:
+    config_file: '{nedas_root}/models/vort2d/default.yml'
+    ens_run_type: scheduler
+    ens_init_dir: '{work_dir}/init_run'
+    truth_dir: '{work_dir}/truth'
+
+obs_def:
+- name: velocity
+  dataset_src: vort2d
+  model_src: vort2d
+  nobs: 1000
+  err:
+    type: normal
+    std: 1.0
+  hroi: 200
+  vroi: inf
+  troi: inf
+
+use_synthetic_obs: True
+
+dataset_def:
+  vort2d:
+    obs_window_min: -3
+    obs_window_max: 0
+
+perturb:
+
+analysis_scheme: offline_filter
+assimilator:
+  type: ETKF
+
+updator:
+  type: addtive
+
+inflation:
+  type: posterior,RTPP
+  adaptive: True
+  coef: 1.0
+
+localization:
+  horizontal:
+    type: 'GC'
+  vertical:
+    type: 'GC'
+  temporal:
+    type: 'exp'
+
+nscale: 1
+scale_id: 0
+decompose_obs: False
+character_length: [10]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
+diag:

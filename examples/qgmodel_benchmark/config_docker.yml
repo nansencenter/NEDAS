@@ -1,10 +1,5 @@
 work_dir: /work
 
-directories:
-  cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
-  forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
-  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
-
 job_submit:
   host: docker
   ppn: 16
@@ -38,6 +33,15 @@ state_def:
   var_type: field
   err_type: normal
 
+model_def:
+  qg:
+    config_file: /app/NEDAS/NEDAS/models/qg/default.yml
+    model_code_dir: /app/NEDAS/NEDAS/models/qg
+    model_env: /app/setup_docker.src
+    ens_run_type: scheduler
+    ens_init_dir: /work/init_ens
+    truth_dir: /work/truth
+
 obs_def:
 - name: streamfunc
   dataset_src: qg
@@ -57,32 +61,14 @@ dataset_def:
     obs_window_min: -6
     obs_window_max: 0
 
-model_def:
-  qg:
-    config_file: /app/NEDAS/NEDAS/models/qg/default.yml
-    model_code_dir: /app/NEDAS/NEDAS/models/qg
-    model_env: /app/setup_docker.src
-    ens_run_type: scheduler
-    ens_init_dir: /work/init_ens
-    truth_dir: /work/truth
-
 perturb:
 
-analysis_type: offline_filter
-assim_mode: batch
-filter_type: ETKF
+analysis_scheme: offline_filter
+assimilator:
+  type: ETKF
 
-filter:
-  config_file:
-
-nscale: 1
-scale_id: 0
-decompose_obs: False
-character_length: [150, 50, 10]
-localize_scale_fac: [1, 1, 1]
-obs_err_scale_fac: [1, 1, 1]
-
-alignment:
+updator:
+  type: additive
 
 inflation:
   type: posterior,RTPP
@@ -93,6 +79,13 @@ localization:
   horizontal: GC
   vertical: GC
   temporal: exp
+
+nscale: 1
+scale_id: 0
+decompose_obs: False
+character_length: [150, 50, 10]
+localize_scale_fac: [1, 1, 1]
+obs_err_scale_fac: [1, 1, 1]
 
 diag:
 - method: misc.convert_output

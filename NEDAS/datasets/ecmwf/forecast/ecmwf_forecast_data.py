@@ -1,5 +1,4 @@
 import os
-import pygrib
 from pyproj import Proj
 import numpy as np
 from NEDAS.grid import Grid
@@ -40,6 +39,10 @@ class EcmwfForecastData(Dataset):
 
     def open_file(self, fname):
         if fname not in self.files:
+            try:
+                import pygrib
+            except ImportError:
+                raise RuntimeError("pygrib package is required to open ecmwf forecast data files.")
             print(f"opening file {fname}")
             self.files[fname] = pygrib.open(fname)
             self.get_record_id_lookup(fname)

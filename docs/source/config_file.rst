@@ -7,6 +7,7 @@ Configuration file
 
 Usage
 -----
+
 NEDAS configuration is driven by YAML files and runtime argument parsing.
 The ``NEDAS/config/default.yml`` file defines all the entries and their default values.
 At runtime, a customized configuration file can be used by ``-c CONFIG_FILE``,
@@ -41,8 +42,10 @@ the configuration object ``c`` can be initialized directly with
 
 Description of entries
 ----------------------
+
 System paths and runtime environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 .. list-table::
    :header-rows: 1
    :widths: 20 55 25
@@ -54,18 +57,18 @@ System paths and runtime environment
      - Working directory for running the analysis scheme.
      - 'work'
    * - ``directories``
-     - Runtime directory structure defined by format strings.      
+     - Runtime directory structure defined by format strings.
      - See details in Table 1.
    * - ``python_env``
      - Initialization script to enter the python environment.
 
        If not None, at runtime ``". {python_env}"`` will source
-       
+
        this script before running the python command.
      - None
    * - ``job_submit``
      - Runtime job submitter settings, which are passed to
-     
+
        :func:`NEDAS.utils.shell_utils.run_job` as kwargs.
      - See details in Table 2.
    * - ``nproc``
@@ -75,7 +78,7 @@ System paths and runtime environment
      - Number of processors in a "member group",
 
        which splits the MPI communicator ``comm`` of size ``nproc``
-       
+
        into ``comm_mem`` of size ``nproc_mem``
 
        If None, no splitting is done.
@@ -122,7 +125,7 @@ System paths and runtime environment
      - Host machine name, machine-specific behavior
 
        in job scheduling can be defined in the
-       
+
        corresponding subclass in :doc:`NEDAS.job_submitters`.
      - None, 'laptop', 'betzy', etc.
    * - ``project``
@@ -133,7 +136,7 @@ System paths and runtime environment
      - None, 'normal', 'devel', etc.
    * - ``scheduler``
      - Scheduler type.
-     
+
        Typically a separate :doc:`NEDAS.job_submitters`
 
        subclass is defined for each scheduler type.
@@ -144,15 +147,16 @@ System paths and runtime environment
        per compute node
      - 128
    * - ``run_separate_jobs``
-     - Whether the jobs will be submitted separately 
+     - Whether the jobs will be submitted separately
 
        to the scheduler, or just run as steps in a
-       
+
        shared job allocation.
      - False
 
 Analysis scheme design parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 .. list-table::
    :header-rows: 1
    :widths: 20 40 40
@@ -201,6 +205,7 @@ Analysis scheme design parameters
 
 Time controls
 ^^^^^^^^^^^^^
+
 .. list-table::
    :header-rows: 1
    :widths: 20 45 35
@@ -247,6 +252,7 @@ Time controls
 
 Analysis grid definition
 ^^^^^^^^^^^^^^^^^^^^^^^^
+
 The ``grid_def`` entry is a dictionary with the following entries:
 
 .. list-table::
@@ -269,7 +275,7 @@ The ``grid_def`` entry is a dictionary with the following entries:
      - 'custom', 'qg', etc.
    * - ``mask``
      - Mask for invalid points in the domain.
-     
+
        If not None, the model name specifies which model generates
 
        the mask for the analysis grid.
@@ -285,7 +291,7 @@ The ``grid_def`` entry is a dictionary with the following entries:
    * - ``proj``
      - Map projection defined as PROJ4 strings
      - None,
-     
+
        '+proj=stere +lat_0=90 +lon_0=-45'
    * - ``xmin``
      - X coordinate start
@@ -303,7 +309,7 @@ The ``grid_def`` entry is a dictionary with the following entries:
      - Grid spacing
 
        Note: the coordinates and grid spacing
-       
+
        should be in meters. But if proj is None,
 
        they can be nondimensional.
@@ -322,6 +328,7 @@ The ``grid_def`` entry is a dictionary with the following entries:
 
 State definition
 ^^^^^^^^^^^^^^^^
+
 The ``state_def`` entry is a list, each item is a dictionary that defines one model state variable:
 
 .. list-table::
@@ -362,21 +369,23 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
    * - ``config_file``
      - YAML configuration file for the model.
 
-       Ideally, this is the only entry necessary and all
+       If not specified, will use ``default.yml``
 
-       the details can be defined in ``config_file``.
+       in the corresponding model module directory.
 
-       However, additional entries added in ``model_def``
-       
-       will overwrite the settings from ``config_file``,
+       Additional entries added below will overwrite
 
-       making it easier to setup twin experiments.
-     - 'models/qg/default.yml'
+       the settings in the YAML file, making it easier
+
+       to setup twin experiments.
+     - None,
+
+       'models/qg/default.yml'
    * - ``model_env``
      - Initialization script for model.
 
        At runtime ``". {model_env}"`` will source
-       
+
        this script before running the model forecast.
      - 'setup.src'
    * - ``model_code_dir``
@@ -401,7 +410,7 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
      - Type of ensemble forecast to run.
 
        'scheduler': run each member as a separate job
-       
+
        and distribute the workload using a :class:`Scheduler`.
 
        'batch': run all members in a single job.
@@ -424,6 +433,7 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
 
 Observation definition
 ^^^^^^^^^^^^^^^^^^^^^^
+
 The ``obs_def`` entry is a list, each item is a dictionary that defines one observation variable:
 
 .. list-table::
@@ -447,7 +457,7 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
      - 'qg'
    * - ``model_src``
      - Name of the model from which to compute the
-     
+
        observation priors .
      - 'qg'
    * - ``nobs``
@@ -533,21 +543,21 @@ The ``dataset_def`` entry is a dictionary, with dataset_name as keys pointing to
    * - ``config_file``
      - YAML configuration file for the dataset.
 
-       Ideally, this is the only entry necessary and all
+       If not specified, will use ``default.yml``
 
-       the details can be defined in ``config_file``.
+       in the corresponding dataset module directory.
 
-       However, additional entries added in ``dataset_def``
-       
-       will overwrite the settings from ``config_file``,
+       Additional entries added below will overwrite
 
-       making it easier to setup twin experiments.
-     - 'dataset/qg/default.yml'
+       the settings in the YAML file.
+     - None,
+
+       'dataset/qg/default.yml'
    * - ``dataset_dir``
      - Path to the dataset files
      - 'data'
-   * - ``obs_window_min`` 
-     - Start of the observation window, 
+   * - ``obs_window_min``
+     - Start of the observation window,
 
        hours relative to the analysis time.
      - -12
@@ -607,7 +617,7 @@ to perform the perturbation.
      - 0.1
    * - ``hcorr``
      - Horizontal correlation length of the
-     
+
        perturbation, in coordinate units
      - 15
    * - ``tcorr``
@@ -637,17 +647,14 @@ For the specific ``filter_type``, the corresponding :class:`Assimilator` subclas
    * - Key
      - Description
      - Example
-   * - ``analysis_type``
-     - Type of analysis scheme to use. 
+   * - ``analysis_scheme``
+     - Type of analysis scheme to use.
      - 'offline_filter'
-   * - ``assim_mode``
-     - Assimilation mode.
-     - 'batch' or 'serial'
-   * - ``filter_type``
+   * - ``assimilator``
      - Type of filter
      - 'ETKF' (for batch mode), 'EAKF' (for serial mode)
 
-Filter-specific parameters are defined in ``filter`` dictionary.
+Assimilator-specific parameters are defined in ``assimilator`` dictionary.
 
 .. list-table::
    :header-rows: 1
@@ -657,57 +664,18 @@ Filter-specific parameters are defined in ``filter`` dictionary.
      - Description
      - Example
    * - ``config_file``
-     - YAML configuration file for the filter algorithm.
-     
-       Ideally, this is the only entry necessary and all
+     - YAML configuration file for the assimilator.
 
-       the details can be defined in ``config_file``.
+       If not specified, will use ``default.yml``
 
-       However, additional entries added in ``filter``
-       
-       will overwrite the settings from ``config_file``,
+       in the corresponding assimilator
 
-       making it easier to setup twin experiments.
-     - 'assimilators/ETKF/default.yml'
+       module directory. Additional entries added
 
-Multiscale approach configuration:
+       below will overwrite the settings.
+     - None,
 
-.. list-table::
-   :header-rows: 1
-   :widths: 20 45 35
-
-   * - Key
-     - Description
-     - Example
-   * - ``nscale``
-     - Number of scale components.
-     - 1
-   * - ``scale_id``
-     - Current scale component index
-     - 0
-   * - ``decompose_obs``
-     - Whether to decompose observations into scale
-
-       components as well.
-     - False
-   * - ``resolution_level``
-     - resolution level for the analysis grid 
-
-       (0 is the analysis grid resolution,
-
-       + reduces, - increases the resolution)
-     - [0]
-   * - ``character_length``
-     - characteristic length (in grid coord unit)
-
-       for each scale (large to small)
-     - [16]
-   * - ``localize_scale_fac``
-     - scale factor for localization distances
-     - [1]
-   * - ``obs_err_scale_fac``
-     - scale factor for observation error variances
-     - [1]
+       'assimilators/ETKF/default.yml'
 
 Alignment technique configuration is stored in ``alignment`` as a dictionary:
 
@@ -754,12 +722,14 @@ Covariance inflation parameters are stored in the ``inflation`` entry as a dicti
      - 'posterior,RTPP'
    * - ``adaptive``
      - Whether to run an adaptive inflation scheme.
-     - True 
+     - True
    * - ``coef``
      - Static inflation coefficient.
      - 1.0
 
-Covariance localization parameters are stored in the ``localization`` entry as a dictionary.
+Covariance localization settings are separately defined for the spatial and temporal components.
+The ``localization`` entry is a dictionary with keys ``horizontal``, ``vertical`` and ``temporal``
+each pointing to a dictionary that defines its localization function parameters.
 
 .. list-table::
    :header-rows: 1
@@ -768,20 +738,58 @@ Covariance localization parameters are stored in the ``localization`` entry as a
    * - Key
      - Description
      - Example
-   * - ``horizontal``
-     - Type of horizontal localization function. Distance-based (GC, step, exp)
-     
+   * - ``type``
+     - Type of localization function to use. Distance-based (GC, step, exp)
+
        or correlation-based (NICE)
      - 'GC'
-   * - ``vertical``
-     - Type of vertical localization function.
-     - 'GC'
-   * - ``temporal``
-     - Type of temporal localization function.
-     - 'exp'
+   * - ``config_file``
+     - YAML configuration file for this type of localization.
+     - None,
+       'default.yml'
+
+Multiscale approach configuration:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 45 35
+
+   * - Key
+     - Description
+     - Example
+   * - ``nscale``
+     - Number of scale components.
+     - 3
+   * - ``scale_id``
+     - Current scale component index
+     - 0
+   * - ``decompose_obs``
+     - Whether to decompose observations into scale
+
+       components as well.
+     - False
+   * - ``resolution_level``
+     - Resolution level (n) for the analysis grid.
+
+       The analysis grid will have a resolution ``dx * 2**n``
+
+       where ``dx`` is the grid spacing defined in ``grid_def``.
+     - [2, 1, 0]
+   * - ``character_length``
+     - Characteristic length (in grid coordinate units)
+
+       for each scale (large to small)
+     - [32, 8, 2]
+   * - ``localize_scale_fac``
+     - Scale factor for localization distances.
+     - [2, 1, 0.5]
+   * - ``obs_err_scale_fac``
+     - Scale factor for observation error inflation.
+     - [1, 1, 1]
 
 Diagnostic methods
 ^^^^^^^^^^^^^^^^^^
+
 The ``diag`` entry is a list, each element is a dictionary defining a diagnostic method to be run.
 
 .. list-table::
@@ -797,11 +805,13 @@ The ``diag`` entry is a list, each element is a dictionary defining a diagnostic
    * - ``config_file``
      - YAML configuration file for the method.
 
-       Ideally, this is the only entry necessary
+       If not specified, will use ``default.yml``
 
-       with all details in ``config_file``.
+       in the corresponding method module
 
-       However, additional entries added below
+       directory. Additional entries added
 
-       will overwrite the settings.
-     - 'diag/misc/convert_output/default.yml'
+       below will overwrite the settings.
+     - None,
+
+       'diag/misc/convert_output/default.yml'
