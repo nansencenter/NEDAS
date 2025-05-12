@@ -55,11 +55,7 @@ class NextsimModel(Model):
             }
         self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables}
 
-        ##default grid and mask (before getting set by read_grid)
-        self.read_grid_from_mshfile(os.path.join(self.nextsim_mesh_dir, self.msh_filename))
-
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
-
+        self.grid = None
         self.grid_bank = {}
 
     def filename(self, **kwargs):
@@ -101,6 +97,9 @@ class NextsimModel(Model):
         """
         Update self.grid object based on input kwargs
         """
+        if kwargs is None:
+            self.read_grid_from_mshfile(os.path.join(self.nextsim_mesh_dir, self.msh_filename))
+
         kwargs = super().parse_kwargs(**kwargs)
         if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
             if 'meshfile' in kwargs:
@@ -121,6 +120,8 @@ class NextsimModel(Model):
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             self.grid = Grid.regular_grid(proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
+
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
 
     def write_grid(self, **kwargs):
         """

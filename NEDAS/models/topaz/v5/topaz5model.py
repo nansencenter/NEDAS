@@ -90,18 +90,9 @@ class Topaz5Model(Model):
                           **self.diag_variables,
                           **self.archive_variables}
 
-        ##model grid
-        grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
-        self.grid = get_topaz_grid(grid_info_file)
-
-        self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
-
-        self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
-        if os.path.exists(self.meanssh_file):
-            self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
-        else:
-            self.meanssh = None
+        self.grid = None
+        self.depth = None
+        self.meanssh = None
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -161,7 +152,12 @@ class Topaz5Model(Model):
         raise FileNotFoundError(f"filename: ERROR: could not find {file} in {path} or its parent directories")
 
     def read_grid(self, **kwargs):
-        pass
+        if self.grid is None:
+            grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
+            self.grid = get_topaz_grid(grid_info_file)
+
+            self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
+            self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
     def read_mask(self, **kwargs):
         pass
@@ -381,6 +377,11 @@ class Topaz5Model(Model):
         return ssh
 
     def get_ocean_surf_height_anomaly(self, **kwargs):
+        self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
+        if os.path.exists(self.meanssh_file):
+            self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
+        else:
+            self.meanssh = None
         assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
         ssh = self.get_ocean_surf_height(**kwargs)
         sla = ssh - self.meanssh

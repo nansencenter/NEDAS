@@ -1,6 +1,6 @@
 ##directories
-nhc_root: /cluster/home/yingyue/code/NERSC-HYCOM-CICE
-basedir: /cluster/work/users/yingyue/TP5a0.06
+nhc_root: NERSC-HYCOM-CICE
+basedir: TP5a0.06
 V: '2.2.98'
 X: '04.1'
 E: '041'

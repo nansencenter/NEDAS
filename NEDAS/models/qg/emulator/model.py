@@ -2,24 +2,23 @@ import os
 import subprocess
 import numpy as np
 from NEDAS.utils.conversion import t2s, dt1h
-from NEDAS.models.qg.util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from NEDAS.models.qg.model import QGModel
-from NEDAS.models.qg.emulator.netutils import Att_Res_UNet
+from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
+from ..model import QGModel
 
 class QGModelEmulator(QGModel):
     """
     Class for configuring and running the qg model emulator
     """
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
-
-        self.restart_dt = 12  ##the model is trained with this output interval
-        self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
-        self.unet_model.load_weights(self.weightfile)
-
     def run_batch(self, nens=1, task_id=0, **kwargs):
         kwargs = super().super().parse_kwargs(**kwargs)
         self.run_status = 'running'
+
+        ##load model weights if not yet
+        if self.unet_model is None:
+            from .netutils import Att_Res_UNet
+            self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
+            self.unet_model.load_weights(self.weightfile)
+
         if nens>1:
             ##running ensmeble together, ignore kwargs['member']
             members = list(range(nens))
@@ -62,4 +61,4 @@ class QGModelEmulator(QGModel):
                 self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
 
     def run(self, task_id=0, **kwargs):
-        raise NotImplementedError
+        raise NotImplementedError("qg.emulator only runs in batch mode, call run_batch instead")
