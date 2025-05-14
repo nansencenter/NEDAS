@@ -36,7 +36,7 @@ class State:
     while easier to run assimilation algorithms with ensemble-complete state.
     """
     def __init__(self, c):
-        self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
+        self.analysis_dir = c.analysis_dir(c.time, c.step)
         self.prior_file = os.path.join(self.analysis_dir, 'prior_state.bin')
         self.prior_mean_file = os.path.join(self.analysis_dir, 'prior_mean_state.bin')
         self.post_file = os.path.join(self.analysis_dir, 'post_state.bin')
@@ -94,7 +94,7 @@ class State:
             if vrec['var_type'] == 'field':
                 ##this is a state variable 'field' with dimensions t, z, y, x
                 ##some properties of the variable is defined in its source module
-                src = c.model_config[vrec['model_src']]
+                src = c.models[vrec['model_src']]
                 assert vname in src.variables, 'variable '+vname+' not defined in '+vrec['model_src']+' Model.variables'
 
                 #now go through time and zlevels to form a uniq field record
@@ -425,7 +425,7 @@ class State:
                 path = c.forecast_dir(rec['time'], rec['model_src'])
 
                 ##the model object for handling this variable
-                model = c.model_config[rec['model_src']]
+                model = c.models[rec['model_src']]
 
                 ##read field from restart file
                 model.read_grid(path=path, member=mem_id, **rec)
@@ -440,7 +440,8 @@ class State:
                     fld[c.grid.mask] = np.nan
 
                 ##misc. transform can be added here
-                fld = c.misc_transform.forward_state(c, rec, fld)
+                for transform_func in c.transform_funcs:
+                    fld = transform_func.forward_state(c, rec, fld)
 
                 ##save field to dict
                 fields[mem_id, rec_id] = fld

@@ -4,7 +4,7 @@ from datetime import timedelta
 from NEDAS.config import Config
 
 def generate_truth(c: Config) -> None:
-    model = c.model_config['qg']
+    model = c.models['qg']
 
     truth_dir = model.truth_dir
     os.system("mkdir -p "+truth_dir)

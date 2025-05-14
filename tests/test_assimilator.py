@@ -1,7 +1,7 @@
 import unittest
 import importlib
 from NEDAS.config import Config
-from NEDAS.assim_tools.assimilators import registry, get_assimilator_class
+from NEDAS.assim_tools.assimilators import registry, get_assimilator
 
 class TestAnalysisScheme(unittest.TestCase):
     def test_assimilator_init(self):
@@ -9,20 +9,20 @@ class TestAnalysisScheme(unittest.TestCase):
         for assimilator_name in registry.keys():
             c.assimilator_def['type'] = assimilator_name
             module = importlib.import_module('NEDAS.assim_tools.assimilators.'+assimilator_name)
-            Assimilator = get_assimilator_class(assimilator_name)
-            assimilator = Assimilator(c)
+            assimilator = get_assimilator(c)
             self.assertIsInstance(assimilator, getattr(module, registry[assimilator_name]))
 
     def test_raise_exception_when_not_implemented(self):
+        c = Config()
         with self.assertRaises(NotImplementedError):
-            get_assimilator_class('foo')
+            c.assimilator_def['type'] = 'foo'
+            get_assimilator(c)
 
     def test_assimilation_algorithm_implemented(self):
         c = Config()
         for assimilator_name in registry.keys():
             c.assimilator_def['type'] = assimilator_name
-            Assimilator = get_assimilator_class(assimilator_name)
-            assimilator = Assimilator(c)
+            assimilator = get_assimilator(assimilator_name)
 
             self.assertTrue(hasattr(assimilator, 'assimilation_algorithm'), "Method 'assimilation_algorithm' not found")
 

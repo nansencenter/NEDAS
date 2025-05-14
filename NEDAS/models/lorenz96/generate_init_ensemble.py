@@ -4,7 +4,7 @@ from NEDAS.config import Config
 def main():
     c = Config(parse_args=True)
 
-    model = c.model_config['lorenz96']
+    model = c.models['lorenz96']
 
     ens_init_dir = model.ens_init_dir
     os.system("mkdir -p "+ens_init_dir)

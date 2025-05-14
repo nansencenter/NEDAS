@@ -1,5 +1,5 @@
 import numpy as np
-from NEDAS.assim_tools.updators.base import Updator
+from .base import Updator
 
 class AdditiveUpdator(Updator):
 
@@ -14,8 +14,9 @@ class AdditiveUpdator(Updator):
             fld_post = state.fields_post[mem_id, rec_id]
 
             ##misc transform inverse
-            fld_prior = c.misc_transform.backward_state(c, rec, fld_prior)
-            fld_post = c.misc_transform.backward_state(c, rec, fld_post)
+            for transform_func in c.transform_funcs:
+                fld_prior = transform_func.backward_state(c, rec, fld_prior)
+                fld_post = transform_func.backward_state(c, rec, fld_post)
 
             ##collect the increments
             self.increment[mem_id, rec_id] = fld_post - fld_prior
@@ -31,7 +32,7 @@ class AdditiveUpdator(Updator):
         - rec_id: record index
         """
         rec = state.info['fields'][rec_id]
-        model = c.model_config[rec['model_src']]
+        model = c.models[rec['model_src']]
         path = c.forecast_dir(rec['time'], rec['model_src'])
         model.read_grid(path=path, member=mem_id, **rec)
 

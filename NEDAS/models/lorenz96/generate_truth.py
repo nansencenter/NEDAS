@@ -5,7 +5,7 @@ from NEDAS.utils.conversion import dt1h
 def main():
     c = Config(parse_args=True)
 
-    model = c.model_config['lorenz96']
+    model = c.models['lorenz96']
 
     truth_dir = model.truth_dir
     os.system("mkdir -p "+truth_dir)

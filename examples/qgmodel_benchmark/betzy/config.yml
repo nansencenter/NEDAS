@@ -72,8 +72,8 @@ kfactor: 1
 nlobs_max:
 
 ##multiscale approach
-nscale: 1
-scale_id: 0
+nstep: 1
+step: 0
 decompose_obs: False
 character_length: [150, 50, 10]
 localize_scale_fac: [1, 1, 1]

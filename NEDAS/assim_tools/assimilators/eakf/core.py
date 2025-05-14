@@ -2,6 +2,28 @@ import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
 
+class EAKFAssimilator(SerialAssimilator):
+    def obs_increment(self, obs_prior, obs, obs_err):
+        return obs_increment_eakf(obs_prior, obs, obs_err)
+
+    def update_local_state(self, state_prior, obs_prior, obs_incr,
+                        state_h_dist, state_v_dist, state_t_dist,
+                        hroi, vroi, troi,
+                        h_local_func, v_local_func, t_local_func) -> None:
+        return update_local_state_linear(state_prior, obs_prior, obs_incr,
+                                         state_h_dist, state_v_dist, state_t_dist,
+                                         hroi, vroi, troi,
+                                         h_local_func, v_local_func, t_local_func)
+
+    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
+                         h_dist, v_dist, t_dist,
+                         hroi, vroi, troi,
+                         h_local_func, v_local_func, t_local_func) -> None:
+        return update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
+                                       h_dist, v_dist, t_dist,
+                                       hroi, vroi, troi,
+                                       h_local_func, v_local_func, t_local_func)
+
 @njit
 def obs_increment_eakf(obs_prior, obs, obs_err) -> np.ndarray:
     nens = obs_prior.size
@@ -93,26 +115,3 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor) -> np.ndarray:
         ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
 
     return ens_post
-
-class EAKFAssimilator(SerialAssimilator):
-    def obs_increment(self, obs_prior, obs, obs_err):
-        return obs_increment_eakf(obs_prior, obs, obs_err)
-
-    def update_local_state(self, state_prior, obs_prior, obs_incr,
-                        state_h_dist, state_v_dist, state_t_dist,
-                        hroi, vroi, troi,
-                        h_local_func, v_local_func, t_local_func) -> None:
-        return update_local_state_linear(state_prior, obs_prior, obs_incr,
-                                         state_h_dist, state_v_dist, state_t_dist,
-                                         hroi, vroi, troi,
-                                         h_local_func, v_local_func, t_local_func)
-
-    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
-                         h_dist, v_dist, t_dist,
-                         hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func) -> None:
-        return update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
-                                       h_dist, v_dist, t_dist,
-                                       hroi, vroi, troi,
-                                       h_local_func, v_local_func, t_local_func)
-

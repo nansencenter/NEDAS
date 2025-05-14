@@ -1,12 +1,20 @@
 import os
+import inspect
 from abc import ABC, abstractmethod
 import numpy as np
+from NEDAS.config import parse_config
 from NEDAS.utils.parallel import bcast_by_root
 from NEDAS.utils.progress import timer
 
 class Assimilator(ABC):
     def __init__(self, c):
-        self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
+        self.analysis_dir = c.analysis_dir(c.time, c.step)
+
+        ##get parameters from config file
+        code_dir = os.path.dirname(inspect.getfile(self.__class__))
+        config_dict = parse_config(code_dir, parse_args=False, **c.assimilator_def)
+        for key, value in config_dict.items():
+            setattr(self, key, value)
 
     def assimilate(self, c, state, obs):
         """

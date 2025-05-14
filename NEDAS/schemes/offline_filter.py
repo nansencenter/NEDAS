@@ -9,6 +9,7 @@ from NEDAS.utils.progress import timer, progress_bar
 from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.utils.random_perturb import random_perturb
+from NEDAS import assim_tools
 from NEDAS.schemes import AnalysisScheme
 
 class OfflineFilterAnalysisScheme(AnalysisScheme):
@@ -74,35 +75,34 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         analysis_grid = c.grid
-        for c.scale_id in range(c.nscale):
-            c.print_1p(f"Running analysis for scale {c.scale_id}:")
+        for c.step in range(c.nstep):
+            c.print_1p(f"Running analysis for outer iteration step {c.step}:")
 
             self.init_analysis_dir(c)
-            c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.scale_id])
-            c.misc_transform = self.get_misc_transform(c)
-            c.localization_funcs = self.get_localization_funcs(c)
-            c.inflation_func = self.get_inflation_func(c)
+            c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.step])
+            c.transform_funcs = assim_tools.transforms.get_transform_funcs(c)
+            c.localization_funcs = assim_tools.localization.get_localization_funcs(c)
+            c.inflation_func = assim_tools.inflation.get_inflation_func(c)
 
-            state = self.get_state(c)
+            state = assim_tools.state.get_state(c)
             timer(c)(state.prepare_state)(c)
 
-            obs = self.get_obs(c, state)
+            obs = assim_tools.obs.get_obs(c, state)
             timer(c)(obs.prepare_obs)(c, state)
             timer(c)(obs.prepare_obs_from_state)(c, state, 'prior')
 
-            assimilator = self.get_assimilator(c)
+            assimilator = assim_tools.assimilators.get_assimilator(c)
             timer(c)(assimilator.assimilate)(c, state, obs)
 
-            updator = self.get_updator(c)
+            updator = assim_tools.updators.get_updator(c)
             timer(c)(updator.update)(c, state)
 
     def ensemble_forecast(self, c):
         """
         Ensemble forecast step.
 
-
         """
-        for model_name, model in c.model_config.items():
+        for model_name, model in c.models.items():
             path = c.forecast_dir(c.time, model_name)
             makedir(path)
             print(f"Running {model_name} ensemble forecast:", flush=True)
@@ -129,7 +129,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
 
         The ``preprocess`` method implemented in each model class details this step.
         """
-        for model_name, model in c.model_config.items():
+        for model_name, model in c.models.items():
             path = c.forecast_dir(c.time, model_name)
             makedir(path)
             print(f"Preprocessing {model_name} state:", flush=True)
@@ -146,7 +146,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
 
         The ``postprocess`` method implemented in each model class details this step.
         """
-        for model_name, model in c.model_config.items():
+        for model_name, model in c.models.items():
             path = c.forecast_dir(c.time, model_name)
             makedir(path)
             print(f"Postprocessing {model_name} state:", flush=True)
@@ -185,7 +185,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         nfld = 0
         for rec in task_list[c.pid]:
             model_name = rec['model_src']
-            model = c.model_config[model_name]
+            model = c.models[model_name]
             vname = ensure_list(rec['variable'])[0]
             dt = model.variables[vname]['dt']
             nstep = c.cycle_period // dt + 1
@@ -197,7 +197,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         fld_id = 0
         for rec in task_list[c.pid]:
             model_name = rec['model_src']
-            model = c.model_config[model_name]  ##model class object
+            model = c.models[model_name]  ##model class object
             mem_id = rec['member']
             mstr = f'_mem{mem_id+1:03d}'
             path = c.forecast_dir(c.time, model_name)
@@ -369,7 +369,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         return opts
 
     def get_restart_dir(self, c, model_name):
-        model = c.model_config[model_name]
+        model = c.models[model_name]
         if c.time == c.time_start:
             restart_dir = model.ens_init_dir
         else:

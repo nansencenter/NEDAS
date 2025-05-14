@@ -1,5 +1,6 @@
 import os
 import inspect
+from typing import Optional
 import yaml
 import dateutil
 import numpy as np
@@ -8,7 +9,7 @@ from pyproj import Proj
 import NEDAS
 from .parse_config import parse_config
 from NEDAS.utils import parallel
-from NEDAS.assim_tools import state, obs, assimilators, updators, covariance, localization, inflation, misc_transform
+from NEDAS import assim_tools
 
 class Config:
     """
@@ -28,7 +29,7 @@ class Config:
         dataset_config (dict): A dictionary where keys are dataset names and values are the corresponding Dataset instances, set by :meth:`set_dataset_config`.
     """
 
-    def __init__(self, config_file: str=None, parse_args: bool=False, **kwargs):
+    def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
         # most of the config variables are defined in a yaml file, create a dict to hold the values
         # and initialize some default runtime variables
         self.config_dict = {}
@@ -138,22 +139,22 @@ class Config:
         """
         return self.directories['forecast_dir'].format(time=time, model_name=model_name)
 
-    def analysis_dir(self, time: datetime, scale_id: int=0):
+    def analysis_dir(self, time: datetime, step: int=0):
         """
         Directory path for an analysis step.
 
         Args:
             time (datetime): Time of the analysis cycle.
-            scale_id (int, optional): Scale component ID if running a multiscale approach.
+            step (int): If nstep > 1, an outer iteration loop exists, step is the index in the loop.
 
         Returns:
             str: Directory path for the analysis step.
         """
-        if self.nscale == 1:
-            scale_dir = ''
+        if self.nstep == 1:
+            step_dir = ''
         else:
-            scale_dir = f"scale{scale_id}"
-        return self.directories['analysis_dir'].format(time=time, scale_dir=scale_dir)
+            step_dir = f"step{step}"
+        return self.directories['analysis_dir'].format(time=time, step=step_dir)
 
     def parse_directories(self, data):
         """
@@ -303,30 +304,9 @@ class Config:
 
     def set_analysis_scheme(self):
         """
-        Initialize analysis scheme and its subcomponents:
-        assimilator, updator, covaraince, localization, inflation,
+        Initialize analysis scheme.
         """
         self.scheme = NEDAS.schemes.get_analysis_scheme(self.analysis_scheme)
-
-        if 'type' not in self.assimilator_def:
-            raise KeyError("Config: 'type' must be specified in assimilator_def")
-        self.Assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.assimilator_def['type'])
-
-        if 'type' not in self.updator_def:
-            raise KeyError("Config: 'type' must be specified in updator_def")
-        self.Updator = NEDAS.assim_tools.updators.get_updator_class(self.updator_def['type'])
-
-        # if 'type' not in self.covariance_def:
-        #     raise KeyError("Config: 'type' must be specified in covariance_def")
-        # self.covariance = NEDAS.assim_tools.covariance.get_covariance_class(self.covariance_def['type'])
-
-        # if 'type' not in self.updator_def:
-        #     raise KeyError("Config: 'type' must be specified in updator_def")
-        # self.assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.updator_def['type'])
-
-        # if 'type' not in self.updator_def:
-        #     raise KeyError("Config: 'type' must be specified in updator_def")
-        # self.assimilator = NEDAS.assim_tools.assimilators.get_assimilator_class(self.updator_def['type'])
 
     def show_summary(self):
         """

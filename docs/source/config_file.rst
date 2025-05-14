@@ -757,10 +757,10 @@ Multiscale approach configuration:
    * - Key
      - Description
      - Example
-   * - ``nscale``
-     - Number of scale components.
+   * - ``nstep``
+     - Number of outer-loop iterations, number of scale components in this case.
      - 3
-   * - ``scale_id``
+   * - ``step``
      - Current scale component index
      - 0
    * - ``decompose_obs``

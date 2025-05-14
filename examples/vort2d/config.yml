@@ -61,28 +61,36 @@ dataset_def:
 perturb:
 
 analysis_scheme: offline_filter
-assimilator:
-  type: ETKF
 
-updator:
-  type: addtive
+nstep: 1
+step: 0
 
-inflation:
-  type: posterior,RTPP
+assimilator_def:
+  type: eakf
+
+updator_def:
+  type: additive
+
+covariance_def:
+  type: ensemble
+
+inflation_def:
+  type: posterior,multiplicative
   adaptive: True
   coef: 1.0
 
 localization:
   horizontal:
-    type: 'GC'
+    type: gaspari_cohn
   vertical:
-    type: 'GC'
+    type: gaspari_cohn
   temporal:
-    type: 'exp'
+    type: exp
 
-nscale: 1
-scale_id: 0
-decompose_obs: False
+transform_def:
+  type: identity
+
+resolution_level: [0]
 character_length: [10]
 localize_scale_fac: [1]
 obs_err_scale_fac: [1]

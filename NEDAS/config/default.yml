@@ -4,7 +4,7 @@ work_dir: work
 directories:
   cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
   forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
-  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{scale_dir}'
+  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{step}'
 
 ##python environment source script
 python_env:
@@ -123,8 +123,12 @@ perturb:
 ##more details in assimilation algorithm
 analysis_scheme: offline_filter  ##type of analysis to perform online/offline, filter/smoother/etc.
 
+##outer loop iterations
+nstep: 1
+step:
+
 assimilator_def:
-  type: ETKF      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+  type: etkf      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
   config_file:    ##configuration for the specific assimilator
 
 updator_def:
@@ -137,31 +141,26 @@ covariance_def:
 
 ##covariance inflation technique in assimilation
 inflation_def:
-  type: posterior,RTPP      ## type of inflation (posterior/prior, multiplicative/RTPP...)
+  type: posterior,rtpp      ## type of inflation (posterior/prior, multiplicative/RTPP...)
   adaptive: True            ## if true, run an adaptive version of the inflation scheme
   coef: 1.0                 ## static inflation coefficient
 
 ##covariance localization technique in assimilation
-## type of localization kernel (GC, step, exp, NICE...)
-## for distance-based localization, the radius of influence (roi) is specified in obs_def
 localization_def:       ## localization is configured separately for horizontal, vertical and temporal relations
   horizontal:
-    type: GC            ## type of localization kernel (GC, step, exp, NICE...)
+    type: gaspari_cohn  ## type of localization kernel (gaspari_cohn, step, exp, nice...)
   vertical:
-    type: GC
+    type: gaspari_cohn
   temporal:
     type: exp
 
 transform_def:
-- type: 'multiscale'          ## e.g. multiscale approach in assimilation
+- type: scale_bandpass        ## e.g. used in multiscale approach
   decompose_obs: False        ## if true, decompose observations as well
-  resolution_level: [0]       ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
-  character_length: [16]      ## characteristic length (in grid coord unit) for each scale (large to small)
-  localize_scale_fac: [1]     ## scale factor for localization distances
-  obs_err_scale_fac: [1]      ## scale factor for observation error variances
-
-n_outer_iter: 1        ## number of scale components
-iter_id:               ## current scale component index
+resolution_level: [0]       ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
+character_length: [16]      ## characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]     ## scale factor for localization distances
+obs_err_scale_fac: [1]      ## scale factor for observation error variances
 
 ##diagnostic methods configuration
 diag:

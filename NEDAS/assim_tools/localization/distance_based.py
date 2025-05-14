@@ -2,7 +2,7 @@ import numpy as np
 from NEDAS.utils.njit import njit
 
 @njit
-def local_func_GC(dist, roi):
+def gaspari_cohn_func(dist, roi):
     """
     Gaspari-Cohn localization function.
 
@@ -30,7 +30,7 @@ def local_func_GC(dist, roi):
     return lfactor.reshape(shape)
 
 @njit
-def local_func_step(dist, roi):
+def step_func(dist, roi):
     """
     Step function for localization.
     """
@@ -41,7 +41,7 @@ def local_func_step(dist, roi):
     return lfactor.reshape(shape)
 
 @njit
-def local_func_exp(dist, roi):
+def exponential_func(dist, roi):
     """
     Exponential decay localization function.
     """

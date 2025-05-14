@@ -2,7 +2,7 @@ import os
 from NEDAS.config import Config
 
 def generate_init_ensemble(c: Config) -> None:
-    model = c.model_config['vort2d']
+    model = c.models['vort2d']
 
     ens_init_dir = model.ens_init_dir
     os.system("mkdir -p "+ens_init_dir)

@@ -13,7 +13,7 @@ class AlignmentUpdator(Updator):
 
         for rec_id in state.rec_list[c.pid_rec]:
             rec = state.info['fields'][rec_id]
-            model = c.model_config[rec['model_src']]
+            model = c.models[rec['model_src']]
             path = c.forecast_dir(rec['time'], rec['model_src'])
             if rec['name'] != c.alignment['variable']:
                 continue
@@ -44,7 +44,7 @@ class AlignmentUpdator(Updator):
         See more details in Ying 2019
         """
         rec = state.info['fields'][rec_id]
-        model = c.model_config[rec['model_src']]
+        model = c.models[rec['model_src']]
         path = c.forecast_dir(rec['time'], rec['model_src'])
         fld_prior = state.fields_prior[mem_id, rec_id]
         fld_post = state.fields_post[mem_id, rec_id]
