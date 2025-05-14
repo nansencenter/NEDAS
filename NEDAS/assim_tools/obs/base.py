@@ -29,7 +29,7 @@ class Obs:
     computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
     """
     def __init__(self, c, state):
-        self.analysis_dir = c.analysis_dir(c.time, c.scale_id)
+        self.analysis_dir = c.analysis_dir(c.time, c.step)
 
         self.info = bcast_by_root(c.comm)(self.parse_obs_info)(c, state)
 
@@ -70,7 +70,7 @@ class Obs:
             obs_err_type = vrec['err'].get('type', 'normal')
 
             ##some properties of the variable is defined in its source module
-            dataset = c.dataset_config[vrec['dataset_src']]
+            dataset = c.datasets[vrec['dataset_src']]
             variables = dataset.variables
             assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.dataset.variables'
 
@@ -104,7 +104,7 @@ class Obs:
                                'tcorr': vrec['err'].get('tcorr',0.),
                                'cross_corr': vrec['err'].get('cross_corr',{}),
                                },
-                        'hroi': vrec['hroi'] * c.localize_scale_fac[c.scale_id],
+                        'hroi': vrec['hroi'] * c.localize_scale_fac[c.step],
                         'vroi': vrec['vroi'],
                         'troi': vrec['troi'],
                         'impact_on_state': impact_on_state,
@@ -238,9 +238,9 @@ class Obs:
         is_vector = kwargs['is_vector']
 
         ##obs dataset source module
-        dataset = c.dataset_config[kwargs['dataset_src']]
+        dataset = c.datasets[kwargs['dataset_src']]
         ##model source module
-        model = c.model_config[kwargs['model_src']]
+        model = c.models[kwargs['model_src']]
 
         ##option 1  TODO: update README and comments
         ## if dataset module provides an obs_operator, use it to compute obs
@@ -403,10 +403,10 @@ class Obs:
             obs_rec = self.info['records'][obs_rec_id]
 
             ##load the dataset module
-            dataset = c.dataset_config[obs_rec['dataset_src']]
+            dataset = c.datasets[obs_rec['dataset_src']]
             assert obs_rec['name'] in dataset.variables, 'variable '+obs_rec['name']+' not defined in dataset.'+obs_rec['dataset_src']+'.variables'
 
-            model = c.model_config[obs_rec['model_src']]
+            model = c.models[obs_rec['model_src']]
             ##read ens-mean z coords from z_file for this obs network
             ##typically model.z_coords can compute the z coords as well, but it is more efficient
             ##to just store the ensemble mean z here
@@ -430,7 +430,8 @@ class Obs:
                 print('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}'.format(seq['obs'].shape[-1]), flush=True)
 
             ##misc. transform here
-            seq = c.misc_transform.forward_obs(c, obs_rec, seq)
+            for transform_func in c.transform_funcs:
+                seq = transform_func.forward_obs(c, obs_rec, seq)
 
             obs_seq[obs_rec_id] = seq
             obs_rec['nobs'] = seq['obs'].shape[-1]  ##update nobs
@@ -486,7 +487,8 @@ class Obs:
                 seq['obs'] = self.state_to_obs(c, state, flag, member=mem_id, **obs_rec, **self.obs_seq[obs_rec_id])
 
                 ##misc. transform here
-                seq = c.misc_transform.forward_obs(c, obs_rec, seq)
+                for transform_func in c.transform_funcs:
+                    seq = transform_func.forward_obs(c, obs_rec, seq)
 
                 ##collect obs priors together
                 if flag == 'prior':

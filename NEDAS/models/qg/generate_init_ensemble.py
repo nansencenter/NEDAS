@@ -6,7 +6,7 @@ from NEDAS.schemes.offline_filter import OfflineFilterAnalysisScheme
 
 def generate_init_ensemble(c: Config) -> None:
     scheme = OfflineFilterAnalysisScheme()
-    model = c.model_config['qg']
+    model = c.models['qg']
 
     print(f"Creating initial condition for qg model:")
     init_time = c.time

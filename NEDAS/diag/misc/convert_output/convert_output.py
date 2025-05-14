@@ -49,7 +49,7 @@ def run(c, **kwargs):
     vname = kwargs['variable']
     member = kwargs['member']
     model_name = kwargs['model_src']
-    model = c.model_config[model_name]
+    model = c.models[model_name]
 
     grid_def = kwargs['grid_def']
     if grid_def:

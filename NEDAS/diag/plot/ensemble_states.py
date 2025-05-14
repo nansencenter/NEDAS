@@ -19,7 +19,7 @@ def get_task_list(c, **kwargs) -> list:
     tasks = []
     for member in range(c.nens):
         for i, vname in enumerate(variables):
-            model = c.model_config[model_src[i]]
+            model = c.models[model_src[i]]
             levels = model.variables[vname]['levels']
             dt = model.variables[vname]['dt']
             for k in levels:
@@ -64,7 +64,7 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the field from model restart files
-    model = c.model_config[model_src]
+    model = c.models[model_src]
     if 'forecast_dir' in kwargs:
         fdir = kwargs['forecast_dir'].format(time=c.time)
     else:
@@ -108,7 +108,7 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     times_by_variable = ""
     for vname in variables:
         levels_by_variable += f"'{vname}': ["
-        model = c.model_config[model_src]
+        model = c.models[model_src]
         for level in model.variables[vname]['levels']:
             levels_by_variable += f"{level}, "
         levels_by_variable += "], \n"

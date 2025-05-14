@@ -1,9 +1,19 @@
+import os
+import inspect
+from abc import ABC, abstractmethod
 import numpy as np
+from NEDAS.config import parse_config
 from NEDAS.utils.progress import progress_bar
 
-class Updator:
+class Updator(ABC):
     """Base class for updators of the model restart files"""
     def __init__(self, c):
+        ##get updator parameters from config file
+        code_dir = os.path.dirname(inspect.getfile(self.__class__))
+        config_dict = parse_config(code_dir, parse_args=False, **c.updator_def)
+        for key, value in config_dict.items():
+            setattr(self, key, value)
+
         self.increment = {}
 
     def update(self, c, state):
@@ -38,15 +48,15 @@ class Updator:
                     mem_id = state.mem_list[c.pid_mem][m]
                     rec_id = state.rec_list[c.pid_rec][r]
                     rec = state.info['fields'][rec_id]
-                #     path = c.forecast_dir(rec['time'], rec['model_src'])
-                #     model = c.model_config[rec['model_src']]
-                #     file = model.filename(path=path, member=mem_id, **rec)
-                # else:
-                #     file = None
-                # all_files = c.comm.allgather(file)
-                # ##create the file locks
-                # for file in all_files:
-                #     c.comm.init_file_lock(file)
+                    path = c.forecast_dir(rec['time'], rec['model_src'])
+                    model = c.models[rec['model_src']]
+                    file = model.filename(path=path, member=mem_id, **rec)
+                else:
+                    file = None
+                all_files = c.comm.allgather(file)
+                ##create the file locks
+                for file in all_files:
+                    c.comm.init_file_lock(file)
 
                 if pid_active:
                     if c.debug:
@@ -61,8 +71,10 @@ class Updator:
         #c.comm.cleanup_file_locks()
         c.print_1p(' done.\n')
 
+    @abstractmethod
     def compute_increment(self):
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def update_restartfile(self):
-        raise NotImplementedError
+        pass

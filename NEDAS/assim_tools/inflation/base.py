@@ -1,5 +1,4 @@
 import numpy as np
-from NEDAS.utils.progress import progress_bar
 
 class Inflation:
     """
