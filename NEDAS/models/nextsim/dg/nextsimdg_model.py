@@ -1,6 +1,6 @@
-import numpy as np
 import os
 import subprocess
+import numpy as np
 from pyproj import Proj
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
