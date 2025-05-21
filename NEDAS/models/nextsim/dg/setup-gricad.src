@@ -1,0 +1,7 @@
+##setup environment for nextsimdg on gricad
+. ${HOME}/.bashrc
+. /applis/environments/conda.sh
+conda activate nextsimdg
+
+export NDG_BLD_DIR=/bettik/${USER}/nextsimdg/build
+export INPUT_DATA_DIR=/summer/sasip/model-forcings/nextsim-dg

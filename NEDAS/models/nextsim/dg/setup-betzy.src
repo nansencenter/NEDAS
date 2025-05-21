@@ -1,0 +1,15 @@
+ulimit -s 2000000
+
+module --force purge
+ml load StdEnv
+ml load GCCcore/13.2.0
+ml load netCDF/4.9.2-gompi-2023b
+ml load netCDF-C++4/4.3.1-gompi-2023b
+ml load Boost.MPI/1.83.0-gompi-2023b
+ml load CMake/3.27.6-GCCcore-13.2.0
+ml load Eigen/3.4.0-GCCcore-13.2.0
+
+. $HOME/conda.src
+conda activate nextsimdg
+
+export NDG_BLD_DIR=/cluster/home/${USER}/code/nextsimdg/build

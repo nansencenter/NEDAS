@@ -3,9 +3,13 @@
 *.exe
 __pycache__
 .ipynb_checkpoints
-slurm*
+slurm*out
 *.nc
 *.npy
 *.npz
-log/
-output
+.env
+.vscode
+.pytest_cache
+docs/build
+*.egg-info
+*.ipynb

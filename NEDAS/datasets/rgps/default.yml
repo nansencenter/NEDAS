@@ -1,0 +1,12 @@
+dataset_dir: "/cluster/work/users/yingyue/data/rgps"
+
+##projection info
+proj4: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=70'
+
+##some parameters
+DRIFT_MAX: 80  ##km/day
+DRIFT_ERR_STD: 5
+DEFORM_MAX: 1  ##1/day
+DEFORM_ERR_STD: 0.02
+
+DAYS_SEARCH_TOLERANCE: 2

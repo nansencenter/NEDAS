@@ -1,0 +1,44 @@
+ulimit -s 2000000
+
+module --force purge
+ml load StdEnv
+ml load intel/2022a
+ml load netCDF-C++4/4.3.1-iimpi-2022a
+ml load Boost.MPI/1.79.0-iimpi-2022a
+
+# Linking module and neXtSIM envinronment variables
+export BOOST_INCDIR=$EBROOTBOOSTMPI/include
+export BOOST_LIBDIR=$EBROOTBOOSTMPI/lib
+export NETCDF_DIR=/cluster/software/netCDF-C++4/4.3.1-iimpi-2022a
+export MPI_INC_DIR=$EBROOTIMPI/mpi/latest/include
+
+#======= User or use-case specific directories
+export NEXTSIMDIR=$HOME/code/nextsim
+export NEXTSIMTOOLS_ROOT_DIR=$HOME/code/nextsim-tools
+
+unset USE_ENSEMLBE
+unset USE_OASIS
+
+# compilers
+export CC=mpiicc
+export CXX=mpiicpc
+export CFLAGS="-xHost -O3 -fPIC"
+export CCFLAGS="$CFLAGS"
+export CXXFLAGS="-xHost -O3 -pthread -fPIC -qopenmp"
+
+#======= links to input observation and forecasts data, and meshes,
+export CLUSTER_ROOT_DIR=/cluster/projects/nn2993k/sim
+export NEXTSIM_DATA_DIR=$USERWORK/output/data
+export NEXTSIM_MESH_DIR=$CLUSTER_ROOT_DIR/mesh
+
+#GMSH related variables
+export GMSH_DIR=$CLUSTER_ROOT_DIR/packages/gmsh-intel2022a
+
+# ======== LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$BOOST_DIR/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$GMSH_DIR/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$NEXTSIMDIR/lib:$LD_LIBRARY_PATH
+
+# ============== paths
+export PATH=$PATH:$NEXTSIM_ROOT_DIR/model/bin
+export PATH=$PATH:$GMSH_DIR/bin
