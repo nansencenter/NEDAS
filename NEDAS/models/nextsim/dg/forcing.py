@@ -7,7 +7,7 @@ the perturbation is temporally correlationed as an AR1 process.
 Parameters of the perturbation are read from the yaml file.
 The perturbation is applied to the forcing variables in the forcing files.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta # type: ignore
 import os
 import threading
@@ -50,6 +50,7 @@ def get_fname_daterange(current_date: datetime, initial_date:str, interval:str, 
     """
     # Parse the dates
     initial_date_dt:datetime = datetime.strptime(initial_date, forcing_file_date_format)
+    initial_date_dt = initial_date_dt.replace(tzinfo=timezone.utc)
     keywords:dict[str, str] = {'y': 'years', 'm': 'months', 'd': 'days'}
     # Initialize start and end dates
     start_date = initial_date_dt
@@ -98,9 +99,10 @@ def get_time_from_nc(fname:str, time_varname:str, time_units_name:str, time: dat
         with netCDF4.Dataset(fname, 'r') as f:
             time_units = f[time_units_name].units
             # get the start time in the forcing file
-            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
+            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units, only_use_cftime_datetimes=False)
             # get the time step in the forcing file
-            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
+            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units, only_use_cftime_datetimes=False) - start_time
+            start_time = start_time.replace(tzinfo=timezone.utc)
             # get the indices of the current and next time steps
             it0: int = int(np.rint((time - start_time) / time_step))
             it1: int = int(np.rint((next_time - start_time) / time_step))
