@@ -29,7 +29,7 @@ class Obs:
     computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
     """
     def __init__(self, c, state):
-        self.analysis_dir = c.analysis_dir(c.time, c.step)
+        self.analysis_dir = c.analysis_dir(c.time, c.iter)
 
         self.info = bcast_by_root(c.comm)(self.parse_obs_info)(c, state)
 
@@ -104,7 +104,7 @@ class Obs:
                                'tcorr': vrec['err'].get('tcorr',0.),
                                'cross_corr': vrec['err'].get('cross_corr',{}),
                                },
-                        'hroi': vrec['hroi'] * c.localize_scale_fac[c.step],
+                        'hroi': vrec['hroi'] * c.localize_scale_fac[c.iter],
                         'vroi': vrec['vroi'],
                         'troi': vrec['troi'],
                         'impact_on_state': impact_on_state,
@@ -338,8 +338,7 @@ class Obs:
                     dzc = zc  ##layer thickness for first level
 
                     ##the first level: constant vc from z=0 to dzc/2
-                    inds = np.where(np.logical_and(obs_z >= np.minimum(0, 0.5*dzc),
-                                                obs_z <= np.maximum(0, 0.5*dzc)) )
+                    inds = (obs_z >= np.minimum(0, 0.5*dzc)) & (obs_z <= np.maximum(0, 0.5*dzc))
                     seq[..., inds] = vc[..., inds]
 
                 if k > 0:
@@ -348,20 +347,24 @@ class Obs:
                     ##in between levels: linear interp between vp and vc
                     z_vp = zp - 0.5*dzp
                     z_vc = zp + 0.5*dzc
-                    inds = np.where(np.logical_and(obs_z >= np.minimum(z_vp, z_vc),
-                                                obs_z <= np.maximum(z_vp, z_vc)) )
+                    inds = (obs_z >= np.minimum(z_vp, z_vc)) & (obs_z <= np.maximum(z_vp, z_vc))
                     ##there can be collapsed layers if z_vc=z_vp
+                    zdiff = z_vc - z_vp
+                    collapsed = (zdiff == 0)
+                    zdiff = np.where(collapsed, 1, zdiff)
+                    vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp) / zdiff
+                    vi = np.where(collapsed, vp, vi)
+
                     ##TODO: still got some warnings here
-                    with np.errstate(divide='ignore'):
-                        vi = np.where(z_vp==z_vc,
-                                    vp,   ##for collapsed layers just use previous value
-                                    ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
+                    #with np.errstate(divide='ignore'):
+                    #    vi = np.where(z_vp==z_vc,
+                    #                vp,   ##for collapsed layers just use previous value
+                    #                ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
                     seq[..., inds] = vi[..., inds]
 
                 if k == len(levels)-1:
                     ##the last level: constant vc from z=zc-dzc/2 to zc
-                    inds = np.where(np.logical_and(obs_z >= np.minimum(zc-0.5*dzc, zc),
-                                                obs_z <= np.maximum(zc-0.5*dzc, zc)) )
+                    inds = (obs_z >= np.minimum(zc-0.5*dzc, zc)) & (obs_z <= np.maximum(zc-0.5*dzc, zc))
                     seq[..., inds] = vc[..., inds]
 
                 if k < len(levels)-1:

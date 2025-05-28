@@ -124,8 +124,12 @@ perturb:
 analysis_scheme: offline_filter  ##type of analysis to perform online/offline, filter/smoother/etc.
 
 ##outer loop iterations
-nstep: 1
-step:
+niter: 1
+iter:
+resolution_level: [0]       ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
+character_length: [16]      ## characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]     ## scale factor for localization distances
+obs_err_scale_fac: [1]      ## scale factor for observation error variances
 
 assimilator_def:
   type: etkf      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
@@ -157,10 +161,6 @@ localization_def:       ## localization is configured separately for horizontal,
 transform_def:
 - type: scale_bandpass        ## e.g. used in multiscale approach
   decompose_obs: False        ## if true, decompose observations as well
-resolution_level: [0]       ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
-character_length: [16]      ## characteristic length (in grid coord unit) for each scale (large to small)
-localize_scale_fac: [1]     ## scale factor for localization distances
-obs_err_scale_fac: [1]      ## scale factor for observation error variances
 
 ##diagnostic methods configuration
 diag:

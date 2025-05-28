@@ -1,7 +1,7 @@
 import os
 import sys
 import tempfile
-import importlib
+import importlib.util
 import subprocess
 import numpy as np
 from NEDAS.utils.conversion import ensure_list, dt1h
@@ -10,9 +10,8 @@ from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.utils.random_perturb import random_perturb
 from NEDAS import assim_tools
-from NEDAS.schemes import AnalysisScheme
 
-class OfflineFilterAnalysisScheme(AnalysisScheme):
+class OfflineFilterAnalysisScheme:
     """
     Offline filtering analysis scheme class.
 
@@ -23,7 +22,7 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
     is run again to reach the next analysis cycle, until the end of the period of interest. The length of
     forecasts between cycles is called the `cycling period`.
     """
-    def run(self, c) -> None:
+    def __call__(self, c) -> None:
         c.show_summary()
 
         if c.step:
@@ -75,11 +74,11 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         analysis_grid = c.grid
-        for c.step in range(c.nstep):
-            c.print_1p(f"Running analysis for outer iteration step {c.step}:")
+        for c.iter in range(c.niter):
+            c.print_1p(f"Running analysis for outer iteration step {c.iter}:")
 
             self.init_analysis_dir(c)
-            c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.step])
+            c.grid = analysis_grid.change_resolution_level(c.resolution_level[c.iter])
             c.transform_funcs = assim_tools.transforms.get_transform_funcs(c)
             c.localization_funcs = assim_tools.localization.get_localization_funcs(c)
             c.inflation_func = assim_tools.inflation.get_inflation_func(c)
@@ -188,8 +187,8 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
             model = c.models[model_name]
             vname = ensure_list(rec['variable'])[0]
             dt = model.variables[vname]['dt']
-            nstep = c.cycle_period // dt + 1
-            for n in range(nstep):
+            niter = c.cycle_period // dt + 1
+            for n in range(niter):
                 for k in model.variables[vname]['levels']:
                     nfld += 1
 
@@ -215,8 +214,8 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
             ##perturb all sub time steps for variables within this cycle
             ##TODO： LBC vs IC perturb time steps are different
             dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
-            nstep = c.cycle_period // dt + 1
-            for n in range(nstep):
+            niter = c.cycle_period // dt + 1
+            for n in range(niter):
                 t = c.time + n * dt * dt1h
 
                 #TODO: only works for surface layer variables now with k=0 (forcing variables)
@@ -339,9 +338,6 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
                 commands += f"{sys.executable} {script_file} -c {tmp_config_file.name}"
             commands += f" --step {step}"
 
-            if c.debug:
-                print(commands)
-
             if mpi:
                 job_opts = {
                     'job_name': step,
@@ -351,7 +347,14 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
                     }
                 run_job(commands, **job_opts)
             else:
-                subprocess.run(commands, stdout=sys.stdout, stderr=sys.stderr, shell=True)
+                p = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                for line in p.stdout:
+                    print(line, end='')  # avoid double newlines
+                p.wait()
+                ##handle error
+                if p.returncode != 0:
+                    print(f"OfflineFilter: run_step '{step}' exited with error")
+                    sys.exit(1)
 
     def get_task_opts(self, c, **other_opts):
         """
@@ -437,10 +440,31 @@ class OfflineFilterAnalysisScheme(AnalysisScheme):
                 ##create the file lock across mpi ranks for this file
                 c.comm.init_file_lock(file)
 
+    def validate_mpi_environment(self, c):
+        """
+        Validate the MPI environment and ensure the number of processes is consistent.
+        """
+        nproc = c.nproc
+        nproc_actual = c.comm.Get_size()
+        if nproc != nproc_actual:
+            raise RuntimeError(f"Error: nproc {nproc} != mpi size {nproc_actual}")
+
+    def init_analysis_dir(self, c):
+        """
+        Initialize the analysis directory.
+        """
+        self._analysis_dir = c.analysis_dir(c.time, c.iter)
+        if c.pid == 0:
+            makedir(self._analysis_dir)
+            print(f"\nRunning assimilation step in {self._analysis_dir}\n", flush=True)
+
 if __name__ == '__main__':
     # get config from runtime args, including the step to run (from --step)
     from NEDAS.config import Config
     c = Config(parse_args=True)
+
+    if not c.step:
+        raise RuntimeError("no step specified for offline filter scheme")
 
     scheme = OfflineFilterAnalysisScheme()
     step = getattr(scheme, c.step)

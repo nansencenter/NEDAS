@@ -8,7 +8,7 @@ from NEDAS.utils.progress import timer
 
 class Assimilator(ABC):
     def __init__(self, c):
-        self.analysis_dir = c.analysis_dir(c.time, c.step)
+        self.analysis_dir = c.analysis_dir(c.time, c.iter)
 
         ##get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))

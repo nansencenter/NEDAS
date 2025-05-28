@@ -7,8 +7,7 @@ class ScaleBandpass(Transform):
     """
     Subclass for scale bandpass filter to get a scale component.
     """
-    def __init__(self, decompose_obs=True):
-
+    def __init__(self, decompose_obs=True, **kwargs):
         self.decompose_obs = decompose_obs
 
     def forward_state(self, c, rec, field):
@@ -19,7 +18,7 @@ class ScaleBandpass(Transform):
         ##pad voids with zero
         mask = np.isnan(field)
         field[mask] = 0.0
-        field = get_scale_component(c.grid, field, c.character_length, c.step)
+        field = get_scale_component(c.grid, field, c.character_length, c.iter)
         field[mask] = np.nan
         return field
 
@@ -52,7 +51,7 @@ class ScaleBandpass(Transform):
         obs_fld[mask] = 0.0
 
         ##get scale component on analysis grid
-        obs_fld_new = get_scale_component(c.grid, obs_fld, c.character_length, c.step)
+        obs_fld_new = get_scale_component(c.grid, obs_fld, c.character_length, c.iter)
         if obs_rec['is_vector']:
             for i in range(2):
                 obs_seq['obs'][i,...] = c.grid.interp(obs_fld_new[i,...], obs_seq['x'], obs_seq['y'], method='nearest')
@@ -61,8 +60,8 @@ class ScaleBandpass(Transform):
 
         ##TODO: current implementation is very slow
         ##update obs err std because some averaging happened in get_scale_component
-        #obs_seq['err_std'] *= get_error_scale_factor(c.grid, c.character_length, c.step)
-        obs_seq['err_std'] *= c.obs_err_scale_fac[c.step]
+        #obs_seq['err_std'] *= get_error_scale_factor(c.grid, c.character_length, c.iter)
+        obs_seq['err_std'] *= c.obs_err_scale_fac[c.iter]
 
         return obs_seq
 

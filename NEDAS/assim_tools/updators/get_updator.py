@@ -26,7 +26,7 @@ def get_updator(c: Config) -> Updator:
         raise NotImplementedError(f"updator type '{updator_type}' is not implemented")
 
     ##TODO: find a better logic
-    if c.step == c.nstep-1:
+    if c.iter == c.niter-1:
         updator_type = 'additive' 
     module = importlib.import_module('NEDAS.assim_tools.updators.'+updator_type)
     UpdatorClass = getattr(module, registry[updator_type])

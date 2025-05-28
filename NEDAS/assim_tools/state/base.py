@@ -36,7 +36,7 @@ class State:
     while easier to run assimilation algorithms with ensemble-complete state.
     """
     def __init__(self, c):
-        self.analysis_dir = c.analysis_dir(c.time, c.step)
+        self.analysis_dir = c.analysis_dir(c.time, c.iter)
         self.prior_file = os.path.join(self.analysis_dir, 'prior_state.bin')
         self.prior_mean_file = os.path.join(self.analysis_dir, 'prior_mean_state.bin')
         self.post_file = os.path.join(self.analysis_dir, 'post_state.bin')
