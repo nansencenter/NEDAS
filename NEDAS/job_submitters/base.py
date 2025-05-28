@@ -19,6 +19,8 @@ class JobSubmitter:
         -run_separate_jobs: bool, if true, submit each job separately to the scheduler, otherwise run in the same allocation as job steps.
         -use_job_array: bool, if true, use job array for ensemble members
         -array_size: int, size of the job array
+        -parallel_mode
+        -debug
         """
         ## setting default parameters if not specified in kwargs
         self.job_name = kwargs.get('job_name', 'run')
@@ -35,6 +37,7 @@ class JobSubmitter:
         self.use_job_array = kwargs.get('use_job_array', False)
         self.array_size = kwargs.get('array_size', 1)
         self.parallel_mode = kwargs.get('parallel_mode', 'mpi')
+        self.debug = kwargs.get('debug', False)
 
     @property
     def nproc(self):
@@ -138,7 +141,6 @@ class JobSubmitter:
         assert self.nproc+self.offset <= self.nproc_avail, f"Requested nproc={self.nproc} and offset={self.offset} exceeds nproc_avail={self.nproc_avail}"
         assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
 
-
     def run_job_as_step(self, commands):
         """
         Run 'commands' from within a job allocation
@@ -147,8 +149,14 @@ class JobSubmitter:
         self.check_resources()
 
         commands = self.parse_commands(commands)
+        if self.debug:
+            print(commands)
 
-        p = subprocess.Popen(commands, shell=True, stdout=sys.stdout, stderr=sys.stderr, text=True)
+        p = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+        # Stream output live
+        for line in p.stdout:
+            print(line, end='')  # avoid double newlines
         p.wait()
 
         ##handle error

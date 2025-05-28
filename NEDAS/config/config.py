@@ -1,15 +1,14 @@
 import os
 import inspect
-from typing import Optional
+from typing import Optional, Any
 import yaml
-import dateutil
+import dateutil.parser
 import numpy as np
 from datetime import datetime, timedelta, timezone
 from pyproj import Proj
 import NEDAS
 from .parse_config import parse_config
 from NEDAS.utils import parallel
-from NEDAS import assim_tools
 
 class Config:
     """
@@ -30,12 +29,6 @@ class Config:
     """
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
-        # most of the config variables are defined in a yaml file, create a dict to hold the values
-        # and initialize some default runtime variables
-        self.config_dict = {}
-        self.config_dict['time'] = None
-        self.config_dict['pid_show'] = 0
-
         # parse the yaml config file to obtain the values
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         self.config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
@@ -51,7 +44,11 @@ class Config:
         self.set_analysis_grid()
         self.set_models()
         self.set_datasets()
-        self.set_analysis_scheme()
+
+        if 'pid_show' not in self.config_dict or self.config_dict['pid_show'] is None:
+            self.config_dict['pid_show'] = 0
+
+        self.directories: dict[str, str] = self.config_dict['directories']
 
     def __getattr__(self, key):
         # get values from config_dict if defined, otherwise will get the attr from the instance directly.
@@ -67,7 +64,7 @@ class Config:
             super().__setattr__(key, value)
 
     @property
-    def prev_time(self):
+    def prev_time(self) -> datetime:
         """
         Previous analysis time. Automatically updated when self.time changes.
 
@@ -80,7 +77,7 @@ class Config:
             return self.time
 
     @property
-    def next_time(self):
+    def next_time(self) -> datetime:
         """
         Next analysis time. Automatically updated when self.time changes.
 
@@ -88,20 +85,6 @@ class Config:
             datetime: Next analysis time.
         """
         return self.time + self.cycle_period * timedelta(hours=1)
-
-    @property
-    def pid_show(self):
-        """
-        Processor ID for the processor that will show runtime progress messages.
-
-        Returns:
-            int: Processor ID.
-        """
-        return self._pid_show
-
-    @pid_show.setter
-    def pid_show(self, value: int):
-        self._pid_show = value
 
     @property
     def print_1p(self):
@@ -114,7 +97,7 @@ class Config:
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(parallel.print_with_cache)
 
-    def cycle_dir(self, time: datetime):
+    def cycle_dir(self, time: datetime) -> str:
         """
         Directory path for an analysis cycle.
 
@@ -139,24 +122,24 @@ class Config:
         """
         return self.directories['forecast_dir'].format(time=time, model_name=model_name)
 
-    def analysis_dir(self, time: datetime, step: int=0):
+    def analysis_dir(self, time: datetime, iter: int=0):
         """
         Directory path for an analysis step.
 
         Args:
             time (datetime): Time of the analysis cycle.
-            step (int): If nstep > 1, an outer iteration loop exists, step is the index in the loop.
+            iter (int): If niter > 1, an outer iteration loop exists, step is the index in the loop.
 
         Returns:
             str: Directory path for the analysis step.
         """
-        if self.nstep == 1:
-            step_dir = ''
+        if self.niter == 1:
+            iter_dir= ''
         else:
-            step_dir = f"step{step}"
-        return self.directories['analysis_dir'].format(time=time, step=step_dir)
+            iter_dir = f"iter{iter}"
+        return self.directories['analysis_dir'].format(time=time, step=iter_dir)
 
-    def parse_directories(self, data):
+    def parse_directories(self, data: Any) -> Any:
         """
         Parse the directories or file names defined in :code:`data`
         and replace the placeholders {work_dir} and {nedas_root} with the actual values.
@@ -194,7 +177,7 @@ class Config:
 
         if self.time is None:
             ##initialize current time to start time, if not available
-            self.config_dict['time'] = self.time_start.replace()
+            self.config_dict['time'] = self.config_dict['time_start'].replace()
 
     def set_comm(self):
         """
@@ -249,6 +232,7 @@ class Config:
         If :code:`grid_def['type']` is 'custom', will create a analysis grid based on provided parameters.
         If :code:`grid_def['type']` is a model name, will load the grid from the specified model class.
         """
+        assert isinstance(self.grid_def, dict)
         if self.grid_def['type'] == 'custom':
             if 'proj' in self.grid_def and self.grid_def['proj'] is not None:
                 proj = Proj(self.grid_def['proj'])
@@ -301,12 +285,6 @@ class Config:
             if not isinstance(kwargs, dict):
                 kwargs = {}
             self.datasets[dataset_name] = Dataset(grid=self.grid, mask=self.grid.mask, **kwargs)
-
-    def set_analysis_scheme(self):
-        """
-        Initialize analysis scheme.
-        """
-        self.scheme = NEDAS.schemes.get_analysis_scheme(self.analysis_scheme)
 
     def show_summary(self):
         """

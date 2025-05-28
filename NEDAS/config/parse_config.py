@@ -2,7 +2,6 @@ import numpy
 import sys
 import os
 import re
-import inspect
 import argparse
 import yaml
 
@@ -96,7 +95,7 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     parser.add_argument('-h', '--help', action='store_true')
 
     ##parse --config_file and --help first
-    args, remaining_args = parser.parse_known_args(input_args)
+    args, remaining_args = parser.parse_known_args(input_args) # type: ignore
 
     ##update config_dict if new config_file is provided
     if config_file is not None:

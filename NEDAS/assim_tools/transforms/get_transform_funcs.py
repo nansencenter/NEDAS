@@ -11,7 +11,7 @@ registry = {
 
 def get_transform_funcs(c: Config) -> list[Transform]:
     if c.transform_def is None:
-        return [Transform(c)]
+        c.transform_def = {'type':'identity'}
     
     transform_funcs = []
     for transform_func_def in ensure_list(c.transform_def):
@@ -25,6 +25,6 @@ def get_transform_funcs(c: Config) -> list[Transform]:
         
         module = importlib.import_module('NEDAS.assim_tools.transforms.'+transform_func_type)
         TransformClass = getattr(module, registry[transform_func_type])
-        transform_funcs.append(TransformClass(c))
+        transform_funcs.append(TransformClass(**transform_func_def))
 
     return transform_funcs

@@ -4,12 +4,11 @@ from .base import Assimilator
 
 # make sure keys are lower-case
 registry = {
-    'etkf': 'ETKFAssimilator',
-    'eakf': 'EAKFAssimilator',
-    'topaz_denkf': 'TopazDEnKFAssimilator',
-    #'pdaf': 'PDAFAssimilator',
-    #'rhf'
-    #'qcef'
+    'ETKF': 'ETKFAssimilator',
+    'EAKF': 'EAKFAssimilator',
+    'TopazDEnKF': 'TopazDEnKFAssimilator',
+    #'PDAF': 'PDAFAssimilator',
+    #'RHF'
 }
 
 def get_assimilator(c: Config) -> Assimilator:
@@ -24,7 +23,7 @@ def get_assimilator(c: Config) -> Assimilator:
     """
     if 'type' not in c.assimilator_def.keys():
         raise KeyError("'type' needs to be specified in assimilator_def")
-    assimilator_type = c.assimilator_def['type'].lower()
+    assimilator_type = c.assimilator_def['type']
 
     if assimilator_type not in registry:
         raise NotImplementedError(f"Assimilator type '{assimilator_type}' is not implemented")
