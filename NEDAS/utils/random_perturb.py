@@ -168,8 +168,8 @@ def get_velocity_from_press(grid, pres, scale_wind=False, press_amp=None, press_
         wprsfac = wind_amp / wind_scale  ##scaling factor to match wind perturbation with given amp
 
     ##pres gradients
-    dpresx = gradx(pres, dx) * wprsfac
-    dpresy = grady(pres, dy) * wprsfac
+    dpresx = gradx(pres, dx, grid.cyclic_dim) * wprsfac
+    dpresy = grady(pres, dy, grid.cyclic_dim) * wprsfac
 
     ##geostrophic wind near poles
     vcor =  dpresx / fcor / rhoa * np.sign(plat)
