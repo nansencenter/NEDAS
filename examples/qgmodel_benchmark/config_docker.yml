@@ -65,8 +65,8 @@ perturb:
 
 analysis_scheme: offline_filter
 
-nstep: 1
-step: 0
+niter: 1
+iter: 0
 
 assimilator_def:
   type: etkf
