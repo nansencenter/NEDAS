@@ -134,7 +134,7 @@ def draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, 
     ax.plot([xr-L/2, xr+L/2], [yr, yr], color=linecolor, zorder=8)
     ax.fill(*arrowhead_xy(xr+L/2, xr-L/2, yr, yr, hw, hl), color=linecolor, zorder=8)
     ##add unit string annotation below the vector
-    ax.text(xr, yr-L/2, f"{V} {ref_units}", color='k', ha='center', va='center', zorder=8)
+    ax.text(xr, yr-L/2, f"{V} {ref_units}", color=linecolor, ha='center', va='center', zorder=8)
 
 def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
     """
