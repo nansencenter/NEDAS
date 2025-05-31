@@ -1,0 +1,106 @@
+work_dir: /cluster/work/users/yingyue/qg
+
+python_env: /cluster/home/yingyue/python.src
+
+job_submit:
+  ppn: 16
+
+nproc: 5
+
+nens: 20
+run_forecast: True
+run_analysis: True
+run_diagnose: True
+debug: False
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-14T00:00:00Z
+time_analysis_start: 2001-01-03T00:00:00Z
+time_analysis_end: 2001-01-09T00:00:00Z
+cycle_period: 12
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'qg'
+
+state_def:
+- name: 'streamfunc'
+  model_src: 'qg'
+  var_type: 'field'
+  err_type: 'normal'
+
+obs_def:
+- name: 'streamfunc'
+  dataset_src: 'qg'
+  model_src: 'qg'
+  nobs: 3000
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 100
+  vroi: 5
+  troi: 24
+  impact_on_state:
+    streamfunc: 1.0
+
+use_synthetic_obs: True
+
+dataset_def:
+  qg:
+    obs_window_min: -6
+    obs_window_max: 0
+
+model_def:
+  qg:
+    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
+    model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
+    model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'
+    ens_run_type: scheduler
+    ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
+    truth_dir: '/cluster/work/users/yingyue/qg/truth'
+
+perturb:
+
+assim_mode: 'batch'
+filter_type: 'ETKF'
+rfactor: 1
+kfactor: 1
+nlobs_max:
+
+##multiscale approach
+niter: 1
+step: 0
+decompose_obs: False
+character_length: [150, 50, 10]
+localize_scale_fac: [1, 1, 1]
+obs_err_scale_fac: [1, 1, 1]
+
+run_alignment: False
+alignment:
+  option: 'optical_flow'
+  variable: 'streamfunc'
+  nlevel: 5
+  smoothness_weight: 1
+
+inflation:
+  type: 'posterior,RTPP'
+  adaptive: True
+  coef: 1.0
+
+localization:
+  horizontal: 'GC'
+  vertical: 'GC'
+  temporal: 'exp'
+
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
+  model_src: 'qg'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
