@@ -26,7 +26,7 @@ def gradx(fld, dx, cyclic_dim=None):
         fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / 2.0
         ##one-sided difference for the left,right edge points
         fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0])
-        fld_gradx[..., -1] = (fld[..., -2] - fld[..., -1])
+        fld_gradx[..., -1] = (fld[..., -1] - fld[..., -2])
         fld_gradx /= dx
     return fld_gradx
 
@@ -46,7 +46,7 @@ def grady(fld, dy, cyclic_dim=None):
         fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / 2.0
         ##one-sided difference for the left,right edge points
         fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :])
-        fld_grady[..., -1, :] = (fld[..., -2, :] - fld[..., -1, :])
+        fld_grady[..., -1, :] = (fld[..., -1, :] - fld[..., -2, :])
         fld_grady /= dy
     return fld_grady
 
