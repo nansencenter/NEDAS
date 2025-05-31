@@ -22,8 +22,8 @@ class NextsimDGModel(Model):
              'seaice_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
              }
         self.diag_variables = {
-             'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
-             'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
+             'seaice_conc': {'name':'data/sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
+             'seaice_thick': {'name':'data/sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              }
         self.atmos_forcing_variables = {
             'atmos_surf_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
@@ -45,7 +45,9 @@ class NextsimDGModel(Model):
 
         # construct grid obj based on config
         self.grid = Grid.regular_grid(Proj(self.proj), self.xstart, self.xend, self.ystart, self.yend, self.dx)
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##model grid points that are masked (land?)
+
+        # mask for grid points not
+        self.grid.mask = self.read_mask()
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -85,7 +87,10 @@ class NextsimDGModel(Model):
 
     def read_mask(self):
         ## the nextsim dg grid is fixed, no need to update the mask at runtime
-        pass
+        if os.path.exists(self.mask_file):
+            mask = nc_read_var(self.mask_file, 'data/mask')[:]
+            return (mask==0)
+        return np.full(self.grid.x.shape, False)
 
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -100,7 +105,11 @@ class NextsimDGModel(Model):
                 var = np.array([u, v])
             else:
                 if rec['name'] in ['data/cice', 'data/hice', 'data/damage']:
-                    var = nc_read_var(fname, rec['name'])[..., kwargs['k']]
+                    tmp = nc_read_var(fname, rec['name'])
+                    if len(tmp.shape) == 3:
+                        var = tmp[..., kwargs['k']]
+                    else:
+                        var = tmp
                 elif rec['name'] in ['data/tice']:
                     var = nc_read_var(fname, rec['name'])[kwargs['k'], ...]
                 else:
@@ -173,7 +182,7 @@ class NextsimDGModel(Model):
             if rec['is_vector']:
                 forcing.write_var(fname, list(rec['name']), np.ma.array(var), itime)
             else:
-                forcing.write_var(fname, [rec['name'],], np.ma.array([var,]))
+                forcing.write_var(fname, [rec['name'],], np.ma.array([var,]), itime)
 
     def z_coords(self, **kwargs):
         return np.zeros(self.grid.x.shape)
@@ -369,10 +378,11 @@ class NextsimDGModel(Model):
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
-        shell_cmd = f". {self.model_env}; "
+        shell_cmd = ""
+        if self.model_env:
+            shell_cmd += f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
-        shell_cmd += "ln -fs $NDG_BLD_DIR/nextsim .; "
-        shell_cmd += "JOB_EXECUTE ./nextsim --config-file nextsim.cfg > time.step"
+        shell_cmd += "JOB_EXECUTE $NDG_BLD_DIR/nextsim --config-file nextsim.cfg > time.step"
 
         run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
