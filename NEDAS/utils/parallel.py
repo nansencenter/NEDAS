@@ -80,6 +80,8 @@ class Comm:
         """
         if self._MPI is None:
             return
+        if isinstance(self._comm, DummyComm):
+            return
         if not filename:
             return
         if filename not in self._locks:
@@ -98,6 +100,8 @@ class Comm:
     def acquire_file_lock(self, filename):
         if self._MPI is None:
             return
+        if isinstance(self._comm, DummyComm):
+            return
         assert filename in self._locks, f"Comm: file lock for {filename} not initialized"
         lock_win = self._locks[filename]
         check_dt = 0.1  ##check file locks every 0.1 seconds, can make this configurable
@@ -115,6 +119,8 @@ class Comm:
 
     def release_file_lock(self, filename):
         if self._MPI is None:
+            return
+        if isinstance(self._comm, DummyComm):
             return
         if filename in self._locks:
             zero = np.array([0], dtype='B')
