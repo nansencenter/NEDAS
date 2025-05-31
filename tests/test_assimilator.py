@@ -22,7 +22,7 @@ class TestAnalysisScheme(unittest.TestCase):
         c = Config()
         for assimilator_name in registry.keys():
             c.assimilator_def['type'] = assimilator_name
-            assimilator = get_assimilator(assimilator_name)
+            assimilator = get_assimilator(c)
 
             self.assertTrue(hasattr(assimilator, 'assimilation_algorithm'), "Method 'assimilation_algorithm' not found")
 
