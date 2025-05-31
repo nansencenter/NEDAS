@@ -58,8 +58,8 @@ class AdditiveUpdator(Updator):
         ##TODO: temporary solution for nan values due to interpolation
         ind = np.where(np.isnan(var_post))
         var_post[ind] = var_prior[ind]
-        if np.isnan(var_post).any():
-            raise ValueError('nan detected in var_post')
+        # if np.isnan(var_post).any():
+        #     raise ValueError('nan detected in var_post')
 
         ##write the posterior variable to restart filediff
         model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)

@@ -757,8 +757,10 @@ class GridBase(ABC):
                 Color of the rivers and lakes, default is 'c' (cyan).
             showgrid (bool, optional):
                 If True (default), show the reference lat/lon grid.
-            dlon, dlat (float, optional):
-                The interval of lon,lat lines in the reference grid. Default is 20,5 degrees.
+            dlon (float, optional):
+                The interval of longitude lines in the reference grid. Default is 20 degrees.
+            dlat (float, optional):
+                The interval in latitude lines in the reference grid. Default is 5 degress.
         """
         ###plot the coastline to indicate land area
         if color is not None:
