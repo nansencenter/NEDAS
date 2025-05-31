@@ -132,7 +132,7 @@ localize_scale_fac: [1]     ## scale factor for localization distances
 obs_err_scale_fac: [1]      ## scale factor for observation error variances
 
 assimilator_def:
-  type: etkf      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+  type: ETKF      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
   config_file:    ##configuration for the specific assimilator
 
 updator_def:

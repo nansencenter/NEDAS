@@ -43,11 +43,11 @@ obs_def:
 - name: velocity
   dataset_src: vort2d
   model_src: vort2d
-  nobs: 1000
+  nobs: 10
   err:
     type: normal
     std: 1.0
-  hroi: 200
+  hroi: 9e5
   vroi: inf
   troi: inf
 
@@ -62,11 +62,11 @@ perturb:
 
 analysis_scheme: offline_filter
 
-nstep: 1
-step: 0
+niter: 1
+iter: 0
 
 assimilator_def:
-  type: eakf
+  type: ETKF
 
 updator_def:
   type: additive
