@@ -126,8 +126,9 @@ def get_time_index(fname:str, time_varname:str, time_units_name:str, time:dateti
     with thread_lock:
         with netCDF4.Dataset(fname, 'r') as f:
             time_units = f[time_units_name].units
-            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units)
-            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units) - start_time
+            start_time: datetime = cftime.num2date(f[time_varname][0], units=time_units, only_use_cftime_datetimes=False)
+            time_step: timedelta = cftime.num2date(f[time_varname][1], units=time_units, only_use_cftime_datetimes=False) - start_time
+            start_time = start_time.replace(tzinfo=timezone.utc)
             ind: int = int(np.rint((time - start_time) / time_step))
     return ind
 
@@ -149,7 +150,8 @@ def get_prev_time_from_nc(fname:str, time_varname:str, time_units_name:str, itim
         with netCDF4.Dataset(fname, 'r') as f:
             it :int = max(0, itime - 1)
             time_units:str = f[time_units_name].units
-            prev_time: datetime = cftime.num2date(f[time_varname][it], units=time_units)
+            prev_time: datetime = cftime.num2date(f[time_varname][it], units=time_units, only_use_cftime_datetimes=False)
+            prev_time = prev_time.replace(tzinfo=timezone.utc)
     return prev_time
 
 

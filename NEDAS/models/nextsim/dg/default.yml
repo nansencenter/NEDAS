@@ -8,6 +8,8 @@ yend: 2.5e6
 dx: 3e3
 
 restart_dt: 24  ##model restart interval (hours)
+output_dt: 24
+mask_file: '/bettik/yumengch-ext/DATA/restart2010-01-01T00:00:00Z.nc'
 
 ##physical parameters
 dg_comp: 6
