@@ -347,11 +347,8 @@ class OfflineFilterAnalysisScheme:
                     }
                 run_job(commands, **job_opts)
             else:
-                p = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-                for line in p.stdout:
-                    print(line, end='')  # avoid double newlines
+                p = subprocess.Popen(commands, shell=True, text=True, bufsize=1)
                 p.wait()
-                ##handle error
                 if p.returncode != 0:
                     print(f"OfflineFilter: run_step '{step}' exited with error")
                     sys.exit(1)

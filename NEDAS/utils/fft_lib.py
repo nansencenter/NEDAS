@@ -57,11 +57,13 @@ try:
         a = pyfftw.empty_aligned(fh.shape, dtype='float32')
         fft_obj = pyfftw.FFTW(b, a, axes=(-2, -1), direction='FFTW_BACKWARD')
         ##perform the ifft2
+        ##TODO: check index
+        ##TODO: normalize?
         f = fft_obj(fh[..., 0:fh.shape[1]//2+1])
         return f
 
 except ImportError:
-    print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
+    #print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
 
     def fft2(x):
         return np.fft.fft2(x)

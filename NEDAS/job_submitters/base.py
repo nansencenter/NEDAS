@@ -152,11 +152,7 @@ class JobSubmitter:
         if self.debug:
             print(commands)
 
-        p = subprocess.Popen(commands, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-
-        # Stream output live
-        for line in p.stdout:
-            print(line, end='')  # avoid double newlines
+        p = subprocess.Popen(commands, shell=True, text=True, bufsize=1)
         p.wait()
 
         ##handle error
