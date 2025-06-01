@@ -60,7 +60,7 @@ class Updator(ABC):
 
                 if pid_active:
                     if c.debug:
-                        print(f"PID {c.pid:4}: update_restart mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
+                        print(f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
                     else:
                         c.print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
 
@@ -72,9 +72,9 @@ class Updator(ABC):
         c.print_1p(' done.\n')
 
     @abstractmethod
-    def compute_increment(self):
+    def compute_increment(self, c, state):
         pass
 
     @abstractmethod
-    def update_restartfile(self):
+    def update_restartfile(self, c, state, mem_id, rec_id):
         pass

@@ -18,14 +18,18 @@ def get_updator(c: Config) -> Updator:
     Returns:
         Updator: Corresponding Updator subclass instance.
     """
+    if not hasattr(c, 'updator_def'):
+        raise AttributeError("'updator_def' missing in configuration")
+    if not isinstance(c.updator_def, dict):
+        c.updator_def = {}
     if 'type' not in c.updator_def.keys():
-        raise KeyError("'type' needs to be specified in updator_def")
+        c.updator_def['type'] = 'additive'
     updator_type = c.updator_def['type'].lower()
 
     if updator_type not in registry:
         raise NotImplementedError(f"updator type '{updator_type}' is not implemented")
 
-    ##TODO: find a better logic
+    ##TODO: last scale component doesn't need alignment, find a better general logic
     if c.iter == c.niter-1:
         updator_type = 'additive' 
     module = importlib.import_module('NEDAS.assim_tools.updators.'+updator_type)
