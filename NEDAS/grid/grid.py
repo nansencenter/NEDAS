@@ -126,6 +126,7 @@ To show the map overlay, you can use `grid.plot_land(ax, color, linecolor, linew
 
 """
 
+from typing import Optional, Any
 import numpy as np
 from NEDAS.grid.grid_regular import RegularGrid
 from NEDAS.grid.grid_irregular import IrregularGrid
@@ -159,19 +160,24 @@ class Grid:
                                  triangles, dst_grid)
 
     @classmethod
-    def regular_grid(cls, proj, xstart, xend, ystart, yend, dx, centered=False, **kwargs):
+    def regular_grid(cls, proj: Any,
+                     xstart: float, xend: float, ystart: float, yend: float,
+                     dx: float, centered: bool=False, **kwargs) -> RegularGrid:
         """
         Create a regular grid within specified boundaries.
 
         Parameters:
-            proj (pyproj.Proj): Projection from lon,lat to x,y.
-            xstart, xend, ystart, yend (float): Boundaries of the grid in the x and y directions.
-            dx (float): Resolution of the grid.
+            proj (Any): Projection from lon,lat to x,y.
+            xstart (float): Lower bound for X coordinates.
+            xend (float): Upper bound for X coordinates.
+            ystart (float): Lower bound for Y coordinates.
+            yend (float): Upper bound for Y coordinates.
+            dx (float): Grid spacing.
             centered (bool): Optional, toggle for grid points to be on vertices (False) or in the middle of each grid box (True).  Default is False.
             **kwargs: Additional keyword arguments.
 
         Returns:
-            A Grid object representing the regular grid.
+            RegularGrid: A Grid object representing the regular grid.
         """
         dx = float(dx)
         xcoord = np.arange(xstart, xend, dx)
@@ -180,22 +186,27 @@ class Grid:
         if centered:
             x += 0.5*dx  ##move coords to center of grid box
             y += 0.5*dx
-        return cls.__new__(cls, proj, x, y, regular=True, **kwargs)
+        return RegularGrid(proj, x, y, **kwargs)
 
     @classmethod
-    def random_grid(cls, proj, xstart, xend, ystart, yend, npoints, min_dist=None, **kwargs):
+    def random_grid(cls, proj: Any,
+                    xstart: float, xend: float, ystart: float, yend: float,
+                    npoints: int, min_dist: Optional[float]=None, **kwargs) -> IrregularGrid:
         """
         Create a grid with randomly positioned points within specified boundaries.
 
         Parameters:
             proj (pyproj.Proj): Projection from lon,lat to x,y.
-            xstart, xend, ystart, yend (float): Boundaries of the grid in the x and y directions.
+            xstart (float): Lower bound for X coordinates.
+            xend (float): Upper bound for X coordinates.
+            ystart (float): Lower bound for Y coordinates.
+            yend (float): Upper bound for Y coordinates.
             npoints (int): Number of grid points.
             min_dist (float): Optional, minimal distance allowed between each pair of grid points.
             **kwargs: Additional keyword arguments.
 
         Returns:
-            A Grid object representing the randomly positioned grid.
+            IrregularGrid: A Grid object representing the randomly positioned grid.
         """
         points = []
         ntry = 0
@@ -215,4 +226,4 @@ class Grid:
         x = np.array([p[0] for p in points])
         y = np.array([p[1] for p in points])
         bounds = [xstart, xend, ystart, yend]
-        return cls.__new__(cls, proj, x, y, regular=False, bounds=bounds, **kwargs)
+        return IrregularGrid(proj, x, y, bounds=bounds, **kwargs)

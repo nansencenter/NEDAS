@@ -24,9 +24,10 @@ class NextsimDGModel(Model):
     files: dict
     perturb: dict
 
-    nproc_per_run: int
     model_env: str
     model_config_file: str
+    nproc_per_run: int
+    walltime: int
     parallel_mode: str
     run_separate_jobs: bool
     use_job_array: bool
@@ -96,6 +97,9 @@ class NextsimDGModel(Model):
 
         elif name in self.ocean_forcing_variables:
             fname = forcing.get_forcing_filename(self.files['forcing']['ocean'], ens_mem_id, time)
+
+        else:
+            raise ValueError(f"variable {name} is not defined for nextsimdg model.")
 
         ##fname is given by the format defined in config file
         ##the source file is copied to path (cycle directory) in preprocess
