@@ -10,13 +10,34 @@ from NEDAS.models import Model
 from . import restart, forcing, namelist, dgLimit
 
 class NextsimDGModel(Model):
+    restart_dt: float
+    dg_comp: int
+
+    proj: str
+    xstart: float
+    xend: float
+    ystart: float
+    yend: float
+    dx: float
+    mask_file: str
+
+    files: dict
+    perturb: dict
+
+    nproc_per_run: int
+    model_env: str
+    model_config_file: str
+    parallel_mode: str
+    run_separate_jobs: bool
+    use_job_array: bool
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.native_variables = {
              'seaice_conc_dg': {'name':'data/cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
              'seaice_thick_dg': {'name':'data/hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':'m'},
-             'seaice_damage_dg': {'name':'data/damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
+             'seaice_damage': {'name':'data/damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
              'snow_thick': {'name':'data/hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
              'seaice_temp_k': {'name':'data/tice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0,1,2], 'units':'K'},
              'seaice_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
@@ -124,6 +145,8 @@ class NextsimDGModel(Model):
                 forcing_name = 'atmosphere'
             elif name in self.ocean_forcing_variables:
                 forcing_name = 'ocean'
+            else:
+                raise KeyError(f"variable {name} is not a forcing variable")
             file_options = self.files['forcing'][forcing_name]
             itime = forcing.get_time_index(fname,
                                            file_options['time_name'],
@@ -154,7 +177,7 @@ class NextsimDGModel(Model):
                 for i in range(2):
                     nc_write_var(fname, dims, rec['name'][i], var[i,...], comm=kwargs['comm'])
             else:
-                if rec['name'] in ['data/cice', 'data/hice', 'data/damage']:
+                if rec['name'] in ['data/cice', 'data/hice']:
                     dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx, 'dg_comp':None}
                     recno = {'dg_comp':kwargs['k']}
                     nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
@@ -163,6 +186,7 @@ class NextsimDGModel(Model):
                     recno = {'zdim':kwargs['k']}
                     nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
                 else:
+                    dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx}
                     nc_write_var(fname, dims, rec['name'], var, comm=kwargs['comm'])
 
         elif name in self.diag_variables:
@@ -173,6 +197,8 @@ class NextsimDGModel(Model):
                 forcing_name = 'atmosphere'
             elif name in self.ocean_forcing_variables:
                 forcing_name = 'ocean'
+            else:
+                raise KeyError(f"variable {name} is not a forcing variable")
             file_options = self.files['forcing'][forcing_name]
             itime = forcing.get_time_index(fname,
                                            file_options['time_name'],
