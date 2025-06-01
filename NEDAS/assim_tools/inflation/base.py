@@ -1,19 +1,17 @@
+from abc import ABC, abstractmethod
 import numpy as np
 
-class Inflation:
+class Inflation(ABC):
     """
     Class for inflating the ensemble members (covariance inflation)
     """
-    def __init__(self, c):
-        if c.inflation:
-            inflation_type = c.inflation.get('type', '').split(',')
-            self.adaptive = c.inflation.get('adaptive', False)
-            self.coef = c.inflation['coef']
-        else:
-            inflation_type = ''
-            self.adaptive = False
-        self.prior = ('prior' in inflation_type)
-        self.posterior = ('posterior' in inflation_type)
+    def __init__(self, coef: float=1.0,
+                 adaptive: bool=False,
+                 prior: bool=False, posterior: bool=False):
+        self.coef = coef
+        self.adaptive = adaptive
+        self.prior = prior
+        self.posterior = posterior
 
     def __call__(self, c, state, obs, flag):
         """
@@ -100,11 +98,14 @@ class Inflation:
                 stats['vara'] += np.sum(variance_obs_post)
         return stats
 
+    @abstractmethod
     def adaptive_prior_inflation(self, c, state, obs):
         pass
 
+    @abstractmethod
     def adaptive_post_inflation(self, c, state, obs):
         pass
 
+    @abstractmethod
     def apply_inflation(self, c, state, flag):
         pass
