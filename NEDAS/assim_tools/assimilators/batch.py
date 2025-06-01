@@ -226,7 +226,7 @@ class BatchAssimilator(Assimilator):
         c.print_1p(' done.\n')
 
     @abstractmethod
-    def local_analysis(self):
+    def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         """Local analysis scheme for each model state variable (grid point)
         to be implemented by derived classes"""
         pass
