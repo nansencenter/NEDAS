@@ -115,8 +115,8 @@ perturb:
         # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
         # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
         # displace: generate a random wavenumber-1 displacement for the whole domain
-        # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        # gaussian: perturbation method strictly following Evensen 1994
+        type: ['gaussian', 'gaussian', 'gaussian', 'gaussian', 'gaussian', 'gaussian']
         # amplitude of the perturbation
         # sqrt(10), sqrt(50),
         amp: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
@@ -154,7 +154,7 @@ perturb:
         wind_amp_name: 'data/wind_speed'
         # perturbation amplitude for wind (sqrt(3))
         wind_pert_amp: 1.732050808
-        type: 'gaussian_evensen'
+        type: 'gaussian'
         # perturbation amplitude for pressure this should consistent with the amplitude in 'all' section
         pres_pert_amp: 1.
         # horizontal and time scale of perturbation when press_wind_relate is True
@@ -170,8 +170,8 @@ perturb:
         # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
         # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
         # displace: generate a random wavenumber-1 displacement for the whole domain
-        # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        # gaussian: perturbation method strictly following Evensen 1994
+        type: ['gaussian', 'gaussian', 'gaussian', 'gaussian', 'gaussian']
         # amplitude of the perturbation
         # sqrt(10), sqrt(50),
         amp: [3.16227766, 7.071067812, 7.071067812, 3., 3.]
@@ -193,8 +193,8 @@ perturb:
         # gaussian: perturbation methods following Evensen 1994 with Gaussian spectral phase shift
         # powerlaw: the amplitude of the perturbation is scaled by the power of the wavenumber
         # displace: generate a random wavenumber-1 displacement for the whole domain
-        # gaussian_evensen: perturbation method strictly following Evensen 1994
-        type: ['gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen', 'gaussian_evensen']
+        # gaussian: perturbation method strictly following Evensen 1994
+        type: ['gaussian', 'gaussian', 'gaussian', 'gaussian', 'gaussian']
         amp: [0.001, 0.001, 0.001, 0.001, 0.001]
         # horizontal correlation length scale in meters
         hcorr: [2.5e5, 2.5e5, 2.5e5, 2.5e5, 2.5e5]

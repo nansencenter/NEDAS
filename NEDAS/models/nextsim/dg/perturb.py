@@ -7,10 +7,9 @@ from NEDAS.utils.fft_lib import fft2, ifft2, get_wn, fftwn
 from NEDAS.grid import Grid
 
 def gen_perturb(grid: Grid,
-                   perturb_type: typing.Literal['gaussian_evensen'],
-                   amp: float,
-                   hcorr : int,
-                   powerlaw:float=-3.) -> np.ndarray:
+                perturb_type: typing.Literal['gaussian'],
+                amp: float,
+                hcorr: int) -> np.ndarray:
     """
     get random perturbation fields
 
@@ -18,7 +17,7 @@ def gen_perturb(grid: Grid,
     ----------
     grid : Grid
         grid object for the 2D domain
-    perturb_type : typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']
+    perturb_type : typing.Literal['gaussian']
         type of perturbation method
     amp : float
         amplitude of the perturbation
@@ -33,8 +32,8 @@ def gen_perturb(grid: Grid,
         random perturbation field
     """
     ##generate perturbation according to prescribed parameters
-    if perturb_type == 'gaussian_evensen':
-        perturb = random_field_gaussian_evensen(grid.nx, grid.ny, amp, hcorr)
+    if perturb_type == 'gaussian':
+        perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
         perturb = perturb - perturb.mean()
     else:
         raise TypeError('unknown perturbation type: '+perturb_type)
@@ -42,7 +41,9 @@ def gen_perturb(grid: Grid,
     return perturb
 
 
-def apply_AR1_perturb(perturb: np.ndarray, tcorr:float=1.0, prev_perturb:typing.Union[None, np.ndarray]=None) -> np.ndarray:
+def apply_AR1_perturb(perturb: np.ndarray,
+                      tcorr:float=1.0,
+                      prev_perturb:typing.Union[None, np.ndarray]=None) -> np.ndarray:
     """apply AR1 perturbation to the field
 
     Parameters
@@ -62,7 +63,10 @@ def apply_AR1_perturb(perturb: np.ndarray, tcorr:float=1.0, prev_perturb:typing.
     return perturb
 
 
-def apply_perturb(grid: Grid, field:np.ndarray, perturb:np.ndarray, perturb_type:typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']) -> np.ndarray:
+def apply_perturb(grid: Grid,
+                  field:np.ndarray,
+                  perturb:np.ndarray,
+                  perturb_type:typing.Literal['gaussian']) -> np.ndarray:
     """apply perturbation to the field
 
     Parameters
@@ -73,7 +77,7 @@ def apply_perturb(grid: Grid, field:np.ndarray, perturb:np.ndarray, perturb_type
         field to be perturbed
     perturb : np.ndarray
         perturbation field
-    perturb_type : typing.Literal['gaussian', 'powerlaw', 'displace', 'gaussian_evensen']
+    perturb_type : typing.Literal['gaussian']
         type of perturbation method
 
     Returns
@@ -83,14 +87,11 @@ def apply_perturb(grid: Grid, field:np.ndarray, perturb:np.ndarray, perturb_type
     """
     ##apply the perturbation
     # todo: adding logorithmic perturbation
-    if perturb_type == 'displace':
-        field = warp(grid, field, perturb[0], perturb[1])
-    else:
-        field += perturb
+    field += perturb
     return field
 
 
-def random_field_gaussian_evensen(nx:int, ny:int, amplitude:float, hcorr:int) -> np.ndarray:
+def random_field_gaussian(nx:int, ny:int, amplitude:float, hcorr:int) -> np.ndarray:
     """generate a 2D random field with Gaussian correlation length scale with given amplitude.
 
     Parameters
