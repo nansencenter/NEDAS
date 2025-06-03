@@ -351,12 +351,6 @@ class NextsimDGModel(Model):
             # add forcing perturbations
             forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time, debug)
 
-        if time > time_start:
-            ##link the init_file from cycle at time_start
-            fname_restart_init = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
-            fname = os.path.join(kwargs['restart_dir'], ens_mem_dir, os.path.basename(fname_restart_init))
-            os.system(f'ln -fs {fname} {run_dir}')
-
     def postprocess(self, task_id=0, **kwargs):
         """Postprocessing method for nextsim.dg
         Parameters: same as preprocess
