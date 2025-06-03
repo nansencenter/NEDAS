@@ -17,7 +17,7 @@ def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwarg
 
     ##change the restart file name
     file_options_restart = file_options['restart']
-    fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time_start)
+    fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
     model_config['model']['init_file'] = os.path.basename(fname_restart)
     model_config['model']['start'] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     model_config['model']['stop'] = next_time.strftime("%Y-%m-%dT%H:%M:%SZ")
