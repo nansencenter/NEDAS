@@ -7,12 +7,19 @@ E: '041'
 T: '05'
 R: 'TP5a0.06'
 nproc: 511
-
-nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
-nproc_per_util: 32
 restart_dt: 168
 output_dt: 24
 forcing_dt: 6
+ens_init_dir:
+truth_dir:
+forcing_file:
+
+nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
+nproc_per_util: 32
+use_job_array: False
+walltime: 3600
+ens_run_type: scheduler
+stagnant_log_timeout: 100
 
 ###model specific settings (blkdat)
 idm: 800   ##longitudinal array size

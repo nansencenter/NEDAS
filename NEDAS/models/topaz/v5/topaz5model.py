@@ -1,13 +1,16 @@
 import os
 import glob
+from typing import Optional, Any
 from functools import lru_cache
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import numpy as np
+
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
 from NEDAS.models import Model
+
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
 from ..model_grid import get_topaz_grid, get_depth, get_mean_ssh, stagger, destagger
@@ -16,6 +19,53 @@ from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
 from .cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
 
 class Topaz5Model(Model):
+    """
+    TOPAZ5 model class.
+    """
+    nhc_root: str
+    basedir: str
+    model_env: Optional[str]
+    V: str
+    X: str
+    T: str
+    R: str
+    E: str
+    idm: int
+    jdm: int
+    kdm: int
+    nproc: int
+    nproc_per_run: int
+    nproc_per_util: int
+    use_job_array: bool
+    walltime: int
+    stagnant_log_timeout: int
+    ens_run_type: str
+    meanssh_file: str
+    forcing_file: str
+    restart_dt: int
+    output_dt: int
+    forcing_dt: int
+    z_units: str
+    thflag: int
+    thref: float
+    thbase: float
+    kapref: int
+    yrflag: int
+    ONEM: float
+    MIN_SEAICE_CONC: float
+    MAX_OCEAN_TEMP: float
+    MIN_OCEAN_SALN: float
+    MAX_OCEAN_SALN: float
+    Nilayer: int
+    saltmax: float
+    min_salin: float
+    depressT: float
+    nsal: float
+    msal: float
+    aice_thresh: float
+    fice_thresh: float
+    hice_impact: float
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
@@ -90,9 +140,15 @@ class Topaz5Model(Model):
                           **self.diag_variables,
                           **self.archive_variables}
 
-        self.grid = None
-        self.depth = None
+        grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
+        self.grid = get_topaz_grid(grid_info_file)
+
+        self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
+        self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
+
         self.meanssh = None
+        if os.path.exists(self.meanssh_file):
+            self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -152,12 +208,7 @@ class Topaz5Model(Model):
         raise FileNotFoundError(f"filename: ERROR: could not find {file} in {path} or its parent directories")
 
     def read_grid(self, **kwargs):
-        if self.grid is None:
-            grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
-            self.grid = get_topaz_grid(grid_info_file)
-
-            self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-            self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
+        pass
 
     def read_mask(self, **kwargs):
         pass
@@ -203,7 +254,7 @@ class Topaz5Model(Model):
                 var = nc_read_var(fname, rec['name'])[0, ...]
 
         elif name in self.atmos_forcing_variables:
-            dtime = (kwargs['time'] - datetime(1900,12,31)) / (24*dt1h)
+            dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / (24*dt1h)
             if rec['is_vector']:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
                 var1 = f1.read_field(rec['name'][0], dtime)
@@ -218,14 +269,10 @@ class Topaz5Model(Model):
                 f.close()
 
         elif name in self.diag_variables:
-            ##TODO: not sure if this is the right way to deal with diagnostic variables
-            ## if the npy file exists, should it just be read to give the variable,
-            ## or should we always calculate the variable from the model state, and refresh to the npy file?
-            if os.path.exists(fname):
-                var = np.load(fname)
-            else:
-                var = rec['operator'](**kwargs)
-                np.save(fname, var)
+            ## if the npy file exists, one could just read it to get the variable.
+            ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
+            var = rec['operator'](**kwargs)
+            np.save(fname, var)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -236,6 +283,9 @@ class Topaz5Model(Model):
             else:
                 var = f.read_field(rec['name'], level=kwargs['k'])
             f.close()
+
+        else:
+            raise ValueError(f"read_var: ERROR: unknown variable name '{name}'")
 
         ##convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)
@@ -282,7 +332,7 @@ class Topaz5Model(Model):
                 nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
 
         elif name in self.atmos_forcing_variables:
-            dtime = (kwargs['time'] - datetime(1900,12,31)) / timedelta(days=1)
+            dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / timedelta(days=1)
             if rec['is_vector']:
                 for i in range(2):
                     f = ABFileForcing(fname+'.'+rec['name'][i], 'r+')
@@ -296,8 +346,11 @@ class Topaz5Model(Model):
         elif name in self.diag_variables:
             np.save(fname, var)
 
-    @lru_cache(maxsize=3)
     def z_coords(self, **kwargs):
+        return self._z_coords_cached(**kwargs)
+
+    @lru_cache(maxsize=3)
+    def _z_coords_cached(self, **kwargs):
         """
         Calculate vertical coordinates given the 3D model state
         Return:
@@ -378,10 +431,6 @@ class Topaz5Model(Model):
 
     def get_ocean_surf_height_anomaly(self, **kwargs):
         self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
-        if os.path.exists(self.meanssh_file):
-            self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
-        else:
-            self.meanssh = None
         assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
         ssh = self.get_ocean_surf_height(**kwargs)
         sla = ssh - self.meanssh
@@ -635,7 +684,9 @@ class Topaz5Model(Model):
 
             ##build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
-            shell_cmd =  ". "+self.model_env+"; "  ##enter topaz5 env
+            shell_cmd = ""
+            if self.model_env:
+                shell_cmd =  ". "+self.model_env+"; "  ##enter topaz5 env
             shell_cmd += "cd "+run_dir+"; "             ##enter run directory
             shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
 
@@ -673,52 +724,4 @@ class Topaz5Model(Model):
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
 
     def run_batch(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        assert kwargs['use_job_array'], "use_job_array shall be True if running ensemble in batch mode."
-
-        time = kwargs['time']
-        forecast_period = kwargs['forecast_period']
-        next_time = time + forecast_period * dt1h
-
-        nens = kwargs['nens']
-        for member in range(nens):
-            mstr = '_mem{:03d}'.format(member+1)
-            run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-            makedir(run_dir)
-            log_file = os.path.join(run_dir, "run.log")
-            run_command("touch "+log_file)
-
-            ##check if input file exists
-            input_files = []
-            tstr = time.strftime('%Y_%j_%H_%M%S')
-            for ext in ['.a', '.b']:
-                input_files.append(os.path.join(run_dir, 'restart.'+tstr+ext))
-            tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
-            input_files.append(os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc'))
-            for file in input_files:
-                if not os.path.exists(file):
-                    raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
-
-        ##build the shell command line
-        model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
-        shell_cmd =  ". "+self.model_env+"; "
-        shell_cmd += "cd mem$(printf '%03d' JOB_ARRAY_INDEX); " 
-        shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
-        run_job(shell_cmd, job_name='topaz5', run_dir=run_dir, array_size=nens,
-                nproc=self.nproc, walltime=self.walltime, **kwargs)
-
-        ##check output
-        for member in range(nens):
-            watch_log(log_file, 'Exiting hycom_cice')
-
-            ##move the output restart files to forecast_dir
-            tstr = next_time.strftime('%Y_%j_%H_%M%S')
-            for ext in ['.a', '.b']:
-                file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
-                file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
-                run_command(f"mv {file1} {file2}")
-            tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
-            file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
-            file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
-            run_command(f"mv {file1} {file2}")
-
+        raise NotImplementedError("topaz5model.run_batch: not implemented, use run() instead")
