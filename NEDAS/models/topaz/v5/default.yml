@@ -13,6 +13,7 @@ forcing_dt: 6
 ens_init_dir:
 truth_dir:
 forcing_file:
+meanssh_file:
 
 nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
 nproc_per_util: 32

@@ -140,14 +140,17 @@ class Topaz5Model(Model):
                           **self.diag_variables,
                           **self.archive_variables}
 
+        self.grid = None
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
-        self.grid = get_topaz_grid(grid_info_file)
+        if self.basedir and os.path.exists(grid_info_file):
+            self.grid = get_topaz_grid(grid_info_file)
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
+        if self.depthfile and os.path.exists(self.depthfile):
+            self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
         self.meanssh = None
-        if os.path.exists(self.meanssh_file):
+        if self.meanssh_file and os.path.exists(self.meanssh_file):
             self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
 
     def filename(self, **kwargs):
@@ -214,6 +217,8 @@ class Topaz5Model(Model):
         pass
 
     def read_var(self, **kwargs):
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
@@ -292,6 +297,8 @@ class Topaz5Model(Model):
         return var
 
     def write_var(self, var, **kwargs):
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
@@ -361,12 +368,10 @@ class Topaz5Model(Model):
         if 'k' not in kwargs:
             kwargs['k'] = 0
 
-        z = np.zeros(self.grid.x.shape)
-
+        z = np.zeros((self.jdm, self.idm))
         if kwargs['k'] == 0:
             ##if level index is 0, this is the surface, so just return zeros
             return z
-
         else:
             ##get layer thickness and convert to units
             rec = kwargs.copy()
@@ -378,7 +383,6 @@ class Topaz5Model(Model):
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
-
             ##use recursive func, get previous layer z and add dz
             kwargs['k'] -= 1
             z_prev = self.z_coords(**kwargs)
@@ -387,6 +391,8 @@ class Topaz5Model(Model):
     def get_ocean_surf_height(self, **kwargs):
         """Get ocean surface height from restart variables
         Adapted from p_ssh_from_state.F90 in ReanalysisTP5/SSHFromState_HYCOMICE"""
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
         tbaric = (self.kapref == self.thflag)
 
         restart_file = self.filename(**{**kwargs, 'name':'ocean_bot_montg_pot'})
@@ -430,6 +436,8 @@ class Topaz5Model(Model):
         return ssh
 
     def get_ocean_surf_height_anomaly(self, **kwargs):
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
         self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
         assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
         ssh = self.get_ocean_surf_height(**kwargs)
@@ -446,6 +454,8 @@ class Topaz5Model(Model):
         Get total seaice concentration from multicategory ice concentration (aicen)
         adapted from ReanalysisTP5/SSHFromState_HYCOMICE/mod_read_icednc by J. Xie
         """
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
         seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         rec['name'] = 'seaice_conc_ncat'
@@ -461,6 +471,8 @@ class Topaz5Model(Model):
         """
         Get total seaice thickness from the multicategory ice volume (vicen)
         """
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined before calling get_seaice_thick")
         seaice_conc = self.get_seaice_conc(**kwargs)
         
         seaice_volume = np.zeros(self.grid.x.shape)
@@ -481,6 +493,8 @@ class Topaz5Model(Model):
         """
         Get total snow thickness from the multi-category snow volume (vsnon)
         """
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined before calling get_snow_thick")
         seaice_conc = self.get_seaice_conc(**kwargs)
 
         snow_volume = np.zeros(self.grid.x.shape)
@@ -590,6 +604,8 @@ class Topaz5Model(Model):
         """Post processing the restart variables for next forecast"""
         ## routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
         kwargs = super().parse_kwargs(**kwargs)
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
 
         ##adjust ocean layer thickness dp
         rec = kwargs.copy()
