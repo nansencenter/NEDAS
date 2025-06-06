@@ -1,10 +1,10 @@
 import struct
 import numpy as np
-from NEDAS.grid import Grid
+from NEDAS.grid.grid_regular import RegularGrid
 from NEDAS.models.topaz.abfile import ABFileBathy
 from NEDAS.models.topaz.confmap import ConformalMapping
 
-def get_topaz_grid(grid_info_file):
+def get_topaz_grid(grid_info_file) -> RegularGrid:
     proj = ConformalMapping.init_from_file(grid_info_file)
 
     ##the coordinates in topaz model native grid
@@ -12,7 +12,7 @@ def get_topaz_grid(grid_info_file):
     x = ii * proj._dx
     y = jj * proj._dy
 
-    return Grid(proj, x, y)
+    return RegularGrid(proj, x, y)
 
 def get_depth(depthfile, grid):
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)

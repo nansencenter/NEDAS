@@ -11,5 +11,6 @@ slurm*out
 .vscode
 .pytest_cache
 docs/build
+extra
 *.egg-info
 *.ipynb
