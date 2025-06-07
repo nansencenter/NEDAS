@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 def diy(iyr):
    if ( (iyr%4 == 0 and 1901+iyr%400==0) or (iyr % 4 != 0 )):
@@ -76,12 +76,12 @@ def dayfor(yrflag, iyear,iday,ihour):
    return dtime
 
 def datetojul(t, refyear=1950, refmonth=1, refday=1):
-    ref_t = datetime(refyear, refmonth, refday)
+    ref_t = datetime(refyear, refmonth, refday, tzinfo=timezone.utc)
     jday = (t - ref_t) / timedelta(days=1)
     return jday
 
 def jultodate(jday, refyear=1950, refmonth=1, refday=1):
-    ref_t = datetime(refyear, refmonth, refday)
+    ref_t = datetime(refyear, refmonth, refday, tzinfo=timezone.utc)
     t = ref_t + jday * timedelta(days=1)
     return t
 

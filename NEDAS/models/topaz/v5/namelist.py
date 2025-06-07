@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ..time_format import forday, dayfor
 
 def bool_str(value):
@@ -214,7 +214,7 @@ def ports(m):
 
 def ice_in(m, time, forecast_period):
     year_init = 1958 ##time.year
-    time_init = datetime(year_init, 1, 1, 0, 0, 0)
+    time_init = datetime(year_init, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     sec0 = (time - time_init) / timedelta(seconds=1)
     istep0 = int(np.floor(sec0 / m.cice_dt)) - 1
     npt = int(np.floor(forecast_period * 3600 / m.cice_dt)) + 1

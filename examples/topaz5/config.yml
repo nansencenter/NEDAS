@@ -15,7 +15,7 @@ nproc: 512
 nens: 30
 run_analysis: True
 run_diagnose: True
-debug: False
+debug: True
 
 time_start: 2021-07-01T00:00:00Z
 time_end: 2022-01-09T00:00:00Z
@@ -87,8 +87,8 @@ model_def:
     ens_run_type: scheduler
     use_job_array: False
     stagnant_log_timeout: 100
-    ens_init_dir: '/cluster/work/users/yingyue/TP5.ecmwf_fcst/cycle/202108230000/topaz.v5'
-    forcing_file: '/cluster/work/users/yingyue/data/ecmwf_fcsts/{time:%Y%m%d%H%M}/mem{member:03}/SCRATCH/forcing.{name}'
+    ens_init_dir: '/cluster/work/users/yingyue/TP5/cycle/202106210000/topaz.v5'
+    forcing_file: '/cluster/work/users/yingyue/TP5a0.06/force/synoptic/041/{name}'
     truth_dir: ''
 
 obs_def:
@@ -144,7 +144,7 @@ obs_def:
 
 dataset_def:
   topaz:
-    config_file: '/cluster/home/yingyue/code/NEDAS/dataset/topaz/default.yml'
+    config_file: '{nedas_root}/datasets/topaz/default.yml'
     dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
 
 use_synthetic_obs: False
@@ -234,7 +234,7 @@ diag:
 #  dt_hours: 24
 #  #variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'seaice_conc', 'seaice_thick', 'seaice_velocity']
 #  variables: ['seaice_conc_daily']
-#  file: '/cluster/work/users/yingyue/TP5.ecmwf_fcst/output/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+#  file: '/cluster/work/users/yingyue/TP5/output/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
 
 - method: 'plot.observations'
   obs_window_min: -168
