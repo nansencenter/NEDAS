@@ -211,16 +211,17 @@ class OfflineFilterAnalysisScheme:
                 else:
                     perturb[vname] = None
 
-            ##perturb all sub time steps for variables within this cycle
-            ##TODO： LBC vs IC perturb time steps are different
-            dt = model.variables[vname]['dt']   ##time interval for variable vname in this cycle
-            niter = c.cycle_period // dt + 1
-            for n in range(niter):
+            # get number of time steps for this set of variables
+            # perturbation will be generated for all time steps if variable is available
+            dt = max([model.variables[v]['dt'] for v in variable_list])
+            nstep = c.cycle_period // dt + 1
+            for n in range(nstep):
                 t = c.time + n * dt * dt1h
 
-                #TODO: only works for surface layer variables now with k=0 (forcing variables)
-                ##      but can be extended to 3D variables with additional vertical corr parameter
-                for k in model.variables[vname]['levels']:
+                # TODO: perturbation for each k level is drawn independently, can be improved
+                # by introducing a vertical correlation length scale, or using EOF modes.
+                # Note: assuming all variables in the list have the same k levels
+                for k in model.variables[variable_list[0]]['levels']:
                     fld_id += 1
                     if c.debug:
                         print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
@@ -232,6 +233,7 @@ class OfflineFilterAnalysisScheme:
                     model.grid.set_destination_grid(c.grid)
                     c.grid.set_destination_grid(model.grid)
 
+                    # collect variable fields
                     fields = {}
                     for vname in variable_list:
                         ##read variable from model state
@@ -347,7 +349,7 @@ class OfflineFilterAnalysisScheme:
                     }
                 run_job(commands, **job_opts)
             else:
-                p = subprocess.Popen(commands, shell=True, text=True, bufsize=1)
+                p = subprocess.Popen(commands, shell=True, text=True)
                 p.wait()
                 if p.returncode != 0:
                     print(f"OfflineFilter: run_step '{step}' exited with error")
@@ -383,7 +385,7 @@ class OfflineFilterAnalysisScheme:
         if c.job_submit and c.job_submit.get('run_separate_jobs', False):
             ##all jobs will be submitted to external scheduler's queue
             ##just assign a worker to each ensemble member
-            nworker = np.min(c.nens, c.nproc)
+            nworker = min(c.nens, c.nproc)
         else:
             ##Scheduler will use nworkers to spawn ensemble member runs to
             ##the available nproc processors
