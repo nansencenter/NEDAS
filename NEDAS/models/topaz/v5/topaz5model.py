@@ -146,7 +146,7 @@ class Topaz5Model(Model):
             self.grid = get_topaz_grid(grid_info_file)
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        if self.depthfile and os.path.exists(self.depthfile):
+        if self.grid and self.depthfile and os.path.exists(self.depthfile):
             self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
         self.meanssh = None
@@ -601,6 +601,11 @@ class Topaz5Model(Model):
         run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
 
     def postprocess(self, task_id=0, **kwargs):
+        # run fixhycom here
+        commands = ""
+        run_command(commands)
+
+    def postprocess_native(self, task_id=0, **kwargs):
         """Post processing the restart variables for next forecast"""
         ## routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
         kwargs = super().parse_kwargs(**kwargs)

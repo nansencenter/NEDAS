@@ -12,7 +12,7 @@ def get_topaz_grid(grid_info_file) -> RegularGrid:
     x = ii * proj._dx
     y = jj * proj._dy
 
-    return RegularGrid(proj, x, y)
+    return RegularGrid(proj, x, y, distance_type='spherical')
 
 def get_depth(depthfile, grid):
     f = ABFileBathy(depthfile, 'r', idm=grid.nx, jdm=grid.ny)

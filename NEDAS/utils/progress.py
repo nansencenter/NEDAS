@@ -11,7 +11,7 @@ def timer(c=None):
 
     Args:
         c (Config, optional): config object
-        
+
     Once decorated, only processor with ID :code:`c.pid_show` in :code:`c.comm` will run the timer in the function.
     """
     def decorator(func):
@@ -32,18 +32,16 @@ def timer(c=None):
 
     return decorator
 
-def progress_bar(task_id: int, ntask: int, width: Optional[int]=50):
+def progress_bar(task_id: int, ntask: int, width: int=50):
     """
     Generate a progress bar based on task_id and ntask.
 
     Args:
         task_id (int): Current task index, from 0 to ntask-1
         ntask (int): Total number of tasks
+        width (int): The length of the progress bar (number of characters)
 
-    - width: int, optional
-      The length of the progress bar (number of characters)
-
-    Return:
+    Returns:
         str: The progress bar msg to be shown.
             Will require the print command with end="" option so that new line updated is overwritting the old line.
     """
