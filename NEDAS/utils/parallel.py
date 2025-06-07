@@ -1,9 +1,10 @@
-import numpy as np
 import os
 from functools import wraps
 import time
 from concurrent.futures import ProcessPoolExecutor
 import threading
+import traceback
+import numpy as np
 from NEDAS.utils.progress import print_with_cache, progress_bar
 
 def check_parallel_io() -> bool:
@@ -320,8 +321,9 @@ class Scheduler:
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
-                    print(f'Scheduler: Job {name} raised exception: {e}', flush=True)
-                    self.error_jobs[name] = e
+                    tb = traceback.format_exc()
+                    print(f'Scheduler: Job {name} raised exception: \n{tb}', flush=True)
+                    self.error_jobs[name] = tb
                     #return  ###if exit right away and don't wait for other jobs to finish, uncomment this
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
@@ -365,4 +367,3 @@ class Scheduler:
             error_details = "\n".join([f"ERROR: Job {job}: {error}" for job, error in self.error_jobs.items()])
             raise RuntimeError(f'Scheduler: there are jobs with errors:\n{error_details}')
         self.executor.shutdown(wait=True)
-
