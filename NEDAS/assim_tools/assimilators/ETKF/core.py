@@ -30,7 +30,7 @@ def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_state, rfactor=1., kfactor=1., nlobs_max=None) ->None:
+                        impact_on_state, rfactor, kfactor, nlobs_max) -> None:
     """perform local analysis for one location in the analysis grid partition"""
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -118,7 +118,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     obs_var = np.sqrt((obs_prior_var + obs_var)**2 + obs_prior_var*(innov/kfactor)**2) - obs_prior_var
     obs_err = np.sqrt(obs_var)
 
-    ##obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.2
+    ##obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.5
     S = np.zeros((nlobs, nens))
     dy = np.zeros((nlobs))
     for p in range(nlobs):

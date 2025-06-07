@@ -1,8 +1,12 @@
+from typing import Optional
 import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class TopazDEnKFAssimilator(BatchAssimilator):
+    rfactor: float
+    kfactor: float
+    nlobs_max: Optional[int]
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  ##variable id for each field (nfld)
@@ -23,14 +27,14 @@ class TopazDEnKFAssimilator(BatchAssimilator):
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_state, c.rfactor, c.kfactor, c.nlobs_max)
+                            impact_on_state, self.rfactor, self.kfactor, self.nlobs_max)
 
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_state, rfactor=1., kfactor=1., nlobs_max=None) ->None:
+                        impact_on_state, rfactor, kfactor, nlobs_max) -> None:
     """perform local analysis for one location in the analysis grid partition"""
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -118,7 +122,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     obs_var = np.sqrt((obs_prior_var + obs_var)**2 + obs_prior_var*(innov/kfactor)**2) - obs_prior_var
     obs_err = np.sqrt(obs_var)
 
-    ##obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.2
+    ##obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.5
     S = np.zeros((nlobs, nens))
     dy = np.zeros((nlobs))
     for p in range(nlobs):
@@ -132,34 +136,33 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     ##note: the added I actually helps prevent issues if S^T S is not full rank
     ##      when nlobs<nens, there will be singular values of 0, but the full matrix
     ##      can still be inverted with singular values of 1.
-    if nlobs >= nens:
+    if nlobs >= nens:  # use ensemble space
         var_ratio_inv = np.eye(nens) + S.T @ S
-
         try:
             L = np.linalg.cholesky(var_ratio_inv)
             L_inv = np.linalg.inv(L)
+            ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
+            ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
+            var_ratio = L_inv.T @ L_inv
+            gain = var_ratio @ S.T
         except:
-            ##if svd failed just return equal weights (no update)
+            ##if inversion failed just return equal weights (no update)
             print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
             return np.eye(nens)
 
-    else:
+    else:  # use obs space
         var_ratio_inv = S @ S.T + np.eye(nlobs)
-
         try:
             L = np.linalg.cholesky(var_ratio_inv)
             L_inv = np.linalg.inv(L)
+            ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
+            ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
+            var_ratio = L_inv.T @ L_inv
+            gain = S.T @ var_ratio
         except:
-            ##if svd failed just return equal weights (no update)
+            ##if inversion failed just return equal weights (no update)
             print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
             return np.eye(nlobs)
-
-    ##the update of ens mean is given by (I + S^T S)^-1 S^T dy
-    ##namely, var_ratio * obs_prior_var / obs_var * dy = G dy
-    var_ratio = L_inv.T @ L_inv
-
-    ##the gain matrix
-    gain = var_ratio @ S.T
 
     for m in range(nens):
         weights[m, :] = np.sum(gain[m, :] * dy)
@@ -167,15 +170,30 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     ##---second part of weights: update of ensemble spread
     if rfactor > 1:  ##scale S with rfactor and recompute the var_ratio
         S /= np.sqrt(rfactor)
-        try:
+
+        if nlobs >= nens:
             var_ratio_inv = np.eye(nens) + S.T @ S
-            L = np.linalg.cholesky(var_ratio_inv)
-            L_inv = np.linalg.inv(L)
-            var_ratio = L_inv.T @ L_inv
-            gain = var_ratio @ S.T
-        except:
-            ##if failed just return equal weights (no update)
-            return np.eye(nens)
+            try:
+                L = np.linalg.cholesky(var_ratio_inv)
+                L_inv = np.linalg.inv(L)
+                var_ratio = L_inv.T @ L_inv
+                gain = var_ratio @ S.T
+            except:
+                ##if failed just return equal weights (no update)
+                print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
+                return np.eye(nens)
+
+        else:
+            var_ratio_inv = S @ S.T + np.eye(nlobs)
+            try:
+                L = np.linalg.cholesky(var_ratio_inv)
+                L_inv = np.linalg.inv(L)
+                var_ratio = L_inv.T @ L_inv
+                gain = S.T @ var_ratio
+            except:
+                ##if failed just return equal weights (no update)
+                print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
+                return np.eye(nlobs)
 
     ##DEnKF: take Taylor approx. of var_ratio_sqrt (Sakov 2008)
     var_ratio_sqrt = np.eye(nens) - 0.5 * gain @ S
@@ -186,6 +204,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
 
 @njit
 def apply_ensemble_transform(ens_prior, weights):
+    """Apply the weights to transform local ensemble"""
 
     nens = ens_prior.size
     ens_post = ens_prior.copy()
@@ -201,3 +220,4 @@ def apply_ensemble_transform(ens_prior, weights):
         ens_post[m] = np.sum(ens_prior * weights[:, m])
 
     return ens_post
+

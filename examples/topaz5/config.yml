@@ -12,12 +12,12 @@ job_submit:
 
 nproc: 512
 
-nens: 30
+nens: 100
 run_analysis: True
 run_diagnose: True
 debug: True
 
-time_start: 2021-07-01T00:00:00Z
+time_start: 2021-07-05T00:00:00Z
 time_end: 2022-01-09T00:00:00Z
 time_assim_start: 2021-07-01T00:00:00Z
 time_assim_end: 2021-12-30T00:00:00Z
@@ -87,7 +87,7 @@ model_def:
     ens_run_type: scheduler
     use_job_array: False
     stagnant_log_timeout: 100
-    ens_init_dir: '/cluster/work/users/yingyue/TP5/cycle/202106210000/topaz.v5'
+    ens_init_dir: '/cluster/work/users/yingyue/26118/FORECAST'
     forcing_file: '/cluster/work/users/yingyue/TP5a0.06/force/synoptic/041/{name}'
     truth_dir: ''
 
@@ -195,9 +195,6 @@ obs_err_scale_fac: [1]
 assimilator_def:
   type: TopazDEnKF
   config_file:
-  rfactor: 2.
-  kfactor: 2.
-  nlobs_max: 3000
 
 updator_def:
   type: additive
@@ -218,7 +215,7 @@ localization_def:
   vertical:
     type: gaspari_cohn
   temporal:
-    type: exp
+    type: exponential
 
 transform_def:
 - type: scale_bandpass
