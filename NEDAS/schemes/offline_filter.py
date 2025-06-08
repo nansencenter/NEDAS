@@ -345,6 +345,7 @@ class OfflineFilterAnalysisScheme:
                     'job_name': step,
                     'run_dir': c.cycle_dir(c.time),
                     'nproc': c.nproc,
+                    'debug': c.debug,
                     **(c.job_submit or {}),
                     }
                 run_job(commands, **job_opts)
