@@ -1,7 +1,5 @@
-import os
 import sys
 import subprocess
-import tempfile
 
 class JobSubmitter:
     def __init__(self, **kwargs):
@@ -40,7 +38,7 @@ class JobSubmitter:
         self.debug = kwargs.get('debug', False)
 
     @property
-    def nproc(self):
+    def nproc(self) -> int:
         """
         Number of requested processors for the job
         """
@@ -51,7 +49,7 @@ class JobSubmitter:
         self._nproc = value
 
     @property
-    def ppn(self):
+    def ppn(self) -> int:
         """
         Number of processors per compute node requested for the job
         """
@@ -62,7 +60,7 @@ class JobSubmitter:
         self._ppn = value
 
     @property
-    def offset(self):
+    def offset(self) -> int:
         """
         Number of processors to skip from the beginning for the job
         This allows different jobs to spawm the total available nproc in the allocation
@@ -75,21 +73,21 @@ class JobSubmitter:
         self._offset = value
 
     @property
-    def nnode(self):
+    def nnode(self) -> int:
         """
         Number of compute nodes for the job
         """
         return (self._nproc + self._ppn - 1) // self._ppn
 
     @property
-    def offset_node(self):
+    def offset_node(self) -> int:
         """
         Number of compute nodes to skip from the beginning
         """
         return self._offset // self._ppn
 
     @property
-    def nproc_avail(self):
+    def nproc_avail(self) -> int:
         """
         Number of available processors on a host machine (only used when not run_separate_jobs)
         Vanila JobSubmitter assumes that requested nproc is always available
@@ -98,21 +96,21 @@ class JobSubmitter:
         return self.nproc + self.offset
 
     @property
-    def nnode_avail(self):
+    def nnode_avail(self) -> int:
         """
         Number of available compute nodes on a host machine (only used when not run_separate_jobs)
         """
         return self.nnode + self.offset_node
 
     @property
-    def ppn_avail(self):
+    def ppn_avail(self) -> int:
         """
         Number of available processors per compute node (only used when not run_separate_jobs)
         """
         return self.ppn
 
     @property
-    def execute_command(self):
+    def execute_command(self) -> str:
         """
         Execute command for running the job on the host machine, replacing 'JOB_EXECUTE' in 'commands'
         Vanila JobSubmitter will just run "mpirun -np nproc ...", and discard the ppn and offset settings
@@ -125,23 +123,23 @@ class JobSubmitter:
             raise ValueError(f"unknown parallel_mode '{self.parallel_mode}'")
 
     @property
-    def job_array_index_name(self):
+    def job_array_index_name(self) -> str:
         """
         Job array index variable name for the host machine, replacing 'JOB_ARRAY_INDEX' in 'commands'
         """
         return 'JOB_ARRAY_INDEX'
 
-    def parse_commands(self, commands):
+    def parse_commands(self, commands) -> str:
         commands = commands.replace('JOB_EXECUTE', self.execute_command)
         commands = commands.replace('JOB_ARRAY_INDEX', self.job_array_index_name)
         return commands
 
-    def check_resources(self):
+    def check_resources(self) -> None:
         ##check if requested resource is available
         assert self.nproc+self.offset <= self.nproc_avail, f"Requested nproc={self.nproc} and offset={self.offset} exceeds nproc_avail={self.nproc_avail}"
         assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
 
-    def run_job_as_step(self, commands):
+    def run_job_as_step(self, commands) -> None:
         """
         Run 'commands' from within a job allocation
         Use nproc processors starting from the offset+1 processor of the allocation
@@ -150,7 +148,7 @@ class JobSubmitter:
 
         commands = self.parse_commands(commands)
         if self.debug:
-            print(commands)
+            print("JobSubmitter run command as step: ", commands, flush=True)
 
         p = subprocess.Popen(commands, shell=True, text=True, bufsize=1)
         p.wait()
@@ -160,10 +158,10 @@ class JobSubmitter:
             print(f"JobSubmitter: job '{self.job_name}' exited with error")
             sys.exit(1)
 
-    def submit_job_and_monitor(self, commands):
+    def submit_job_and_monitor(self, commands) -> None:
         raise NotImplementedError("run_separate_jobs=True is not availalbe without a scheduler")
 
-    def run(self, commands):
+    def run(self, commands) -> None:
         """
         Top level run method
         Input commands: str, shell commands to be run by the job submitter

@@ -87,6 +87,9 @@ class SLURMJobSubmitter(JobSubmitter):
             raise RuntimeError(f"Failed to submit job: {p.stderr}")
         self.job_id = int(p.stdout.split()[-1])
 
+        if self.debug:
+            print(f"JobSubmitter: job '{self.job_name}' submitted with ID {self.job_id} to SLURM scheduler", flush=True)
+
         ##monitor job status
         if self.use_job_array:
             while True:

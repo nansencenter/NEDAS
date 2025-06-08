@@ -19,11 +19,9 @@ debug: True
 
 time_start: 2021-07-05T00:00:00Z
 time_end: 2022-01-09T00:00:00Z
-time_assim_start: 2021-07-01T00:00:00Z
-time_assim_end: 2021-12-30T00:00:00Z
+time_analysis_start: 2021-07-05T00:00:00Z
+time_analysis_end: 2021-12-30T00:00:00Z
 cycle_period: 168
-
-time:
 obs_time_steps: [0]
 obs_time_scale: 0
 state_time_steps: [0]
@@ -81,7 +79,7 @@ model_def:
     basedir: '/cluster/work/users/yingyue/TP5a0.06'
     nproc_per_run: 512
     nproc_per_util: 50
-    walltime: 3600
+    walltime:
     restart_dt: 168
     forcing_dt: 6
     ens_run_type: scheduler
