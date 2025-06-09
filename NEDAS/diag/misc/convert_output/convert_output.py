@@ -1,6 +1,7 @@
 import os
 import yaml
 import cftime
+import numpy as np
 from pyproj import Proj
 from NEDAS.grid import Grid
 from NEDAS.utils.netcdf_lib import nc_write_var
@@ -34,7 +35,7 @@ def get_file_list(c, **kwargs):
         time_start = s2t(kwargs['time'])
     else:
         time_start = c.time
-    
+
     files = []
     for member in range(c.nens):
         file = kwargs['file'].format(time=time_start, member=member+1)
@@ -89,10 +90,16 @@ def run(c, **kwargs):
         file = kwargs['file'].format(time=time_start, member=member+1)
         makedir(os.path.dirname(file))
 
+        lon_name: str = kwargs.get('lon_name', 'lon')
+        lat_name: str = kwargs.get('lat_name', 'lat')
+        x_name: str = kwargs.get('x_name', 'x')
+        y_name: str = kwargs.get('y_name', 'y')
+        time_name: str = kwargs.get('time_name', 'time')
+        recno = {}
+        recno[time_name] = n_step
         levels = rec['levels']
         is_vector = rec['is_vector']
         for k in levels:
-
             # read the field from model restart file
             model.read_grid(path=path, name=vname, time=t, member=member, k=k)
             fld = model.read_var(path=path, name=vname, time=t, member=member, k=k)
@@ -102,20 +109,13 @@ def run(c, **kwargs):
             fld_ = model.grid.convert(fld, is_vector=is_vector)
             # build dimension records
             dims = {}
-            time_name = kwargs.get('time_name', 'time')
             dims[time_name] = None  ##make time dimension unlimited in nc file
             k_name = kwargs.get('k_name')
             if len(levels) > 1:
                 dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
-            x_name = kwargs.get('x_name', 'x')
-            y_name = kwargs.get('y_name', 'y')
             dims[y_name] = grid.ny
             dims[x_name] = grid.nx
-            lon_name = kwargs.get('lon_name', 'lon')
-            lat_name = kwargs.get('lat_name', 'lat')
             # output the variable
-            recno = {}
-            recno[time_name] = n_step
             if len(levels) > 1:
                 recno[k_name] = list(levels).index(k)
             # variable attr
@@ -137,10 +137,10 @@ def run(c, **kwargs):
         # output the dimension variables
         time = cftime.date2num(t, units=time_units)
         time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
-        nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr, comm=c.comm)
+        nc_write_var(file, {time_name:None}, time_name, time, dtype='float', recno=recno, attr=time_attr, comm=c.comm)
         nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lat_name, lat, attr={'standard_name':'latitude', 'units':'degrees_north'}, comm=c.comm)
         # output projection info
-        nc_write_var(file, {}, proj_params['projection'], 1, attr=proj_params, comm=c.comm)
+        nc_write_var(file, {}, proj_params['projection'], np.array([1]), attr=proj_params, comm=c.comm)
