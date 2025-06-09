@@ -25,6 +25,7 @@ class Topaz5Model(Model):
     nhc_root: str
     basedir: str
     model_env: Optional[str]
+    reanalysis_code: str
     V: str
     X: str
     T: str
@@ -601,8 +602,68 @@ class Topaz5Model(Model):
         run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
 
     def postprocess(self, task_id=0, **kwargs):
-        # run fixhycom here
+        kwargs = super().parse_kwargs(**kwargs)
+        if self.grid is None:
+            raise AttributeError("topaz5model: grid not yet defined")
+        time = kwargs['time']
+        member = kwargs['member']
+        if member is not None:
+            mstr = '_mem{:03d}'.format(member+1)
+        else:
+            mstr = ''
+        run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
+        makedir(run_dir)
+
+        # link files
         commands = ""
+        if self.model_env:
+            commands += f". {self.model_env}; "
+        commands += f"cd {run_dir}; "
+        for ext in ['.a', '.b']:
+            file1 = os.path.join(kwargs['restart_dir'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
+            file2 = f'forecast{member+1:03}{ext}'
+            commands += f"ln -fs {file1} {file2}; "
+        file1 = os.path.join(kwargs['restart_dir'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
+        file2 = f'ice_forecast{member+1:03}.nc'
+        commands += f"ln -fs {file1} {file2}; "
+        commands += f"ln -fs {self.reanalysis_code}/FILES/depths{self.idm}x{self.jdm}.uf .; "
+        run_command(commands)
+
+        # restart2nc on forecast files
+        commands = ""
+        if self.model_env:
+            commands += f". {self.model_env}; "
+        commands += f"cd {run_dir}; "
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc"
+        run_command(commands)
+
+        # add posterior ice variables in analysis abfile
+        for ext in ['.a', '.b']:
+            file1 = os.path.join(kwargs['path'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
+            file2 = os.path.join(run_dir, f'analysis{member+1:03}{ext}')
+            run_command(f"cp -L {file1} {file2}")
+        f = ABFileRestart(file2, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
+        nfld = len(f.fields.keys())
+        fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
+        f.write_field(fld, None, 'ficem', 0, 1, nfld)
+        fld = np.load(self.filename(path=kwargs['path'], name='seaice_thick', member=member, time=time))
+        f.write_field(fld, None, 'hicem', 0, 1, nfld+1)
+        f.close()
+
+        # run fixhycom and update restart file
+        commands = ""
+        if self.model_env:
+            commands += f". {self.model_env}; "
+        commands += f"cd {run_dir}; "
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'fixhycom')} analysis{member+1:03}.a {member+1} forecast{member+1:03}.nc ice_forecast{member+1:03}.nc {time:%j} 0; "
+        commands += f"cat fixanalysis{member+1:03}.b >> tmp{member+1:03}.b; mv tmp{member+1:03}.b fixanalysis{member+1:03}.b; "
+        for ext in ['.a', '.b']:
+            file1 = os.path.join(run_dir, f'fixanalysis{member+1:03}{ext}')
+            file2 = os.path.join(kwargs['path'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
+            commands += f"mv {file1} {file2}; "
+        file1 = os.path.join(run_dir, f'fix_ice_forecast{member+1:03}.nc')
+        file2 = os.path.join(kwargs['path'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
+        commands += f"mv {file1} {file2}; "
         run_command(commands)
 
     def postprocess_native(self, task_id=0, **kwargs):

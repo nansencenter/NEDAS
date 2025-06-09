@@ -185,9 +185,6 @@ class ABFile:
         self._endian = endian
         self._firstwrite=True
 
-    def close(self) :
-        self._fileb.close()
-
     def scanitem(self,item=None,conversion=None) :
         line = self._fileb.readline().strip()
         if item is not None :
@@ -198,7 +195,8 @@ class ABFile:
         if m :
             if conversion :
                 value = conversion(m.group(1))
-            return m.group(2),value
+                return m.group(2),value
+            return m.group(2), m.group(1)
         else :
             return None,None
 
@@ -243,7 +241,7 @@ class ABFile:
         else :
             pass
 
-    def close (self):
+    def close(self):
         self._filea.close()
         self._fileb.close()
 
@@ -936,10 +934,10 @@ class ABFileRestart(ABFile) :
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(iexpt,iversn,yrflag,sigver))
         self._fileb.write("RESTART2: nstep,dtime,thbase = %12d%19.10f%24.13f\n"%(nstep,dtime,thbase))
 
-    def write_field(self,field,mask,fieldname,k,time) :
+    def write_field(self,field,mask,fieldname,k,time,record=None) :
         self._open_filea_if_necessary(field)
         self.check_dimensions(field)
-        hmin,hmax = self._filea.writerecord(field,mask)
+        hmin,hmax = self._filea.writerecord(field,mask,record)
         fmtstr="%-8s: layer,tlevel,range = %3d%3d%18.7E%16.7E\n"
         self._fileb.write(fmtstr%(fieldname,k,time,hmin,hmax))
 

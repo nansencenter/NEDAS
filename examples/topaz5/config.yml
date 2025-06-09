@@ -19,7 +19,7 @@ debug: True
 
 time_start: 2021-07-05T00:00:00Z
 time_end: 2022-01-09T00:00:00Z
-time_analysis_start: 2021-07-05T00:00:00Z
+time_analysis_start: 2021-07-12T00:00:00Z
 time_analysis_end: 2021-12-30T00:00:00Z
 cycle_period: 168
 obs_time_steps: [0]
@@ -76,10 +76,11 @@ model_def:
   topaz.v5:
     config_file: '{nedas_root}/models/topaz/v5/default.yml'
     model_env: '{nedas_root}/models/topaz/env/setup.src'
+    reanalysis_code: '/cluster/home/yingyue/code/ReanalysisTP5'
     basedir: '/cluster/work/users/yingyue/TP5a0.06'
     nproc_per_run: 512
     nproc_per_util: 50
-    walltime:
+    walltime: 3600
     restart_dt: 168
     forcing_dt: 6
     ens_run_type: scheduler
@@ -221,23 +222,23 @@ transform_def:
 
 diag:
 ##convert seaice conc output to nc files for ICECAP diagnostics
-#- method: 'misc.convert_output'
-#  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-#  model_src: 'topaz.v5'
-#  time_start: '202107010000'
-#  forecast_hours: 240
-#  dt_hours: 24
-#  #variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'seaice_conc', 'seaice_thick', 'seaice_velocity']
-#  variables: ['seaice_conc_daily']
-#  file: '/cluster/work/users/yingyue/TP5/output/{time:%Y}/{time:%m}/topaz5_local_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+- method: 'misc.convert_output'
+  config_file:
+  grid_def:
+  model_src: 'topaz.v5'
+  time_start: '202107050000'
+  forecast_hours: 169
+  dt_hours: 168
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'seaice_conc', 'seaice_thick', 'seaice_velocity']
+  file: '{work_dir}/output/topaz5_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
 
-- method: 'plot.observations'
-  obs_window_min: -168
-  obs_window_max: 0
-  variables: ['ocean_temp', 'ocean_saln', 'ocean_surf_temp', 'seaice_conc', 'seaice_thick', 'seaice_drift']
-  dataset_src: ['topaz', 'topaz', 'topaz', 'topaz', 'topaz', 'topaz']
-  vmin: [-10,  4, -10,  0, 0, -50]
-  vmax: [ 20, 38,  20,  1, 5,  50]
-  nlevels: [15,17, 15, 10,10,  10]
-  cmap: ['cmocean.thermal', 'cmocean.haline', 'cmocean.thermal', 'cmocean.ice', 'viridis', 'bwr']
-  obs_dt: [168, 168, 168, 168, 168, 24]
+#- method: 'plot.observations'
+#  obs_window_min: -168
+#  obs_window_max: 0
+#  variables: ['ocean_temp', 'ocean_saln', 'ocean_surf_temp', 'seaice_conc', 'seaice_thick', 'seaice_drift']
+#  dataset_src: ['topaz', 'topaz', 'topaz', 'topaz', 'topaz', 'topaz']
+#  vmin: [-10,  4, -10,  0, 0, -50]
+#  vmax: [ 20, 38,  20,  1, 5,  50]
+#  nlevels: [15,17, 15, 10,10,  10]
+#  cmap: ['cmocean.thermal', 'cmocean.haline', 'cmocean.thermal', 'cmocean.ice', 'viridis', 'bwr']
+#  obs_dt: [168, 168, 168, 168, 168, 24]

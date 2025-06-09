@@ -1,6 +1,8 @@
 ##directories
 nhc_root: NERSC-HYCOM-CICE
 basedir: TP5a0.06
+model_env:
+reanalysis_bin:
 V: '2.2.98'
 X: '04.1'
 E: '041'
@@ -14,7 +16,6 @@ ens_init_dir:
 truth_dir:
 forcing_file:
 meanssh_file:
-
 nproc_per_run: 512   ##batch size n*128, easier to divide up the compute nodes
 nproc_per_util: 32
 use_job_array: False
