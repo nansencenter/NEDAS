@@ -131,6 +131,11 @@ class Comm:
             lock_win.Unlock(0)
             # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
+    def finalize(self):
+        if self._MPI is not None:
+            self.cleanup_file_locks()
+            self._MPI.Finalize()
+
 class DummyComm:
     """Dummy communicator for python without mpi"""
     def __init__(self):
