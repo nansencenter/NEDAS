@@ -135,6 +135,9 @@ class SLURMJobSubmitter(JobSubmitter):
                     print(self.job_name, 'stagnant', elapsed_time)
                     raise RuntimeError(f"job {self.job_name} killed: {self.log_file} remain stagnent for {self.stagnant_log_timeout} seconds")
 
+        if self.debug:
+            print(f"JobSubmitter: job '{self.job_name}' finished", flush=True)
+
         ##check log file and report errors
         if self.use_job_array:
             for i in range(self.array_size):

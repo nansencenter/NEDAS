@@ -1,9 +1,11 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, Literal
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
 
-def nc_open(filename: str, mode: str, comm: Optional[Comm]=None) -> Dataset:
+AccessMode = Literal['r', 'w', 'a', 'r+']
+
+def nc_open(filename: str, mode: AccessMode, comm: Optional[Comm]=None) -> Dataset:
     """
     Open a netCDF file.
 
@@ -44,9 +46,14 @@ def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
     if comm is not None and not comm.parallel_io:
         comm.release_file_lock(filename)
 
-def nc_write_var(filename: str, dim: Dict[str,int], varname: str, dat: np.ndarray,
-                 dtype: Optional[str]=None, recno: Optional[Dict[str,int]]=None,
-                 attr: Optional[Dict]=None, comm: Optional[Comm]=None) -> None:
+def nc_write_var(filename: str,
+                 dim: Dict[str,Optional[int]],
+                 varname: str,
+                 dat: np.ndarray,
+                 dtype: Optional[str]=None,
+                 recno: Optional[Dict[str,int]]=None,
+                 attr: Optional[Dict]=None,
+                 comm: Optional[Comm]=None) -> None:
     """
     Write a variable to a netCDF file.
 
@@ -103,7 +110,7 @@ def nc_write_var(filename: str, dim: Dict[str,int], varname: str, dat: np.ndarra
             group.createDimension(name, size=dim[name])
 
     if varname not in group.variables:
-        group.createVariable(varname, dtype, tuple(dim.keys()))
+        group.createVariable(varname, dtype, tuple(dim.keys())) # type: ignore
 
     if isinstance(dat, np.ndarray):
         dat = dat.astype(dtype)
