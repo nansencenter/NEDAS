@@ -469,3 +469,5 @@ if __name__ == '__main__':
     scheme = OfflineFilterAnalysisScheme()
     step = getattr(scheme, c.step)
     timer(c)(step)(c)
+
+    c.comm.finalize()
