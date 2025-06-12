@@ -156,7 +156,7 @@ localization_def:       ## localization is configured separately for horizontal,
   vertical:
     type: gaspari_cohn
   temporal:
-    type: exp
+    type: exponential
 
 transform_def:
 - type: scale_bandpass        ## e.g. used in multiscale approach

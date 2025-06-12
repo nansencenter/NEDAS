@@ -1,4 +1,4 @@
-work_dir: '/cluster/work/users/yingyue/TP5'
+work_dir: '/cluster/work/users/yingyue/TP5-test'
 
 python_env: '/cluster/home/yingyue/python.src'
 
@@ -11,16 +11,17 @@ job_submit:
   run_separate_jobs: True
 
 nproc: 512
+nproc_util: 128
 
-nens: 100
+nens: 30
 run_analysis: True
 run_diagnose: True
 debug: True
 
 time_start: 2021-07-05T00:00:00Z
-time_end: 2022-01-09T00:00:00Z
+time_end: 2021-08-09T00:00:00Z
 time_analysis_start: 2021-07-12T00:00:00Z
-time_analysis_end: 2021-12-30T00:00:00Z
+time_analysis_end: 2021-08-09T00:00:00Z
 cycle_period: 168
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -95,49 +96,42 @@ obs_def:
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
 - name: 'ocean_saln'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
 - name: 'ocean_surf_temp'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
-#- name: 'ocean_surf_height_anomaly'
-#  dataset_src: 'topaz'
-#  model_src: 'topaz.v5'
-#  hroi: 2e5
-#  vroi: inf
-#  troi: inf
-#  impact_on_state:
 - name: 'seaice_conc'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
 - name: 'seaice_thick'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
 - name: 'seaice_drift'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
-  vroi: inf
+  vroi: 1e3
   troi: inf
   impact_on_state:
 

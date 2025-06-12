@@ -12,8 +12,6 @@ class SLURMJobSubmitter(JobSubmitter):
         super().__init__(**kwargs)
 
         ##additional slurm options
-        if self.host == 'betzy':
-            self.ppn = kwargs.get('ppn', 128)
         self.mem_per_cpu = kwargs.get('mem_per_cpu')
 
         self.log_file = kwargs.get('log_file', None)

@@ -8,6 +8,7 @@ slurm*out
 *.npy
 *.npz
 .env
+*.so
 .vscode
 .pytest_cache
 docs/build

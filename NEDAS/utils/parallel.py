@@ -133,7 +133,6 @@ class Comm:
 
     def finalize(self):
         if self._MPI is not None:
-            self.cleanup_file_locks()
             self._MPI.Finalize()
 
 class DummyComm:
