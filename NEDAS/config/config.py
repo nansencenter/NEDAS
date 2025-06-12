@@ -27,6 +27,24 @@ class Config:
         model_config (dict): A dictionary where keys are model names and values are the corresponding Model instances, set by :meth:`set_model_config`.
         dataset_config (dict): A dictionary where keys are dataset names and values are the corresponding Dataset instances, set by :meth:`set_dataset_config`.
     """
+    work_dir: str
+    time: datetime
+    time_start: datetime
+    time_end: datetime
+    time_analysis_start: datetime
+    time_analysis_end: datetime
+    cycle_period: float
+    nproc: int
+    nproc_mem: int
+    nproc_rec: int
+    nproc_util: int
+    pid: int
+    pid_mem: int
+    pid_rec: int
+    grid_def: dict
+    model_def: dict
+    dataset_def: dict
+    comm: parallel.Comm
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
         # parse the yaml config file to obtain the values
@@ -203,7 +221,9 @@ class Config:
             ##if not set, figure out the available number of processors
             if comm_size == 1:
                 ##serial program, set nproc to available processors (scheduler can spawn tasks to them)
-                self.nproc = os.cpu_count()
+                nproc_avail = os.cpu_count()
+                if nproc_avail:
+                    self.nproc = nproc_avail
             else:
                 ##mpi program, set nproc to comm size
                 self.nproc = comm_size
@@ -216,6 +236,9 @@ class Config:
         self.nproc_rec = int(self.nproc/self.nproc_mem)
         self.pid_mem = self.pid % self.nproc_mem
         self.pid_rec = self.pid // self.nproc_mem
+
+        if not hasattr(self, 'nproc_util') or self.nproc_util is None:
+            self.nproc_util = self.nproc
 
         ##split comm if in mpi program
         if comm_size > 1:
@@ -246,13 +269,13 @@ class Config:
             self.grid = NEDAS.grid.Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
             ##mask for invalid grid points (none for now, add option later)
+            self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
             if 'mask' in self.grid_def and self.grid_def['mask'] is not None:
                 model_name = self.grid_def['mask']
                 Model = NEDAS.models.get_model_class(model_name)
                 model = Model()
-                self.grid.mask = model.prepare_mask(self.grid)
-            else:
-                self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+                if hasattr(model, 'prepare_mask'):
+                    self.grid.mask = model.prepare_mask(self.grid)
 
         else:
             ##get analysis grid from model module

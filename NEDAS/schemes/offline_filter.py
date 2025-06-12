@@ -332,7 +332,7 @@ class OfflineFilterAnalysisScheme:
                 commands = f". {c.python_env}; "
             if mpi:
                 if importlib.util.find_spec("mpi4py") is not None:
-                    commands += f"JOB_EXECUTE {sys.executable} -m mpi4py {script_file} -c {tmp_config_file.name}"
+                    commands += f"JOB_EXECUTE {sys.executable} {script_file} -c {tmp_config_file.name}"
                 else:
                     print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
                     commands += f"{sys.executable} {script_file} -c {tmp_config_file.name} --nproc=1"

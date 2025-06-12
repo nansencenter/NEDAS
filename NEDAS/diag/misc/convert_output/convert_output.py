@@ -137,7 +137,7 @@ def run(c, **kwargs):
         # output the dimension variables
         time = cftime.date2num(t, units=time_units)
         time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
-        nc_write_var(file, {time_name:None}, time_name, time, dtype='float', recno=recno, attr=time_attr, comm=c.comm)
+        nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr, comm=c.comm)
         nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'}, comm=c.comm)
