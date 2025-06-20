@@ -22,7 +22,7 @@ When the container starts running, you can first run
 
 .. code-block:: bash
 
-   ./prepare_files.sh``
+   ./prepare_files.sh
 
 to generate the truth and intial ensemble member files.
 
@@ -39,10 +39,9 @@ For benchmarking of the performance, you can change parameters by adding runtime
 
 - ``--nens=NENS`` changes the ensemble size (int)
 - ``--nproc=NPROC`` changes the number of processors to use (int)
-- ``--assimilator=ASSIMILATOR`` change the assimilator algorithm (such as ``ETKF``, ``EAKF``, etc.).
 
 To make more detailed changes (such as localization and inflation parameters),
-you can make a copy of the YAML configuration file 
+you can make a copy of the YAML configuration file
 
 .. code-block:: bash
    cp /app/config.yml /work/new-config.yml
