@@ -757,35 +757,30 @@ Multiscale approach configuration:
    * - Key
      - Description
      - Example
-   * - ``nstep``
-     - Number of outer-loop iterations, number of scale components in this case.
-     - 3
-   * - ``step``
-     - Current scale component index
+   * - ``niter``
+     - Number of outer-loop iterations, e.g. number of scale components in a multiscale approach.
+     - 1
+   * - ``iter``
+     - Current iteration number
      - 0
-   * - ``decompose_obs``
-     - Whether to decompose observations into scale
-
-       components as well.
-     - False
    * - ``resolution_level``
      - Resolution level (n) for the analysis grid.
 
        The analysis grid will have a resolution ``dx * 2**n``
 
        where ``dx`` is the grid spacing defined in ``grid_def``.
-     - [2, 1, 0]
+     - [0]
    * - ``character_length``
      - Characteristic length (in grid coordinate units)
 
        for each scale (large to small)
-     - [32, 8, 2]
+     - [1]
    * - ``localize_scale_fac``
      - Scale factor for localization distances.
-     - [2, 1, 0.5]
+     - [1]
    * - ``obs_err_scale_fac``
      - Scale factor for observation error inflation.
-     - [1, 1, 1]
+     - [1]
 
 Diagnostic methods
 ^^^^^^^^^^^^^^^^^^
