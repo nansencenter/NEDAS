@@ -66,6 +66,7 @@ def update_local_state_linear(state_data, obs_prior, obs_incr,
 
     nloc_sub = np.where(h_lfactor>0)[0]  ##subset of range(nloc) to update
 
+    ##TODO: impact_on_state missing
     lfactor = np.zeros((nfld, nloc))
     for l in nloc_sub:
         for n in range(nfld):
