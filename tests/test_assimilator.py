@@ -3,7 +3,7 @@ import importlib
 from NEDAS.config import Config
 from NEDAS.assim_tools.assimilators import registry, get_assimilator
 
-class TestAnalysisScheme(unittest.TestCase):
+class TestAssimilator(unittest.TestCase):
     def test_assimilator_init(self):
         c = Config()
         for assimilator_name in registry.keys():
