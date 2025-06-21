@@ -125,6 +125,8 @@ class SerialAssimilator(Assimilator):
             if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['obs']):
                 continue
 
+            # ens-complete transforms (probit)
+
             ##compute obs-space increment
             obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
 
@@ -133,18 +135,20 @@ class SerialAssimilator(Assimilator):
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
-                            state_h_dist, state_v_dist, state_t_dist,
-                            obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
+                                    state_h_dist, state_v_dist, state_t_dist,
+                                    obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
+                                    c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
             ##3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
             obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
             obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])
             self.update_local_obs(obs_data['obs_prior'], obs_data['used'], obs_p['prior'], obs_incr,
-                            obs_h_dist, obs_v_dist, obs_t_dist,
-                            obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                            c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
+                                  obs_h_dist, obs_v_dist, obs_t_dist,
+                                  obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
+                                  c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
+
+            # ens-complete inverse transforms (probit)
 
         state.unpack_local_state_data(c, par_id, state.state_post, state_data)
         obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
@@ -193,4 +197,10 @@ class SerialAssimilator(Assimilator):
             obs_data_prior (np.ndarray):
             obs_used (np.nd
         """
+        pass
+
+    def transform_to():
+        pass
+
+    def transform_from():
         pass

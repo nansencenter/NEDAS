@@ -7,8 +7,9 @@ registry = {
     'ETKF': 'ETKFAssimilator',
     'EAKF': 'EAKFAssimilator',
     'TopazDEnKF': 'TopazDEnKFAssimilator',
+    'QCEF': 'QCEFAssimilator',
     #'PDAF': 'PDAFAssimilator',
-    #'RHF'
+    #'DART': 'DARTAssimilator',
 }
 
 def get_assimilator(c: Config) -> Assimilator:
