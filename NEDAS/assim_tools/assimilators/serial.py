@@ -96,6 +96,10 @@ class SerialAssimilator(Assimilator):
         obs_data = obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
         obs_list = bcast_by_root(c.comm)(obs.global_obs_list)(c)
 
+        # ens-complete pre transforms (probit)
+        self.transform_ens_state_forward(state_data)
+        self.transform_ens_obs_forward(obs_data)
+
         c.print_1p('>>> assimilate in serial mode:\n')
         ##go through the entire obs list, indexed by p, one scalar obs at a time
         for p in range(len(obs_list)):
@@ -125,8 +129,6 @@ class SerialAssimilator(Assimilator):
             if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['obs']):
                 continue
 
-            # ens-complete transforms (probit)
-
             ##compute obs-space increment
             obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
 
@@ -148,7 +150,9 @@ class SerialAssimilator(Assimilator):
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
-            # ens-complete inverse transforms (probit)
+        # ens-complete inverse transforms (probit)
+        self.transform_ens_state_backward(state_data)
+        self.transform_ens_obs_backward(obs_data)
 
         state.unpack_local_state_data(c, par_id, state.state_post, state_data)
         obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
@@ -199,8 +203,15 @@ class SerialAssimilator(Assimilator):
         """
         pass
 
-    def transform_to():
+    def transform_ens_state_forward(self, state_data):
         pass
 
-    def transform_from():
+    def transform_ens_state_backward(self, state_data):
         pass
+
+    def transform_ens_obs_forward(self, obs_data):
+        pass
+
+    def transform_ens_obs_backward(self, obs_data):
+        pass
+

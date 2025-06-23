@@ -24,6 +24,20 @@ class QCEFAssimilator(SerialAssimilator):
                                        hroi, vroi, troi,
                                        h_local_func, v_local_func, t_local_func)
 
+    def transform_ens_state_forward(self, state_data):
+        #here the implementation of probit transform_to_probit for all state variables
+        pass
+
+    def transform_ens_state_backward(self, state_data):
+        pass
+
+    def transform_ens_obs_forward(self, obs_data):
+        #here the implementation of probit transform_to_probit for all obs variables
+        pass
+
+    def transform_ens_obs_backward(self, obs_data):
+        pass
+
 def transform_to_probit():
     pass
 
