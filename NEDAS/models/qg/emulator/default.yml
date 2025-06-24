@@ -1,0 +1,27 @@
+weightfile: '/cluster/home/yingyue/code/qgda/Checkpoints.h5'
+
+model_params:
+  list_predictors: ['psi_0', 'psi_1']
+  list_targets: ['psi_0', 'psi_1']
+  patch_dim: [256, 256]
+  batch_size: 16
+  n_filters: [32, 64, 96, 128, 160, 192]
+  activation: 'relu'
+  kernel_initializer: 'he_normal'
+  batch_norm: True
+  pooling_type: 'Max'
+  dropout: 0.05
+
+kmax: 127  ## max resolved wavenumber; spectral resolution
+nz: 2  ## number of vertical layers
+F: 100  ## f^2*L^2/[(2pi)^2g H_0]
+beta: 16  ## beta_0*L^2/[(2pi)^2 U]
+dt: 0.00025  ## time step
+
+nproc_per_run: 1
+nproc_per_util: 1
+restart_dt: 24
+output_dt: 24
+forcing_dt: 24
+model_code_dir: ''
+model_data_dir: ''

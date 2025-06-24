@@ -1,8 +1,0 @@
-
-FC = ifort
-LD = ifort
-FFLAGS =  -O3 -r8 -i4 -assume byterecl -free -ipo -nowarn
-LIBS = -L$(FFTW_DIR)/lib -lfftw3 -L/user/lib64 -lm
-LDFLAGS = $(LIBS)
-TMPFILES = *.mod
-

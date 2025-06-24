@@ -1,0 +1,172 @@
+##working directory for your experiment
+work_dir: work
+
+directories:
+  cycle_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}'
+  forecast_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
+  analysis_dir: '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis/{step}'
+
+##python environment source script
+python_env:
+
+job_submit:
+  host: localhost     ##machine name, laptop or supercomputer
+  project:            ##project for resource allocation
+  queue:              ##job queue name
+  scheduler:          ##which scheduler is used on the machine
+  run_separate_jobs: False  ##if true, submit each job separately to the scheduler
+                            ##otherwise jobs will be run as steps in a shared job allocation
+
+##number of processors to use for assimilation
+nproc: 10
+nproc_mem:
+nproc_util:
+
+##some experiment design parameters
+nens: 20            ##ensemble size
+run_preproc: True   ##if true, run the preprocessing step
+run_forecast: True  ##if true, run the ensemble forecast step
+run_analysis: True  ##if true, run the analysis step
+run_diagnose: True  ##if true, run the diagnose scripts
+debug: False        ##if true, output debug data/message
+timer: True         ##if true, output information on function runtime
+step:
+
+##time control of the experiment
+time_start: 2001-01-01T00:00:00Z          ## start time of the experiment
+time_end: 2001-01-30T00:00:00Z            ## end time of the experiment
+time_analysis_start: 2001-01-07T00:00:00Z ## start time of the first analysis cycle
+time_analysis_end: 2001-01-28T00:00:00Z   ## end time of the last analysis cycle
+cycle_period: 12                    ## cycle period, in hours
+time:
+obs_time_steps: [0]              ## time steps defining observation window, hours, relative to cycle time
+obs_time_scale: 0                ## smoothing window in hours for observations
+state_time_steps: [0]            ## time steps defining the 4D state vector, hours, relative to cycle time
+state_time_scale: 0              ## smoothing window in hours for state variables
+
+##analysis grid definition, for now we support only uniform analysis grids
+## if type==custom, configure a Grid.regular_grid
+## if you want to use the model grid directly (if only 1 model is involved), set type==model_name
+grid_def:
+  type: custom
+  proj: 
+  xmin: -1                 ##coordinate range in x and y, use meter units but can be nondimensional too
+  xmax: 257
+  ymin: -1
+  ymax: 257
+  dx: 1                    ##grid spacing in coordinate units (resolution)
+  centered: False
+  cyclic_dim: xy
+  distance_type: cartesian    ## type of distance function (default: cartesian; or spherical from lat/lon coords)
+  mask:
+
+##state vector definition (a list of definitions, one for each variable)
+state_def:
+- name: streamfunc      ## name of the variable
+  model_src: qg         ## which model the variable come from
+  var_type: field       ## if 'field' the variable consists of 2D fields, if 'scalar' it is a number
+  err_type: normal      ## which error model to use, now only 'normal'
+##model configuration dict(model_name, opts)
+##will use config_file as starting point, additional variables will overwrite config_file settings
+##if new variables introduced here, they will be appended to the configuration
+
+model_def:
+  qg:
+    config_file: '{nedas_root}/models/qg/default.yml' ##configuration file
+    model_env: '{nedas_root}/models/qg/env/setup_local.src'  ##source file to enter environment
+    model_code_dir: '{nedas_root}/models/qg'  ##where to find model executable
+    nproc_per_run: 1    ## number of processors for one model.run
+    nproc_per_util: 1   ## number of processors for other utility funcs, model.preprocess, etc.
+    walltime: 1000      ## walltime in seconds
+    restart_dt: 24      ## restart file interval in hours
+    forcing_dt: 24      ## boundary forcing interval
+    ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
+    use_job_array: False       ##if true, use job array in scheduler for ensemble runs
+    ens_init_dir: '{work_dir}/init_ens'  ##path to the initial ensemble restart files
+    truth_dir: '{work_dir}/truth'           ##path to the truth files (for synthetic obs)
+
+##observation definition (a list of definitions, one for each variable)
+obs_def:
+- name: streamfunc      ## name of the variable
+  dataset_src: qg       ## which dataset module it comes from
+  model_src: qg         ## which model to use to compute observation priors
+  ##the following is specific to the observation 'streamfunc' in the dataset
+  nobs: 3000              ## number of observations (if generating synthetic obs)
+  err:
+    type: normal        ## observation error model (normal, ...)
+    std: 0.2              ## error standard deviation (in observation physical units)
+  hroi: 100               ## horizontal localization radius (in grid coordinate units)
+  vroi: 5                 ## vertical   ..            .. (vertical coordinate units)
+  troi: 24                ## temporal   ..            .. (hours)
+  impact_on_state:        ## a list of impact factor of this observation on state variables
+    streamfunc: 1.0       ## unlisted state variable has a default of 1.0,
+                          ## this can help removing the analysis increment only on certain variables
+
+##dataset configuration dict(dataset_name, opts)
+##will use config_file as starting point, additional variables will overwrite config_file settings
+##if new variables introduced here, they will be appended to the configuration
+dataset_def:
+  qg:
+    config_file:   ##configuration file (empty for now)
+    dataset_dir:   ##path to the dataset files, for qg we use synthethic obs so no need to specify
+    obs_window_min: -6      ## observation within the window (in hours) will be considered valid at cycle time
+    obs_window_max: 0
+
+use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
+shuffle_obs: False       ## if true, shuffle the order of obs sequence
+z_coords_from: mean      ##use ensemble 'mean' or 'member' z coords as reference of obs z location
+
+##perturbatio scheme (a list of individual perturbation methods can be set here)
+#leave blank if no perturbation added
+perturb:
+
+##more details in assimilation algorithm
+analysis_scheme: offline_filter  ##type of analysis to perform online/offline, filter/smoother/etc.
+
+##outer loop iterations
+niter: 1
+iter:
+resolution_level: [0]       ## resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
+character_length: [16]      ## characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]     ## scale factor for localization distances
+obs_err_scale_fac: [1]      ## scale factor for observation error variances
+
+assimilator_def:
+  type: ETKF      ##assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+  config_file:    ##configuration for the specific assimilator
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+##covariance inflation technique in assimilation
+inflation_def:
+  type: posterior,rtpp      ## type of inflation (posterior/prior, multiplicative/RTPP...)
+  adaptive: True            ## if true, run an adaptive version of the inflation scheme
+  coef: 1.0                 ## static inflation coefficient
+
+##covariance localization technique in assimilation
+localization_def:       ## localization is configured separately for horizontal, vertical and temporal relations
+  horizontal:
+    type: gaspari_cohn  ## type of localization kernel (gaspari_cohn, step, exp, nice...)
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass        ## e.g. used in multiscale approach
+  decompose_obs: False        ## if true, decompose observations as well
+
+##diagnostic methods configuration
+diag:
+- method: misc.convert_output  ## method name
+  config_file:                 ## configuration file, leave blank to use default
+  model_src: qg                ## which model the method is applied to
+  variables: ['streamfunc', 'temperature', 'vorticity']   ## which variables the method is applied to
+  grid_def:                    ## output grid definition, leave blank to use model grid
+  file: '{work_dir}/output/mem{member:03}_{time:%Y-%m-%dT%H}.nc'  ## output file format

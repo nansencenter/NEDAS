@@ -1,0 +1,238 @@
+work_dir: '/cluster/work/users/yingyue/TP5-test'
+
+python_env: '/cluster/home/yingyue/python.src'
+
+job_submit:
+  host: betzy
+  project: nn2993k
+  queue: normal
+  scheduler: slurm
+  ppn: 128
+  run_separate_jobs: True
+
+nproc: 512
+nproc_util: 128
+
+nens: 30
+run_analysis: True
+run_diagnose: True
+debug: True
+
+time_start: 2021-07-05T00:00:00Z
+time_end: 2021-08-09T00:00:00Z
+time_analysis_start: 2021-07-12T00:00:00Z
+time_analysis_end: 2021-08-09T00:00:00Z
+cycle_period: 168
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'topaz.v5'
+
+state_def:
+- name: 'ocean_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_temp'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_saln'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_layer_thick'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_mixl_depth'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'ocean_b_press'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_velocity'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_conc_ncat'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+- name: 'seaice_volume_ncat'
+  model_src: 'topaz.v5'
+  var_type: 'field'
+  err_type: 'normal'
+
+model_def:
+  topaz.v5:
+    config_file: '{nedas_root}/models/topaz/v5/default.yml'
+    model_env: '{nedas_root}/models/topaz/env/setup.src'
+    reanalysis_code: '/cluster/home/yingyue/code/ReanalysisTP5'
+    basedir: '/cluster/work/users/yingyue/TP5a0.06'
+    nproc_per_run: 512
+    nproc_per_util: 50
+    walltime: 3600
+    restart_dt: 168
+    forcing_dt: 6
+    ens_run_type: scheduler
+    use_job_array: False
+    stagnant_log_timeout: 100
+    ens_init_dir: '/cluster/work/users/yingyue/26118/FORECAST'
+    forcing_file: '/cluster/work/users/yingyue/TP5a0.06/force/synoptic/041/{name}'
+    truth_dir: ''
+
+obs_def:
+- name: 'ocean_temp'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+- name: 'ocean_saln'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+- name: 'ocean_surf_temp'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+- name: 'seaice_conc'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+- name: 'seaice_thick'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+- name: 'seaice_drift'
+  dataset_src: 'topaz'
+  model_src: 'topaz.v5'
+  hroi: 2e5
+  vroi: 1e3
+  troi: inf
+  impact_on_state:
+
+dataset_def:
+  topaz:
+    config_file: '{nedas_root}/datasets/topaz/default.yml'
+    dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
+
+use_synthetic_obs: False
+z_coords_from: member
+
+perturb:
+- variable: ['atmos_surf_press', 'atmos_surf_velocity']
+  model_src: 'topaz.v5'
+  type: 'gaussian,press_wind_relate,scale_wind'
+  amp: [316., 1.58]
+  hcorr: [2.5e5, 2.5e5]
+  tcorr: [48, 48]
+- variable: 'atmos_surf_temp'
+  model_src: 'topaz.v5'
+  type: 'gaussian'
+  amp: 2
+  hcorr: 2.5e5
+  tcorr: 48
+- variable: 'atmos_precip'
+  model_src: 'topaz.v5'
+  type: 'gaussian,exp'
+  amp: 0.5
+  hcorr: 2.5e5
+  tcorr: 48
+  bounds: [0, inf]
+- variable: 'atmos_down_longwave'
+  model_src: 'topaz.v5'
+  type: 'gaussian,exp'
+  amp: 0.045
+  hcorr: 2.5e5
+  tcorr: 48
+- variable: 'atmos_down_shortwave'
+  model_src: 'topaz.v5'
+  type: 'gaussian,exp'
+  amp: 0.045
+  hcorr: 2.5e5
+  tcorr: 48
+
+analysis_scheme: offline_filter
+
+niter: 1
+iter:
+resolution_level: [0]
+character_length: [1e6]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
+assimilator_def:
+  type: TopazDEnKF
+  config_file:
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+inflation_def:
+  type: posterior,multiplicative
+  adaptive: False
+  coef: 1.01
+
+localization_def:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass
+  decompose_obs: False
+
+diag:
+##convert seaice conc output to nc files for ICECAP diagnostics
+- method: 'misc.convert_output'
+  config_file:
+  grid_def:
+  model_src: 'topaz.v5'
+  time_start: '202107050000'
+  forecast_hours: 169
+  dt_hours: 168
+  variables: ['ocean_temp', 'ocean_saln', 'ocean_velocity', 'ocean_layer_thick', 'seaice_conc', 'seaice_thick', 'seaice_velocity']
+  file: '{work_dir}/output/topaz5_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+
+#- method: 'plot.observations'
+#  obs_window_min: -168
+#  obs_window_max: 0
+#  variables: ['ocean_temp', 'ocean_saln', 'ocean_surf_temp', 'seaice_conc', 'seaice_thick', 'seaice_drift']
+#  dataset_src: ['topaz', 'topaz', 'topaz', 'topaz', 'topaz', 'topaz']
+#  vmin: [-10,  4, -10,  0, 0, -50]
+#  vmax: [ 20, 38,  20,  1, 5,  50]
+#  nlevels: [15,17, 15, 10,10,  10]
+#  cmap: ['cmocean.thermal', 'cmocean.haline', 'cmocean.thermal', 'cmocean.ice', 'viridis', 'bwr']
+#  obs_dt: [168, 168, 168, 168, 168, 24]
