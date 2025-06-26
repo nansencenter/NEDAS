@@ -112,3 +112,36 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor) -> np.ndarray:
         ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
 
     return ens_post
+
+@njit
+def epanechnikov_kernel(x) -> np.ndarray:
+    return 0.75 * max(0.0, 1.0 - x**2)
+
+@njit
+def epanechnikov_cdf(x) -> np.ndarray:
+    x_truncated = min(1.0, max(-1.0, x))
+    return 0.25 * (2.0 + 3.0 * x_truncated - x_truncated**3)
+
+@njit
+def get_kde_bandwidths(obs_prior) -> np.ndarray:
+    ## uses the observation-space forecast ensemble to compute kernel bandwidths
+    nens = obs_prior.shape[0]
+    d_max = np.absolute(obs_prior[0] - obs_prior[:]).max()
+    #if (d_max <= 0.0): There should be a warning/error here. Can't continue if all ensemble members have the same value.
+    ens_mean = np.mean(obs_prior)
+    ens_sd   = np.std(obs_prior)
+    h0 = 2.0 * ens_sd / (ens_size**0.2)  # This would be the kernel width if the widths were not adaptive.
+                                         # It would be better to use min(sd, iqr/1.34) but don't want to compute iqr
+    k = np.floor( np.sqrt(nens) )  # distance to kth nearest neighbor is used to set bandwidth for k defined here
+    f_tilde = np.zeros(nens)
+    for i in range(nens):
+        ## This loop can fail if the kth nearest neighbor has distance 0, in which case you need to
+        ## search for the first neighbor that has a nonzero distance.
+        dist  = np.absolute(obs_prior[0] - obs_prior[:]).sort()
+        d_max = dist.max()
+        dist  = np.where(dist <= 1.E-3 * d_max, 0.0, dist)  # replace small distances with 0
+        f_tilde[i] = 0.5 * (k - 1) / (nens * dist[k])  # Initial density estimate
+    f_tilde[:] = f_tilde[:] / np.max(f_tilde[:])  # Avoids overflow in the next line
+    g = f_tilde.prod()**(1.0 / nens)
+   lamda = np.sqrt(g / f_tilde)
+   return h0 * lamda
