@@ -140,8 +140,8 @@ def get_kde_bandwidths(obs_prior) -> np.ndarray:
         dist  = np.absolute(obs_prior[0] - obs_prior[:]).sort()
         d_max = dist.max()
         dist  = np.where(dist <= 1.E-3 * d_max, 0.0, dist)  # replace small distances with 0
-        f_tilde[i] = 0.5 * (k - 1) / (nens * dist[k])  # Initial density estimate
-    f_tilde[:] = f_tilde[:] / np.max(f_tilde[:])  # Avoids overflow in the next line
+        f_tilde[i] = 0.5 * (k - 1) / (nens * dist[k])       # Initial density estimate
+    f_tilde[:] = f_tilde[:] / np.max(f_tilde[:])            # Avoids overflow in the next line
     g = f_tilde.prod()**(1.0 / nens)
-   lamda = np.sqrt(g / f_tilde)
-   return h0 * lamda
+    lamda = np.sqrt(g / f_tilde)
+    return h0 * lamda
