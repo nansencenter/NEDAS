@@ -145,3 +145,75 @@ def get_kde_bandwidths(obs_prior) -> np.ndarray:
     g = f_tilde.prod()**(1.0 / nens)
     lamda = np.sqrt(g / f_tilde)
     return h0 * lamda
+
+@njit
+def kde_pdf(x, params):
+    ## Evaluates the kde approximation to the prior pdf at x. params is a dict.
+    kde_pdf = 0.0  # Initialize
+    for i in range(nens):  # This is a reduction loop
+        kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
+    kde_pdf *= params["i_nens"] * params["normalization_constant"]
+
+@njit
+def gauss_quad(a, b, f):
+    ## Apply three-point (fifth-order) Gauss-Legendre quadrature to integrate f(x) from x=a to x=b
+
+    # Ideally we would compute these once, rather than every time that the function is called.
+    gq_nodes   = np.array([-np.sqrt(0.6), 0.0, np.sqrt(0.6)])
+    gq_weights = np.array([5.0 / 9.0, 8.0 / 9.0, 5.0 / 9.0])
+
+    # Local nodes & weights
+    nodes   = 0.5 * ((b - a) * gq_nodes + a + b)
+    weights = 0.5 * (b - a) * gq_weights
+
+    # Evaluate
+    return np.sum(weights * f(nodes))
+
+@njit
+def get_kde_params(obs_prior, obs, obs_err):
+    ## Calculates and stores a bunch of parameters related to a kde distribution
+    ## obs_err = np.inf signals that we're using the prior.
+
+    # Get ensemble size so we don't have to keep using .shape[0]
+    nens = obs_prior.shape[0]
+    params = {'ens' : obs_prior, 'nens' : nens, 'i_nens' : 1.0 / nens, 'obs' : obs, 'obs_err' : obs_err}
+
+    # Get kernel bandwidths
+    params["bandwidths"]   = get_kde_bandwidths(obs_prior)
+    params["i_bandwidths"] = 1.0 / params["bandwidths"]
+
+    if (obs_err == np.inf):
+        params["is_prior"] = True
+    else:
+        ## Posterior distribution, so we need to use quadrature, so we
+        ## pre-calculate the cdf at "edges"
+        params["is_prior"] = False
+
+        # Get edges of the subintervals on which the pdf is smooth
+        edges = np.sort(np.concatenate((obs_prior - params["bandwidths"],
+                                        obs_prior + params["bandwidths"])))
+        params["edges"] = np.sort(edges)
+
+        # get cdf values evaluated at edges
+        cdf_at_edges = np.zeros(2*nens)
+        params["normalization_constant"] = 1  # placeholder before we compute the actual value
+        post_pdf = lambda x: kde_pdf(x, params) * np.exp(-0.5 * ((x - obs) / obs_err)**2)
+        for i in range(1,2*nens):
+            cdf_at_edges[i] = cdf_at_edges[i-1] + gauss_quad(edges[i-1], edges[i], post_pdf)
+        params["normalization_constant"] = np.array(cdf_at_edges[-1])  # Use np.array to force a copy
+        cdf_at_edges[:] /= cdf_at_edges[-1]
+        params["cdf_at_edges"] = cdf_at_edges
+
+@njit
+def kde_cdf(x, params):
+    ## Evaluates the cdf at x.
+    ## Whether it's prior or posterior is defined by the param dict that is passed in.
+    if (params["is_prior"]):
+        return np.sum( epanechnikov_cdf( (x - params["obs_prior"]) * params["i_bandwidths"] ) ) * params["i_nens"]
+    bin_index = np.digitize(x, params["edges"])
+    if (bin_index == 0):
+        return 0.0
+    if (bin_index == params["ed"].shape[0]):
+        return 1.0
+    post_pdf = lambda t : kde_pdf(t, params) * np.exp(-0.5 * ((t - params["obs"]) / params["obs_err"])**2)
+    return params["cdf_at_edges"][bin_index-1] + gauss_quad(params["edges"][bin_index-1], x, post_pdf)
