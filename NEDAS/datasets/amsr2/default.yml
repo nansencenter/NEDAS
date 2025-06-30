@@ -1,0 +1,5 @@
+dataset_dir: "/cluster/work/users/yingyue/data/amsr2"
+
+##projection info
+proj4: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=70'
+
