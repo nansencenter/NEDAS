@@ -7,3 +7,4 @@ Examples
    examples.lorenz96
    examples.vort2d
    examples.qg
+   examples.nextsimdg
