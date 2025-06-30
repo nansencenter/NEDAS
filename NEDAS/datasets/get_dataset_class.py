@@ -15,6 +15,7 @@ registry = {
     'cs2smos': 'Cs2SmosObs',
     'rgps': 'RgpsObs',
     'topaz': 'TopazPrepObs',
+    'synthetic': 'SyntheticObs',
 }
 
 def get_dataset_class(dataset_name: str) -> Type["Dataset"]:
