@@ -1,6 +1,7 @@
 import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
+from scipy.optimize import root_scalar
 
 class QCEFAssimilator(SerialAssimilator):
     def obs_increment(self, obs_prior, obs, obs_err):
@@ -44,9 +45,26 @@ def transform_to_probit():
 def transform_from_probit():
     pass
 
-@njit
 def obs_increment_qcef(obs_prior, obs, obs_err) -> np.ndarray:
-    pass
+
+    obs_increment = np.zeros_like(obs_prior)
+
+    # If all members are equal, return zero increments.
+    d_max = np.absolute(obs_prior[0] - obs_prior[:]).max()
+    if (d_max <= 0.0):
+        return obs_increment
+
+    # Get prior and posterior distribution parameters
+    params_prior = get_kde_params(obs_prior, 0.0, np.Inf)
+    params_post  = get_kde_params(obs_prior, obs, obs_err)
+
+    for i in range(params["nens"]):  # Loop iterations are independent, parallelizable
+        u = kde_cdf(obs_prior[i], params_prior)
+        f = lambda x: kde_cdf(x, params_post) - u
+        fprime = lambda x: kdf_pdf(x, params_post)
+        obs_increment[i] = root_scalar(f, fprime=fprime, x0=obs_prior[i]).root - obs_prior[i]  # TODO: Add logic to catch errors. Maybe a better initial guess.
+
+    return obs_increment
 
 @njit
 def update_local_state_linear(state_data, obs_prior, obs_incr,
@@ -147,14 +165,6 @@ def get_kde_bandwidths(obs_prior) -> np.ndarray:
     return h0 * lamda
 
 @njit
-def kde_pdf(x, params):
-    ## Evaluates the kde approximation to the prior pdf at x. params is a dict.
-    kde_pdf = 0.0  # Initialize
-    for i in range(nens):  # This is a reduction loop
-        kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
-    kde_pdf *= params["i_nens"] * params["normalization_constant"]
-
-@njit
 def gauss_quad(a, b, f):
     ## Apply three-point (fifth-order) Gauss-Legendre quadrature to integrate f(x) from x=a to x=b
 
@@ -184,6 +194,7 @@ def get_kde_params(obs_prior, obs, obs_err):
 
     if (obs_err == np.inf):
         params["is_prior"] = True
+        params["normalization_constant"] = 1.0
     else:
         ## Posterior distribution, so we need to use quadrature, so we
         ## pre-calculate the cdf at "edges"
@@ -196,13 +207,29 @@ def get_kde_params(obs_prior, obs, obs_err):
 
         # get cdf values evaluated at edges
         cdf_at_edges = np.zeros(2*nens)
-        params["normalization_constant"] = 1  # placeholder before we compute the actual value
-        post_pdf = lambda x: kde_pdf(x, params) * np.exp(-0.5 * ((x - obs) / obs_err)**2)
+        params["normalization_constant"] = 1.0  # placeholder before we compute the actual value
+        post_pdf = lambda x: kde_pdf(x, params)
         for i in range(1,2*nens):
             cdf_at_edges[i] = cdf_at_edges[i-1] + gauss_quad(edges[i-1], edges[i], post_pdf)
-        params["normalization_constant"] = np.array(cdf_at_edges[-1])  # Use np.array to force a copy
-        cdf_at_edges[:] /= cdf_at_edges[-1]
+        params["normalization_constant"] = 1.0 / np.array(cdf_at_edges[-1])  # Use np.array to force a copy
+        cdf_at_edges[:] *= params["normalization_constant"]
         params["cdf_at_edges"] = cdf_at_edges
+    return params
+
+@njit
+def kde_pdf(x, params):
+    ## Evaluates the kde approximation to the pdf at x. params is a dict set above.
+    kde_pdf = 0.0  # Initialize
+    if (params["is_prior"]):
+        for i in range(nens):  # This is a reduction loop
+            kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
+        kde_pdf *= params["i_nens"] * params["normalization_constant"]
+    else:
+        for i in range(nens):  # This is a reduction loop
+            kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
+        kde_pdf *= params["i_nens"] * params["normalization_constant"] \
+                 * np.exp(-0.5 * ((x - params["obs"]) / params["obs_err"])**2)  # TODO: Enable non-Gaussian likelihoods
+    return kde_pdf
 
 @njit
 def kde_cdf(x, params):
@@ -213,7 +240,7 @@ def kde_cdf(x, params):
     bin_index = np.digitize(x, params["edges"])
     if (bin_index == 0):
         return 0.0
-    if (bin_index == params["ed"].shape[0]):
+    if (bin_index == params["edges"].shape[0]):
         return 1.0
-    post_pdf = lambda t : kde_pdf(t, params) * np.exp(-0.5 * ((t - params["obs"]) / params["obs_err"])**2)
+    post_pdf = lambda t : kde_pdf(t, params)
     return params["cdf_at_edges"][bin_index-1] + gauss_quad(params["edges"][bin_index-1], x, post_pdf)
