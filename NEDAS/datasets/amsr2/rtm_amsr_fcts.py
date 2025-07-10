@@ -602,10 +602,8 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
     Tb = TBU + tau*(surface_em * Ts + TBD * (1 - surface_em))
 
     # OW bias correction
-    # Assume Tb is an xarray.DataArray with named dimensions, e.g., ('y', 'x')
     # Use the same dims and coords for ice_conc
-    ice_conc_da = xr.DataArray(ice_conc, coords = Tb.coords, dims = Tb.dims)
     # Apply mask and bias
-    Tb = Tb.where(ice_conc_da >= 0.15, Tb - ow_bias)
+    Tb = np.where(ice_conc >= 0.15, Tb, Tb - ow_bias)
 
     return Tb, e_ice
