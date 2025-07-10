@@ -1,10 +1,11 @@
 import os
-import glob
 import numpy as np
 from datetime import datetime, timedelta
 import pyproj
+import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.datasets import Dataset
+import .rtm_amsr_fcts as rtm_amsr
 
 class AMSR2Obs(Dataset):
 
@@ -12,15 +13,15 @@ class AMSR2Obs(Dataset):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.variables = {
-            'tb19h': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
-            'tb19v': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
-            'tb37h': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
-            'tb37v': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'tb19h': {'name':'tb19h', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'tb19v': {'name':'tb19v', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'tb37h': {'name':'tb37h', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
+            'tb37v': {'name':'tb37v', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
             }
 
         ##obs is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
-        self.grid = None
+        self.grid = Grid.regular_grid(self.proj, self.xstart, self.xend, self.ystart, self.yend, self.dx)
 
         self.obs_operator = {
         #    'tb19h': self.get_simulated_tb19h,
@@ -36,33 +37,20 @@ class AMSR2Obs(Dataset):
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         t = kwargs['time']
-
-        if 'obs_window_min' in kwargs and 'obs_window_max' in kwargs:
-            d_range = [kwargs['obs_window_min'], kwargs['obs_window_max']]
-        else:
-            d_range = [0]
-
-        file_list = []
-        # search = os.path.join(kwargs['path'], '&&&')
-        # for result in glob.glob(search):
-        #     ss = result.split('_')
-        #     t1 = datetime.strptime(ss[1], '%Y-%m-%d')
-        #     t2 = datetime.strptime(ss[2], '%Y-%m-%d')
-        #     for d in d_range:
-        #         t_ = t + d * timedelta(hours=1)
-        #         if t_ >= t1 and t_ <= t2 and result not in file_list:
-        #             file_list.append(result)
-
-        # assert len(file_list)>0, 'no matching files found'
-
-        return file_list
+        return os.path.join(self.dataset_dir, f"{t:%Y}", f"tc_amsr-gw1_topaz5-6p25km_{t:%Y%m%d}12.nc")
 
     def read_obs(self, **kwargs):
         """read obs from AMSR2 dataset"""
         kwargs = super().parse_kwargs(**kwargs)
+        t = kwargs['time']
         obs_name = kwargs['name']
-        d0_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
-        d1_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
+        native_name = self.variables[obs_name]['name']
+
+        is_vector = self.variables[obs_name]['is_vector']
+
+        obs_err_std = self.obs_err_std
+        if 'err' in kwargs:
+            obs_err_std = kwargs['err']['std']
 
         ##target grid for obs_seq
         grid = kwargs['grid']
@@ -71,20 +59,35 @@ class AMSR2Obs(Dataset):
         ##      x0,y0,x1,y1 are position on rgps_proj (in kilometers),
         ##      triangles: velocity is defined on nodes and deform on elements
         ##      record: trajectory id, we process one record at a time
-        obs_seq = {'obs':[], 'err_std':[], 't':[], 'z':[], 'y':[], 'x':[],
-                   'x0':[], 'y0':[], 'triangles':[], 'record':[], 'index':[]}
+        obs_seq = {'obs':[], 'err_std':[], 't':[], 'z':[], 'y':[], 'x':[],}
 
-        rec = 0
-        for file_name in self.filename(**kwargs):
-            obs_seq['obs'].append(1)
-            rec += 1
+        with netCDF4.Dataset(self.filename(**kwargs), 'r') as f:
+            ##read the tc_amsr-gw1_topaz5-6p25km_*.nc files for the observed tb data
+            ##flip y direction (the files have decreasing y coords)
+            tmp = f[native_name][0,::-1,:]
+            dat = tmp.data
+            dat[tmp.mask] = np.nan
+
+        ##convert to target grid
+        self.grid.set_destination_grid(grid)
+        dat1 = self.grid.convert(dat, is_vector=is_vector, coarse_grain=True)
+        mask1 = np.isnan(dat1)
+        ones = np.ones(np.sum(~mask1))
+
+        ##build obs sequence
+        obs_seq['obs'].append(dat1[~mask1])
+        obs_seq['err_std'].append(ones*obs_err_std)
+        obs_seq['t'].append(np.full(ones.size, t))
+        obs_seq['z'].append(np.full(ones.size, 0.0))
+        obs_seq['y'].append(grid.y[~mask1])
+        obs_seq['x'].append(grid.x[~mask1])
 
         ##convert from list to np.array
         ##raw data are kept in list format
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
             obs_seq[key] = np.array(obs_seq[key])
 
-        if self.variables[obs_name]['is_vector']:
+        if is_vector:
             obs_seq['obs'] = obs_seq['obs'].T
 
         return obs_seq

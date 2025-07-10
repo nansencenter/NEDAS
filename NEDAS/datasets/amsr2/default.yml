@@ -1,5 +1,13 @@
-dataset_dir: "/cluster/work/users/yingyue/data/amsr2"
+dataset_dir:
+coefficients_file:
 
-##projection info
-proj4: '+proj=stere +a=6378273 +b=6356889.448910593 +lat_0=90 +lon_0=-45 +lat_ts=70'
+##grid info
+proj4: "+proj=stere +R=6378273 +k=1 +lat_0=90 +lon_0=-45 +no_defs=None +type=crs +units=m +x_0=0 +y_0=0"
+xstart: -3.6e6
+xend: 3.801e6
+ystart: -4.3e6
+yend: 2.801e6
+dx: 6.25e3
+
+obs_err_std: 4
 

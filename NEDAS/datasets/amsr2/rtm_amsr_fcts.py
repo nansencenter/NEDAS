@@ -13,11 +13,12 @@ c_ice: ice concentration [0-1]
 e_icex: ice emissivity
 -------------------------------------------------------------------------------"""
 import numpy as np
+import xarray as xr
 import cmath
 
 frequencies = np.array([6.93, 10.65, 18.70, 23.80, 36.50, 50.30, 52.80, 89.00])
 
-########################### SEA ICE EMISSIVITIES ########################### 
+########################### SEA ICE EMISSIVITIES ###########################
 ### 1-Original values from github RTM
 #sea ice emissivities (same as in rtm_ssmi.py for 19v, 19h, 22v, 22h, 37v, 37h)
 # checked with Rasmus (04.05.2015)
@@ -36,10 +37,10 @@ Eice_h = [0.88, 0.9, 0.90, 0.90, 0.88, 0.9, 0.9, 0.83]
 ######
 ### 2-Values from ASI3 algorithm Lu Junshen for February (no values for 50.30 and 52.80 fqs)
 # FYI values
-#Eice_v = [0.951, 0.952, 0.965, 0.963, 0.944, '', '', 0.882] 
-#Eice_h = [0.852,  0.857,  0.851,  0.867,  0.845, '', '', 0.814] 
+#Eice_v = [0.951, 0.952, 0.965, 0.963, 0.944, '', '', 0.882]
+#Eice_h = [0.852,  0.857,  0.851,  0.867,  0.845, '', '', 0.814]
 # MYI values
-#Eice_v = [0.962, 0.939, 0.896, 0.860, 0.774, '', '', 0.801] 
+#Eice_v = [0.962, 0.939, 0.896, 0.860, 0.774, '', '', 0.801]
 #Eice_h = [0.862, 0.845, 0.817, 0.785, 0.707, '', '', 0.754]
 #############################################################################
 
@@ -105,7 +106,7 @@ def _get_chn_idx(channel):
     return chn_idx
 
 def _is_Vpol(channel):
-    """Check if v-polarisation 
+    """Check if v-polarisation
     """
 
     return channel.endswith('v')
@@ -121,13 +122,13 @@ def calc_epsilon(Ts, channel, freq = None) :
 
     :Returns:
     epsilon: float or numpy array
-        Dielectric constant of sea water 
+        Dielectric constant of sea water
     """
 
     # Get channel index and frequency
     i = _get_chn_idx(channel)
     if freq is None: freq = frequencies[i]
-    #   
+    #
     epsilon_R = 4.44 # Dielectric constant at inf. freq. This value is from wentz and meisner, 2000, p. 28
     s = 35.0 # Salinity in parts per thousand
     ny = 0.012 # Spread factor. Klein and Swift is using 0.02 which is giving a higher epsilon_R (4.9)
@@ -194,9 +195,9 @@ def calc_ocean_emissivity(W, Ts, theta, channel) :
         C_R_0 = 0
         r0 = r0h[i]; r1 = r1h[i]; r2 = r2h[i]; r3 = r3h[i];
         W_1 = 7.0; W_2 = 12.0
-        f1 = m1h[i]; f2 = m2h[i]        
+        f1 = m1h[i]; f2 = m2h[i]
     #eq.46
-    R_0 = np.absolute(rho)**2 + C_R_0 
+    R_0 = np.absolute(rho)**2 + C_R_0
     #eq.57
     R_geo = R_0 - (r0 + r1 * (theta - 53.0) + r2 * (Ts - 288.0) + r3 * (theta - 53.0) * (Ts - 288.0)) * W
     #eq.60
@@ -233,7 +234,7 @@ def calc_emissivity(V, L, Ts, Tb, theta, channel) :
         Effective surface emissivity
     """
 
-    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel) 
+    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)
     emissivity_value = (Tb - TBU - tau * TBD)/(tau * (Ts - TBD))
 
     return emissivity_value
@@ -262,15 +263,15 @@ def calc_transmittance(V, L, Ts, TD, theta, channel):
 
     # Get channel index
     i = _get_chn_idx(channel)
-    Tl = (Ts + 273.0) / 2.0    
+    Tl = (Ts + 273.0) / 2.0
     #eq 28
     AO = ao1[i] + ao2[i] * (TD - 270.0)
     #eq 29
     AV = av1[i] * V + av2[i] * V**2
     #eq 33
-    AL = aL1[i] * (1.0 - aL2[i] * (Tl - 283.0)) * L    
+    AL = aL1[i] * (1.0 - aL2[i] * (Tl - 283.0)) * L
     #eq 22
-    tau = np.exp((-1.0/np.cos(np.deg2rad(theta))) * (AO + AV + AL))      
+    tau = np.exp((-1.0/np.cos(np.deg2rad(theta))) * (AO + AV + AL))
 
     return tau
 
@@ -299,12 +300,12 @@ def calc_down_up_welling(V, L, Ts, theta, channel) :
     """
 
     # Get channel index
-    i = _get_chn_idx(channel)           
+    i = _get_chn_idx(channel)
     Tl = (Ts + 273.0) / 2.0
     #eq 27
     Tv = np.where(V <= 48, 273.16 + 0.8337 * V - 3.029E-5 * (V**3.33), 301.16)
     G = np.where(np.fabs(Ts - Tv) <= 20, 1.05 * (Ts - Tv) * (1 - ((Ts - Tv)**2)/1200.0), (Ts - Tv) * 14/np.fabs(Ts - Tv))
-    ###    
+    ###
     #eq26
     TD = b0[i] + b1[i] * V + b2[i] * V**2 + b3[i] * V**3 + b4[i] * V**4 + b5[i] * G
     TU = TD + b6[i] + b7[i] * V
@@ -335,21 +336,21 @@ def calc_omega(W, tau, channel, freq = None) :
     # Get channel index and frequency
     i = _get_chn_idx(channel)
     if freq is None: freq = frequencies[i]
-    #    
+    #
     if i >= 4: Delta_S2 = 5.22E-3 * W
     else: Delta_S2 = 5.22E-3 * (1 - 0.00748 * (37.0 - freq)**1.3) * W
     Delta_S2 = (Delta_S2 > 0.069) * 0.069 + (Delta_S2 <= 0.069) * Delta_S2 # set all values gt 0.069 to 0.069
     #eq.62
-    term = Delta_S2 - 70.0 * Delta_S2**3     
+    term = Delta_S2 - 70.0 * Delta_S2**3
     # Next equations split for each polarisation
     if _is_Vpol(channel) : # vertical polarisation
         Omega = (2.5 + 0.018 * (37.0 - freq)) * term * tau**3.4
     else: # horizontal polarisation
-        Omega=(6.2 - 0.001 * (37.0 - freq)**2) * term * tau**2.0    
+        Omega = (6.2 - 0.001 * (37.0 - freq)**2) * term * tau**2.0
 
     return Omega
 
-def observed_tb(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
+def observed_tb(V, W, L, Ts, ice_conc, theta, channel) :
     """
     Calculates brightness temperature as seen by the sensor over sea.
     No correction for wind direction.
@@ -375,41 +376,41 @@ def observed_tb(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
 
     """
 
-    # Get channel index 
+    # Get channel index
     i = _get_chn_idx(channel)
 
     # Cosmic microwave background temperature
     T_C = 2.726
 
     # Ice concentration
-    ice_conc = np.clip(ice_conc, 0., 1.)    
+    ice_conc = np.clip(ice_conc, 0., 1.)
     # Mix temperature and ice emissivity
     if _is_Vpol(channel) : tmix = Tmix_v[i]; e_ice = Eice_v[i]
     else: tmix = Tmix_h[i]; e_ice = Eice_h[i]
     # Ice temperature
-    Ti = np.clip(tmix * Ts + (1. - tmix) * 272, 0, 272)  
+    Ti = np.clip(tmix * Ts + (1. - tmix) * 272, 0, 272)
 
     # Get upwelling, downwelling temperatures and transmittance
-    TD, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel) 
+    TD, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)
     # Get reflection reductance from surface roughness
-    Omega = calc_omega(W, tau, channel) 
+    Omega = calc_omega(W, tau, channel)
     # Get sea surface emissivity
     emissivity = calc_ocean_emissivity(W, Ts, theta, channel)
 
     #eq.61 sky radiation scattered upward by Earth surface
-    T_BOmega = ((1 + Omega) * (1 - tau) * (TD - T_C) + T_C) 
+    T_BOmega = ((1 + Omega) * (1 - tau) * (TD - T_C) + T_C)
 
     # Calculate Tb
     Tb = TBU +  \
                 tau * (
-                (1.0 - ice_conc) * emissivity * Ts + 
-                ice_conc * e_ice * Ti + 
+                (1.0 - ice_conc) * emissivity * Ts +
+                ice_conc * e_ice * Ti +
                 (1.0 - ice_conc) * (1.0 - emissivity) * (T_BOmega) +
                 ice_conc * (1.0 - e_ice) * (TBD + tau * T_C))
 
     return Tb
 
-def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
+def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel) :
     """
     Simulates brightness temperature from constant ice and water emissivity values.
     No correction for wind direction.
@@ -417,6 +418,8 @@ def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
     :Parameters:
     V : float, numpy array
         Columnar water vapor
+    W : float, numpy array
+        Windspeed over water
     L : float, numpy array
         Columnar cloud liquid water
     Ts : float, numpy array
@@ -430,10 +433,9 @@ def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
     :Returns:
     Tb : float or numpy array
         Simulated brightness temperature
-
     """
-    
-    # Get channel index 
+
+    # Get channel index
     i = _get_chn_idx(channel)
     #
     Ew_v = ['-', '-', 0.65, '-', 0.75, '-', '-', '-']
@@ -443,24 +445,24 @@ def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
     else :
         e_ice = Eice_h[i]; e_water = Ew_h[i]
     #
-        
+
     # Ice concentration
-    ice_conc = np.clip(ice_conc, 0., 1.)    
-    
+    ice_conc = np.clip(ice_conc, 0., 1.)
+
     # Compute effective emissivity
-    effective_em = (1 - ice_conc) * e_water + ice_conc * e_ice 
-   
+    effective_em = (1 - ice_conc) * e_water + ice_conc * e_ice
+
     # Get upwelling, downwelling temperatures and transmittance
-    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)     
-       
+    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)
+
     # Compute Tb
     Tb = TBU + tau * (effective_em * Ts + TBD * (1 - effective_em))
     #Tb = TBU + tau*((1 - ice_conc)*e_water*Ts + ice_conc*e_ice*Ts + TBD(1 - (1 - ice_conc)*e_water + ice_conc*e_ice))
     #Tb = TBU + tau*((1.0 - ice_conc)*emissivity*Ts + ice_conc*e_ice*Ti + (1.0 - ice_conc)*\
     #(1.0 - emissivity)*(T_BOmega + tau*T_C) + ice_conc*(1.0 - e_ice)*(TBD + tau*T_C))
-    return Tb  
+    return Tb
 
-def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
+def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel) :
     """
     Simulates brightness temperature from constant ice and computed water emissivity values.
     No correction for wind direction.
@@ -468,6 +470,8 @@ def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
     :Parameters:
     V : float, numpy array
         Columnar water vapor
+    W : float, numpy array
+        Windspeed over water
     L : float, numpy array
         Columnar cloud liquid water
     Ts : float, numpy array
@@ -483,36 +487,36 @@ def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel, freq = None) :
         Simulated brightness temperature
 
     """
-    
-    # Get channel index 
+
+    # Get channel index
     i = _get_chn_idx(channel)
-     
+
     if _is_Vpol(channel) :
-        e_ice = Eice_v[i]; 
+        e_ice = Eice_v[i];
     else :
-        e_ice = Eice_h[i]; 
+        e_ice = Eice_h[i];
     #
     e_water = calc_ocean_emissivity(W, Ts, theta, channel)
-       
+
     # Ice concentration
-    ice_conc = np.clip(ice_conc, 0., 1.)    
-    
+    ice_conc = np.clip(ice_conc, 0., 1.)
+
     # Compute effective emissivity
-    effective_em = (1 - ice_conc) * e_water + ice_conc * e_ice 
-   
+    effective_em = (1 - ice_conc) * e_water + ice_conc * e_ice
+
     # Get upwelling, downwelling temperatures and transmittance
-    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)     
-       
+    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)
+
     # Compute Tb
     Tb = TBU + tau*(effective_em * Ts + TBD * (1 - effective_em))
+
     return Tb
 
 def calc_emissivity_plan(x, y, channel, dict_coeffs) :
     """
-    
-    Computes emissivity (z) as a plan: z = a1*x + a2*y + c 
+    Computes emissivity (z) as a plan: z = a1*x + a2*y + c
     Coefficients a1, a2, c have been computed from TPD files with SIC = 1
-    
+
     :Parameters:
     x, y : float, numpy array
             input variables of plane with x, y = T2M, DAL
@@ -520,20 +524,19 @@ def calc_emissivity_plan(x, y, channel, dict_coeffs) :
             coefficients of equation of plane
     c : float
         value of intercept
-    
+
     :Returns:
     z : float or numpy array
         Simulated emissivity
-    
-    """ 
+    """
     a1, a2 = dict_coeffs[channel]['a1'], dict_coeffs[channel]['a2']
     c = dict_coeffs[channel]['c']
-    
     x1, y1 = x, y
     z = a1*x1 + a2*y1 + c
+
     return z
 
-def simulated_tb_v03(V, W, L, Ts, dal, ice_conc, theta, channel, freq = None, dict_coeffs = {}) :
+def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em = 0, dal = None, dict_coeffs = {}, file_atlas = None, file_ml = None) :
     """
     Simulates brightness temperature from computed ice and water emissivity values.
     No correction for wind direction.
@@ -541,6 +544,8 @@ def simulated_tb_v03(V, W, L, Ts, dal, ice_conc, theta, channel, freq = None, di
     :Parameters:
     V : float, numpy array
         Columnar water vapor
+    W : float, numpy array
+        Windspeed over water
     L : float, numpy array
         Columnar cloud liquid water
     Ts : float, numpy array
@@ -548,32 +553,59 @@ def simulated_tb_v03(V, W, L, Ts, dal, ice_conc, theta, channel, freq = None, di
     ice_conc : float, numpy array
         Sea ice concentration
     theta: float
-        Incidence angle
+           Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
+    ow_bias : float, scalar
+              open water bias (K) for Tbs
+    opt_em : float, scalar
+             0:'fix', 1:'dal', 2:'atlas'
+    dal : float, numpy array
+          Distance Along the Line (K)
+    dict_coeffs : dictionnary, dict_coeffs[channel]['a1'], dict_coeffs[channel]['a2'], dict_coeffs[channel]['c']
+                 Coefficients for computation of ice emissivity from DAL and Ts
 
     :Returns:
-    Tb : float or numpy array
+    Tb : float, numpy array
         Simulated brightness temperature
-
     """
-
-    # Get channel index 
+    # Get channel index
     i = _get_chn_idx(channel)
 
-    e_ice = calc_emissivity_plan(Ts, dal, channel, dict_coeffs) 
+    # Emissivity over sea ice (check option chosen: em_opt)
+    ice_emissivity_options = {0 : 'fix', 1 : 'atlas', 2 : 'dal', 3 : 'ml'}
+    if ice_emissivity_options[opt_em] == 'fix' :
+        if _is_Vpol(channel) :
+            e_ice = Eice_v[i]
+        else :
+            e_ice = Eice_h[i]
+    elif ice_emissivity_options[opt_em] == 'atlas' :
+        data_atlas = xr.open_dataset(file_atlas)
+        e_ice = data_atlas[f'em_{channel}'][:].data
+    elif ice_emissivity_options[opt_em] == 'dal' :
+        e_ice = calc_emissivity_plan(Ts, dal, channel, dict_coeffs)
+    elif ice_emissivity_options[opt_em] == 'ml' :
+        e_ice = xr.open_dataset(file_ml)[f'Prediction_AMSR2_e{channel}'].data
 
-    #
+    # Emissivity over water
     e_water = calc_ocean_emissivity(W, Ts, theta, channel)
 
     # Ice concentration
-    ice_conc = np.clip(ice_conc, 0., 1.)    
+    ice_conc = np.clip(ice_conc, 0., 1.)
 
-    # Compute effective emissivity
-    effective_em = (1 - ice_conc) * e_water + ice_conc * e_ice 
+    # Compute surface emissivity
+    surface_em = (1 - ice_conc) * e_water + ice_conc * e_ice
 
     # Get upwelling, downwelling temperatures and transmittance
-    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)     
+    _, TBD, _, TBU, tau = calc_down_up_welling(V, L, Ts, theta, channel)
 
     # Compute Tb
-    Tb = TBU + tau*(effective_em * Ts + TBD * (1 - effective_em))
+    Tb = TBU + tau*(surface_em * Ts + TBD * (1 - surface_em))
+
+    # OW bias correction
+    # Assume Tb is an xarray.DataArray with named dimensions, e.g., ('y', 'x')
+    # Use the same dims and coords for ice_conc
+    ice_conc_da = xr.DataArray(ice_conc, coords = Tb.coords, dims = Tb.dims)
+    # Apply mask and bias
+    Tb = Tb.where(ice_conc_da >= 0.15, Tb - ow_bias)
+
     return Tb, e_ice
