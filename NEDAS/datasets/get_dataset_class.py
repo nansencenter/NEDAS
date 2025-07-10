@@ -12,6 +12,7 @@ registry = {
     'ifremer.argo': 'ArgoObs',
     'osisaf.ice_conc': 'OsisafSeaIceConcObs',
     'osisaf.ice_drift': 'OsisafSeaIceDriftObs',
+    'amsr2': 'AMSR2Obs',
     'cs2smos': 'Cs2SmosObs',
     'rgps': 'RgpsObs',
     'topaz': 'TopazPrepObs',
