@@ -386,7 +386,7 @@ class OfflineFilterAnalysisScheme:
         if c.job_submit and c.job_submit.get('run_separate_jobs', False):
             ##all jobs will be submitted to external scheduler's queue
             ##just assign a worker to each ensemble member
-            nworker = min(c.nens, c.nproc)
+            nworker = min(c.nens, c.nproc_util)
         else:
             ##Scheduler will use nworkers to spawn ensemble member runs to
             ##the available nproc processors
