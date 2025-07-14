@@ -4,7 +4,6 @@ import numpy as np
 from datetime import datetime, timedelta
 import pyproj
 import netCDF4
-import pandas as pd
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
 from NEDAS.datasets import Dataset
@@ -18,7 +17,7 @@ class AMSR2Obs(Dataset):
     yend: float
     dx: float
     obs_err_std: float
-    dataset_dir: str    
+    dataset_dir: str
     coefficients_file: str
     ow_bias_file: str
 
@@ -85,7 +84,7 @@ class AMSR2Obs(Dataset):
         if search is None or len(file_list) == 0:
             raise RuntimeError(f'no matching files found: {search}')
         return file_list
-    
+
     def read_obs(self, **kwargs):
         """read obs from AMSR2 dataset"""
         kwargs = super().parse_kwargs(**kwargs)
@@ -154,6 +153,7 @@ class AMSR2Obs(Dataset):
         raise NotImplementedError
 
     def _load_coeffs_biases(self, date):
+        import pandas as pd
         if self.coeffs is None:
             df = pd.read_csv(self.coefficients_file)
 
