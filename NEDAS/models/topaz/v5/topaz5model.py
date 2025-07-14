@@ -644,9 +644,11 @@ class Topaz5Model(Model):
             run_command(f"cp -L {file1} {file2}")
         f = ABFileRestart(file2, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
         nfld = len(f.fields.keys())
-        fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
+        # fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
+        fld = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         f.write_field(fld, None, 'ficem', 0, 1, nfld)
-        fld = np.load(self.filename(path=kwargs['path'], name='seaice_thick', member=member, time=time))
+        # fld = np.load(self.filename(path=kwargs['path'], name='seaice_thick', member=member, time=time))
+        fld = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         f.write_field(fld, None, 'hicem', 0, 1, nfld+1)
         f.close()
 
