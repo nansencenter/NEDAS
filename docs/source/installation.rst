@@ -17,6 +17,8 @@ NEDAS requires Python >=3.8, the following packages are mandatory:
 - `pyshp <https://github.com/GeospatialPython/pyshp>`_
 - `netCDF4 <https://unidata.github.io/netcdf4-python/>`_
 - `pyYAML <https://pyyaml.org/>`_
+- `xarray <https://docs.xarray.dev/en/stable/>`_
+- `pandas <https://pandas.pydata.org/>`_
 
 The dynamical model, unless directly implemented in Python, needs to be installed separately.
 Check its own documentation for details on installation.
