@@ -55,13 +55,13 @@ def obs_increment_qcef(obs_prior, obs, obs_err) -> np.ndarray:
         return obs_increment
 
     # Get prior and posterior distribution parameters
-    params_prior = get_kde_params(obs_prior, 0.0, np.Inf)
+    params_prior = get_kde_params(obs_prior, 0.0, np.inf)
     params_post  = get_kde_params(obs_prior, obs, obs_err)
 
-    for i in range(params["nens"]):  # Loop iterations are independent, parallelizable
+    for i in range(params_prior["nens"]):  # Loop iterations are independent, parallelizable
         u = kde_cdf(obs_prior[i], params_prior)
         f = lambda x: kde_cdf(x, params_post) - u
-        fprime = lambda x: kdf_pdf(x, params_post)
+        fprime = lambda x: kde_pdf(x, params_post)
         obs_increment[i] = root_scalar(f, fprime=fprime, x0=obs_prior[i]).root - obs_prior[i]  # TODO: Add logic to catch errors. Maybe a better initial guess.
 
     return obs_increment
@@ -133,11 +133,11 @@ def update_ensemble(ens_prior, obs_prior, obs_incr, local_factor) -> np.ndarray:
 
 @njit
 def epanechnikov_kernel(x) -> np.ndarray:
-    return 0.75 * max(0.0, 1.0 - x**2)
+    return 0.75 * np.maximum(0.0, 1.0 - x**2)
 
 @njit
 def epanechnikov_cdf(x) -> np.ndarray:
-    x_truncated = min(1.0, max(-1.0, x))
+    x_truncated = np.minimum(1.0, np.maximum(-1.0, x))
     return 0.25 * (2.0 + 3.0 * x_truncated - x_truncated**3)
 
 @njit
@@ -148,14 +148,14 @@ def get_kde_bandwidths(obs_prior) -> np.ndarray:
     #if (d_max <= 0.0): There should be a warning/error here. Can't continue if all ensemble members have the same value.
     ens_mean = np.mean(obs_prior)
     ens_sd   = np.std(obs_prior)
-    h0 = 2.0 * ens_sd / (ens_size**0.2)  # This would be the kernel width if the widths were not adaptive.
+    h0 = 2.0 * ens_sd / (nens**0.2)  # This would be the kernel width if the widths were not adaptive.
                                          # It would be better to use min(sd, iqr/1.34) but don't want to compute iqr
-    k = np.floor( np.sqrt(nens) )  # distance to kth nearest neighbor is used to set bandwidth for k defined here
+    k = int(np.floor( np.sqrt(nens) ))  # distance to kth nearest neighbor is used to set bandwidth for k defined here
     f_tilde = np.zeros(nens)
     for i in range(nens):
         ## This loop can fail if the kth nearest neighbor has distance 0, in which case you need to
         ## search for the first neighbor that has a nonzero distance.
-        dist  = np.absolute(obs_prior[0] - obs_prior[:]).sort()
+        dist  = np.sort(np.absolute(obs_prior[0] - obs_prior[:]))
         d_max = dist.max()
         dist  = np.where(dist <= 1.E-3 * d_max, 0.0, dist)  # replace small distances with 0
         f_tilde[i] = 0.5 * (k - 1) / (nens * dist[k])       # Initial density estimate
@@ -221,11 +221,11 @@ def kde_pdf(x, params):
     ## Evaluates the kde approximation to the pdf at x. params is a dict set above.
     kde_pdf = 0.0  # Initialize
     if (params["is_prior"]):
-        for i in range(nens):  # This is a reduction loop
+        for i in range(int(params['i_nens'])):  # This is a reduction loop
             kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
         kde_pdf *= params["i_nens"] * params["normalization_constant"]
     else:
-        for i in range(nens):  # This is a reduction loop
+        for i in range(int(params['i_nens'])):  # This is a reduction loop
             kde_pdf += params["i_bandwidths"] * epanechnikov_kernel( (x - params["ens"][i]) * params["i_bandwidths"][i] )
         kde_pdf *= params["i_nens"] * params["normalization_constant"] \
                  * np.exp(-0.5 * ((x - params["obs"]) / params["obs_err"])**2)  # TODO: Enable non-Gaussian likelihoods
