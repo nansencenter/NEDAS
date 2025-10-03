@@ -9,6 +9,7 @@ from pyproj import Proj
 import NEDAS
 from .parse_config import parse_config
 from NEDAS.utils import parallel
+from NEDAS.grid import GridType
 
 class Config:
     """
@@ -45,6 +46,8 @@ class Config:
     model_def: dict
     dataset_def: dict
     comm: parallel.Comm
+    nens: int
+    grid: GridType
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
         # parse the yaml config file to obtain the values
@@ -274,8 +277,9 @@ class Config:
                 model_name = self.grid_def['mask']
                 Model = NEDAS.models.get_model_class(model_name)
                 model = Model()
-                if hasattr(model, 'prepare_mask'):
-                    self.grid.mask = model.prepare_mask(self.grid)
+                prepare_mask = getattr(model, 'prepare_mask', None)
+                if prepare_mask is not None:
+                    self.grid.mask = prepare_mask(self.grid)
 
         else:
             ##get analysis grid from model module
@@ -283,7 +287,10 @@ class Config:
             kwargs = self.model_def[model_name]
             Model = NEDAS.models.get_model_class(model_name)
             model = Model(**kwargs)
-            self.grid = model.grid
+            model_grid = getattr(model, 'grid')
+            if model_grid is not GridType:
+                raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
+            self.grid = model_grid
 
     def set_models(self):
         """

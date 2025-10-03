@@ -1,7 +1,6 @@
 import numpy as np
-import copy
 from matplotlib.tri import Triangulation
-from matplotlib import colormaps
+import matplotlib
 from NEDAS.grid.grid_base import GridBase
 
 class IrregularGrid(GridBase):
@@ -47,7 +46,7 @@ class IrregularGrid(GridBase):
     def change_resolution_level(self, nlevel):
         raise NotImplementedError("change_resolution only works for regular grid now")
 
-    def _mesh_dx(self):
+    def _mesh_dx(self) -> float:
         """
         computes averaged edge length for irregular mesh, used in self.dx, dy
         """
@@ -62,10 +61,11 @@ class IrregularGrid(GridBase):
         valid = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
         if ~valid.all():
             ##all triangles are elongated, just take their mean size
-            return np.mean(sa)
+            dx = np.mean(sa)
         else:
             ##take the mean of triangle size, excluding the elongated ones
-            return np.mean(sa[valid])
+            dx = np.mean(sa[valid])
+        return float(dx)
 
     def _triangle_properties(self):
         """
@@ -89,18 +89,19 @@ class IrregularGrid(GridBase):
         x = self.x
         y = self.y
         inds = np.arange(self.npoints)
-        if 'x' in self.cyclic_dim:
-            x = np.hstack([x, x-self.Lx, x+self.Lx])
-            y = np.hstack([y, y, y])
-            inds = np.hstack([inds, inds, inds])
-        if 'y' in self.cyclic_dim:
-            x = np.hstack([x, x, x])
-            y = np.hstack([y, y-self.Ly, y+self.Ly])
-            inds = np.hstack([inds, inds, inds])
-        if 'x' in self.cyclic_dim and 'y' in self.cyclic_dim:
-            x = np.hstack([x, x-self.Lx, x+self.Lx, x-self.Lx, x+self.Lx])
-            y = np.hstack([y, y-self.Ly, y-self.Ly, y+self.Ly, y+self.Ly])
-            inds = np.hstack([inds, inds, inds, inds, inds])
+        if self.cyclic_dim is not None:
+            if 'x' in self.cyclic_dim:
+                x = np.hstack([x, x-self.Lx, x+self.Lx])
+                y = np.hstack([y, y, y])
+                inds = np.hstack([inds, inds, inds])
+            if 'y' in self.cyclic_dim:
+                x = np.hstack([x, x, x])
+                y = np.hstack([y, y-self.Ly, y+self.Ly])
+                inds = np.hstack([inds, inds, inds])
+            if 'x' in self.cyclic_dim and 'y' in self.cyclic_dim:
+                x = np.hstack([x, x-self.Lx, x+self.Lx, x-self.Lx, x+self.Lx])
+                y = np.hstack([y, y-self.Ly, y-self.Ly, y+self.Ly, y+self.Ly])
+                inds = np.hstack([inds, inds, inds, inds, inds])
         tri = Triangulation(x, y)
 
         ##find the triangles that covers the domain and keep them
@@ -185,6 +186,8 @@ class IrregularGrid(GridBase):
         return interp_weights
 
     def interp(self, fld, x=None, y=None, method='linear'):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for interpolation")
         if x is None or y is None:
             ##use precalculated weights for self.dst_grid
             inside = self.interp_inside
@@ -216,6 +219,9 @@ class IrregularGrid(GridBase):
         return fld_interp.reshape(np.array(x).shape)
 
     def coarsen(self, fld):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for coarse-graining")
+
         ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
@@ -248,7 +254,7 @@ class IrregularGrid(GridBase):
             vmax = np.nanmax(fld)
 
         if isinstance(cmap, str):
-            cmap = colormaps[cmap]
+            cmap = matplotlib.colormaps[cmap]  # type: ignore
 
         if fld.shape == self.x.shape:
             fld = fld[self.tri.inds]

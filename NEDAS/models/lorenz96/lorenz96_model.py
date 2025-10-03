@@ -8,6 +8,11 @@ from .core import M_nl
 from NEDAS.models import Model
 
 class Lorenz96Model(Model):
+    nx: int
+    F: float
+    dt: float
+    restart_dt: float
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
