@@ -1,6 +1,7 @@
+from typing import Optional
 import copy
 import numpy as np
-from matplotlib import colormaps
+import matplotlib
 from NEDAS.grid.grid_base import GridBase
 
 class RegularGrid(GridBase):
@@ -18,6 +19,9 @@ class RegularGrid(GridBase):
             Since specifying neighbors already take care of cyclic boundary conditions, `cyclic_dim` will be discarded if `neighbors` is set.
 
     """
+    pole_dim: Optional[str]
+    pole_index: Optional[list[int]]
+
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian',
                  pole_dim=None, pole_index=None, neighbors=None, dst_grid=None,):
         super().__init__(proj, x, y, bounds, cyclic_dim, distance_type, dst_grid)
@@ -198,13 +202,13 @@ class RegularGrid(GridBase):
         we fill in the void using surrounding values for each pole defined by self.pole_dim and pole_index
         """
         if self.pole_dim == 'x':
-            for i in self.pole_index:
+            for i in self.pole_index or []:
                 if i==0:
                     fld[:, 0] = np.mean(fld[:, 1])
                 if i==-1:
                     fld[:, -1] = np.mean(fld[:, -2])
         if self.pole_dim == 'y':
-            for i in self.pole_index:
+            for i in self.pole_index or []:
                 if i==0:
                     fld[0, :] = np.mean(fld[1, :])
                 if i==-1:
@@ -260,6 +264,8 @@ class RegularGrid(GridBase):
         return interp_weights
 
     def interp(self, fld, x=None, y=None, method='linear'):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for interpolation")
         if x is None or y is None:
             ##use precalculated weights for self.dst_grid
             inside = self.interp_inside
@@ -289,6 +295,8 @@ class RegularGrid(GridBase):
 
     ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for coarse-graining")
         ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
@@ -318,7 +326,7 @@ class RegularGrid(GridBase):
             vmax = np.nanmax(fld)
 
         if isinstance(cmap, str):
-            cmap = colormaps[cmap]
+            cmap = matplotlib.colormaps[cmap]  # type: ignore
 
         x = self.x
         y = self.y
