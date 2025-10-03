@@ -1,11 +1,12 @@
 import os
 import inspect
 from functools import cached_property
+from typing import Optional
 from abc import ABC, abstractmethod
 import numpy as np
 import shapefile
 from pyproj import Proj, Geod
-from matplotlib import colormaps
+import matplotlib
 from NEDAS.utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_reference_vector_legend
 
 class GridBase(ABC):
@@ -35,6 +36,17 @@ class GridBase(ABC):
         mask (np.ndarray):
             Mask (bool) for points that are not participating the analysis,same shape as :code:`x`, default is all False.
     """
+    x: np.ndarray
+    y: np.ndarray
+    x_elem: np.ndarray
+    y_elem: np.ndarray
+    dx: float
+    dy: float
+    Lx: float
+    Ly: float
+    regular: bool
+    cyclic_dim: Optional[str]
+
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian', dst_grid=None):
         assert x.shape == y.shape, "x, y shape does not match"
 
@@ -168,12 +180,12 @@ class GridBase(ABC):
 
         ##prepare indices for coarse-graining
         x, y = self._proj_to(self.x, self.y)
-        inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+        inside, _, _, _, nearest = grid.find_index(x, y)
         self.coarsen_inside = inside
         self.coarsen_nearest = nearest
         if not self.regular: ## for irregular mesh, find indices for elements too
             x, y = self._proj_to(self.x_elem, self.y_elem)
-            inside, _, _, _, nearest = self.dst_grid.find_index(x, y)
+            inside, _, _, _, nearest = grid.find_index(x, y)
             self.coarsen_inside_elem = inside
             self.coarsen_nearest_elem = nearest
 
@@ -203,7 +215,7 @@ class GridBase(ABC):
         return x_, y_
 
     @abstractmethod
-    def find_index(self, x_, y_):
+    def find_index(self, x_, y_) -> tuple[np.ndarray, np.ndarray|None, np.ndarray, np.ndarray, np.ndarray]:
         """
         Find indices of `self.x`, `self.y` corresponding to the given `x_`, `y_`.
 
@@ -234,12 +246,14 @@ class GridBase(ABC):
             - This function assumes `self.x`, `self.y` define either a regular or triangular grid.
             - Internal coordinates are used for interpolation and vary in dimension based on the grid type.
         """
-        pass
+        ...
 
     def _proj_to(self, x, y):
         """
         Transform coordinates from self.proj to dst_grid.proj
         """
+        if self.dst_grid is None:
+            raise ValueError("dst_grid is not set, cannot project to dst_grid coordinates")
         if self.dst_grid.proj != self.proj:
             lon, lat = self.proj(x, y, inverse=True)
             x, y = self.dst_grid.proj(lon, lat)
@@ -250,6 +264,8 @@ class GridBase(ABC):
         """
         transform coordinates from dst_grid.proj to self.proj
         """
+        if self.dst_grid is None:
+            raise ValueError("dst_grid is not set, cannot project from dst_grid coordinates")
         if self.dst_grid.proj != self.proj:
             lon, lat = self.dst_grid.proj(x, y, inverse=True)
             x, y = self.proj(lon, lat)
@@ -260,6 +276,8 @@ class GridBase(ABC):
         """
         setting the rotation matrix for converting vector fields from self to dst_grid
         """
+        if self.dst_grid is None:
+            raise ValueError("dst_grid is not set, cannot set rotation matrix")
         self.rotate_matrix = np.zeros((4,)+self.x.shape)
         if self.proj != self.dst_grid.proj:
             ##self.x,y corresponding coordinates in dst_proj, call them x,y
@@ -306,7 +324,11 @@ class GridBase(ABC):
         return np.array([u_rot, v_rot])
 
     @abstractmethod
-    def interp(self, fld, x=None, y=None, method='linear'):
+    def _interp_weights(self, inside, vertices, in_coords) -> np.ndarray:
+        ...
+
+    @abstractmethod
+    def interp(self, fld, x=None, y=None, method='linear') -> np.ndarray:
         """
         Interpolation of 2D field data (fld) from one grid (self or given x,y) to another (dst_grid).
         This can be used for grid refining (low->high resolution) or grid thinning (high->low resolution).
@@ -324,10 +346,10 @@ class GridBase(ABC):
         Returns:
             The interpolated field defined on the destination grid
         """
-        pass
+        ...
 
     @abstractmethod
-    def coarsen(self, fld):
+    def coarsen(self, fld) -> np.ndarray:
         """
         Coarse-graining is sometimes needed when the dst_grid is at lower resolution than self.
         Since many points of self.x,y falls in one dst_grid box/element, it is better to
@@ -340,7 +362,7 @@ class GridBase(ABC):
         Returns:
             The coarse-grained field defined on self.dst_grid.
         """
-        pass
+        ...
 
     def convert(self, fld, is_vector=False, method='linear', coarse_grain=False):
         """
@@ -364,6 +386,8 @@ class GridBase(ABC):
         Returns:
             The converted field defined on the destination grid self.dst_grid.
         """
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for convert")
         if self.dst_grid != self:
             if is_vector:
                 assert fld.shape[0] == 2, "vector field should have first dim==2, for u,v component"
@@ -576,7 +600,7 @@ class GridBase(ABC):
             cmap (matplotlib colormap, or str, optional):
                 Colormap used in the plot, default is 'viridis'
         """
-        pass
+        ...
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
@@ -729,7 +753,7 @@ class GridBase(ABC):
             vbound = np.maximum(np.minimum(v, vmax), vmin)
 
             if isinstance(cmap, str):
-                cmap = colormaps[cmap]
+                cmap = matplotlib.colormaps[cmap]  # type: ignore
             cmap = np.array([cmap(x)[0:3] for x in np.linspace(0, 1, nlevels+1)])
 
             cind = ((vbound - vmin) / dv).astype(int)

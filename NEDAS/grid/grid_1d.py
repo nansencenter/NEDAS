@@ -9,6 +9,8 @@ class Grid1D:
     This introduces y coordinates in Grid1D class, although y is not defined for 1D grid, this makes the code that
     calles Grid/Grid1D methods to be easier to maintain.
     """
+    mask: np.ndarray
+
     def __init__(self, x, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
 
         ##coordinates and properties of the 2D grid
@@ -101,7 +103,7 @@ class Grid1D:
         self.interp_weights = self._interp_weights(inside, vertices, in_coords)
 
         ##prepare indices for coarse-graining
-        inside, _, _, nearest = self.dst_grid.find_index(self.x)
+        inside, _, _, nearest = grid.find_index(self.x)
         self.coarsen_inside = inside
         self.coarsen_nearest = nearest
 
@@ -150,6 +152,9 @@ class Grid1D:
         return interp_weights
 
     def interp(self, fld, x=None, y=None, method='linear'):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for interpolation")
+
         if x is None:
             ##use precalculated weights for self.dst_grid
             inside = self.interp_inside
@@ -178,6 +183,9 @@ class Grid1D:
 
     ###utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for coarse-graining")
+
         ##find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
@@ -201,6 +209,9 @@ class Grid1D:
         return fld_coarse.reshape(self.dst_grid.x.shape)
 
     def convert(self, fld, is_vector=False, method='linear', coarse_grain=False, **kwargs):
+        if self.dst_grid is None:
+            raise ValueError("dst_grid not set for convert")
+
         if self.dst_grid != self:
             fld_out = np.full(self.dst_grid.x.shape, np.nan)
             fld_out = self.interp(fld, method=method)
