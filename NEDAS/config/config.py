@@ -288,7 +288,7 @@ class Config:
             Model = NEDAS.models.get_model_class(model_name)
             model = Model(**kwargs)
             model_grid = getattr(model, 'grid')
-            if model_grid is not GridType:
+            if not isinstance(model_grid, GridType):
                 raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
             self.grid = model_grid
 
