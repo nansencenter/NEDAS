@@ -6,6 +6,7 @@ import pyproj
 import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
+from NEDAS.utils.random_perturb import random_field_gaussian
 from NEDAS.datasets import Dataset
 from .rtm_amsr_fcts import simulated_tb_v03
 
@@ -183,6 +184,7 @@ class AMSR2Obs(Dataset):
         kwargs = super().parse_kwargs(**kwargs)
         model = kwargs['model']
         grid = kwargs['grid']
+        model.grid.set_destination_grid(grid)
         x, y = kwargs['x'], kwargs['y']
 
         #load coefficients and biases from csv files of the given date
@@ -192,15 +194,28 @@ class AMSR2Obs(Dataset):
         ow_bias = self.ow_bias[channel]
 
         #load atmospheric data
-        ##should come from model.read_var, for convenience I read the copy from observation files for now
-        wind = self.read_obs(**{**kwargs, 'name': 'wind_speed', 'units': 'm/s'})['obs']
-        vapor = self.read_obs(**{**kwargs, 'name': 'water_vapor', 'units': 'g/kg'})['obs']
-        liquid = self.read_obs(**{**kwargs, 'name': 'liquid_water', 'units': 'g/kg'})['obs']
-        airtemp = self.read_obs(**{**kwargs, 'name': 'air_temp', 'units': 'K'})['obs']
+        ##option 1: for convenience I read the copy from observation files for now
+        #wind = self.read_obs(**{**kwargs, 'name': 'wind_speed', 'units': 'm/s'})['obs']
+        #vapor = self.read_obs(**{**kwargs, 'name': 'water_vapor', 'units': 'g/kg'})['obs']
+        #liquid = self.read_obs(**{**kwargs, 'name': 'liquid_water', 'units': 'g/kg'})['obs']
+        #airtemp = self.read_obs(**{**kwargs, 'name': 'air_temp', 'units': 'K'})['obs']
+        ##option 2: read from model forcing files
+        wind_vector_from_model = model.read_var(**{**kwargs, 'name': 'atmos_surf_velocity', 'units': 'm/s'})
+        wind_vector = model.grid.convert(wind_vector_from_model, is_vector=True)
+        wind_on_grid = np.hypot(wind_vector[0,...], wind_vector[1,...])
+        wind = grid.interp(wind_on_grid, x, y)
+        airtemp_from_model = model.read_var(**{**kwargs, 'name': 'atmos_surf_temp', 'units': 'K'})
+        airtemp_on_grid = model.grid.convert(airtemp_from_model)
+        airtemp = grid.interp(airtemp_on_grid, x, y)
+        vapor_from_model = model.read_var(**{**kwargs, 'name': 'atmos_column_vapor', 'units': 'kg/m2'})
+        vapor_on_grid = model.grid.convert(vapor_from_model)
+        vapor = grid.interp(vapor_on_grid, x, y)
+        liquid_from_model = model.read_var(**{**kwargs, 'name': 'atmos_column_liquid', 'units': 'kg/m2'})
+        liquid_on_grid = model.grid.convert(liquid_from_model)
+        liquid = grid.interp(liquid_on_grid, x, y)
 
         #sea ice concentration from model
         sic_from_model = model.read_var(**{**kwargs, 'name': 'seaice_conc', 'units': 1})
-        model.grid.set_destination_grid(grid)
         sic_on_grid = model.grid.convert(sic_from_model)
         sic = grid.interp(sic_on_grid, x, y)
 

@@ -122,6 +122,8 @@ class Topaz5Model(Model):
             'atmos_down_longwave': {'name':'radflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
             'atmos_down_shortwave': {'name':'shwflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
             'atmos_surf_vapor_mix': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
+            'atmos_column_vapor': {'name':'tcwv', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/m2'},
+            'atmos_column_liquid': {'name':'tclw', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/m2'},
             }
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
 
@@ -459,9 +461,9 @@ class Topaz5Model(Model):
             raise AttributeError("topaz5model: grid not yet defined")
         seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'seaice_conc_ncat'
-        rec['units'] = self.variables['seaice_conc_ncat']['units']
-        for k in range(len(self.variables['seaice_conc_ncat']['levels'])):
+        rec['name'] = 'seaice_conc_ncat'  ##can use iceh or iced files
+        rec['units'] = self.variables[rec['name']]['units']
+        for k in range(len(self.variables[rec['name']]['levels'])):
             seaice_conc += self.read_var(**{**rec, 'k':k})
         
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
@@ -479,8 +481,8 @@ class Topaz5Model(Model):
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         rec['name'] = 'seaice_volume_ncat'
-        rec['units'] = self.variables['seaice_volume_ncat']['units']
-        for k in range(len(self.variables['seaice_volume_ncat']['levels'])):
+        rec['units'] = self.variables[rec['name']]['units']
+        for k in range(len(self.variables[rec['name']]['levels'])):
             seaice_volume += self.read_var(**{**rec, 'k':k})
         
         seaice_thick = np.zeros(self.grid.x.shape)
