@@ -42,7 +42,8 @@ class OfflineFilterAnalysisScheme:
 
             if c.run_preproc:
                 self.run_step(c, 'preprocess', mpi=False)
-                self.run_step(c, 'perturb', mpi=True)
+                if c.perturb:
+                    self.run_step(c, 'perturb', mpi=True)
 
             ##assimilation step
             if c.run_analysis and c.time >= c.time_analysis_start and c.time <= c.time_analysis_end:
