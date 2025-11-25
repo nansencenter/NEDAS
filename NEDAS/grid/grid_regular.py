@@ -41,6 +41,12 @@ class RegularGrid(GridBase):
         self.Ly = self.ny * self.dy
         self.npoints = self.nx * self.ny
 
+        self._dst_grid = None
+        if dst_grid is not None:
+            self.set_destination_grid(dst_grid)
+        else:
+            self.set_destination_grid(self)
+
     def change_resolution_level(self, nlevel):
         """
         Generate a new grid with changed resolution.

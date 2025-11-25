@@ -42,6 +42,8 @@ class IrregularGrid(GridBase):
         self._dst_grid = None
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
+        else:
+            self.set_destination_grid(self)
 
     def change_resolution_level(self, nlevel):
         raise NotImplementedError("change_resolution only works for regular grid now")
@@ -83,7 +85,7 @@ class IrregularGrid(GridBase):
         ##circumference-to-area ratio
         ##(1: equilateral triangle, ~0: very elongated)
         self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
-   
+
     def _pad_cyclic_mesh_bounds(self):
         ##repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
         x = self.x
