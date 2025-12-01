@@ -26,7 +26,7 @@ def get_cmap(cmap_name: str):
         cmap = colormaps[cmap_name]
     return cmap
 
-def adjust_ax_size(ax):
+def adjust_ax_size(ax, wfac=1., hfac=1.):
     """
     Make plot axes a little smaller on right hand side to make room for colorbar.
 
@@ -35,9 +35,11 @@ def adjust_ax_size(ax):
 
     Args:
         ax (matplotlib.axes.Axes): Matplotlib axes object.
+        wfac (float, optional): Ratio to scale the width of the axes. Defaults to 1.
+        hfac(float, optional): Ratio to scale the height of the axes. Defaults to 1.
     """
     left, bottom, width, height = ax.get_position().bounds
-    ax.set_position([left, bottom, width*0.9, height])
+    ax.set_position([left, bottom, width*wfac, height*hfac])
 
 def add_colorbar(fig, ax, cmap, vmin, vmax, nlevels=10, fontsize=12, units=None):
     """
@@ -67,10 +69,11 @@ def add_colorbar(fig, ax, cmap, vmin, vmax, nlevels=10, fontsize=12, units=None)
 
     ##adjust the main plot ax to make room for colorbar
     left, bottom, width, height = ax.get_position().bounds
-    ax.set_position([left, bottom, width*0.9, height])
+    ax.set_position([left, bottom, width, height])
 
     ##add colorbar ax to the right
-    cax = fig.add_axes([left+width*0.95, bottom+height*0.15, width*0.03, height*0.7])
+    ##TODO: adjustable wfac and option to add colorbar to bottom?
+    cax = fig.add_axes([left+width*1.05, bottom+height*0.15, width*0.03, height*0.7])
     cax.tick_params(labelsize=fontsize)
 
     ##draw the colorbar
