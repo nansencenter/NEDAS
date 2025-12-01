@@ -79,11 +79,7 @@ class Comm:
         Args:
             filename (str): Path to the file.
         """
-        if self._MPI is None:
-            return
-        if isinstance(self._comm, DummyComm):
-            return
-        if not filename:
+        if self._MPI is None or isinstance(self._comm, DummyComm) or not filename:
             return
         if filename not in self._locks:
             ##create the lock memory
@@ -95,13 +91,18 @@ class Comm:
             self._locks[filename] = lock_win
 
     def cleanup_file_locks(self):
-        for file, lock_win in self._locks.items():
-            lock_win.Free()
+        try:
+            for file, lock_win in self._locks.items():
+                try:
+                    lock_win.Free()
+                except Exception as e:
+                    print(f"Rank {self.Get_rank()}: warning freeing win for {file}: {e}", flush=True)
+            self._locks.clear()
+        except Exception as e:
+            print(f"Rank {self.Get_rank()}: error cleaning locks: {e}", flush=True)
 
     def acquire_file_lock(self, filename):
-        if self._MPI is None:
-            return
-        if isinstance(self._comm, DummyComm):
+        if self._MPI is None or isinstance(self._comm, DummyComm):
             return
         assert filename in self._locks, f"Comm: file lock for {filename} not initialized"
         lock_win = self._locks[filename]
@@ -119,9 +120,7 @@ class Comm:
             time.sleep(check_dt)
 
     def release_file_lock(self, filename):
-        if self._MPI is None:
-            return
-        if isinstance(self._comm, DummyComm):
+        if self._MPI is None or isinstance(self._comm, DummyComm):
             return
         if filename in self._locks:
             zero = np.array([0], dtype='B')
@@ -132,8 +131,17 @@ class Comm:
             # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
 
     def finalize(self):
-        if self._MPI is not None:
-            self._MPI.Finalize()
+        """Clean up MPI resources cleanly to avoid hangs on exit."""
+        # nothing to do for serial/DummyComm
+        if self._MPI is None or isinstance(self._comm, DummyComm):
+            return
+
+        self.cleanup_file_locks()
+
+        self._comm.Barrier()        
+
+        self._locks = {}
+        self._MPI = None
 
 class DummyComm:
     """Dummy communicator for python without mpi"""
