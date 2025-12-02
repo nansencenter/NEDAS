@@ -193,8 +193,11 @@ class BatchAssimilator(Assimilator):
                 hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
                 ind = np.where(hdist<=hroi)[0]
 
-                ##TODO: filter out nan in obs_prior
-                #obs_data['obs_prior']
+                ##filter out nan in obs_prior
+                if np.isnan(obs_data['obs_prior']).any():
+                    if c.debug:
+                        print(f"obs prior contains nan, skipping..., {obs_data['obs_prior']}")
+                    continue
 
                 ##compute horizontal localization factor (using L2 norm for distance)
                 obs_rec_id = obs_data['obs_rec_id'][ind]
@@ -210,6 +213,7 @@ class BatchAssimilator(Assimilator):
                         print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
                     else:
                         c.print_1p(progress_bar(task, ntask))
+                    task += 1
                     continue ##if all obs has no impact on state, just skip to next location
 
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
