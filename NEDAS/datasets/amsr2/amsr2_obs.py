@@ -25,7 +25,8 @@ class AMSR2Obs(Dataset):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        self.channels = ['tb19h', 'tb19v', 'tb37h', 'tb37v']
+        self.channels = ['tb19v', 'tb19h', 'tb37v', 'tb37h']  ##need to be the same order as listed in self.coefficients_file
+
         self.variables = {
             'dal': {'name': 'dal_SICCI3LF_corrSICCI3LF', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 100},
             'eia': {'name': 'eia', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'deg'},
