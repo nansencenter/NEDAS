@@ -196,7 +196,10 @@ class BatchAssimilator(Assimilator):
                 ##filter out nan in obs_prior
                 if np.isnan(obs_data['obs_prior']).any():
                     if c.debug:
-                        print(f"obs prior contains nan, skipping..., {obs_data['obs_prior']}")
+                        print(f"PID {c.pid:4} obs prior contains nan, skipping..., {obs_data['obs_prior']}", flush=True)
+                    else:
+                        c.print_1p(progress_bar(task, ntask))
+                    task += 1
                     continue
 
                 ##compute horizontal localization factor (using L2 norm for distance)
