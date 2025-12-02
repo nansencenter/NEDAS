@@ -314,6 +314,7 @@ class Obs:
                     fld = model.grid.convert(model_fld, is_vector=is_vector, method='nearest')
 
                 ##horizontal interp field to obs_x,y, for current layer k
+                ##TODO: move vertical interp to a separate function
                 if is_vector:
                     z = c.grid.interp(z[0, ...], obs_x, obs_y, method='nearest')
                     zc = np.array([z, z])
@@ -334,6 +335,7 @@ class Obs:
                 ##
                 ##z at current level k denoted as zc, previous level as zp
                 ##variables are considered layer averages, so they are at layer centers
+                zp = None; vp = None; dzp = None; dzc = None;
                 if k == 0:
                     dzc = zc  ##layer thickness for first level
 
@@ -345,6 +347,8 @@ class Obs:
                     dzc = zc - zp  ##layer thickness for level k
 
                     ##in between levels: linear interp between vp and vc
+                    assert dzp is not None
+                    assert vp is not None
                     z_vp = zp - 0.5*dzp
                     z_vc = zp + 0.5*dzc
                     inds = (obs_z >= np.minimum(z_vp, z_vc)) & (obs_z <= np.maximum(z_vp, z_vc))
@@ -364,10 +368,12 @@ class Obs:
 
                 if k == len(levels)-1:
                     ##the last level: constant vc from z=zc-dzc/2 to zc
+                    assert dzc is not None
                     inds = (obs_z >= np.minimum(zc-0.5*dzc, zc)) & (obs_z <= np.maximum(zc-0.5*dzc, zc))
                     seq[..., inds] = vc[..., inds]
 
                 if k < len(levels)-1:
+                    assert dzc is not None
                     ##make a copy of current layer as 'previous' for next k
                     zp = zc.copy()
                     vp = vc.copy()
@@ -377,6 +383,24 @@ class Obs:
             raise ValueError('unable to obtain obs prior for '+obs_name)
 
         return seq
+
+    def validate_seq_shape(self, seq, is_vector):
+        """
+        Validate the shape of an observation sequence. 
+        Allowed shape: (nobs,) for scalar obs seq; (2, nobs) for vector obs seq.
+        """
+        if not isinstance(seq, np.ndarray):
+            raise TypeError(f"obs sequence must be a numpy array, got {type(seq)}")
+
+        shape = seq.shape
+        if is_vector:
+            if len(shape) != 2:
+                raise ValueError(f"vector obs sequence must have shape (2, nobs), got {shape}")
+            if shape[0] != 2:
+                raise ValueError(f"vector obs sequence first dimension must be 2, got {shape[0]}")
+        else:
+            if len(shape) != 1:
+                raise ValueError(f"scalar obs sequence must have shape (nobs,), got {shape}")
 
     def collect_obs_seq(self, c, state):
         """
@@ -428,6 +452,8 @@ class Obs:
             else:
                 ##read dataset files and obtain obs sequence
                 seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, **obs_rec)
+
+            self.validate_seq_shape(seq['obs'], obs_rec['is_vector'])
 
             if c.pid_mem == 0:
                 print('number of '+obs_rec['name']+' obs from '+obs_rec['dataset_src']+': {}'.format(seq['obs'].shape[-1]), flush=True)
@@ -558,11 +584,11 @@ class Obs:
                     'units': ss[5],
                     'z_units':ss[6],
                     'err_type': ss[7],
-                    'err': np.float32(ss[8]),
-                    'x': np.float32(ss[9]),
-                    'y': np.float32(ss[10]),
-                    'z': np.float32(ss[11]),
-                    'time': h2t(np.float32(ss[12])),
+                    'err': float(ss[8]),
+                    'x': float(ss[9]),
+                    'y': float(ss[10]),
+                    'z': float(ss[11]),
+                    'time': h2t(float(ss[12])),
                     'pos': int(ss[13]), }
                 self.info['obs_seq'][obs_id] = rec
                 obs_id += 1
@@ -609,9 +635,13 @@ class Obs:
             ##all pid goes through their own mem_list simultaneously
             nm_max = np.max([len(lst) for p,lst in state.mem_list.items()])
             for m in range(nm_max):
+                if m < len(state.mem_list[c.pid_mem]):
+                    mem_id = state.mem_list[c.pid_mem][m]
+                else:
+                    mem_id = None
+
                 if c.debug:
-                    if m < len(state.mem_list[c.pid_mem]):
-                        mem_id = state.mem_list[c.pid_mem][m]
+                    if mem_id:
                         print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
                     else:
                         print(f"PID {c.pid:4}: transposing obs: waiting")
@@ -619,6 +649,7 @@ class Obs:
                     c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
                 ##prepare the obs seq for sending if not at the end of mem_list
+                seq = None
                 if m < len(state.mem_list[c.pid_mem]):
                     mem_id = state.mem_list[c.pid_mem][m]
                     if ensemble:  ##this is the obs prior seq
@@ -649,6 +680,7 @@ class Obs:
                             lobs_seq = {}
                             for par_id in state.par_list[dst_pid]:
                                 inds = self.obs_inds[obs_rec_id][par_id]
+                                assert seq is not None
                                 lobs_seq[par_id] = seq[..., inds]
 
                             if dst_pid == c.pid_mem:
@@ -667,6 +699,7 @@ class Obs:
                                 for par_id in state.par_list[dst_pid]:
                                     lobs_seq[par_id] = {}
                                     inds = self.obs_inds[obs_rec_id][par_id]
+                                    assert seq is not None
                                     for key in ('obs', 'err_std', 'x', 'y', 'z', 't'):
                                         lobs_seq[par_id][key] = seq[key][..., inds]
 
@@ -725,9 +758,13 @@ class Obs:
             ##all pid goes through their own mem_list simultaneously
             nm_max = np.max([len(lst) for p,lst in state.mem_list.items()])
             for m in range(nm_max):
+                if m < len(state.mem_list[c.pid_mem]):
+                    mem_id = state.mem_list[c.pid_mem][m]
+                else:
+                    mem_id = None
+
                 if c.debug:
-                    if m < len(state.mem_list[c.pid_mem]):
-                        mem_id = state.mem_list[c.pid_mem][m]
+                    if mem_id:
                         print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
                     else:
                         print(f"PID {c.pid:4}: transposing obs: waiting")
@@ -735,8 +772,8 @@ class Obs:
                     c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
                 ##prepare an empty obs_seq for receiving if not at the end of mem_list
+                seq = None
                 if m < len(state.mem_list[c.pid_mem]):
-                    mem_id = state.mem_list[c.pid_mem][m]
                     rec = self.info['records'][obs_rec_id]
                     if rec['is_vector']:
                         seq = np.full((2, rec['nobs']), np.nan)
@@ -757,7 +794,6 @@ class Obs:
                 ##    cycle back to receive from src_pid<pid then.
                 if m < len(state.mem_list[c.pid_mem]):
                     for src_pid in np.mod(np.arange(c.nproc_mem)+c.pid_mem, c.nproc_mem):
-
                         if src_pid == c.pid_mem:
                             ##pid already stores the lobs_seq, just copy
                             lobs_seq = lobs[mem_id, obs_rec_id].copy()
@@ -768,6 +804,7 @@ class Obs:
                         ##unpack the lobs_seq to form a complete seq
                         for par_id in state.par_list[src_pid]:
                             inds = self.obs_inds[obs_rec_id][par_id]
+                            assert seq is not None
                             seq[..., inds] = lobs_seq[par_id]
 
                         obs_seq[mem_id, obs_rec_id] = seq
