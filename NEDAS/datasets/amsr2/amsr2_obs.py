@@ -138,10 +138,7 @@ class AMSR2Obs(Dataset):
         ##convert from list to np.array
         ##raw data are kept in list format
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
-            obs_seq[key] = np.array(obs_seq[key])
-
-        if is_vector:
-            obs_seq['obs'] = obs_seq['obs'].T
+            obs_seq[key] = np.array(obs_seq[key]).flatten()
 
         #convert units if necessary
         if 'units' in kwargs and kwargs['units'] != native_units:

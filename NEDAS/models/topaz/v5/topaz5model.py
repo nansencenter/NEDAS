@@ -279,8 +279,11 @@ class Topaz5Model(Model):
         elif name in self.diag_variables:
             ## if the npy file exists, one could just read it to get the variable.
             ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
-            var = rec['operator'](**kwargs)
-            np.save(fname, var)
+            if not os.path.exists(fname):
+                var = rec['operator'](**kwargs)
+                np.save(fname, var)
+            else:
+                var = np.load(fname)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
