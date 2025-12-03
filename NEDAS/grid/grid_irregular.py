@@ -1,9 +1,9 @@
 import numpy as np
 from matplotlib.tri import Triangulation
 import matplotlib
-from NEDAS.grid.grid_base import GridBase
+from NEDAS.grid.grid_2d_base import Grid2DBase
 
-class IrregularGrid(GridBase):
+class IrregularGrid(Grid2DBase):
     """
     Class for handling irregular grids.
 
@@ -23,7 +23,7 @@ class IrregularGrid(GridBase):
         self.y = self.y.flatten()
         self.npoints = self.x.size
         self.tri = Triangulation(self.x, self.y, triangles=triangles)
-        self.tri.inds = np.arange(self.npoints)
+        setattr(self.tri, "inds", np.arange(self.npoints))
         self._triangle_properties()
         dx = self._mesh_dx()
         self.dx = dx
@@ -74,17 +74,21 @@ class IrregularGrid(GridBase):
         computes triangle properties for the mesh triangles
         """
         t = self.tri.triangles
-        x = self.x[self.tri.inds]
-        y = self.y[self.tri.inds]
+        inds = getattr(self.tri, 'inds')
+        x = self.x[inds]
+        y = self.y[inds]
         s1 = np.hypot(x[t[:,0]] - x[t[:,1]], y[t[:,0]] - y[t[:,1]])
         s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
         s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
         s = 0.5*(s1+s2+s3)
-        self.tri.p = 2.0 * s  ##circumference
-        self.tri.a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+        p = 2.0 * s  ##circumference
+        a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+        setattr(self.tri, 'p', p)
+        setattr(self.tri, 'a', a)
         ##circumference-to-area ratio
+        ratio = a / s**2 * 3**(3/2)
         ##(1: equilateral triangle, ~0: very elongated)
-        self.tri.ratio =  self.tri.a / s**2 * 3**(3/2)
+        setattr(self.tri, 'ratio', ratio)
 
     def _pad_cyclic_mesh_bounds(self):
         ##repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
@@ -119,7 +123,7 @@ class IrregularGrid(GridBase):
         for i in np.ndindex(triangles.shape):
             triangles[i] = uniq_inds.index(triangles[i])
         self.tri = Triangulation(x[uniq_inds], y[uniq_inds], triangles=triangles)
-        self.tri.inds = inds[uniq_inds]
+        setattr(self.tri, 'inds', inds[uniq_inds])
 
     def find_index(self, x_, y_):
         x_ = np.array(x_).flatten()
@@ -134,7 +138,7 @@ class IrregularGrid(GridBase):
 
         ##for irregular mesh, use tri_finder to find index
         tri_finder = self.tri.get_trifinder()
-        triangle_map = tri_finder(x_, y_)
+        triangle_map = np.asarray(tri_finder(x_, y_))
         inside = (triangle_map >= 0)
         indices = triangle_map[inside]
 
@@ -205,7 +209,8 @@ class IrregularGrid(GridBase):
 
         fld_interp = np.full(np.array(x).flatten().shape, np.nan)
         if fld.shape == self.x.shape:
-            fld = fld[self.tri.inds]
+            inds = getattr(self.tri, 'inds')
+            fld = fld[inds]
             if method == 'nearest':
                 # find the node of the triangle with the maximum weight
                 fld_interp[inside] = fld.flatten()[nearest]
@@ -259,7 +264,8 @@ class IrregularGrid(GridBase):
             cmap = matplotlib.colormaps[cmap]  # type: ignore
 
         if fld.shape == self.x.shape:
-            fld = fld[self.tri.inds]
+            inds = getattr(self.tri, 'inds')
+            fld = fld[inds]
         im = ax.tripcolor(self.tri, fld, vmin=vmin, vmax=vmax, cmap=cmap, **kwargs)
 
         self.set_xylim(ax)

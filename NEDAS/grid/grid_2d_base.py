@@ -9,7 +9,7 @@ from pyproj import Proj, Geod
 import matplotlib
 from NEDAS.utils.graphics import draw_line, draw_patch, arrowhead_xy, draw_reference_vector_legend
 
-class GridBase(ABC):
+class Grid2DBase(ABC):
     """
     Base class to handle 2D fields defined on regular grids or unstructured meshes.
 
@@ -102,7 +102,7 @@ class GridBase(ABC):
             self.set_destination_grid(dst_grid)
 
     def __eq__(self, other):
-        if not isinstance(other, GridBase):
+        if not isinstance(other, Grid2DBase):
             return False
         if self.proj != other.proj:
             return False
@@ -158,7 +158,7 @@ class GridBase(ABC):
 
     @dst_grid.setter
     def dst_grid(self, grid):
-        assert isinstance(grid, GridBase), "dst_grid should be a Grid instance"
+        assert isinstance(grid, Grid2DBase), "dst_grid should be a Grid instance"
         if grid == self.dst_grid:  ##the same grid is set before
             return
 

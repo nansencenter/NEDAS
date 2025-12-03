@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Literal
+from typing import Optional, Literal, Mapping
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
@@ -47,12 +47,12 @@ def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
         comm.release_file_lock(filename)
 
 def nc_write_var(filename: str,
-                 dim: Dict[str,Optional[int]],
+                 dim: Mapping[str,Optional[int]],
                  varname: str,
                  dat: np.ndarray,
                  dtype: Optional[str]=None,
-                 recno: Optional[Dict[str,int]]=None,
-                 attr: Optional[Dict]=None,
+                 recno: Optional[dict[str,int]]=None,
+                 attr: Optional[dict]=None,
                  comm: Optional[Comm]=None) -> None:
     """
     Write a variable to a netCDF file.

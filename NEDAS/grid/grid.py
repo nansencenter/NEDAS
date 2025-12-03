@@ -28,7 +28,7 @@ So far we only support regular grid x,y where all the `x[j,:]` and all the `y[:,
 
 Cyclic boundary condition is supported, by setting the `cyclic_dim` parameter you can tell `Grid` which dimension(s) should wrap around when the coordinates fall outside of the given range (done by `wrap_cyclic_xy()`)
 
-The longitude,latitude (geodetic) grid is special since it is the only projection not on a flat surface. For this `+proj=longlat` projection we support longitude conventions both 0\~360 and -180\~180 as long as its unit is "degrees east", you shall set `cyclic_dim='x'` if x is your longitude dimension. The latitude has units "degrees north". We also support special treatment of the two poles (lat=-90, 90) at which rotation angle is not well defined. You shall specify which dimension contains the pole and which index in that dimension is the pole. For example, if your data is [lat=40\~90, long=0\~360], you can set `pole_dim='y'` and `pole_index=(-1)`.
+The longitude,latitude (geodetic) grid is special since it is the only projection not on a flat surface. For this `+proj=longlat` projection we support longitude conventions both 0 ~ 360 and -180 ~ 180 as long as its unit is "degrees east", you shall set `cyclic_dim='x'` if x is your longitude dimension. The latitude has units "degrees north". We also support special treatment of the two poles (lat=-90, 90) at which rotation angle is not well defined. You shall specify which dimension contains the pole and which index in that dimension is the pole. For example, if your data is [lat=40~90, long=0~360], you can set `pole_dim='y'` and `pole_index=(-1)`.
 
 For an unstructured mesh, the `x,y` coordinates are for the nodes (vertices of the triangles), the 2D field can be either defined on nodes or elements (triangle faces). If the later is true, `x_elem,y_elem` will be used in handling the field. Note that `x_elem` has different size with `x`.
 
@@ -130,7 +130,7 @@ from NEDAS.grid.grid_irregular import IrregularGrid
 
 class Grid:
     """
-    Factory class for creating a 2D grid object.
+    Factory class for creating a grid object.
 
     This class serves as a factory for creating either a RegularGrid or an IrregularGrid instance
     based provided parameters. It allows for easy instantiation of different grid types
@@ -149,6 +149,7 @@ class Grid:
     """
     def __new__(cls, proj, x, y, regular=True, bounds=None, cyclic_dim=None, pole_dim=None, pole_index=None,
                 distance_type='cartesian', triangles=None, neighbors=None, dst_grid=None):
+        ##TODO: add 1D grid initialization
         if regular:
             return RegularGrid(proj, x, y, bounds, cyclic_dim, distance_type,
                                pole_dim, pole_index, neighbors, dst_grid)

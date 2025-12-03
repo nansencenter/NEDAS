@@ -2,9 +2,9 @@ from typing import Optional
 import copy
 import numpy as np
 import matplotlib
-from NEDAS.grid.grid_base import GridBase
+from NEDAS.grid.grid_2d_base import Grid2DBase
 
-class RegularGrid(GridBase):
+class RegularGrid(Grid2DBase):
     """
     Regular 2D grid class
 
