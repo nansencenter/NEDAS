@@ -820,13 +820,21 @@ class Obs:
 
     def pack_local_obs_data(self, c, state, par_id, lobs, lobs_prior):
         """pack lobs and lobs_prior into arrays for the jitted functions"""
-        data = {}
-
-        ##number of local obs on partition
-        nlobs = np.sum([lobs[r][par_id]['obs'].size for r in self.info['records'].keys()])
         n_obs_rec = len(self.info['records'])        ##number of obs records
         n_state_var = len(state.info['variables'])   ##number of state variable names
 
+        ##filter out obs with nan in obs_prior, valid index stored as subset of local_inds
+        nlobs = 0  ##number of local obs on partition
+        self.valid = {}
+        for obs_rec_id in range(n_obs_rec):
+            obs_rec = self.info['records'][obs_rec_id]
+            v_list = [0, 1] if obs_rec['is_vector'] else [None]
+            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list], axis=0)
+            no_nan_mask = ~np.isnan(values).any(axis=0)
+            self.valid[obs_rec_id] = np.where(no_nan_mask)[0].tolist()
+            nlobs += len(self.valid[obs_rec_id]) * len(v_list)
+
+        data = {}
         data['obs_rec_id'] = np.zeros(nlobs, dtype=int)
         data['obs'] = np.full(nlobs, np.nan)
         data['x'] = np.full(nlobs, np.nan)
@@ -844,6 +852,7 @@ class Obs:
         i = 0
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info['records'][obs_rec_id]
+            v_list = [0, 1] if obs_rec['is_vector'] else [None]
 
             data['hroi'][obs_rec_id] = obs_rec['hroi']
             data['vroi'][obs_rec_id] = obs_rec['vroi']
@@ -852,19 +861,20 @@ class Obs:
                 state_vname = state.info['variables'][state_var_id]
                 data['impact_on_state'][obs_rec_id, state_var_id] = obs_rec['impact_on_state'][state_vname]
 
+            valid = self.valid[obs_rec_id]
             local_inds = self.obs_inds[obs_rec_id][par_id]
-            d = len(local_inds)
-            v_list = [0, 1] if obs_rec['is_vector'] else [None]
+            d = len(local_inds[valid])
+            ##append obs and obs prior records to the full array
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
-                data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, :])
-                data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x']
-                data['y'][i:i+d] = lobs[obs_rec_id][par_id]['y']
-                data['z'][i:i+d] = lobs[obs_rec_id][par_id]['z'].astype(np.float32)
-                data['t'][i:i+d] = np.array([t2h(t) for t in lobs[obs_rec_id][par_id]['t']])
-                data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std']
+                data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, valid])
+                data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x'][valid]
+                data['y'][i:i+d] = lobs[obs_rec_id][par_id]['y'][valid]
+                data['z'][i:i+d] = lobs[obs_rec_id][par_id]['z'][valid].astype(np.float32)
+                data['t'][i:i+d] = np.array([t2h(t) for t in lobs[obs_rec_id][par_id]['t'][valid]])
+                data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std'][valid]
                 for m in range(c.nens):
-                    data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, :].copy())
+                    data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, valid].copy())
                 i += d
 
         return data
@@ -876,10 +886,11 @@ class Obs:
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info['records'][obs_rec_id]
 
+            valid = self.valid[obs_rec_id]
             local_inds = self.obs_inds[obs_rec_id][par_id]
-            d = len(local_inds)
+            d = len(local_inds[valid])
             v_list = [0, 1] if obs_rec['is_vector'] else [None]
             for v in v_list:
                 for m in range(c.nens):
-                    lobs_prior[m, obs_rec_id][par_id][v, :] = data['obs_prior'][m, i:i+d]
+                    lobs_prior[m, obs_rec_id][par_id][v, valid] = data['obs_prior'][m, i:i+d]
                 i += d
