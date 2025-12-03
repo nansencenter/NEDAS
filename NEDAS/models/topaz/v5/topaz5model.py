@@ -344,6 +344,15 @@ class Topaz5Model(Model):
                     recno = None
                 nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
 
+        elif name in self.iceh_variables:
+            dims = {'time':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
+            recno = {'time':0}
+            if rec['is_vector']:
+                for i in range(2):
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
+            else:
+                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+
         elif name in self.atmos_forcing_variables:
             dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / timedelta(days=1)
             if rec['is_vector']:
@@ -358,6 +367,9 @@ class Topaz5Model(Model):
 
         elif name in self.diag_variables:
             np.save(fname, var)
+
+        else:
+            print(f"WARNING: write_var not implemented for variable {name}, skipping...")
 
     def z_coords(self, **kwargs):
         return self._z_coords_cached(**kwargs)
