@@ -78,7 +78,7 @@ class AMSR2Obs(Dataset):
             file_list = []
             for d in d_range:
                 t = time + d * timedelta(hours=1)
-                search = os.path.join(self.dataset_dir, f"{t:%Y}", f"tc_amsr-gw1_topaz5-6p25km_{t:%Y%m%d}12.nc")
+                search = os.path.join(self.dataset_dir, f"{t:%Y}", f"{t:%m}", f"tc_amsr-gw1_topaz5-6p25km_{t:%Y%m%d}12.nc")
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
