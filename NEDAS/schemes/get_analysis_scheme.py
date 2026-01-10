@@ -3,6 +3,7 @@ from typing import Any
 
 registry = {
     'offline_filter': 'OfflineFilterAnalysisScheme',
+    'forecast': 'ForecastScheme',
 }
 
 def get_analysis_scheme(c) -> Any:
