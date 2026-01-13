@@ -56,7 +56,8 @@ class OfflineFilterAnalysisScheme:
 
             ##compute diagnostics
             if c.run_diagnose:
-                self.run_step(c, 'diagnose', mpi=True)
+                if c.diag:
+                    self.run_step(c, 'diagnose', mpi=True)
 
             ##advance to next cycle
             c.time = c.next_time
