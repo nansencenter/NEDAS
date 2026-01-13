@@ -551,7 +551,14 @@ class Topaz5Model(Model):
         for varname in self.force_synoptic_names:
             forcing_file = self.forcing_file.format(member=kwargs['member']+1, time=time, name=varname)
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
-            f = ABFileForcing(forcing_file, 'r')
+            try:
+                f = ABFileForcing(forcing_file, 'r')
+            except FileNotFoundError:
+                #print(f"WARNING: {forcing_file} not found, skipping...")
+                if varname in ['tcwv', 'tclw']:  ##these two variables are optional
+                    continue
+                else:
+                    raise FileNotFoundError(f"preprocess: ERROR: forcing file {forcing_file} not found")
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
             t = time
             dt = self.forcing_dt
