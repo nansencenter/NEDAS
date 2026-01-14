@@ -78,7 +78,7 @@ def random_perturb(grid, fields, prev_perturb, dt=1, n=0, seed=None, **kwargs):
         for vname in ['atmos_surf_velocity', 'atmos_surf_press']:
             assert vname in params.keys(), f'{vname} not in variable list, cannot run press_wind_relate option'
 
-        for s in range(ns):
+        for s in range(params['atmos_surf_press']['nscale']):
             perturb['atmos_surf_velocity'][s] = get_velocity_from_press(grid, perturb['atmos_surf_press'][s], ('scale_wind' in other_opts), params['atmos_surf_press']['amp'][s], params['atmos_surf_press']['hcorr'][s], params['atmos_surf_velocity']['amp'][s])
 
     ##now add perturbations to each field
@@ -158,14 +158,14 @@ def get_velocity_from_press(grid, pres, scale_wind=False, press_amp=None, press_
     ##grid spacing
     dx = grid.dx / grid.mfx
     dy = grid.dy / grid.mfy
-    ##hcorr = rh * dx according to mid-domain dx (to be consistent with ReanalysisTP5/Perturb_forcing)
+    ##mid-domain dx (to be consistent with ReanalysisTP5/Perturb_forcing)
     dx_ = grid.dx / grid.mfx[grid.ny//2, grid.nx//2]
 
     wprsfac = 1.
     if scale_wind:
-        ds = 0.54 * press_hcorr / dx_ * np.hypot(dx, dy)  ##horizontal scale
-        wind_scale = press_amp / ds / fcor / rhoa  ##expected wind scale from pressure field
-        wprsfac = wind_amp / wind_scale  ##scaling factor to match wind perturbation with given amp
+        ds = (press_hcorr / dx_) * np.hypot(dx, dy) * 0.96   ##horizontal scale rh * dx, 0.96 is a tuning factor
+        wind_scale = press_amp / ds / fcor  ##expected wind scale from pressure field
+        wprsfac = wind_amp / wind_scale     ##scaling factor to match wind perturbation with given amp
 
     ##pres gradients
     dpresx = gradx(pres, dx, grid.cyclic_dim) * wprsfac
@@ -276,7 +276,7 @@ def random_displacement(grid, mask, amp, hcorr):
 
     ##distance to masked area
     dist = distance_transform_edt(1-mask.astype(float))
-    dist /= np.max(dist)
+    #dist /= dist.max()
     dist = gaussian_filter(dist, sigma=10)
     dist[mask] = 0
 
