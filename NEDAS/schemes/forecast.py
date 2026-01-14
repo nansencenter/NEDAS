@@ -295,7 +295,7 @@ class ForecastScheme:
                 p = subprocess.Popen(commands, shell=True, text=True)
                 p.wait()
                 if p.returncode != 0:
-                    print(f"OfflineFilter: run_step '{step}' exited with error")
+                    print(f"ForecastScheme: run_step '{step}' exited with error")
                     sys.exit(1)
 
     def get_task_opts(self, c, **other_opts):
