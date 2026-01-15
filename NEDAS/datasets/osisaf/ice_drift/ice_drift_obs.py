@@ -8,6 +8,14 @@ from NEDAS.grid import Grid
 from NEDAS.datasets import Dataset
 
 class OsisafSeaIceDriftObs(Dataset):
+    proj: str
+    proj_name: str
+    xstart: float
+    xend: float
+    ystart: float
+    yend: float
+    dx: float
+    dy: float
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -28,16 +36,15 @@ class OsisafSeaIceDriftObs(Dataset):
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
+        search = ''
         if time is None:
             search = os.path.join(path, '????', '??', 'ice_drift_'+self.proj_name+'-625_multi-oi_????????????-????????????.nc')
             file_list = glob.glob(search)
-
         else:
             if obs_window_min is not None and obs_window_max is not None:
                 d_range = np.arange(obs_window_min, obs_window_max)
             else:
                 d_range = [0]
-
             file_list = []
             for d in d_range:
                 t = time + d * timedelta(hours=1)
@@ -46,7 +53,6 @@ class OsisafSeaIceDriftObs(Dataset):
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
-
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
@@ -120,13 +126,14 @@ class OsisafSeaIceDriftObs(Dataset):
 
             f.close()
 
+        obs_seq_arr = {}
         for key in obs_seq.keys():
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
         ##make obs dimension [2,nobs] for vectors
-        obs_seq['obs'] = obs_seq['obs'].T
+        obs_seq_arr['obs'] = obs_seq_arr['obs'].T
 
-        return obs_seq
+        return obs_seq_arr
 
     def get_seaice_drift(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
