@@ -1,7 +1,7 @@
 import os
 import inspect
 from functools import cached_property
-from typing import Optional
+from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 import numpy as np
 import shapefile
@@ -215,7 +215,7 @@ class Grid2DBase(ABC):
         return x_, y_
 
     @abstractmethod
-    def find_index(self, x_, y_) -> tuple[np.ndarray, np.ndarray|None, np.ndarray, np.ndarray, np.ndarray]:
+    def find_index(self, x_, y_) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray, np.ndarray, np.ndarray]:
         """
         Find indices of `self.x`, `self.y` corresponding to the given `x_`, `y_`.
 
@@ -510,7 +510,7 @@ class Grid2DBase(ABC):
         """
         path = os.path.split(inspect.getfile(self.__class__))[0]
         sf = shapefile.Reader(os.path.join(path, 'ne_50m_coastline.shp'))
-        shapes = sf.shapes()
+        shapes: list[shapefile.Shape] = sf.shapes()  # type: ignore
 
         ##Some cosmetic tweaks of the shapefile for some Canadian coastlines
         shapes[1200].points = shapes[1200].points + shapes[1199].points[1:]
@@ -520,7 +520,6 @@ class Grid2DBase(ABC):
         shapes[1228].points = []
         shapes[1227].points = []
         shapes[1233].points = shapes[1233].points + shapes[1234].points
-        shapes[1234].points = []
         shapes[1234].points = []
 
         return self._collect_shape_data(shapes)

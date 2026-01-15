@@ -1,6 +1,6 @@
 import os
 import inspect
-from typing import Optional, Any
+from typing import Optional, Any, get_args
 import yaml
 import dateutil.parser
 import numpy as np
@@ -288,7 +288,7 @@ class Config:
             Model = NEDAS.models.get_model_class(model_name)
             model = Model(**kwargs)
             model_grid = getattr(model, 'grid')
-            if not isinstance(model_grid, GridType):
+            if not isinstance(model_grid, get_args(GridType)):
                 raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
             self.grid = model_grid
 
