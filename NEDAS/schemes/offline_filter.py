@@ -48,7 +48,8 @@ class OfflineFilterAnalysisScheme:
             ##assimilation step
             if c.run_analysis and c.time >= c.time_analysis_start and c.time <= c.time_analysis_end:
                 self.run_step(c, 'filter', mpi=True)
-                self.run_step(c, 'postprocess', mpi=False)
+                if c.run_postproc:
+                    self.run_step(c, 'postprocess', mpi=False)
 
             ##advance model state to next analysis cycle
             if c.run_forecast:
