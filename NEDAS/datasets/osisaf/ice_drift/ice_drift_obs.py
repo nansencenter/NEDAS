@@ -114,7 +114,8 @@ class OsisafSeaIceDriftObs(Dataset):
                     obs_v = obs_dy[p] / obs_dt
                     obs_value = [obs_u, obs_v]
 
-                    obs_err_std = obs_err[p] / obs_dt  ##uncertainty from dataset
+                    #obs_err_std = obs_err[p] / obs_dt  ##uncertainty from dataset, convert from km to km/day
+                    obs_err_std = kwargs['err']['std']  ##use constant err std from config
 
                     ##assignn to obs_seq
                     obs_seq['obs'].append(obs_value)

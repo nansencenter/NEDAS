@@ -13,7 +13,6 @@ registry = {
     'osisaf.ice_conc': 'OsisafSeaIceConcObs',
     'osisaf.ice_drift': 'OsisafSeaIceDriftObs',
     'amsr2': 'AMSR2Obs',
-    'amsr2.conc': 'AMSR2SeaIceConcObs',
     'cs2smos': 'Cs2SmosObs',
     'rgps': 'RgpsObs',
     'topaz': 'TopazPrepObs',
