@@ -476,10 +476,18 @@ class Topaz5Model(Model):
             raise AttributeError("topaz5model: grid not yet defined")
         seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'seaice_conc_ncat'  ##can use iceh or iced files
-        rec['units'] = self.variables[rec['name']]['units']
-        for k in range(len(self.variables[rec['name']]['levels'])):
-            seaice_conc += self.read_var(**{**rec, 'k':k})
+
+        ##try to read it from iced file
+        try:
+            rec['name'] = 'seaice_conc_ncat'  ##can use iceh or iced files
+            rec['units'] = self.variables[rec['name']]['units']
+            for k in range(len(self.variables[rec['name']]['levels'])):
+                seaice_conc += self.read_var(**{**rec, 'k':k})
+        except FileNotFoundError:
+            ##if failed, try to read from iceh file
+            rec['name'] = 'seaice_conc_daily'
+            rec['units'] = self.variables[rec['name']]['units']
+            seaice_conc = self.read_var(**rec)
         
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
         seaice_conc[self.grid.mask] = np.nan
