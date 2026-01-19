@@ -4,7 +4,7 @@ import glob
 from datetime import datetime, timedelta, timezone
 import netCDF4
 import pyproj
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.datasets import Dataset
 
 class OsisafSeaIceDriftObs(Dataset):
@@ -24,7 +24,7 @@ class OsisafSeaIceDriftObs(Dataset):
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
-        self.grid = Grid(proj, x, y)
+        self.grid = RegularGrid(proj, x, y)
 
         self.obs_operator = {'seaice_drift': self.get_seaice_drift,}
 
@@ -139,16 +139,27 @@ class OsisafSeaIceDriftObs(Dataset):
     def get_seaice_drift(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         grid = kwargs['grid']
-        path = kwargs['path']
-        member = kwargs['member']
+        obs_x = kwargs['x']
+        obs_y = kwargs['y']
         model = kwargs['model']
         model.grid.set_destination_grid(grid)
 
-        start_x = kwargs['x']
-        start_y = kwargs['y']
-        start_t = kwargs['t']
-        x = start_x.copy()
-        y = start_y.copy()
-        obs_seq = np.zeros((2,)+x.shape)
+        ##just return model variable seaice_velocity_daily snapshot, convert to km/day units
+        rec = kwargs.copy()
+        drift_units = self.variables['seaice_drift']['units']
+        try:
+            ##try to obtain seaice velocity from iced files
+            model_si_velocity = model.read_var(**{**kwargs, 'name':'seaice_velocity', 'units':drift_units})
+        except FileNotFoundError:
+            ##if not available, try to get from iceh files
+            model_si_velocity = model.read_var(**{**kwargs, 'name':'seaice_velocity_daily', 'units':drift_units})
+        grid_si_velocity = model.grid.convert(model_si_velocity, is_vector=True)
+
+        ##find obs location velocity
+        u = grid.interp(grid_si_velocity[0,...], obs_x, obs_y)
+        v = grid.interp(grid_si_velocity[1,...], obs_x, obs_y)
+        obs_seq = np.array([u, v])
+
+        ##TODO: alternatively, one can run a trajectory to get more accurate drift vectors
 
         return obs_seq
