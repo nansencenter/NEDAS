@@ -298,6 +298,8 @@ class Config:
         Store the model instances in :code:`models[model_name]`.
         """
         self.models = {}
+        if self.model_def is None:
+            return
         for model_name, kwargs in self.model_def.items():
             Model = NEDAS.models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
@@ -310,6 +312,8 @@ class Config:
         Store the dataset instances in :code:`datasets[dataset_name]`.
         """
         self.datasets = {}
+        if self.dataset_def is None:
+            return
         for dataset_name, kwargs in self.dataset_def.items():
             Dataset = NEDAS.datasets.get_dataset_class(dataset_name)
             if not isinstance(kwargs, dict):
