@@ -207,8 +207,9 @@ ilport: [204, 694]   ##'ilport   ' = last  i-index (=ifport for east/west port)
 jfport: [760, 2]   ##'jfport   ' = first j-index
 jlport: [760, 2]   ##'jlport   ' = last  j-index (=jfport for north/south port)
 
-##cice
-cice_dt: 1200.0  ##cice model time step (seconds)
+##ice_in
+cice_dt: 900.0  ##cice model time step (seconds)
+
 Nilayer  : 7   ## vertical layers for ice
 Nslayer  : 1   ## vertical layers for snow
 
@@ -233,6 +234,24 @@ hs_min   : 1.e-4     ## min snow thickness for computing zTsn (m)
 msal     : 0.573
 nsal     : 0.407
 
+albedo_type: default
+albicev: 0.78
+albicei: 0.42
+albsnowv: 0.98
+albsnowi: 0.73
+rsnw_mlt: 750.0
+
+formdrag: True
+fbot_xfer_type: Cdn_ocn
+
+f_tarea: False
+f_uarea: False
+f_angle: True
+f_anglet: True
+f_ncat: True
+
+
+##other parameters
 z_units: 'm'
 
 ONEM: 9806.
