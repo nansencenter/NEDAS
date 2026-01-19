@@ -141,23 +141,26 @@ class OsisafSeaIceDriftObs(Dataset):
         grid = kwargs['grid']
         obs_x = kwargs['x']
         obs_y = kwargs['y']
+        obs_t = kwargs['t']
         model = kwargs['model']
         model.grid.set_destination_grid(grid)
+        drift_units = self.variables['seaice_drift']['units']
 
         ##just return model variable seaice_velocity_daily snapshot, convert to km/day units
-        rec = kwargs.copy()
-        drift_units = self.variables['seaice_drift']['units']
-        try:
-            ##try to obtain seaice velocity from iced files
-            model_si_velocity = model.read_var(**{**kwargs, 'name':'seaice_velocity', 'units':drift_units})
-        except FileNotFoundError:
-            ##if not available, try to get from iceh files
-            model_si_velocity = model.read_var(**{**kwargs, 'name':'seaice_velocity_daily', 'units':drift_units})
-        grid_si_velocity = model.grid.convert(model_si_velocity, is_vector=True)
-
-        ##find obs location velocity
-        u = grid.interp(grid_si_velocity[0,...], obs_x, obs_y)
-        v = grid.interp(grid_si_velocity[1,...], obs_x, obs_y)
+        u = np.full(obs_x.shape, np.nan)
+        v = np.full(obs_x.shape, np.nan)
+        for t in np.unique(obs_t):
+            obs_mask = (obs_t == t)
+            try:
+                ##try to obtain seaice velocity from iced files
+                model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity', 'units':drift_units})
+            except FileNotFoundError:
+                ##if not available, try to get from iceh files
+                model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity_daily', 'units':drift_units})
+            grid_si_velocity = model.grid.convert(model_si_velocity, is_vector=True)
+            ##find obs location velocity
+            u[obs_mask] = grid.interp(grid_si_velocity[0,...], obs_x[obs_mask], obs_y[obs_mask])
+            v[obs_mask] = grid.interp(grid_si_velocity[1,...], obs_x[obs_mask], obs_y[obs_mask])
         obs_seq = np.array([u, v])
 
         ##TODO: alternatively, one can run a trajectory to get more accurate drift vectors
