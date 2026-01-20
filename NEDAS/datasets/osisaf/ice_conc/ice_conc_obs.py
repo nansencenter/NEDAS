@@ -50,8 +50,7 @@ class OsisafSeaIceConcObs(Dataset):
             file_list = []
             for d in d_range:
                 t = time + d * timedelta(hours=1)
-                tstr = t.strftime('%Y%m%d%H%M')
-                search = os.path.join(path, f'{t:%Y}', f'{t:%m}', 'ice_conc_'+self.proj_name+'-100_'+self.source+'_'+tstr+'.nc')
+                search = os.path.join(path, f'{t:%Y}', f'{t:%m}', f'ice_conc_{self.proj_name}-100_{self.source}_{t:%Y%m%d}1200.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
