@@ -9,4 +9,5 @@ ystart: 5845000.
 yend: -5355000.
 dy: -10000.
 
-source: amsr2  ##multi
+source: amsr2   ##multi
+obs_file_dt: 24 ##time interval (hours) between obs files

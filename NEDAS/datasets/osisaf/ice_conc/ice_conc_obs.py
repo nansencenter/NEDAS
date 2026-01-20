@@ -17,6 +17,7 @@ class OsisafSeaIceConcObs(Dataset):
     yend: float
     dx: float
     dy: float
+    obs_file_dt: int
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -42,7 +43,7 @@ class OsisafSeaIceConcObs(Dataset):
             file_list = glob.glob(search)
         else:
             if obs_window_min is not None and obs_window_max is not None:
-                d_range = np.arange(obs_window_min, obs_window_max)
+                d_range = np.arange(obs_window_min, obs_window_max, self.obs_file_dt)
             else:
                 d_range = [0]
 

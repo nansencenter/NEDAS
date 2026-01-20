@@ -10,3 +10,4 @@ ystart: 5750000.
 yend: -5251000.
 dy: -62500.
 
+obs_file_dt: 24  #time interval (hours) between obs files

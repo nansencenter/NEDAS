@@ -16,6 +16,7 @@ class OsisafSeaIceDriftObs(Dataset):
     yend: float
     dx: float
     dy: float
+    obs_file_dt: int
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -42,14 +43,15 @@ class OsisafSeaIceDriftObs(Dataset):
             file_list = glob.glob(search)
         else:
             if obs_window_min is not None and obs_window_max is not None:
-                d_range = np.arange(obs_window_min, obs_window_max)
+                d_range = np.arange(obs_window_min, obs_window_max, self.obs_file_dt)
             else:
                 d_range = [0]
             file_list = []
             for d in d_range:
                 t = time + d * timedelta(hours=1)
-                t0 = t - timedelta(days=2)  ##drift traj start time
-                search = os.path.join(path, t.strftime('%Y'), t.strftime('%m'), 'ice_drift_'+self.proj_name+'-625_multi-oi_'+t0.strftime('%Y%m%d%H%M')+'-'+t.strftime('%Y%m%d%H%M')+'.nc')
+                t1 = t - timedelta(days=1)  ##drift traj start time
+                t2 = t + timedelta(days=1)  ##drift traj end time
+                search = os.path.join(path, f'{t2:%Y}', f'{t2:%m}', f'ice_drift_{self.proj_name}-625_multi-oi_{t1:%Y%m%d}1200-{t2:%Y%m%d}1200.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
@@ -108,7 +110,7 @@ class OsisafSeaIceDriftObs(Dataset):
 
                     dt0 = obs_dt0[p] if ~np.isnan(obs_dt0[p]) else 0.
                     dt1 = obs_dt1[p] if ~np.isnan(obs_dt1[p]) else 0.
-                    obs_t = (t1+dt1) * timedelta(seconds=1) + datetime(1978, 1, 1, tzinfo=timezone.utc)
+                    obs_t = 0.5 * (t1+dt1 + t0+dt0) * timedelta(seconds=1) + datetime(1978, 1, 1, tzinfo=timezone.utc)
                     obs_dt = (t1+dt1 - t0-dt0)*timedelta(seconds=1) / timedelta(days=1)
                     obs_u = obs_dx[p] / obs_dt
                     obs_v = obs_dy[p] / obs_dt
