@@ -118,11 +118,22 @@ def parse_perturb_opts(**kwargs):
             key_list.append(key)
 
     ##a list of variables can be specified if running a multivariate perturbation scheme
-    ##form a variable list for further processing
-    variable_list = ensure_list(kwargs['variable'])
-    nv = len(variable_list)
+    ##rectify variable and parameter to be lists for further processing
+    if not isinstance(kwargs['variable'], list):
+        kwargs['variable'] = [kwargs['variable']]
+        for key in key_list:
+            kwargs[key] = [kwargs[key]]
+    variable_list = kwargs['variable']
+    nv = len(variable_list)  ##number of variables
+
+    ##ensure again that parameters are rectified to lists 
     for key in key_list:
-        kwargs[key] = ensure_list(kwargs[key])
+        if not isinstance(kwargs[key], list):
+            kwargs[key] = [kwargs[key]]
+
+        ##check for mismatch in list length    
+        if len(kwargs[key]) != nv:
+            raise ValueError(f"perturb option: {key} has {len(kwargs[key])} entries, but {nv} variables are specified")
 
     ##get perturbation parameters for each variable from kwargs
     params = {}
