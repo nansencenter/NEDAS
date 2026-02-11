@@ -194,6 +194,8 @@ def t2h(t: datetime) -> float:
     """
     Convert datetime object to hours since 1900-1-1 00:00
     """
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
     return (t - ref_time)/timedelta(hours=1)
 
 def h2t(h: float) -> datetime:

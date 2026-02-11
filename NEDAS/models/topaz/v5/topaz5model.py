@@ -264,6 +264,8 @@ class Topaz5Model(Model):
                 var = nc_read_var(fname, rec['name'])[0, ...]
 
         elif name in self.atmos_forcing_variables:
+            if kwargs['time'].tzinfo is None:
+                kwargs['time'] = kwargs['time'].replace(tzinfo=timezone.utc)
             dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / (24*dt1h)
             if rec['is_vector']:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
@@ -356,6 +358,8 @@ class Topaz5Model(Model):
                 nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
 
         elif name in self.atmos_forcing_variables:
+            if kwargs['time'].tzinfo is None:
+                kwargs['time'] = kwargs['time'].replace(tzinfo=timezone.utc)
             dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / timedelta(days=1)
             if rec['is_vector']:
                 for i in range(2):
