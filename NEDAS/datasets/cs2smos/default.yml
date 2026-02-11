@@ -1,11 +1,13 @@
-dataset_dir: '/cluster/projects/nn2993k/sim/data/CS2SMOS'
+dataset_dir:
+obs_file_dt: 24
+obs_days: 7
+use_dataset_uncertainty: False
 
 ##osisaf grid parameters
-proj_name: 'nh_polstere'
-proj: '+proj=stere +a=6378273 +b=6356889.44891 +lat_0=90 +lat_ts=70 +lon_0=-45'
-xstart: -3845000.
-xend: 3755000.
-dx: 10000.
-ystart: 5845000.
-yend: -5355000.
-dy: -10000.
+proj: "+proj=laea +lon_0=0 +datum=WGS84 +ellps=WGS84 +lat_0=90.0"
+xstart: -5387500.
+xend: 5388000.
+dx: 25000.
+ystart: 5387500.
+yend: -5388000.
+dy: -25000.
