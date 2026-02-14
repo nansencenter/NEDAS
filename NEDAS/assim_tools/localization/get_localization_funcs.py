@@ -8,7 +8,9 @@ registry = {
 
 def get_localization_funcs(c: Config) -> dict:
     local_funcs = {}
+    assert c.localization_def is not None, "c.localization_def needs to be defined in the config file"
     for key in ['horizontal', 'vertical', 'temporal']:
+        assert key in c.localization_def, f"{key} needs to be defined in c.localization_def"
         if c.localization_def[key]:
             if 'type' not in c.localization_def[key]:
                 raise KeyError(f"'type' needs to be specified for c.localization['{key}']")

@@ -20,7 +20,7 @@ def get_cmap(cmap_name: str):
         KeyError: If the colormap name is not found.
     """
     if cmap_name.split('.')[0] == 'cmocean':
-        import cmocean
+        import cmocean  #type: ignore
         cmap = getattr(cmocean.cm, cmap_name.split('.')[-1])
     else:
         cmap = colormaps[cmap_name]

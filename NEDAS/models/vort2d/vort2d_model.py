@@ -8,6 +8,19 @@ from NEDAS.models import Model
 from .util import initial_condition, advance_time
 
 class Vort2DModel(Model):
+    nx: int
+    ny: int
+    dx: float
+    dt: float
+    restart_dt: float
+    Vmax: float
+    Rmw: float
+    Vbg: float
+    Vslope: float
+    loc_sprd: int
+    gen: float
+    diss: float
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 

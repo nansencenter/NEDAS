@@ -2,7 +2,7 @@ import numpy as np
 
 try:
     ###fft implementation using FFTW
-    import pyfftw
+    import pyfftw  #type: ignore
 
     def fft2(f: np.ndarray) -> np.ndarray:
         """
@@ -65,11 +65,11 @@ try:
 except ImportError:
     #print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
 
-    def fft2(x):
-        return np.fft.fft2(x)
+    def fft2(f: np.ndarray) -> np.ndarray:
+        return np.fft.fft2(f)
 
-    def ifft2(x):
-        return np.real(np.fft.ifft2(x))
+    def ifft2(fh: np.ndarray) -> np.ndarray:
+        return np.real(np.fft.ifft2(fh))
 
 def fftwn(n):
     """

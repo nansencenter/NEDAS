@@ -21,6 +21,8 @@ def get_assimilator(c: Config) -> Assimilator:
     Returns:
         Assimilator: Corresponding Assimilator subclass instance.
     """
+    if c.assimilator_def is None:
+        raise ValueError("assimilator_def not found in Config")
     if 'type' not in c.assimilator_def.keys():
         raise KeyError("'type' needs to be specified in assimilator_def")
     assimilator_type = c.assimilator_def['type']

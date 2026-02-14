@@ -23,14 +23,14 @@ class ETKFAssimilator(BatchAssimilator):
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_state, self.rfactor, self.kfactor, self.nlobs_max)
+                            impact_on_state)
 
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_state, rfactor, kfactor, nlobs_max) -> None:
+                        impact_on_state) -> None:
     """perform local analysis for one location in the analysis grid partition"""
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -75,16 +75,11 @@ def local_analysis_main(state_prior, obs_prior,
         sort_ind = np.argsort(lfactor[ind])[::-1]
         ind = ind[sort_ind]
 
-        ##limit number of local obs if needed
-        ###e.g. topaz only keep the first 3000 obs with highest lfactor
-        # nlobs_max = 3000
-        ind = ind[:nlobs_max]
-
         ##use cached weight if no localization is applied, to avoid repeated computation
         if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
             weights = weights_old
         else:
-            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind], rfactor, kfactor)
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind])
 
         ##perform local analysis and update the ensemble state
         state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
@@ -93,7 +88,7 @@ def local_analysis_main(state_prior, obs_prior,
         weights_old = weights
 
 @njit
-def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
+def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor):
     nens, nlobs = obs_prior.shape
 
     ##ensemble weight matrix, weights[:, m] is for the m-th member
@@ -114,8 +109,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     innov = obs - obs_prior_mean
     obs_var = obs_err**2
 
-    ##inflate obs error by rfactor, and kfactor where innovation is large
-    obs_var = np.sqrt((obs_prior_var + obs_var)**2 + obs_prior_var*(innov/kfactor)**2) - obs_prior_var
     obs_err = np.sqrt(obs_var)
 
     ##obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.5
@@ -157,17 +150,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
         weights[m, :] = np.sum(gain[m, :] * dy)
 
     ##---second part of weights: update of ensemble spread
-    if rfactor > 1:  ##scale S with rfactor and recompute the var_ratio
-        S /= np.sqrt(rfactor)
-        try:
-            var_ratio_inv = np.eye(nens) + S.T @ S
-            L, sv, Rh = np.linalg.svd(var_ratio_inv)
-            var_ratio = L @ np.diag(sv**-1) @ Rh
-            gain = var_ratio @ S.T
-        except:
-            ##if failed just return equal weights (no update)
-            return np.eye(nens)
-
     var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
 
     weights += var_ratio_sqrt

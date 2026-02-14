@@ -63,6 +63,7 @@ class Inflation(ABC):
             ##sum over all obs_prior_seq on differnet pids to get the total sum
             sum_obs_prior = c.comm_mem.allreduce(sum_obs_prior_pid)
             mean_obs_prior = sum_obs_prior / c.nens
+            mean_obs_post = None
 
             if obs.obs_post_seq:
                 ##sum over all obs_prior_seq locally stored on pid
@@ -79,6 +80,7 @@ class Inflation(ABC):
                 pert2_obs_prior_pid += (obs.obs_prior_seq[mem_id, obs_rec_id] - mean_obs_prior)**2
             pert2_obs_prior = c.comm_mem.allreduce(pert2_obs_prior_pid)
             variance_obs_prior = pert2_obs_prior / (c.nens - 1)
+            variance_obs_post = None
 
             if obs.obs_post_seq:
                 pert2_obs_post_pid = np.zeros(shape)
@@ -92,7 +94,7 @@ class Inflation(ABC):
             stats['omb2'] += np.sum((obs_value - mean_obs_prior)**2)
             stats['varo'] += np.sum(obs.obs_seq[obs_rec_id]['err_std']**2) * nv
             stats['varb'] += np.sum(variance_obs_prior)
-            if obs.obs_post_seq:
+            if obs.obs_post_seq and variance_obs_post is not None:
                 stats['amb2'] += np.sum((mean_obs_post - mean_obs_prior)**2)
                 stats['omaamb'] += np.sum((obs_value - mean_obs_post)*(mean_obs_post - mean_obs_prior))
                 stats['vara'] += np.sum(variance_obs_post)

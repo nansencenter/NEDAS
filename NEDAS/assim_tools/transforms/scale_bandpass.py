@@ -1,5 +1,5 @@
 import numpy as np
-from NEDAS.grid import Grid
+from NEDAS.grid import Grid, IrregularGrid, Grid1D
 from NEDAS.utils.multiscale import get_scale_component, get_error_scale_factor
 from .base import Transform
 
@@ -34,15 +34,20 @@ class ScaleBandpass(Transform):
 
         ##temporarily convert obs grid to the analysis grid
         ##create the irregular obs grid
-        obs_grid = Grid(c.grid.proj, obs_seq['x'], obs_seq['y'], regular=False)
+        if isinstance(c.grid, Grid1D):
+            raise NotImplementedError("ScaleBandpass transform is not implemented for 1D grid.")
+        obs_grid = IrregularGrid(c.grid.proj, obs_seq['x'], obs_seq['y'])
 
         ##remove unwanted triangles in the obs grid
-        max_a = np.quantile(obs_grid.tri.a, 0.999)
-        max_p = np.quantile(obs_grid.tri.p, 0.99)
-        msk = np.logical_or(obs_grid.tri.a > max_a, obs_grid.tri.p > max_p, obs_grid.tri.ratio < 0.3)
+        tri_a = getattr(obs_grid.tri, 'a')
+        tri_p = getattr(obs_grid.tri, 'p')
+        tri_ratio = getattr(obs_grid.tri, 'ratio')
+        max_a = np.quantile(tri_a, 0.999)
+        max_p = np.quantile(tri_p, 0.99)
+        msk = np.logical_or(tri_a > max_a, tri_p > max_p, tri_ratio < 0.3)
 
         ##convert obs to analysis grid
-        obs_grid = Grid(c.grid.proj, obs_seq['x'], obs_seq['y'], regular=False, triangles=obs_grid.tri.triangles[~msk,:])
+        obs_grid = IrregularGrid(c.grid.proj, obs_seq['x'], obs_seq['y'], triangles=obs_grid.tri.triangles[~msk,:])
         obs_grid.set_destination_grid(c.grid)
         obs_fld = obs_grid.convert(obs_seq['obs'], is_vector=obs_rec['is_vector'], method='nearest', coarse_grain=False)
 
@@ -61,6 +66,7 @@ class ScaleBandpass(Transform):
         ##TODO: current implementation is very slow
         ##update obs err std because some averaging happened in get_scale_component
         #obs_seq['err_std'] *= get_error_scale_factor(c.grid, c.character_length, c.iter)
+        assert c.obs_err_scale_fac is not None
         obs_seq['err_std'] *= c.obs_err_scale_fac[c.iter]
 
         return obs_seq

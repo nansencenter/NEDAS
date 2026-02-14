@@ -36,6 +36,7 @@ def get_scale_component_spec_bandpass(grid, fld, character_length, s):
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
     fld_spec = fft2(fld)
+    r = np.ones(fld_spec.shape)
     if s == 0:
         r = lowpass_response(k2d, character_k[s], character_k[s+1])
     if s == nscale-1:
@@ -122,6 +123,7 @@ def get_error_scale_factor(grid, character_length, s):
     kx, ky = get_wn(rgrid.x)
     ny, nx = rgrid.x.shape
     k2d = np.hypot(kx, ky)
+    response = np.ones(k2d.shape)
     if s == 0:
         response = lowpass_response(k2d, character_k[s], character_k[s+1])
     if s == nscale-1:

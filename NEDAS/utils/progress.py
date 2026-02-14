@@ -62,12 +62,12 @@ def print_with_cache(msg):
     ##previous message is cached so that new message is displayed only
     ##when it's different from the previous one (avoid redundant output)
     if not hasattr(print_with_cache, 'prev_msg'):
-        print_with_cache.prev_msg = ''
+        setattr(print_with_cache, 'prev_msg', '')
 
     ##only show at most nmsg messages
-    if msg != print_with_cache.prev_msg:
+    if msg != getattr(print_with_cache, 'prev_msg', None):
         print(msg, flush=True, end="")
-        print_with_cache.prev_msg = msg
+        setattr(print_with_cache, 'prev_msg', msg)
 
 def watch_files(files, timeout=1000, check_dt=1):
     ##wait for file in files to appear, check every check_dt seconds

@@ -54,6 +54,8 @@ def read_chunks(filename, chk_list, var_list):
                 elif 'west_east_stag' in dims:
                     i1 = f.getncattr('WEST-EAST_PATCH_START_STAG') - 1
                     i2 = f.getncattr('WEST-EAST_PATCH_END_STAG')
+                else:
+                    raise ValueError("west_east dimension not found in "+vname)
 
                 if 'south_north' in dims:
                     j1 = f.getncattr('SOUTH-NORTH_PATCH_START_UNSTAG') - 1
@@ -61,6 +63,8 @@ def read_chunks(filename, chk_list, var_list):
                 elif 'south_north_stag' in dims:
                     j1 = f.getncattr('SOUTH-NORTH_PATCH_START_STAG') - 1
                     j2 = f.getncattr('SOUTH-NORTH_PATCH_END_STAG')
+                else:
+                    raise ValueError("south_north dimension not found in "+vname)
 
                 if 'bottom_top' in dims:
                     k1 = f.getncattr('BOTTOM-TOP_PATCH_START_UNSTAG') - 1
@@ -88,11 +92,13 @@ def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunk
 
     nv_max = np.max([len(lst) for p,lst in var_list_pid.items()])
     for v in range(nv_max):
+        vname = None
         if v < len(var_list_pid[pid]):
             ##prepare empty field for receiving chunks
             vname = var_list_pid[pid][v]
             ni, nj, nk, _,_,_ = var_dims[vname]
             fields[vname] = np.full((nk, nj, ni), np.nan)
+        assert vname is not None, f"Variable index {v} exceeds the number of variables assigned to processor {pid}"
 
         for dst_pid in np.arange(0, pid):
             if v < len(var_list_pid[dst_pid]):
@@ -134,8 +140,10 @@ def write_fields_bin(comm, filename, var_list, var_dims, fields):
     comm.Barrier()
     for vname in var_list:
         with open(filename, 'r+b') as f:
-            f.seek()
-            f.write()
+            pass
+            #TODO
+            #f.seek()
+            #f.write()
 
 def read_fields_nc(comm, filename, var_list, var_dims):
 

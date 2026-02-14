@@ -7,6 +7,7 @@ class TestAnalysisScheme(unittest.TestCase):
     def test_assimilator_init(self):
         c = Config()
         for assimilator_name in registry.keys():
+            c.assimilator_def = {}
             c.assimilator_def['type'] = assimilator_name
             module = importlib.import_module('NEDAS.assim_tools.assimilators.'+assimilator_name)
             assimilator = get_assimilator(c)
@@ -15,12 +16,14 @@ class TestAnalysisScheme(unittest.TestCase):
     def test_raise_exception_when_not_implemented(self):
         c = Config()
         with self.assertRaises(NotImplementedError):
+            c.assimilator_def = {}
             c.assimilator_def['type'] = 'foo'
             get_assimilator(c)
 
     def test_assimilation_algorithm_implemented(self):
         c = Config()
         for assimilator_name in registry.keys():
+            c.assimilator_def = {}
             c.assimilator_def['type'] = assimilator_name
             assimilator = get_assimilator(c)
 

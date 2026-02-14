@@ -1,9 +1,27 @@
 """Convert binary state file contents to netcdf files in analysis directory"""
 import os
+import struct
 import numpy as np
 from NEDAS.utils.netcdf_lib import nc_write_var
-from NEDAS.utils.conversion import t2h
-from NEDAS.assim_tools.state import read_field
+from NEDAS.utils.conversion import t2h, type_dic, type_size
+
+def read_field(binfile: str, info: dict, mask: np.ndarray, mem_id: int, rec_id: int) -> np.ndarray:
+    rec = info['fields'][rec_id]
+
+    nv = 2 if rec['is_vector'] else 1
+    fld_shape = (2,)+info['shape'] if rec['is_vector'] else info['shape']
+    fld_size = np.sum((~mask).astype(int))
+
+    with open(binfile, 'rb') as f:
+        f.seek(mem_id*info['size'] + rec['pos'])
+        fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec['dtype']]),
+                        f.read(nv*fld_size*type_size[rec['dtype']])))
+        fld = np.full(fld_shape, np.nan)
+        if rec['is_vector']:
+            fld[:, ~mask] = fld_.reshape((2, -1))
+        else:
+            fld[~mask] = fld_
+        return fld
 
 def run(c):
     adir = c.analysis_dir(c.time)
@@ -28,15 +46,15 @@ def run(c):
                 ##get the field from bin file
                 fld = read_field(filename, info, mask, mem_id, rec_id)
                 ##get record number along time,level dimensions
-                id_time = [i for i,t in enumerate(times) if t2h(rec['time'])==t][0]
-                id_level = [i for i,z in enumerate(levels) if rec['k']==z][0]
+                id_time = int([i for i,t in enumerate(times) if t2h(rec['time'])==t][0])
+                id_level = int([i for i,z in enumerate(levels) if rec['k']==z][0])
                 recno = {'member':mem_id, 'time':id_time, 'level':id_level}
                 if rec['is_vector']:
                     comp = ('_x', '_y')
                     for i in range(2):
-                        nc_write_var(outfile, dims, v+comp[i], fld[i,...], recno)
+                        nc_write_var(outfile, dims, v+comp[i], fld[i,...], recno=recno)
                 else:
-                    nc_write_var(outfile, dims, v, fld, recno)
+                    nc_write_var(outfile, dims, v, fld, recno=recno)
 
         ##output dimensions
         nc_write_var(outfile, {'member':len(members)}, 'member', members, attr={'standard_name':'member', 'long_name':'ensemble member'})

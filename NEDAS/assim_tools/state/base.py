@@ -182,7 +182,7 @@ class State:
 
             ss = lines[0].split()
             if len(ss)==1:
-                info['shape'] = (int(ss),)
+                info['shape'] = (int(ss[0]),)
             else:
                 info['shape'] = (int(ss[0]), int(ss[1]))
 
@@ -199,7 +199,7 @@ class State:
                     'is_vector': bool(int(ss[3])),
                     'units': ss[4],
                     'err_type': ss[5],
-                    'time': h2t(np.float32(ss[6])),
+                    'time': h2t(float(ss[6])),
                     'dt': np.float32(ss[7]),
                     'k': np.float32(ss[8]),
                     'pos': int(ss[9]), }
@@ -460,7 +460,7 @@ class State:
 
         ##additonal output of debugging
         if c.debug:
-            np.save(os.path.join(self.analysis_dir, f'fields_prior.{c.pid_mem}.{c.pid_rec}.npy'), fields)
+            np.savez(os.path.join(self.analysis_dir, f'fields_prior.{c.pid_mem}.{c.pid_rec}.npz'), **fields)
 
         return fields, z_fields
 
@@ -532,6 +532,9 @@ class State:
                     c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
                 ##prepare the fld for sending if not at the end of mem_list
+                fld = None
+                rec = {}
+                mem_id = None
                 if m < len(self.mem_list[c.pid_mem]):
                     mem_id = self.mem_list[c.pid_mem][m]
                     rec = self.info['fields'][rec_id]
@@ -603,6 +606,9 @@ class State:
                     c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
 
                 ##prepare an empty fld for receiving if not at the end of mem_list
+                fld = None
+                rec = {}
+                mem_id = None
                 if m < len(self.mem_list[c.pid_mem]):
                     mem_id = self.mem_list[c.pid_mem][m]
                     rec = self.info['fields'][rec_id]

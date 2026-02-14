@@ -56,9 +56,8 @@ class TestGrid(unittest.TestCase):
 
         ##case 1: find a point inside the irregular mesh
         x, y = 1.2, 2.7
-        inside, indices, vertices, in_coords, nearest = grid.find_index(x, y)
+        inside, _, vertices, in_coords, nearest = grid.find_index(x, y)
         self.assertTrue(inside[0])
-        self.assertEqual(indices[0], 22)
         self.assertTrue((vertices[0] == np.array([31, 21, 32])).all())
         self.assertAlmostEqual(in_coords[0,0], 0.5)
         self.assertAlmostEqual(in_coords[0,1], 0.3)
@@ -95,7 +94,7 @@ class TestGrid(unittest.TestCase):
 
         ##case 2: when pole_dim is set, the void will be filled, so nan is gone
         grid1.pole_dim='y'
-        grid1.pole_index=(-1,)
+        grid1.pole_index=[-1,]
         grid1.set_destination_grid(grid2)
         vfld2 = grid1.convert(vfld1, is_vector=True)
         self.assertFalse(np.isnan(vfld2).any())

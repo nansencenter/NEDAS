@@ -11,6 +11,23 @@ from ..model_grid import get_topaz_grid
 from .namelist import namelist
 
 class Topaz4Model(Model):
+    basedir: str
+    R: str
+    T: str
+    E: str
+    V: str
+    X: str
+    onem: float
+    ens_init_dir: str
+    forcing_frc: str
+    era5_path: str
+    priver: int
+    jerlv0: int
+    relax: int
+    nproc: int
+    nproc_per_run: int
+    walltime: int
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
@@ -95,48 +112,45 @@ class Topaz4Model(Model):
             f.overwrite_field(var, None, rec['name'], level=kwargs['k'], tlevel=1)
         f.close()
 
+    def z_coords(self, **kwargs) -> np.ndarray:
+        """
+        Calculate vertical coordinates given the 3D model state.
+        Returns:
+            np.ndarray: The corresponding z field.
+        """
+        return self._z_coords_cached(tuple(sorted(kwargs.items())))
+
     @lru_cache(maxsize=3)
-    def z_coords(self, **kwargs):
-        """calculate vertical coordinates given the 3D model state
-        """
-        """
-        Calculate vertical coordinates given the 3D model state
-        Return:
-        - z: np.array
-        The corresponding z field
-        """
-        ##some defaults if not set in kwargs
+    def _z_coords_cached(self, kwargs_tuple):
+        ##not checked for correctness yet
+        kwargs = dict(kwargs_tuple)
         if 'k' not in kwargs:
             kwargs['k'] = 0
 
         z = np.zeros(self.grid.x.shape)
 
         if kwargs['k'] == 0:
-            ##if level index is 0, this is the surface, so just return zeros
             return z
-
         else:
-            ##get layer thickness and convert to units
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+            rec['units'] = self.variables['ocean_layer_thick']['units']
             if self.z_units == 'm':
-                dz = - self.read_var(**rec) / self.onem ##in meters, negative relative to surface
+                dz = - self.read_var(**rec) / self.onem
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
 
-            ##use recursive func, get previous layer z and add dz
-            kwargs['k'] -= 1
-            z_prev = self.z_coords(**kwargs)
+            rec['k'] -= 1
+            z_prev = self._z_coords_cached(tuple(sorted(rec.items())))
             return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
 
-        init_file = self.self.filename(**{**kwargs, 'path':self.ens_init_dir})
-        input_file = self.self.filename(**kwargs)
+        init_file = self.filename(**{**kwargs, 'path':self.ens_init_dir})
+        input_file = self.filename(**kwargs)
         os.system("mkdir -p "+os.path.dirname(input_file))
         os.system("cp "+init_file+" "+input_file)
         os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
@@ -152,7 +166,7 @@ class Topaz4Model(Model):
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
 
-        input_file = self.self.filename(**kwargs)
+        input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
         os.system("mkdir -p "+run_dir)
         os.chdir(run_dir)
@@ -164,7 +178,7 @@ class Topaz4Model(Model):
         next_time = time + forecast_period * dt1h
 
         kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.self.filename(**kwargs_out)
+        output_file = self.filename(**kwargs_out)
 
         ##create namelist config files
         namelist(self, time, forecast_period, run_dir)
@@ -180,10 +194,12 @@ class Topaz4Model(Model):
         os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
 
         ##TODO: switches for other forcing options
+        forcing_path = None
         if self.forcing_frc == 'era5':
             forcing_path = self.era5_path
         if self.forcing_frc == 'era40':
             pass
+        assert forcing_path is not None
         os.system("ln -fs "+forcing_path+" .")
         os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
         for ext in ['.a', '.b']:

@@ -125,9 +125,11 @@ class OARJobSubmitter(JobSubmitter):
             self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_ARRAY_ID=')[-1])
             while True:
                 sleep(self.check_dt)
-                p = subprocess.run(['ssh', self.job_submit_node,
-                                    'oarstat', '-f', f'--array {self.job_id}',
-                                    '| grep "state = "'], capture_output=True)
+                if self.job_submit_node:
+                    ssh_cmd = f'oarstat -f --array {self.job_id} | grep "state = "'
+                    p = subprocess.run(['ssh', self.job_submit_node, ssh_cmd], capture_output=True)
+                else:
+                    raise ValueError
                 s = p.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
                 print(s, flush=True)
                 s = [string for string in s if 'state=' in string]
@@ -143,9 +145,11 @@ class OARJobSubmitter(JobSubmitter):
             self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_JOB_ID=')[-1])
             while True:
                 sleep(20)
-                p = subprocess.run(['ssh', self.job_submit_node,
-                                    'oarstat', '-f', f'--job {self.job_id}',
-                                    '| grep "state = "'], capture_output=True)
+                if self.job_submit_node:
+                    ssh_cmd = f'oarstat -f --job {self.job_id} | grep "state = "'
+                    p = subprocess.run(['ssh', self.job_submit_node, ssh_cmd], capture_output=True)
+                else:
+                    raise ValueError
                 s = p.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
                 s = s[0]
                 print(s, flush=True)

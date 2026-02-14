@@ -1,6 +1,6 @@
 ##demo of how to run the qg model in standalone mode
 from datetime import datetime
-from NEDAS.models.qg import Model
+from NEDAS.models.qg import QGModel
 
 def main():
     ##run the model by
@@ -23,7 +23,7 @@ def main():
         'forecast_period': 120,
         }
 
-    model = Model(parse_args=True, **model_param)
+    model = QGModel(parse_args=True, **model_param)
 
     model.run(**run_opt)
 

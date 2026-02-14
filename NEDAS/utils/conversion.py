@@ -2,13 +2,13 @@ import numbers
 import numpy as np
 from datetime import datetime, timezone
 
-def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray:
+def units_convert(units_from, units_to, var):
     """
     Convert units for a given variable.
 
     Args:
-        units_from (str): Source units for the input variable
-        units_to (str): Target units to convert to
+        units_from (str or numbers.Number): Source units for the input variable
+        units_to (str or numbers.Number): Target units to convert to
         var (np.ndarray): The input variable
 
     Returns:

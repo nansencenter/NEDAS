@@ -24,7 +24,7 @@ def get_task_list(c, **kwargs) -> list:
             dt = model.variables[vname]['dt']
             for k in levels:
                 for t in np.arange(t2h(c.time), t2h(c.next_time), dt):
-                    tasks.append({**kwargs, 'time':h2t(t), 'member':member, 'model_src':model_src[i], 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i]})
+                    tasks.append({**kwargs, 'time':h2t(float(t)), 'member':member, 'model_src':model_src[i], 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i]})
     return tasks
 
 def run(c, **kwargs) -> None:
@@ -114,7 +114,7 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
         levels_by_variable += "], \n"
         times_by_variable += f"'{vname}': ["
         for t in np.arange(t2h(c.time_start), t2h(c.time_end), model.variables[vname]['dt']):
-            times_by_variable += f"'{h2t(t):%Y%m%dT%H%M%S}', "
+            times_by_variable += f"'{h2t(float(t)):%Y%m%dT%H%M%S}', "
         times_by_variable += "], \n"
     html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_by_variable)
     html_page = html_page.replace("TIMES_BY_VARIABLE", times_by_variable)

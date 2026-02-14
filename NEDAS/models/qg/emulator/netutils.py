@@ -3,7 +3,7 @@ import netCDF4
 import numpy as np
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import tensorflow as tf
+import tensorflow as tf  #type: ignore
 
 class Att_Res_UNet():
     def __init__(self, list_predictors, list_targets, patch_dim, batch_size, n_filters, activation, kernel_initializer, batch_norm, pooling_type, dropout):
@@ -84,6 +84,8 @@ class Att_Res_UNet():
             p = tf.keras.layers.MaxPool2D(pool_size = pool_size, strides = strides)(f)
         elif self.pooling_type == "Average":
             p = tf.keras.layers.AveragePooling2D(pool_size = pool_size, strides = strides)(f)
+        else:
+            raise ValueError("Invalid pooling type. Must be 'Max' or 'Average'.")
 
         p = tf.keras.layers.Dropout(self.dropout)(p)
         return(f, p)  
@@ -118,7 +120,7 @@ class Att_Res_UNet():
 
         return(unet_model)
 
-    def featname2tuple(feature_name):
+    def featname2tuple(self, feature_name):
         parts = feature_name.rsplit('_', 1)  # Split from the right, max 1 split
         varname = parts[0]
         channel = int(parts[1])
@@ -174,10 +176,10 @@ class Data_generator(tf.keras.utils.Sequence):
             ncx = netCDF4.Dataset(fileIDX, "r")
             ncy = netCDF4.Dataset(fileIDy, "r")
             for k in range(self.npredictors):
-                varname, channel = featname2tuple(self.list_predictors[k])
+                varname, channel = self.featname2tuple(self.list_predictors[k])
                 X[i,...,k] = ncx.variables[varname][0,channel,:,:]
             for k in range(self.ntargets):
-                varname, channel = featname2tuple(self.list_targets[k])
+                varname, channel = self.featname2tuple(self.list_targets[k])
                 y[i,...,k] = ncy.variables[varname][0,channel,:,:]
             ncx.close()
             ncy.close()

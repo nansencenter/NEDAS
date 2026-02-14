@@ -30,6 +30,7 @@ def get_updator(c: Config) -> Updator:
         raise NotImplementedError(f"updator type '{updator_type}' is not implemented")
 
     ##TODO: last scale component doesn't need alignment, find a better general logic
+    assert c.niter is not None
     if c.iter == c.niter-1:
         updator_type = 'additive' 
     module = importlib.import_module('NEDAS.assim_tools.updators.'+updator_type)

@@ -6,7 +6,7 @@ from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.utils.conversion import t2s, s2t, dt1h, units_convert
 from NEDAS.utils.shell_utils import run_command, makedir, run_job
 from NEDAS.utils.progress import watch_files
-from NEDAS.grid import Grid
+from NEDAS.grid import Grid, IrregularGrid
 from NEDAS.models import Model
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
@@ -17,6 +17,19 @@ class NextsimModel(Model):
     """
     Class for configuring and running the nextsim v1 model (lagrangian version)
     """
+    nextsim_dir: str
+    model_env: str
+    nextsim_mesh_dir: str
+    msh_filename: str
+    nextsim_data_dir: str
+    ocean_forcing_path: str
+    restart_input_path: str
+    restart_dt: float
+    atmos_forcing_path: str
+    forcing_dt: float
+    nproc_per_run: int
+    walltime: int
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
         super().__init__(config_file, parse_args, **kwargs)
@@ -83,6 +96,9 @@ class NextsimModel(Model):
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
 
+        else:
+            raise ValueError('unknown variable name: '+kwargs['name'])
+
     def read_grid_from_mshfile(self, mshfile):
         """
         Read mshfile and update the self.grid object
@@ -114,14 +130,14 @@ class NextsimModel(Model):
                 elements = read_data(meshfile, 'Elements')
                 n_elements = int(elements.size/3)
                 triangles = elements.reshape((n_elements, 3)) - 1
-                self.grid_bank[meshfile] = Grid(proj, x, y, regular=False, triangles=triangles)
+                self.grid_bank[meshfile] = IrregularGrid(proj, x, y, triangles=triangles)
                 self.grid_bank[meshfile].id = read_data(meshfile, 'id')
             self.grid = self.grid_bank[meshfile]
+            self.grid.mask = None
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             self.grid = Grid.regular_grid(proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
-
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
+            self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
 
     def write_grid(self, **kwargs):
         """
@@ -133,6 +149,7 @@ class NextsimModel(Model):
         kwargs = super().parse_kwargs(**kwargs)
         meshfile = self.filename(**kwargs).replace('field', 'mesh')
 
+        assert isinstance(self.grid, IrregularGrid)
         write_data(meshfile, 'Nodes_x', self.grid.x)
         write_data(meshfile, 'Nodes_y', self.grid.y)
 
@@ -140,6 +157,7 @@ class NextsimModel(Model):
         write_data(meshfile, 'Elements', elements)
 
     def get_boundary_nodes(self):
+        assert isinstance(self.grid, IrregularGrid)
         edges = set()
         for triangle in self.grid.tri.triangles:
             for i in range(3):
@@ -151,6 +169,7 @@ class NextsimModel(Model):
         return np.unique(np.array(list(edges)))  ##the boundary node indices
 
     def get_neighbor_nodes(self, nodes):
+        assert isinstance(self.grid, IrregularGrid)
         neighbors = set()
         for i in nodes:
             r,c = np.where(self.grid.tri.edges == i)
@@ -180,6 +199,7 @@ class NextsimModel(Model):
         """
         ##read grid, refresh self.grid.x, y
         self.read_grid(**kwargs)
+        assert self.grid is not None
 
         ##make sure boundary is not moving
         u = self.taper_boundary(u)
@@ -196,6 +216,7 @@ class NextsimModel(Model):
         pass
 
     def prepare_mask(self, dst_grid):
+        assert self.grid is not None
         self.grid.set_destination_grid(dst_grid)
         tmp = self.grid.convert(np.ones(self.grid.x.shape))
         return np.isnan(tmp)
@@ -225,6 +246,8 @@ class NextsimModel(Model):
                 var = np.array([u, v])
             else:
                 var = nc_read_var(fname, rec['name'])[nt_in_file, ...]
+        else:
+            raise ValueError('unknown variable name: '+name)
 
         ##convert units if native unit is not the same as required by kwargs
         var = units_convert(rec['units'], kwargs['units'], var)
@@ -265,9 +288,12 @@ class NextsimModel(Model):
             else:
                 data_attr={'standard_name':rec['name'], 'units':rec['units'], 'grid_mapping':'projection_stereo'}
                 nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'], var, recno={'time':nt_in_file}, attr=data_attr, comm=kwargs['comm'])
+        else:
+            raise ValueError('unknown variable name: '+name)
 
     def z_coords(self, **kwargs):
         ##for nextsim, just discard inputs and simply return zero as z_coords
+        assert self.grid is not None
         return np.zeros(self.grid.x.shape)
 
     def get_seaice_drift(self, **kwargs):

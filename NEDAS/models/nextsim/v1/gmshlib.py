@@ -1,6 +1,7 @@
 ##from nextsim-tools/pynextsim
 
 import numpy as np
+from matplotlib.path import Path
 
 ##projection used in msh files
 from pyproj import Proj
@@ -169,6 +170,25 @@ class GmshBoundary:
         dy = np.diff(ye)
         self.resolution = np.mean(np.hypot(dx, dy))
 
+    @staticmethod
+    def points_in_polygon(poly, coords):
+        """
+        Test if coords are inside a polygon
+
+        Parameters:
+        -----------
+        poly : shapely.geometry.Polygon
+        coords : numpy.ndarray(float)
+            shape (num_points,2) with x in 1st column and y in 2nd
+
+        Returns:
+        --------
+        inside : numpy.ndarray(bool)
+            length is num_points
+        """
+        bpath = Path(np.array(poly.exterior.coords))
+        return np.array(bpath.contains_points(coords), dtype=bool)
+
     def iswet(self, x, y):
         """
         use matplotlib.path to test if multiple points are contained
@@ -192,6 +212,7 @@ class GmshBoundary:
         # test if inside external polygon
         mask = self.points_in_polygon(self.exterior_polygon, coords)
         # test not inside island polygons
+        assert self.island_polygons is not None, "island_polygons should be defined in GmshBoundary"
         for p in self.island_polygons:
             mask *= ~self.points_in_polygon(p, coords)
         return mask.reshape(x.shape)

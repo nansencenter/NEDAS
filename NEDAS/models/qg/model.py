@@ -12,6 +12,14 @@ class QGModel(Model):
     """
     Class for configuring and running the qg model
     """
+    kmax: int
+    nz: int
+    restart_dt: float
+    nproc_per_run: int
+    psi_init_type: str
+    model_code_dir: str
+    model_env: str
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
@@ -97,6 +105,9 @@ class QGModel(Model):
             tempk2 = psi2temp(psik2)
             var2 = spec2grid(tempk2).T
 
+        else:
+            raise ValueError('unknown variable name '+kwargs['name'])
+
         ##vertical interp between var1 and var2
         if k1 < self.nz-1:
             return (var1*(k2-k) + var2*(k-k1)) / (k2-k1)
@@ -124,6 +135,9 @@ class QGModel(Model):
             elif kwargs['name'] == 'temperature':
                 tempk = grid2spec(var.T)
                 psik = temp2psi(tempk)
+
+            else:
+                raise ValueError('unknown variable name '+kwargs['name'])
 
             write_data_bin(fname, psik, self.kmax, self.nz, int(k))
 

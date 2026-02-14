@@ -52,6 +52,9 @@ class Updator(ABC):
                     model = c.models[rec['model_src']]
                     file = model.filename(path=path, member=mem_id, **rec)
                 else:
+                    mem_id = 0
+                    rec_id = 0
+                    rec = {}
                     file = None
                 all_files = c.comm.allgather(file)
                 ##create the file locks

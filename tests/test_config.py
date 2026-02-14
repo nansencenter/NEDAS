@@ -35,7 +35,7 @@ class TestConfig(unittest.TestCase):
     def test_raise_exception_if_time_type_error(self):
         with self.assertRaises(TypeError):
             c = Config()
-            c.time='2023-01-01'
+            c.time='2023-01-01'  #type: ignore
 
     def test_argparse_time_str(self):
         tzinfo = timezone.utc
