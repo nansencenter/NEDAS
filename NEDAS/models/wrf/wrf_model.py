@@ -9,6 +9,20 @@ from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.models import Model
 
 class WRFModel(Model):
+    map_proj: str
+    ref_lat: float
+    ref_lon: float
+    truelat1: float
+    truelat2: float
+    max_dom: int
+    e_we: list[int]
+    e_sn: list[int]
+    e_vert: list[int]
+    dx: list[float]
+    dy: list[float]
+    model_code_dir: str
+    nproc_per_run: int
+    walltime: int
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -61,15 +75,15 @@ class WRFModel(Model):
 
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        pass
+        raise NotImplementedError
 
-    def write_var(self, **kwargs):
+    def write_var(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         pass
 
     def z_coords(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
-        pass
+        raise NotImplementedError
 
     def preprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

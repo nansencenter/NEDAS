@@ -2,10 +2,18 @@ import os
 import glob
 import numpy as np
 from datetime import datetime, timedelta, timezone
+import netCDF4
 from NEDAS.utils.conversion import dt1h
 from NEDAS.datasets import Dataset
 
 class ArgoObs(Dataset):
+    ONEM: float
+    TEMP_MIN: float
+    TEMP_MAX: float
+    SALN_MIN: float
+    SALN_MAX: float
+    NUM_OBS_PER_LAYER: int
+    OBS_ERR_VAR: dict[str, float]
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -23,6 +31,7 @@ class ArgoObs(Dataset):
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
+        search = ''
         if time is None:
             tstr = '????????'
             search = os.path.join(path, tstr+'_?_prof.nc')
@@ -75,7 +84,7 @@ class ArgoObs(Dataset):
         for fname in self.filename(**kwargs):
 
             ##read the profiles from nc file
-            f = Dataset(fname)
+            f = netCDF4.Dataset(fname)
 
             nprof = f.dimensions['N_PROF'].size
             nlev = f.dimensions['N_LEVELS'].size
@@ -95,14 +104,18 @@ class ArgoObs(Dataset):
             elif 'DEPH' in f.variables:
                 z = 0. - f['DEPH'][0:nprof, 0:nlev].data
                 z_qc = f['DEPH_QC'][0:nprof, 0:nlev].data
+            else:
+                raise RuntimeError
 
             ##model z (zm) at profile location on grid
+            zm = None
             if model.z is not None:
                 nz = model.z.shape[0]
                 zm = np.zeros((nprof, nz))
                 for k in range(nz):
                     ztmp = model.grid.convert(model.z[k, ...])
                     zm[:, k] = grid.interp(ztmp, x, y)
+            assert zm is not None
 
             ##observed variable
             if name == 'ocean_temp' and 'TEMP' in f.variables:
@@ -220,10 +233,11 @@ class ArgoObs(Dataset):
 
             f.close()
 
+        obs_seq_arr = {}
         for key in obs_seq.keys():
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
-        return obs_seq
+        return obs_seq_arr
 
     def random_network(self, model, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

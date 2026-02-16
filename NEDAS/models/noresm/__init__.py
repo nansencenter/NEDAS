@@ -45,7 +45,7 @@ def filename(path, **kwargs):
     ##if there is a list of matching files, we return the first one
     return flist[0]
 
-def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
+def grid_info(grid_file: str, grid_type: str, scale_x: float=1., scale_y: float=1., stagger: str='p'):
     """
     Fetch grid info from a given grid_file, or generate from locally stored data.
 
@@ -84,6 +84,8 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
             lat = f[stagger+'lat'][...].data
         else:
             raise ValueError('unknown staggering type '+stagger)
+
+    grid_lon, grid_lat = None, None
 
     if os.path.exists(grid_file):
         ##just get lon, lat from provided grid_file, strip padded rows
@@ -151,6 +153,7 @@ def grid_info(grid_file, grid_type, scale_x=1, scale_y=1, stagger='p'):
             xo, yo = np.meshgrid(x_, y_)
             grid_lon, grid_lat = hproj(xy2hx(xo, yo), xy2hy(xo, yo), inverse=True)
 
+    assert grid_lon is not None and grid_lat is not None
     ny, nx = grid_lon.shape
     x, y = np.meshgrid(np.arange(nx), np.arange(ny))
     grid_x, grid_y = x, y
@@ -231,8 +234,8 @@ def read_grid(path, **kwargs):
         return xo.reshape(shape), yo.reshape(shape)
 
     ##set some attributes for proj info
-    proj.name = grid_type
-    proj.definition = 'proj='+grid_type+' lon_0=70 lat_0=0'
+    setattr(proj, 'name', grid_type)
+    setattr(proj, 'definition', 'proj='+grid_type+' lon_0=70 lat_0=0')
 
     return Grid(proj, x, y, neighbors=neighbors)
 

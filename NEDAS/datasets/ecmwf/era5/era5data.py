@@ -112,5 +112,5 @@ class ERA5Data(Dataset):
         vapmix = atmos_utils.vapmix(e_sat, press)
         return vapmix
 
-    def read_obs(self):
+    def read_obs(self, **kwargs):
         raise NotImplementedError

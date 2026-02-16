@@ -1,14 +1,21 @@
 import os
 import glob
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pyproj
 from scipy.spatial import KDTree
-from NEDAS.grid import Grid
+from NEDAS.grid import IrregularGrid
 from NEDAS.datasets import Dataset
 from .utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
 
 class RgpsObs(Dataset):
+    dataset_dir: str
+    proj4: str
+    DAYS_SEARCH_TOLERANCE: int
+    DRIFT_MAX: float
+    DRIFT_ERR_STD: float
+    DEFORM_MAX: float
+    DEFORM_ERR_STD: float
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -23,9 +30,6 @@ class RgpsObs(Dataset):
 
         ##RGPS trajectory data (x,y) is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
-
-        ##tolerance when searching for the time along trajectory
-        self.dt_tol=timedelta(days=self.DAYS_SEARCH_TOLERANCE)
 
         self.obs_operator = {}
         ##TODO the get_traj_pairs functions sometimes fail, near the tree.query part, returns wrong index?
@@ -46,6 +50,8 @@ class RgpsObs(Dataset):
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         t = kwargs['time']
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
 
         if 'obs_window_min' in kwargs and 'obs_window_max' in kwargs:
             d_range = [kwargs['obs_window_min'], kwargs['obs_window_max']]
@@ -58,6 +64,8 @@ class RgpsObs(Dataset):
             ss = result.split('_')
             t1 = datetime.strptime(ss[1], '%Y-%m-%d')
             t2 = datetime.strptime(ss[2], '%Y-%m-%d')
+            t1 = t1.replace(tzinfo=timezone.utc)
+            t2 = t2.replace(tzinfo=timezone.utc)
             for d in d_range:
                 t_ = t + d * timedelta(hours=1)
                 if t_ >= t1 and t_ <= t2 and result not in file_list:
@@ -86,7 +94,7 @@ class RgpsObs(Dataset):
 
         rec = 0
         for file_name in self.filename(**kwargs):
-            pairs = get_data_traj_pairs(file_name, d0_out, d1_out, self.dt_tol)
+            pairs = get_data_traj_pairs(file_name, d0_out, d1_out, self.DAYS_SEARCH_TOLERANCE)
 
             for x0, y0, t0, x1, y1, t1 in pairs:
                 tri = get_triangulation(x0, y0)
@@ -123,10 +131,13 @@ class RgpsObs(Dataset):
                         obs_values = ux + vy
                     elif obs_name == 'seaice_deform_vort':
                         obs_values = vx - uy
+                    else:
+                        raise ValueError(f"unknown obs_name {obs_name}")
 
                     for p in range(len(x_elem)):
                         ##quality check
-                        if tri.mask[p]:
+                        tri_mask = getattr(tri, 'mask')
+                        if tri_mask[p]:
                             continue
                         if np.abs(obs_values[p]) > self.DEFORM_MAX or np.isnan(obs_values[p]):
                             continue
@@ -149,36 +160,40 @@ class RgpsObs(Dataset):
 
         ##convert from list to np.array
         ##raw data are kept in list format
+        obs_seq_arr = {}
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
         if self.variables[obs_name]['is_vector']:
-            obs_seq['obs'] = obs_seq['obs'].T
+            obs_seq_arr['obs'] = obs_seq_arr['obs'].T
 
         ##superob to target grid, coarsen and keep the valid grid points
         ##make a mesh grid for the obs points
         obs_x, obs_y = obs_seq['x'], obs_seq['y']
-        obs_grid = Grid(grid.proj, obs_x, obs_y, regular=False)
+        obs_grid = IrregularGrid(grid.proj, obs_x, obs_y)
         ##remove unwanted triangles in the mesh
-        msk = np.logical_or(obs_grid.tri.a > 2e8, obs_grid.tri.p > 1e5, obs_grid.tri.ratio < 0.3)
-        obs_grid = Grid(grid.proj, obs_x, obs_y, regular=False, triangles=obs_grid.tri.triangles[~msk,:])
+        tri_a = getattr(obs_grid.tri, 'a')
+        tri_p = getattr(obs_grid.tri, 'p')
+        tri_ratio = getattr(obs_grid.tri, 'ratio')
+        msk = np.logical_or(tri_a > 2e8, tri_p > 1e5, tri_ratio < 0.3)
+        obs_grid = IrregularGrid(grid.proj, obs_x, obs_y, triangles=obs_grid.tri.triangles[~msk,:])
         ##convert to target grid with coarse graining (superobing)
         obs_grid.set_destination_grid(grid)
         obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name]['is_vector'], coarse_grain=True)
         ##overwrite the obs info with superobs
         if self.variables[obs_name]['is_vector']:
             msk = np.isnan(obs_on_grid[0,...])
-            obs_seq['obs'] = np.array([obs_on_grid[0,~msk].flatten(), obs_on_grid[1,~msk].flatten()])
+            obs_seq_arr['obs'] = np.array([obs_on_grid[0,~msk].flatten(), obs_on_grid[1,~msk].flatten()])
         else:
             msk = np.isnan(obs_on_grid)
-            obs_seq['obs'] = obs_on_grid[~msk].flatten()
-        obs_seq['x'] = grid.x[~msk].flatten()
-        obs_seq['y'] = grid.y[~msk].flatten()
+            obs_seq_arr['obs'] = obs_on_grid[~msk].flatten()
+        obs_seq_arr['x'] = grid.x[~msk].flatten()
+        obs_seq_arr['y'] = grid.y[~msk].flatten()
         ##other parameters
         for key in ('z', 't', 'err_std'):
-            obs_seq[key] = np.full(obs_seq['x'].size, obs_seq[key][0])
+            obs_seq_arr[key] = np.full(obs_seq_arr['x'].size, obs_seq_arr[key][0])
 
-        return obs_seq
+        return obs_seq_arr
 
     def random_network(self):
         raise NotImplementedError

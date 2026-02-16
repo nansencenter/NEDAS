@@ -10,6 +10,8 @@ from NEDAS.datasets.ecmwf.era5 import ERA5Data
 era5 = ERA5Data()
 
 class EcmwfForecastData(Dataset):
+    dt_hours: int
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
         self.variables = {
@@ -40,7 +42,7 @@ class EcmwfForecastData(Dataset):
     def open_file(self, fname):
         if fname not in self.files:
             try:
-                import pygrib
+                import pygrib  #type: ignore
             except ImportError:
                 raise RuntimeError("pygrib package is required to open ecmwf forecast data files.")
             print(f"opening file {fname}")
@@ -109,6 +111,7 @@ class EcmwfForecastData(Dataset):
                     era5.read_grid(name=name, time=time)
                     tmp = era5.read_var(name=name, time=time)
                     ##convert to grid
+                    assert era5.grid is not None
                     era5.grid.set_destination_grid(self.grid)
                     var = era5.grid.convert(tmp)
                 else:
@@ -131,5 +134,5 @@ class EcmwfForecastData(Dataset):
         vapmix = atmos_utils.vapmix(e, press)
         return vapmix
 
-    def read_obs(self):
+    def read_obs(self, **kwargs):
         raise NotImplementedError

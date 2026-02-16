@@ -13,7 +13,7 @@ c_ice: ice concentration [0-1]
 e_icex: ice emissivity
 -------------------------------------------------------------------------------"""
 import numpy as np
-import xarray as xr
+import xarray as xr  #type: ignore
 import cmath
 
 frequencies = np.array([6.93, 10.65, 18.70, 23.80, 36.50, 50.30, 52.80, 89.00])
@@ -579,12 +579,18 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
         else :
             e_ice = Eice_h[i]
     elif ice_emissivity_options[opt_em] == 'atlas' :
+        if file_atlas is None:
+            raise ValueError("file_atlas must be provided when opt_em='atlas'")
         data_atlas = xr.open_dataset(file_atlas)
         e_ice = data_atlas[f'em_{channel}'][:].data
     elif ice_emissivity_options[opt_em] == 'dal' :
         e_ice = calc_emissivity_plan(Ts, dal, channel, dict_coeffs)
     elif ice_emissivity_options[opt_em] == 'ml' :
+        if file_ml is None:
+            raise ValueError("file_ml must be provided when opt_em='ml'")
         e_ice = xr.open_dataset(file_ml)[f'Prediction_AMSR2_e{channel}'].data
+    else:
+        raise ValueError(f"unknown ice_emissivity_option {ice_emissivity_options[opt_em]}")
 
     # Emissivity over water
     e_water = calc_ocean_emissivity(W, Ts, theta, channel)

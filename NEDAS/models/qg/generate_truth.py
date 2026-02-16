@@ -13,6 +13,8 @@ def generate_truth(c: Config) -> None:
     run_dir = os.path.join(truth_dir, 'run')
     init_file = f"output_{c.time_start:%Y%m%d_%H}.bin"
     print(f"Running the model for spinup period to get initial condition: {init_file}")
+    if c.job_submit is None:
+        c.job_submit = {}
     opt = {
         'path': run_dir,
         'member': 999,  ##make truth run different from the ensemble members

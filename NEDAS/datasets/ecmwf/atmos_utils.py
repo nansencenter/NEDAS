@@ -116,6 +116,8 @@ def windstress(uwind,vwind) :
    if karalight :
       wndfac=numpy.maximum(2.5,numpy.minimum(32.5,ws))
       cd_new = 1.0E-3*(.692 + .0710*wndfac - .000700*wndfac**2)
+   else:
+      raise NotImplementedError
    # else :
    #    wndfac=(1.+numpy.sign(1.,ws-11.))*.5
    #    cd_new=(0.49+0.065*ws)*1.0e-3*wndfac+cd*(1.-wndfac)

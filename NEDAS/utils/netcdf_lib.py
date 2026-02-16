@@ -84,9 +84,9 @@ def nc_write_var(filename: str,
 
     if dtype is None:
         if isinstance(dat, np.ndarray):
-            dtype = dat.dtype
+            dtype = str(dat.dtype)
         else:
-            dtype = type(dat)
+            dtype = type(dat).__name__
 
     ndim = len(dim)
     s = ()  ##slice for each dimension

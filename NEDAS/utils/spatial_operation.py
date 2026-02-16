@@ -138,12 +138,15 @@ def coarsen_field(fld, lev1, lev2):
 
 def sharpen_field(fld, lev1, lev2):
     if lev1 > lev2:
+        assert isinstance(fld, np.ndarray)
+        fld_shape = fld.shape
+        assert len(fld_shape)>=2
         for k in range(lev1, lev2, -1):
-            ni, nj = fld.shape[-2:]
-            fld1 = np.zeros(fld.shape[:-2]+(ni*2, nj))
+            ni, nj = fld_shape[-2:]
+            fld1 = np.zeros(fld_shape[:-2]+(ni*2, nj))
             fld1[..., 0:ni*2:2, :] = fld
             fld1[..., 1:ni*2:2, :] = 0.5*(np.roll(fld, -1, axis=-2) + fld)
-            fld2 = np.zeros(fld.shape[:-2]+(ni*2, nj*2))
+            fld2 = np.zeros(fld_shape[:-2]+(ni*2, nj*2))
             fld2[..., :, 0:nj*2:2] = fld1
             fld2[..., :, 1:nj*2:2] = 0.5*(np.roll(fld1, -1, axis=-1) + fld1)
             fld = fld2

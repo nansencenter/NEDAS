@@ -105,6 +105,7 @@ class Vort2DObs(Dataset):
         zmax = -999
         center_x, center_y = -1, -1
         buff = 6
+        center_i, center_j = None, None
         for j in range(buff, ny-buff):
             for i in range(buff, nx-buff):
                 z = np.sum(zeta[j-buff:j+buff, i-buff:i+buff])
@@ -178,5 +179,5 @@ class Vort2DObs(Dataset):
         Rsize = Rsize * dx
         return np.array([Rsize])
 
-    def read_obs(self):
+    def read_obs(self, **kwargs):
         raise NotImplementedError("read_obs is not implemented for vort2d, since only using synthetic obs.")

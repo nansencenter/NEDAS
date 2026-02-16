@@ -20,6 +20,7 @@ class Vort2DModel(Model):
     loc_sprd: int
     gen: float
     diss: float
+    truth_dir: str
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)

@@ -191,9 +191,9 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     ny, nx = fice.shape
     dims2 = {'nj':ny, 'ni':nx}
     dims3 = {'ncat':5, 'nj':ny, 'ni':nx}
-    nc_write_var(post_ice_file, dims3, 'aicen', aicen, dtype=np.float64)
-    nc_write_var(post_ice_file, dims3, 'vicen', vicen, dtype=np.float64)
-    nc_write_var(post_ice_file, dims3, 'vsnon', vsnon, dtype=np.float64)
+    nc_write_var(post_ice_file, dims3, 'aicen', aicen, dtype='float64')
+    nc_write_var(post_ice_file, dims3, 'vicen', vicen, dtype='float64')
+    nc_write_var(post_ice_file, dims3, 'vsnon', vsnon, dtype='float64')
 
     ##other affected 2D variables
     ind = np.where(ficem <= 0)
@@ -205,7 +205,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     for vname in varlist_2d:
         var = nc_read_var(post_ice_file, vname)
         var[ind] = 0.0
-        nc_write_var(post_ice_file, dims2, vname, var, dtype=np.float64)
+        nc_write_var(post_ice_file, dims2, vname, var, dtype='float64')
 
     ##other affected 3D variables
     varlist_3d = ['iage', 'FY', 'alvl', 'vlvl', 'apnd', 'hpnd', 'ipnd', 'dhs', 'ffrac', 'Tsfcn']
@@ -236,5 +236,5 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
             #    Ti = -1.8 + tmp1*(l-0.5)/7
             #    var[k,...][ind] = -rhoi * (cp_ice*(Tmaz-Ti) + Lfresh*(1-Tmz/Ti) - cp_ocn*Tmz) / 7
 
-        nc_write_var(post_ice_file, dims3, vname, var, dtype=np.float64)
+        nc_write_var(post_ice_file, dims3, vname, var, dtype='float64')
 

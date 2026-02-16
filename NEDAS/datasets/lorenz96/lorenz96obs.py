@@ -29,5 +29,5 @@ class Lorenz96Obs(Dataset):
 
         return obs_seq
 
-    def read_obs(self):
+    def read_obs(self, **kwargs):
         raise NotImplementedError('Only synthetic obs will be used.')

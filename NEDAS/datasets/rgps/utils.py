@@ -66,15 +66,18 @@ def get_triangulation(x, y):
     tri_s = np.hypot(tri_x, tri_y)
 
     ##perimeter
-    tri.p = np.sum(tri_s, axis=0)
+    tri_p = np.sum(tri_s, axis=0)
 
     ##area
-    s = tri.p / 2
-    tri.a = np.sqrt(s * (s-tri_s[0]) * (s-tri_s[1]) * (s-tri_s[2]))
+    s = tri_p / 2
+    tri_a = np.sqrt(s * (s-tri_s[0]) * (s-tri_s[1]) * (s-tri_s[2]))
 
     ##mask off some triangles that don't belong to the mesh
-    tri.mask = np.logical_or(tri.a>300, tri.p>50, tri.a/tri.p<1.5)
+    tri_mask = np.logical_or(tri_a>300, tri_p>50, tri_a/tri_p<1.5)
 
+    setattr(tri, 'p', tri_p)
+    setattr(tri, 'a', tri_a)
+    setattr(tri, 'mask', tri_mask)
     return tri
 
 def get_velocity(x0, y0, t0, x1, y1, t1):
@@ -97,7 +100,8 @@ def get_velocity_gradients(x, y, u, v):
         vx += (vt[i0] + vt[i1]) * (yt[i0] - yt[i1])
         vy -= (vt[i0] + vt[i1]) * (xt[i0] - xt[i1])
 
-    ux, uy, vx, vy = [i / (2 * tri.a) for i in (ux, uy, vx, vy)]
+    tri_a = getattr(tri, 'a')
+    ux, uy, vx, vy = [i / (2 * tri_a) for i in (ux, uy, vx, vy)]
     return ux, uy, vx, vy
 
 def get_deform_shear(x0, y0, t0, x1, y1, t1):

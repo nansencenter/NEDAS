@@ -73,9 +73,10 @@ class TopazPrepObs(Dataset):
             fname = self.filename(**kwargs)
         except AssertionError:
             ##just return empty obs_seq if no matching files found
+            obs_seq_arr = {}
             for key in obs_seq.keys():
-                obs_seq[key] = np.array([])
-            return obs_seq
+                obs_seq_arr[key] = np.array([])
+            return obs_seq_arr
 
         for file in fname:
             data = read_uf_data(file)
@@ -122,13 +123,13 @@ class TopazPrepObs(Dataset):
             ##thin observation profiles vertically by picking those closest to model levels only
             mask = np.full(len(obs_seq['obs']), False)
             
-
+        obs_seq_arr = {}
         for key in obs_seq.keys():
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
         if is_vector:
-            obs_seq['obs'] = obs_seq['obs'].T  ##make vector dimension [2,nobs]
-        return obs_seq
+            obs_seq_arr['obs'] = obs_seq_arr['obs'].T  ##make vector dimension [2,nobs]
+        return obs_seq_arr
 
     def get_seaice_drift(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

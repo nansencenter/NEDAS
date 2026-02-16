@@ -12,7 +12,7 @@ def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwarg
 
     # read the config file
     model_config = configparser.ConfigParser()
-    model_config.optionxform = str
+    model_config.optionxform = str  #type: ignore
     model_config.read(model_config_file)
 
     ##change the restart file name
@@ -23,12 +23,12 @@ def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwarg
     model_config['model']['stop'] = next_time.strftime("%Y-%m-%dT%H:%M:%SZ")
     model_config['ConfigOutput']['start'] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     # changing the forcing file in ERA5Atmosphere
-    file_options_forcing:dict[str, str] = file_options['forcing']
+    file_options_forcing = file_options['forcing']
     fname_atmos_forcing = forcing.get_forcing_filename(file_options_forcing['atmosphere'],
                                                         1, time)
     fname_atmos_forcing = os.path.basename(fname_atmos_forcing)
     model_config['ERA5Atmosphere']['file'] = fname_atmos_forcing
-    # changing the forcing file in ERA5Atmosphere
+    # changing the forcing file in TOPAZOcean
     fname_ocn_forcing = forcing.get_forcing_filename(file_options_forcing['ocean'],
                                                         1, time)
     fname_ocn_forcing = os.path.basename(fname_ocn_forcing)

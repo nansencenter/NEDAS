@@ -25,4 +25,4 @@ def generate_init_ensemble(c: Config) -> None:
 
 if __name__ == '__main__':
     c = Config(parse_args=True)
-    generate_init_ensemble()
+    generate_init_ensemble(c)

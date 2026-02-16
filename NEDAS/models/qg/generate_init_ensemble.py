@@ -16,7 +16,7 @@ def generate_init_ensemble(c: Config) -> None:
     print(f"spinup period: {model.spinup_hours} hours")
 
     print(f"Running ensemble forecast from {c.time} to {c.next_time}")
-    scheme.run_step(c, 'ensemble_forecast')
+    scheme.run_step(c, 'ensemble_forecast', False)
 
     print("Moving output files")
     fcst_dir = c.forecast_dir(c.time, 'qg')
@@ -37,4 +37,4 @@ def generate_init_ensemble(c: Config) -> None:
 
 if __name__ == '__main__':
     c = Config(parse_args=True)
-    generate_init_ensemble()
+    generate_init_ensemble(c)

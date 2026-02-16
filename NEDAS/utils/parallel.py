@@ -48,7 +48,7 @@ class Comm:
         if any([ev in os.environ for ev in mpi_env_var]):
             ##program is called from mpi, initialize comm
             try:
-                from mpi4py import MPI
+                from mpi4py import MPI   #type: ignore
                 self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
 
