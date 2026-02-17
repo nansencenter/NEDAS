@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import cm
-from matplotlib import colormaps
+from matplotlib import colormaps  #type: ignore
 from matplotlib.colors import BoundaryNorm
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch

@@ -82,11 +82,12 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
         input_args = {}
 
     default_config_file = os.path.join(code_dir, 'default.yml')
+    config_dict: dict = {}
     if os.path.exists(default_config_file):
         with open(default_config_file, 'r') as f:
-            config_dict = yaml.safe_load(f)
-    else:
-        config_dict = {}
+            loaded_config = yaml.safe_load(f)
+            if isinstance(loaded_config, dict):
+                config_dict = loaded_config
 
     ##optionally, a config file can be specified at runtime
     ##through the config_file argument, build a parser for this
@@ -100,11 +101,15 @@ def parse_config(code_dir='.', config_file=None, parse_args=False, **kwargs):
     ##update config_dict if new config_file is provided
     if config_file is not None:
         with open(config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f)}
+            loaded_config = yaml.safe_load(f)
+            if isinstance(loaded_config, dict):
+                config_dict = {**config_dict, **loaded_config}
 
     if args.config_file is not None:
         with open(args.config_file, 'r') as f:
-            config_dict = {**config_dict, **yaml.safe_load(f)}
+            loaded_config = yaml.safe_load(f)
+            if isinstance(loaded_config, dict):
+                config_dict = {**config_dict, **loaded_config}
 
     if not isinstance(config_dict, dict):
         config_dict = {}

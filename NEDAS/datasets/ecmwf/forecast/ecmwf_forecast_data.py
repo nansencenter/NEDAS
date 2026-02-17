@@ -46,7 +46,7 @@ class EcmwfForecastData(Dataset):
             except ImportError:
                 raise RuntimeError("pygrib package is required to open ecmwf forecast data files.")
             print(f"opening file {fname}")
-            self.files[fname] = pygrib.open(fname)
+            self.files[fname] = pygrib.open(fname)  #type: ignore
             self.get_record_id_lookup(fname)
 
     def close_file(self, fname):

@@ -13,12 +13,17 @@ def get_task_list(c, **kwargs):
     # parse kwargs
     # load the default config first
     default_config_file = os.path.join(os.path.dirname(__file__), 'default.yml')
+    kwargs_from_default: dict = {}
     with open(default_config_file, 'r') as f:
-        kwargs_from_default = yaml.safe_load(f)
-    kwargs_from_config_file = {}
+        loaded_default = yaml.safe_load(f)
+        if isinstance(loaded_default, dict):
+            kwargs_from_default = loaded_default
+    kwargs_from_config_file: dict = {}
     if 'config_file' in kwargs and kwargs['config_file'] is not None:
         with open(kwargs['config_file'], 'r') as f:
-            kwargs_from_config_file = yaml.safe_load(f)
+            loaded_config = yaml.safe_load(f)
+            if isinstance(loaded_config, dict):
+                kwargs_from_config_file = loaded_config
     # overwrite with kwargs
     kwargs = {**kwargs_from_default, **kwargs_from_config_file, **kwargs}
 
