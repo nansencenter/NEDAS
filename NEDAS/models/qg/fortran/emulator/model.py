@@ -3,9 +3,9 @@ import subprocess
 import numpy as np
 from NEDAS.utils.conversion import t2s, dt1h
 from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from ..model import QGModel
+from ..model import QGFortranModel
 
-class QGModelEmulator(QGModel):
+class QGFortranModelEmulator(QGFortranModel):
     """
     Class for configuring and running the qg model emulator
     """

@@ -1,8 +1,8 @@
 import os
 import sys
 import numpy as np
-from NEDAS.models.qg import QGModel
-from NEDAS.models.qg.util import read_data_bin, spec2grid
+from NEDAS.models.qg.fortran import QGFortranModel
+from NEDAS.models.qg.fortran.util import read_data_bin, spec2grid
 from NEDAS.utils.conversion import t2s, s2t, dt1h
 from NEDAS.utils.netcdf_lib import nc_write_var
 
@@ -12,7 +12,7 @@ def main():
     tstr = sys.argv[3]  ##'202301021200'
 
     mem_list = np.arange(nens)
-    model = QGModel()
+    model = QGFortranModel()
 
     kmax = 127
     nx = 2*(kmax+1)

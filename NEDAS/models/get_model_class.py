@@ -6,8 +6,8 @@ if TYPE_CHECKING:
 
 registry = {
     'lorenz96': 'Lorenz96Model',
-    'qg': 'QGModel',
-    # 'qg.emulator': 'QGModelEmulator',
+    'qg.fortran': 'QGFortranModel',
+    'qg.fortran.emulator': 'QGFortranModelEmulator',
     'vort2d': 'Vort2DModel',
     'topaz.v5': 'Topaz5Model',
     'nextsim.v1': 'NextsimModel',

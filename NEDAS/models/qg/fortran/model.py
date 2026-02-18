@@ -8,10 +8,11 @@ from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
 
-class QGModel(Model):
+class QGFortranModel(Model):
     """
     Class for configuring and running the qg model
     """
+    io_mode = 'offline'
     kmax: int
     nz: int
     restart_dt: float
