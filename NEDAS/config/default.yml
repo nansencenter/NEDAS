@@ -9,6 +9,9 @@ directories:
 ##python environment source script
 python_env:
 
+io_mode: offline      ##I/O mode: 'online' uses data stored in memory,
+                      ##          'offline' uses files stored on disks.
+
 job_submit:
   host: localhost     ##machine name, laptop or supercomputer
   project:            ##project for resource allocation
@@ -72,10 +75,10 @@ state_def:
 ##if new variables introduced here, they will be appended to the configuration
 
 model_def:
-  qg:
-    config_file: '{nedas_root}/models/qg/default.yml' ##configuration file
-    model_env: '{nedas_root}/models/qg/env/setup_local.src'  ##source file to enter environment
-    model_code_dir: '{nedas_root}/models/qg'  ##where to find model executable
+  qg.fortran:
+    config_file: '{nedas_root}/models/qg/fortran/default.yml' ##configuration file
+    model_env: '{nedas_root}/models/qg/fortran/env/setup_local.src'  ##source file to enter environment
+    model_code_dir: '{nedas_root}/models/qg/fortran'  ##where to find model executable
     nproc_per_run: 1    ## number of processors for one model.run
     nproc_per_util: 1   ## number of processors for other utility funcs, model.preprocess, etc.
     walltime: 1000      ## walltime in seconds
@@ -84,17 +87,17 @@ model_def:
     ens_run_type: scheduler    ## 'scheduler' or 'batch', see ensemble_forecast.py for details
     use_job_array: False       ##if true, use job array in scheduler for ensemble runs
     ens_init_dir: '{work_dir}/init_ens'  ##path to the initial ensemble restart files
-    truth_dir: '{work_dir}/truth'           ##path to the truth files (for synthetic obs)
+    truth_dir: '{work_dir}/truth'        ##path to the truth files (for synthetic obs)
 
 ##observation definition (a list of definitions, one for each variable)
 obs_def:
-- name: streamfunc      ## name of the variable
-  dataset_src: qg       ## which dataset module it comes from
-  model_src: qg         ## which model to use to compute observation priors
+- name: streamfunc        ## name of the variable
+  dataset_src: qg.fortran ## which dataset module it comes from
+  model_src: qg.fortran   ## which model to use to compute observation priors
   ##the following is specific to the observation 'streamfunc' in the dataset
   nobs: 3000              ## number of observations (if generating synthetic obs)
   err:
-    type: normal        ## observation error model (normal, ...)
+    type: normal          ## observation error model (normal, ...)
     std: 0.2              ## error standard deviation (in observation physical units)
   hroi: 100               ## horizontal localization radius (in grid coordinate units)
   vroi: 5                 ## vertical   ..            .. (vertical coordinate units)
@@ -108,9 +111,9 @@ obs_def:
 ##if new variables introduced here, they will be appended to the configuration
 dataset_def:
   qg:
-    config_file:   ##configuration file (empty for now)
-    dataset_dir:   ##path to the dataset files, for qg we use synthethic obs so no need to specify
-    obs_window_min: -6      ## observation within the window (in hours) will be considered valid at cycle time
+    config_file:         ##configuration file (empty for now)
+    dataset_dir:         ##path to the dataset files, for qg we use synthethic obs so no need to specify
+    obs_window_min: -6   ## observation within the window (in hours) will be considered valid at cycle time
     obs_window_max: 0
 
 use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
@@ -122,7 +125,7 @@ z_coords_from: mean      ##use ensemble 'mean' or 'member' z coords as reference
 perturb:
 
 ##more details in assimilation algorithm
-analysis_scheme: offline_filter  ##type of analysis to perform online/offline, filter/smoother/etc.
+analysis_scheme: filter  ##type of analysis to perform: filter/smoother/etc.
 
 ##outer loop iterations
 niter: 1

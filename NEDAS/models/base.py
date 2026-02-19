@@ -1,5 +1,6 @@
 import os
 import inspect
+from typing import Literal
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
@@ -9,6 +10,14 @@ class Model(ABC):
     """
     Class for configuring and running a model
     """
+    io_mode: Literal['online', 'offline'] = 'offline'
+    grid = None
+    z_untis = '*'
+    z = None
+    variables: dict = {}
+    run_process = None
+    run_status = 'pending'
+
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
@@ -17,14 +26,6 @@ class Model(ABC):
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
             setattr(self, key, value)
-
-        self.grid = None
-        self.z = None
-
-        self.variables = {}
-
-        self.run_process = None
-        self.run_status = 'pending'
 
     def parse_kwargs(self, **kwargs):
         ##args that pinpoints a certain model state variable

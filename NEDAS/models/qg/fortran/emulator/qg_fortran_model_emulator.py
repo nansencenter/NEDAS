@@ -3,7 +3,7 @@ import subprocess
 import numpy as np
 from NEDAS.utils.conversion import t2s, dt1h
 from ..util import read_data_bin, write_data_bin, grid2spec, spec2grid
-from ..model import QGFortranModel
+from ..qg_fortran_model import QGFortranModel
 
 class QGFortranModelEmulator(QGFortranModel):
     """

@@ -21,6 +21,7 @@ class Vort2DModel(Model):
     gen: float
     diss: float
     truth_dir: str
+    memory: dict = {}
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -33,13 +34,7 @@ class Vort2DModel(Model):
         self.grid.mask = np.full(self.grid.x.shape, False)  ##no mask
 
         levels = np.array([0])  ##there is no vertical levels
-
         self.variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':self.restart_dt, 'levels':levels, 'units':'m/s'}, }
-
-        self.z_units = '*'
-
-        self.run_process = None
-        self.run_status = 'pending'
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -60,6 +55,26 @@ class Vort2DModel(Model):
         pass
 
     def read_var(self, **kwargs):
+        if self.io_mode == 'offline':
+            return self._read_var_from_file(**kwargs)
+        elif self.io_mode == 'online':
+            return self._read_var_from_memory(**kwargs)
+        else:
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
+
+    def _read_var_from_memory(self, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+        name = kwargs['name']
+        member = kwargs['member']
+        time = kwargs['time']
+        if name not in self.memory:
+            raise RuntimeError(f"vort2d model online state memory not allocated yet.")
+        key = (member, time)
+        if key not in self.memory[name]:
+            raise RuntimeError(f"vort2d model online state: {key} not found in memory for {name}")
+        return self.memory[name][key]
+
+    def _read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
 
@@ -74,6 +89,24 @@ class Vort2DModel(Model):
         return var
 
     def write_var(self, var, **kwargs):
+        if self.io_mode == 'offline':
+            self._write_var_to_file(var, **kwargs)
+        elif self.io_mode == 'online':
+            self._write_var_to_memory(var, **kwargs)
+        else:
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
+
+    def _write_var_to_memory(self, var, **kwargs):
+        kwargs = super().parse_kwargs(**kwargs)
+        name = kwargs['name']
+        member = kwargs['member']
+        time = kwargs['time']
+        #create memory dict entry if not yet
+        if name not in self.memory:
+            self.memory[name] = {}
+        self.memory[name][member, time] = var
+
+    def _write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
 
@@ -92,27 +125,25 @@ class Vort2DModel(Model):
         state = initial_condition(self.grid, self.Vmax, self.Rmw, self.Vbg, self.Vslope, self.loc_sprd)
         return state
 
-    def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        makedir(kwargs['path'])
+    def preprocess(self, **kwargs):
+        if self.io_mode == 'offline':
+            kwargs = super().parse_kwargs(**kwargs)
+            makedir(kwargs['path'])
+            file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
+            file2 = self.filename(**kwargs)
+            run_command(f"cp -fL {file1} {file2}")
 
-        file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
-        file2 = self.filename(**kwargs)
-        run_command(f"cp -fL {file1} {file2}")
-
-    def postprocess(self, task_id=0, **kwargs):
+    def postprocess(self, **kwargs):
         pass
 
-    def run(self, task_id=0, **kwargs):
+    def run(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
-        makedir(kwargs['path'])
-
         state = self.read_var(**kwargs)
-        time = kwargs['time']
         forecast_period = kwargs['forecast_period']
-        next_time = time + forecast_period * dt1h
+        next_time = kwargs['time'] + forecast_period * dt1h
         next_state = advance_time(state, self.dx, forecast_period, self.dt, self.gen, self.diss)
         self.write_var(next_state, **{**kwargs, 'time':next_time})
+
         self.run_status = 'complete'

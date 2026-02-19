@@ -13,6 +13,7 @@ class QGFortranModel(Model):
     Class for configuring and running the qg model
     """
     io_mode = 'offline'
+    z_units = 1
     kmax: int
     nz: int
     restart_dt: float
@@ -40,11 +41,6 @@ class QGFortranModel(Model):
             'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
             'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
             }
-
-        self.z_units = 1
-
-        self.run_process = None
-        self.run_status = 'pending'
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

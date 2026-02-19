@@ -1,6 +1,6 @@
 import os
 import inspect
-from typing import Optional, Any, get_args
+from typing import Optional, Literal, Any, get_args
 import yaml
 import dateutil.parser
 import numpy as np
@@ -29,6 +29,7 @@ class Config:
         dataset_config (dict): A dictionary where keys are dataset names and values are the corresponding Dataset instances, set by :meth:`set_dataset_config`.
     """
     work_dir: str
+    io_mode: Literal['online', 'offline']
     time: datetime
     time_start: datetime
     time_end: datetime
@@ -301,10 +302,17 @@ class Config:
         if self.model_def is None:
             return
         for model_name, kwargs in self.model_def.items():
-            Model = NEDAS.models.get_model_class(model_name)
+            #instantiate the model class
+            ModelClass = NEDAS.models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            self.models[model_name] = Model(**kwargs)
+            model = ModelClass(**kwargs)
+
+            #validate the model class instance to have the right io mode
+            if model.io_mode != self.io_mode:
+                raise ValueError(f"{self.__class__.__name__}: model '{model_name}' has wrong io_mode: {model.io_mode}")
+
+            self.models[model_name] = model
 
     def set_datasets(self):
         """
