@@ -62,6 +62,7 @@ class Config:
     iter: int
     resolution_level: list[int]
     character_length: list[float]
+    diag: Optional[dict]
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
         # parse the yaml config file to obtain the values
@@ -77,6 +78,10 @@ class Config:
         # check a few attributes, setting default values if not specified in yaml file
         config_dict = self._check_time_scheme(config_dict)
         config_dict = self._check_parallel_scheme(config_dict)
+
+        # set current iteration to 0 if undefined
+        if 'iter' not in config_dict or config_dict['iter'] is None:
+            config_dict['iter'] = 0
 
         # set the attributes
         self.__dict__.update(config_dict)

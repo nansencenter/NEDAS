@@ -201,17 +201,17 @@ class Coordinator:
         decorator = by_rank(self.comm, self.pid_show)
         return decorator(print_with_cache)
 
-#     def show_summary(self):
-#         """
-#         Print a summary of the configuration.
-#         """
-#         print(f"""Initializing config...
-#  working directory: {self.work_dir}
-#  parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
-#  cycling from {self.time_start} to {self.time_end}
-#  analysis start at {self.time_analysis_start}
-#  cycle_period = {self.cycle_period} hours
-#  current time: {self.time}
-#  nens: {self.nens}
-#  Assimilation scheme:
-#  """, flush=True)
+    def show_summary(self):
+        """
+        Print a summary of the configuration.
+        """
+        print(f"""Initializing config...
+ working directory: {self.work_dir}
+ parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
+ cycling from {self.time_start} to {self.time_end}
+ analysis start at {self.time_analysis_start}
+ cycle_period = {self.cycle_period} hours
+ current time: {self.time}
+ nens: {self.nens}
+ Assimilation scheme:
+ """, flush=True)

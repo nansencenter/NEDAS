@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 
 from NEDAS.config import Config
 from .coordinator import Coordinator
 
-class Scheme:
+class Scheme(ABC):
 
     c: Coordinator
 
@@ -10,5 +11,6 @@ class Scheme:
 
         self.c = Coordinator(cf)
 
-    def __call__(self):
+    @abstractmethod
+    def __call__(self) -> None:
         pass

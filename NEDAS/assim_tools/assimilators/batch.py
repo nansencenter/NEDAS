@@ -6,7 +6,7 @@ from NEDAS.utils.progress import progress_bar
 from NEDAS.assim_tools.assimilators.base import Assimilator
 
 class BatchAssimilator(Assimilator):
-    def init_partitions(self, c):
+    def init_partitions(self, c) -> list[tuple]:
         """
         Generate spatial partitioning of the domain
         partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
@@ -39,7 +39,7 @@ class BatchAssimilator(Assimilator):
             if c.grid.Ly==0:
                 ##for 1D grid, just divide into equal sections, no y dimension
                 Dx = c.grid.Lx / ntile
-                partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0]
+                partitions = [tuple(np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0])
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
             else:
@@ -48,14 +48,14 @@ class BatchAssimilator(Assimilator):
                 ntile_x = max(ntile // ntile_y, 1)
                 Dx = c.grid.Lx / ntile_x
                 Dy = c.grid.Ly / ntile_y
-                partitions = [np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
-                                                      np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))
+                partitions = [tuple(np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
+                                                            np.logical_and(c.grid.y>=y, c.grid.y<y+Dy))))
                               for y in np.arange(c.grid.ymin, c.grid.ymax, Dy)
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
         return partitions
 
-    def assign_obs(self, c, state, obs):
+    def assign_obs(self, c, state, obs) -> dict:
         """
         Assign the observation sequence to each partition par_id
 
@@ -110,7 +110,7 @@ class BatchAssimilator(Assimilator):
 
         return obs_inds
 
-    def distribute_partitions(self, c, state, obs):
+    def distribute_partitions(self, c, state, obs) -> dict:
         par_list_full = np.arange(len(state.partitions))
 
         ##distribute the list of par_id according to workload to each pid

@@ -1,6 +1,5 @@
 import importlib
-from NEDAS.config import Config
-from .base import Assimilator
+from NEDAS.core import Coordinator, Assimilator
 
 # make sure keys are lower-case
 registry = {
@@ -11,12 +10,12 @@ registry = {
     #'RHF'
 }
 
-def get_assimilator(c: Config) -> Assimilator:
+def get_assimilator(c: Coordinator) -> Assimilator:
     """
     Get the correct Assimilator subclass instance based on the configuration.
 
     Args:
-        c (Config): Configuration object.
+        c (Coordinator): the coordinator object.
 
     Returns:
         Assimilator: Corresponding Assimilator subclass instance.

@@ -10,7 +10,7 @@ class SerialAssimilator(Assimilator):
     Subclass for serial assimilation algorithms
     """
 
-    def init_partitions(self, c):
+    def init_partitions(self, c) -> list[tuple]:
         """
         Generate spatial partitioning of the domain
         """
@@ -40,7 +40,7 @@ class SerialAssimilator(Assimilator):
 
         return partitions
 
-    def assign_obs(self, c, state, obs):
+    def assign_obs(self, c, state, obs) -> dict:
         """
         Assign the observation sequence to each partition par_id
 
@@ -72,7 +72,7 @@ class SerialAssimilator(Assimilator):
 
         return obs_inds
 
-    def distribute_partitions(self, c, state, obs):
+    def distribute_partitions(self, c, state, obs) -> dict:
         ##just assign each partition to each pid, pid==par_id
         par_list = {p:np.array([p]) for p in range(c.nproc_mem)}
         return par_list

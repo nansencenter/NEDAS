@@ -1,4 +1,4 @@
-from NEDAS.config import Config
+from NEDAS.core import Coordinator
 
 registry = {
     'gaspari_cohn': ('distance_based', 'gaspari_cohn_func'),
@@ -6,7 +6,7 @@ registry = {
     'exponential': ('distance_based', 'exponential_func'),
 }
 
-def get_localization_funcs(c: Config) -> dict:
+def get_localization_funcs(c: Coordinator) -> dict:
     local_funcs = {}
     assert c.localization_def is not None, "c.localization_def needs to be defined in the config file"
     for key in ['horizontal', 'vertical', 'temporal']:

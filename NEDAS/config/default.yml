@@ -21,7 +21,7 @@ job_submit:
                             ##otherwise jobs will be run as steps in a shared job allocation
 
 ##number of processors to use for assimilation
-nproc: 10
+nproc: 1
 nproc_mem:
 nproc_util:
 
