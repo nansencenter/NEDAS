@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import netCDF4
 import pyproj
 from NEDAS.grid import RegularGrid
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 
 class OsisafSeaIceDriftObs(Dataset):
     proj: str

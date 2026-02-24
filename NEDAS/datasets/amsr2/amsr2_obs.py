@@ -7,7 +7,7 @@ import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
 from NEDAS.utils.random_perturb import random_field_gaussian
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 from .rtm_amsr_fcts import simulated_tb_v03
 
 class AMSR2Obs(Dataset):

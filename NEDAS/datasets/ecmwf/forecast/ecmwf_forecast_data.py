@@ -1,10 +1,10 @@
 import os
 from pyproj import Proj
 import numpy as np
-from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert, s2t, dt1h
+from NEDAS.grid import Grid
+from NEDAS.core import Dataset
 from NEDAS.datasets.ecmwf import atmos_utils
-from NEDAS.datasets import Dataset
 
 from NEDAS.datasets.ecmwf.era5 import ERA5Data
 era5 = ERA5Data()

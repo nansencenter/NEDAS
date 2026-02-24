@@ -7,7 +7,7 @@ from pyproj import Proj
 import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 from NEDAS.datasets.ecmwf import atmos_utils
 
 class ERA5Data(Dataset):

@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime, timedelta, timezone
 import netCDF4
 from NEDAS.utils.conversion import dt1h
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 
 class ArgoObs(Dataset):
     ONEM: float

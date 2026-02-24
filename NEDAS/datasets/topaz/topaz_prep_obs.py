@@ -3,7 +3,7 @@ import glob
 import numpy as np
 from NEDAS.utils.conversion import dt1h
 from NEDAS.models.topaz.time_format import datetojul
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 from .uf_data import read_uf_data
 
 class TopazPrepObs(Dataset):

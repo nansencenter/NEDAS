@@ -1,8 +1,8 @@
 import numpy as np
 from NEDAS.models.vort2d import Vort2DModel
-from NEDAS.datasets import Dataset
+from NEDAS.datasets.synthetic import SyntheticObs
 
-class Vort2DObs(Dataset):
+class Vort2DObs(SyntheticObs):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
@@ -178,6 +178,3 @@ class Vort2DObs(Dataset):
         Rsize = self.vortex_size(velocity[0,...], velocity[1,...], center_i, center_j)
         Rsize = Rsize * dx
         return np.array([Rsize])
-
-    def read_obs(self, **kwargs):
-        raise NotImplementedError("read_obs is not implemented for vort2d, since only using synthetic obs.")

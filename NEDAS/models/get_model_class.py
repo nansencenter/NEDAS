@@ -1,8 +1,6 @@
 import importlib
-from typing import Type, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from NEDAS.models import Model
+from typing import Type
+from NEDAS.core import Model
 
 registry = {
     'lorenz96': 'Lorenz96Model',
@@ -23,7 +21,7 @@ def get_model_class(model_name: str) -> Type["Model"]:
         model_name (str): Model name
 
     Returns:
-        Type[Model]: Corresponding Model subclass
+        Type["Model"]: Corresponding Model subclass
     """
     model_name = model_name.lower()
 

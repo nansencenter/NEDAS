@@ -1,12 +1,8 @@
 import importlib
-from typing import Type, TYPE_CHECKING
-if TYPE_CHECKING:
-    from NEDAS.datasets import Dataset
+from typing import Type
+from NEDAS.core import Dataset
 
 registry = {
-    'lorenz96': 'Lorenz96Obs',
-    'qg': 'QGObs',
-    'vort2d': 'Vort2DObs',
     'ecmwf.era5': 'ERA5Data',
     'ecmwf.forecast': 'EcmwfForecastData',
     'ifremer.argo': 'ArgoObs',
@@ -16,6 +12,7 @@ registry = {
     'cs2smos': 'Cs2SmosObs',
     'rgps': 'RgpsObs',
     'topaz': 'TopazPrepObs',
+    'vort2d': 'Vort2DObs',
     'synthetic': 'SyntheticObs',
 }
 
@@ -27,7 +24,7 @@ def get_dataset_class(dataset_name: str) -> Type["Dataset"]:
         dataset_name (str): Dataset name
 
     Returns:
-        Type[Dataset]: Corresponding Dataset subclass.
+        Type["Dataset"]: Corresponding Dataset subclass.
     """
     dataset_name = dataset_name.lower()
 

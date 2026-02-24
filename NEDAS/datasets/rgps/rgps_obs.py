@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pyproj
 from scipy.spatial import KDTree
 from NEDAS.grid import IrregularGrid
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 from .utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
 
 class RgpsObs(Dataset):

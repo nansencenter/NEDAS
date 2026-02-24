@@ -5,7 +5,7 @@ import pyproj
 from datetime import datetime, timedelta, timezone
 import netCDF4
 from NEDAS.grid import Grid
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
 
 class Cs2SmosObs(Dataset):
     proj: str
