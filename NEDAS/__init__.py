@@ -1,6 +1,6 @@
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
-from . import assim_tools, grid, config, schemes, datasets, models, utils
+from . import utils, grid, config, core, datasets, models, assim_tools, schemes
 
-__all__ = ['assim_tools', 'grid', 'config', 'schemes', 'datasets', 'models', 'utils']
+__all__ = ['utils', 'grid', 'config', 'core', 'datasets', 'models', 'assim_tools', 'schemes']

@@ -1,19 +1,19 @@
 import os
 import inspect
-from typing import Literal
+from typing import Literal, Generic
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
 
-class Model(ABC):
+class Model(Generic[GridType], ABC):
     """
     Class for configuring and running a model
     """
     io_mode: Literal['online', 'offline'] = 'offline'
     grid: GridType
-    z_untis = '*'
+    z_untis: str = '*'
     z = None
     variables: dict = {}
     run_process = None
