@@ -1,6 +1,6 @@
 import os
 import glob
-from typing import Optional, Any
+from typing import Optional
 from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 import numpy as np
@@ -9,7 +9,8 @@ from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
-from NEDAS.models import Model
+from NEDAS.grid import RegularGrid
+from NEDAS.core import Model
 
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
@@ -18,7 +19,7 @@ from .namelist import namelist
 from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
 from .cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
 
-class Topaz5Model(Model):
+class Topaz5Model(Model[RegularGrid]):
     """
     TOPAZ5 model class.
     """
@@ -145,13 +146,14 @@ class Topaz5Model(Model):
                           **self.diag_variables,
                           **self.archive_variables}
 
-        self.grid = None
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         if self.basedir and os.path.exists(grid_info_file):
             self.grid = get_topaz_grid(grid_info_file)
+        else:
+            raise RuntimeError(f"Cannot find topaz.v5 grid info: {grid_info_file}")
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        if self.grid and self.depthfile and os.path.exists(self.depthfile):
+        if self.depthfile and os.path.exists(self.depthfile):
             self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
         self.meanssh = None

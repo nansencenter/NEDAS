@@ -6,7 +6,7 @@ from netCDF4 import Dataset
 from datetime import datetime, timedelta
 from NEDAS.grid import Grid
 from .proj import lonlat2xy, xy2lonlat
-from NEDAS.models import Model
+from NEDAS.core import Model
 
 class NorESM(Model):
     pass

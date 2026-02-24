@@ -5,13 +5,14 @@ from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
+from NEDAS.grid import GridType
 
 class Model(ABC):
     """
     Class for configuring and running a model
     """
     io_mode: Literal['online', 'offline'] = 'offline'
-    grid = None
+    grid: GridType
     z_untis = '*'
     z = None
     variables: dict = {}

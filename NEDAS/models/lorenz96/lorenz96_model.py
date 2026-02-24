@@ -1,12 +1,25 @@
 import os
-from typing import Literal
 import numpy as np
 from NEDAS.grid import Grid1D
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
-from .core import M_nl
-from NEDAS.models import Model
+from NEDAS.core import Model
+
+def M_nl(x, F, T, dt):
+    """
+    Lorenz 1996 model with 40 variables, nonlinear advance_time function
+    Input:
+    -x: np.array, the model state
+    -F: parameter, default is 8
+    -T: duration of the simulation
+    -dt: model time step
+    Output:
+    -x: np.array, the updated model state after simulation
+    """
+    for n in range(int(T/dt)):
+        x += ((np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F) * dt
+    return x
 
 class Lorenz96Model(Model):
     nx: int
@@ -17,6 +30,9 @@ class Lorenz96Model(Model):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
+        if 'io_mode' in kwargs:
+            if kwargs['io_mode'] not in ['online', 'offline']:
+                raise ValueError(f"Lorenz96model: unknown io_mode: {kwargs['io_mode']}")
 
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
         self.grid.mask = np.full(self.grid.x.shape, False)

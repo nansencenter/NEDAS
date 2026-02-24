@@ -7,7 +7,7 @@ from NEDAS.utils.conversion import t2s, s2t, dt1h, units_convert
 from NEDAS.utils.shell_utils import run_command, makedir, run_job
 from NEDAS.utils.progress import watch_files
 from NEDAS.grid import Grid, IrregularGrid
-from NEDAS.models import Model
+from NEDAS.core import Model
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
 from .drift_utils import get_deformation_nodes
@@ -68,7 +68,7 @@ class NextsimModel(Model):
             }
         self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables}
 
-        self.grid = None
+        self.read_grid()
         self.grid_bank = {}
 
     def filename(self, **kwargs):
@@ -113,7 +113,7 @@ class NextsimModel(Model):
         """
         Update self.grid object based on input kwargs
         """
-        if kwargs is None:
+        if kwargs is {}:
             self.read_grid_from_mshfile(os.path.join(self.nextsim_mesh_dir, self.msh_filename))
 
         kwargs = super().parse_kwargs(**kwargs)
@@ -133,11 +133,11 @@ class NextsimModel(Model):
                 self.grid_bank[meshfile] = IrregularGrid(proj, x, y, triangles=triangles)
                 self.grid_bank[meshfile].id = read_data(meshfile, 'id')
             self.grid = self.grid_bank[meshfile]
-            self.grid.mask = None
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             self.grid = Grid.regular_grid(proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
-            self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
+
+        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
 
     def write_grid(self, **kwargs):
         """
@@ -227,6 +227,10 @@ class NextsimModel(Model):
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name]
+
+        ##always update model.grid with given kwargs:
+        ##this is a nextsim specific requirement: mesh is changing in time
+        self.read_grid(**kwargs)
 
         if name in self.native_variables:
             var = read_data(fname, rec['name'])

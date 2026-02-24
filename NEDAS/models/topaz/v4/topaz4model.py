@@ -5,12 +5,13 @@ from functools import lru_cache
 
 from NEDAS.utils.conversion import units_convert, dt1h
 from NEDAS.utils.shell_utils import run_job
-from NEDAS.models import Model
+from NEDAS.grid import RegularGrid
+from NEDAS.core import Model
 from ..abfile import ABFileRestart, ABFileBathy
 from ..model_grid import get_topaz_grid
 from .namelist import namelist
 
-class Topaz4Model(Model):
+class Topaz4Model(Model[RegularGrid]):
     basedir: str
     R: str
     T: str

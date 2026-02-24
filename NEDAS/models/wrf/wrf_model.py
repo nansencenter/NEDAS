@@ -1,14 +1,14 @@
 import os
 import numpy as np
 from pyproj import Proj
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
 # from .namelist import namelist
 # from .bin_io import read_
-from NEDAS.models import Model
+from NEDAS.core import Model
 
-class WRFModel(Model):
+class WRFModel(Model[RegularGrid]):
     map_proj: str
     ref_lat: float
     ref_lon: float
@@ -41,8 +41,7 @@ class WRFModel(Model):
             'atmos_q_vapor': {'name':'QVAPOR', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'kg/kg'},
             }
 
-        self.run_process = None
-        self.run_status = 'pending'
+        self.read_grid()
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -71,7 +70,7 @@ class WRFModel(Model):
         y_coords = (np.arange(self.e_sn[0]) - self.ref_y) * self.dy
         x, y = np.meshgrid(x_coords, y_coords)
 
-        self.grid = Grid(proj, x, y)
+        self.grid = RegularGrid(proj, x, y)
 
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

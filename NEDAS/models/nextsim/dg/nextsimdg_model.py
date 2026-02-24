@@ -2,17 +2,16 @@ import os
 import subprocess
 import numpy as np
 from pyproj import Proj
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid, Grid
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.shell_utils import run_job, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
-from NEDAS.models import Model
+from NEDAS.core import Model
 from . import restart, forcing, namelist, dgLimit
 
-class NextsimDGModel(Model):
+class NextsimDGModel(Model[RegularGrid]):
     restart_dt: float
     dg_comp: int
-
     proj: str
     xstart: float
     xend: float
@@ -20,10 +19,9 @@ class NextsimDGModel(Model):
     yend: float
     dx: float
     mask_file: str
-
+    grid: RegularGrid
     files: dict
     perturb: dict
-
     model_env: str
     model_config_file: str
     nproc_per_run: int

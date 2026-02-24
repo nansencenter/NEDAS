@@ -1,13 +1,13 @@
 import os
 import numpy as np
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
-from NEDAS.models import Model
+from NEDAS.core import Model
 from .util import initial_condition, advance_time
 
-class Vort2DModel(Model):
+class Vort2DModel(Model[RegularGrid]):
     nx: int
     ny: int
     dx: float
@@ -30,7 +30,7 @@ class Vort2DModel(Model):
         ii, jj = np.meshgrid(np.arange(self.nx), np.arange(self.ny))
         x = ii*self.dx
         y = jj*self.dx
-        self.grid = Grid(None, x, y, cyclic_dim='xy')
+        self.grid = RegularGrid(None, x, y, cyclic_dim='xy')
         self.grid.mask = np.full(self.grid.x.shape, False)  ##no mask
 
         levels = np.array([0])  ##there is no vertical levels
