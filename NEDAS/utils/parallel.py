@@ -1,5 +1,6 @@
 import os
 from functools import wraps
+from typing import TypeVar, Callable, ParamSpec, Optional, Sequence, Union
 import time
 from concurrent.futures import ProcessPoolExecutor
 import threading
@@ -183,13 +184,16 @@ class DummyComm:
     def reduce(self, obj, root=0):
         return obj
 
-def by_rank(comm, rank):
+T = TypeVar("T")    # represents the return type of a func
+P = ParamSpec("P")  # represents the parameter list of a func
+
+def by_rank(comm: Comm, rank: int) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
     """
     Decorator for func() to be run only by rank 0 in comm
     """
-    def decorator(func):
+    def decorator(func: Callable[P, T]) -> Callable[P, Optional[T]]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
             if comm.Get_rank() == rank:
                 result = func(*args, **kwargs)
             else:
@@ -198,14 +202,14 @@ def by_rank(comm, rank):
         return wrapper
     return decorator
 
-def bcast_by_root(comm):
+def bcast_by_root(comm: Comm) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
     Decorator for func() to be run only by rank 0 in comm,
     and result of func() is then broadcasted to all other ranks.
     """
-    def decorator(func):
+    def decorator(func: Callable[P, T]) -> Callable[P, T]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             if comm.Get_rank() == 0:
                 result = func(*args, **kwargs)
             else:
@@ -215,13 +219,15 @@ def bcast_by_root(comm):
         return wrapper
     return decorator
 
-def distribute_tasks(comm, tasks, load=None):
+TaskSequence = Union[np.ndarray, Sequence]
+
+def distribute_tasks(comm: Comm, tasks: TaskSequence, load: Optional[TaskSequence]=None) -> dict[int, list]:
     """
     Divide a list of task indices and assign a subset to each rank in comm
 
     Args:
         comm (Comm): MPI communicator
-        tasks (list): List of task indices (to be distributed over the processors)
+        tasks (ArrayLike): List of task indices (to be distributed over the processors)
         load (np.ndarray, optional):
             Amount of workload for each task element
             The default is None, we will let tasks have equal workload
@@ -236,14 +242,17 @@ def distribute_tasks(comm, tasks, load=None):
     ##assume equal load between tasks if not specified
     if load is None:
         load = np.ones(ntask)
-
-    assert load.size==ntask, f'load.size = {load.size} not equal to tasks.size'
+    
+    ##make sure load has right length
+    _load = np.array(load)
+    if _load.size != ntask:
+        raise ValueError(f'Length of task load = {_load.size} not equal to ntask = {ntask}')
 
     ##normalize to get load distribution function
-    load = load / np.sum(load)
+    _load = _load / np.sum(_load)
 
     ##cumulative load distribution, rounded to 5 decimals
-    cum_load = np.round(np.cumsum(load), decimals=5)
+    cum_load = np.round(np.cumsum(_load), decimals=5)
 
     ##given the load distribution function, we assign load to processors
     ##by evenly divide the distribution into nproc parts
