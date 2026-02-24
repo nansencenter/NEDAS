@@ -67,7 +67,7 @@ grid_def:
 ##state vector definition (a list of definitions, one for each variable)
 state_def:
 - name: streamfunc      ## name of the variable
-  model_src: qg         ## which model the variable come from
+  model_src: qg.fortran ## which model the variable come from
   var_type: field       ## if 'field' the variable consists of 2D fields, if 'scalar' it is a number
   err_type: normal      ## which error model to use, now only 'normal'
 ##model configuration dict(model_name, opts)
@@ -92,7 +92,7 @@ model_def:
 ##observation definition (a list of definitions, one for each variable)
 obs_def:
 - name: streamfunc        ## name of the variable
-  dataset_src: qg.fortran ## which dataset module it comes from
+  dataset_src: synthetic  ## which dataset module it comes from
   model_src: qg.fortran   ## which model to use to compute observation priors
   ##the following is specific to the observation 'streamfunc' in the dataset
   nobs: 3000              ## number of observations (if generating synthetic obs)
@@ -110,13 +110,12 @@ obs_def:
 ##will use config_file as starting point, additional variables will overwrite config_file settings
 ##if new variables introduced here, they will be appended to the configuration
 dataset_def:
-  qg:
+  synthetic:
     config_file:         ##configuration file (empty for now)
-    dataset_dir:         ##path to the dataset files, for qg we use synthethic obs so no need to specify
+    dataset_dir:         ##path to the dataset files, for qg we use synthetic obs so no need to specify
     obs_window_min: -6   ## observation within the window (in hours) will be considered valid at cycle time
     obs_window_max: 0
 
-use_synthetic_obs: True  ## if true, use synthetic observations generated from truth
 shuffle_obs: False       ## if true, shuffle the order of obs sequence
 z_coords_from: mean      ##use ensemble 'mean' or 'member' z coords as reference of obs z location
 
