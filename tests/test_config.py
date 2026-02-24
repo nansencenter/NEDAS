@@ -21,7 +21,7 @@ class TestConfig(unittest.TestCase):
         self.assertIsInstance(cf.time_analysis_start, datetime)
         self.assertIsInstance(cf.time_analysis_end, datetime)
 
-    def test_raise_exception_if_time_type_error(self):
+    def test_raise_exception_if_time_parse_error(self):
         with self.assertRaises(ValueError):
             Config(time='abcdefg')
 
