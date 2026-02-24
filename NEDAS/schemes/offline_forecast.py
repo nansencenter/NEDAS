@@ -9,9 +9,9 @@ from NEDAS.utils.progress import timer, progress_bar
 from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.utils.random_perturb import random_perturb
-from NEDAS import assim_tools
+from .base import BaseScheme
 
-class ForecastScheme:
+class ForecastScheme(BaseScheme):
     """
     Forecast scheme class.
 

@@ -2,8 +2,8 @@ from NEDAS.config import Config
 from NEDAS.schemes.get_analysis_scheme import get_analysis_scheme
 
 def main() -> None:
-    c = Config(parse_args=True)
-    scheme = get_analysis_scheme(c)
+    cf = Config(parse_args=True)
+    scheme = get_analysis_scheme(cf)
 
     # prepare files
     # initial ensemble
@@ -11,7 +11,7 @@ def main() -> None:
 
     # run analysis scheme
     print("Running NEDAS analysis scheme")
-    scheme(c)
+    scheme()
 
 if __name__ == '__main__':
     main()

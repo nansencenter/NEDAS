@@ -10,17 +10,13 @@ from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.utils.random_perturb import random_perturb
 from NEDAS import assim_tools
+from .filter import FilterAnalysisScheme
 
-class OfflineFilterAnalysisScheme:
+class OfflineFilterAnalysisScheme(FilterAnalysisScheme):
     """
     Offline filtering analysis scheme class.
 
-    This scheme runs the 4D analysis by cycling through time steps. Running the ensemble forecast first,
-    pause the model and write model states (the `prior`) to restart files at a certain time step (`analysis cycle`),
-    then perform data assimilation at the analysis cycle with observations within a time window,
-    finally using the updated model states (the `posterior`) as new initial conditions, the ensemble forecast
-    is run again to reach the next analysis cycle, until the end of the period of interest. The length of
-    forecasts between cycles is called the `cycling period`.
+    Using restart files I/O to pass information between the steps in a filtering analysis.
     """
     def __call__(self, c) -> None:
         c.show_summary()
@@ -86,10 +82,10 @@ class OfflineFilterAnalysisScheme:
             c.localization_funcs = assim_tools.localization.get_localization_funcs(c)
             c.inflation_func = assim_tools.inflation.get_inflation_func(c)
 
-            state = assim_tools.state.get_state(c)
+            state = assim_tools.state.State(c)
             timer(c)(state.prepare_state)(c)
 
-            obs = assim_tools.obs.get_obs(c, state)
+            obs = assim_tools.obs.Obs(c, state)
             timer(c)(obs.prepare_obs)(c, state)
             timer(c)(obs.prepare_obs_from_state)(c, state, 'prior')
 
@@ -443,14 +439,6 @@ class OfflineFilterAnalysisScheme:
                 ##create the file lock across mpi ranks for this file
                 c.comm.init_file_lock(file)
 
-    def validate_mpi_environment(self, c):
-        """
-        Validate the MPI environment and ensure the number of processes is consistent.
-        """
-        nproc = c.nproc
-        nproc_actual = c.comm.Get_size()
-        if nproc != nproc_actual:
-            raise RuntimeError(f"Error: nproc {nproc} != mpi size {nproc_actual}")
 
     def init_analysis_dir(self, c):
         """
