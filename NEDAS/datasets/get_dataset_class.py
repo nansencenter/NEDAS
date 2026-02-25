@@ -1,6 +1,6 @@
 import importlib
 from typing import Type
-from NEDAS.core import Dataset
+from NEDAS.core.dataset import Dataset
 
 registry = {
     'ecmwf.era5': 'ERA5Data',
