@@ -68,8 +68,11 @@ class NextsimModel(Model):
             }
         self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables}
 
-        self.read_grid()
         self.grid_bank = {}
+
+        mshfile = os.path.join(self.nextsim_mesh_dir, self.msh_filename)
+        if os.path.exists(mshfile):
+            self.read_grid_from_mshfile(mshfile)
 
     def filename(self, **kwargs):
         """
@@ -113,9 +116,6 @@ class NextsimModel(Model):
         """
         Update self.grid object based on input kwargs
         """
-        if kwargs is {}:
-            self.read_grid_from_mshfile(os.path.join(self.nextsim_mesh_dir, self.msh_filename))
-
         kwargs = super().parse_kwargs(**kwargs)
         if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
             if 'meshfile' in kwargs:

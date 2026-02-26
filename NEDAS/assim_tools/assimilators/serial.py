@@ -3,14 +3,14 @@ from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.utils.progress import progress_bar
-from NEDAS.assim_tools.assimilators.base import Assimilator
+from NEDAS.core import Context, Assimilator
 
 class SerialAssimilator(Assimilator):
     """
     Subclass for serial assimilation algorithms
     """
 
-    def init_partitions(self, c) -> list[tuple]:
+    def init_partitions(self, c: Context) -> list[tuple]:
         """
         Generate spatial partitioning of the domain
         """
@@ -23,7 +23,7 @@ class SerialAssimilator(Assimilator):
             ##list of possible factoring of nproc_mem = nx_intv * ny_intv
             ##pick the last factoring that is most 'square', so that the interval
             ##is relatively even in both directions for each pid
-            nx_intv, ny_intv = [(i, int(c.nproc_mem / i))
+            nx_intv, ny_intv = [(i, int(c.config.nproc_mem / i))
                                 for i in range(1, int(np.ceil(np.sqrt(c.nproc_mem))) + 1)
                                 if c.nproc_mem % i == 0][-1]
 

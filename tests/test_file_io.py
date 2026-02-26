@@ -2,8 +2,8 @@ import unittest
 import os
 from datetime import datetime
 from NEDAS.config import Config
-from NEDAS.core import Coordinator
-from NEDAS.assim_tools.io import FileIO
+from NEDAS.core import Context
+from NEDAS.io_backends.file_io import FileIO
 
 class TestFileIO(unittest.TestCase):
 
@@ -14,7 +14,7 @@ class TestFileIO(unittest.TestCase):
         time = datetime(2023, 1, 1)
         cwd = os.getcwd()
         cf = Config(work_dir='test', time=time, directories=dir_def)
-        c = Coordinator(cf)
+        c = Context(cf)
         io = FileIO(c)
         self.assertEqual(io.cycle_dir(time), os.path.join(cwd, 'test', 'cycle', '20230101'))
         self.assertEqual(io.analysis_dir(time), os.path.join(cwd, 'test', 'cycle', '20230101', 'analysis'))
@@ -25,7 +25,7 @@ class TestFileIO(unittest.TestCase):
         time = datetime(2023, 1, 1)
         cwd = os.getcwd()
         cf = Config(work_dir='./', time=time, directories=dir_def)
-        c = Coordinator(cf)
+        c = Context(cf)
         io = FileIO(c)
         self.assertEqual(io.prior_file, '.')
 

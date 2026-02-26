@@ -1,11 +1,22 @@
 import os
 import inspect
-from typing import Literal, Generic, TypeVar
+import importlib
+from typing import Literal, Generic, TypeVar, Type
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
+
+"""
+Model module
+
+    Model base class
+
+    registry
+
+    get_model_class
+"""
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -139,3 +150,34 @@ class Model(Generic[GridT], ABC):
             **kwargs: Keyword arguments for running the model.
         """
         pass
+
+registry = {
+    'lorenz96': 'Lorenz96Model',
+    'qg.fortran': 'QGFortranModel',
+    'qg.fortran.emulator': 'QGFortranModelEmulator',
+    'vort2d': 'Vort2DModel',
+    'topaz.v5': 'Topaz5Model',
+    'nextsim.v1': 'NextsimModel',
+    'nextsim.dg': 'NextsimDGModel',
+    'wrf': 'WRFModel',
+}
+
+def get_model_class(model_name: str) -> Type["Model"]:
+    """
+    Factory function to return the correct Model subclass.
+
+    Args:
+        model_name (str): Model name
+
+    Returns:
+        Type["Model"]: Corresponding Model subclass
+    """
+    model_name = model_name.lower()
+
+    if model_name not in registry.keys():
+        raise NotImplementedError(f"Model class not implemented for '{model_name}'")
+
+    module = importlib.import_module('NEDAS.models.'+model_name)
+    ModelClass = getattr(module, registry[model_name])
+
+    return ModelClass

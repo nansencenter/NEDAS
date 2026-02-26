@@ -62,6 +62,14 @@ class Config:
     iter: int
     resolution_level: list[int]
     character_length: list[float]
+    localize_scale_fac: list[float]
+    obs_err_scale_fac: list[float]
+    assimilator_def: dict
+    updator_def: dict
+    covariance_def: dict
+    inflation_def: dict
+    localiazation_def: dict
+    transform_def: dict
     diag: Optional[dict]
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
@@ -162,3 +170,19 @@ class Config:
         """
         with open(config_file, 'w') as f:
             yaml.dump(self.__dict__, f, sort_keys=False)
+
+
+    def show_summary(self):
+        """
+        Print a summary of the configuration.
+        """
+        print(f"""Initializing config...
+ working directory: {self.work_dir}
+ parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
+ cycling from {self.time_start} to {self.time_end}
+ analysis start at {self.time_analysis_start}
+ cycle_period = {self.cycle_period} hours
+ current time: {self.time}
+ nens: {self.nens}
+ Assimilation scheme: TODO
+ """, flush=True)

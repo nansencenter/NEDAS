@@ -124,7 +124,7 @@ z_coords_from: mean      ##use ensemble 'mean' or 'member' z coords as reference
 perturb:
 
 ##more details in assimilation algorithm
-analysis_scheme: filter  ##type of analysis to perform: filter/smoother/etc.
+analysis_scheme: offline_filter  ##type of analysis to perform: filter/smoother/etc.
 
 ##outer loop iterations
 niter: 1

@@ -21,7 +21,7 @@ def M_nl(x, F, T, dt):
         x += ((np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F) * dt
     return x
 
-class Lorenz96Model(Model):
+class Lorenz96Model(Model[Grid1D]):
     nx: int
     F: float
     dt: float

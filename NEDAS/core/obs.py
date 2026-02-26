@@ -1,8 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import numpy as np
 from NEDAS.utils.progress import progress_bar
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
-from .coordinator import Coordinator
+from .types import ProcIDRec, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
 from .obs_info import ObsInfo
+if TYPE_CHECKING:
+    from .context import Context
 
 class Obs:
     """
@@ -28,28 +32,27 @@ class Obs:
     To compare to the observation, obs_prior simulated by the model needs to be
     computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
     """
-    def __init__(self, c: Coordinator):
-        self.analysis_dir = c.io.analysis_dir(c.time, c.iter)
-
+    rec_list: dict[ProcIDRec, list[ObsRecordID]] = {}
+    obs_inds: dict = {}            # will be created by assimilator.assign_obs()
+    obs_seq: ObsSeq = {}           # will be created by self.prepare_obs()
+    obs_prior: ObsEns = {}         # will be created by self.prepare_obs_from_state()
+    lobs: LocalObsSeq = {}         # will be created by self.transpose_to_ensemble_complete()
+    lobs_prior: LocalObsEns = {}
+    lobs_post: LocalObsEns = {}    # will be created by assimilator.assimilate()
+    obs_post: ObsEns = {}          # will be created by self.transpose_to_field_complete()
+    data: dict = {}                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
+ 
+    def __init__(self, c: Context):
+        #self.analysis_dir = c.io.analysis_dir(c.time, c.iter)
         self.info = bcast_by_root(c.comm)(ObsInfo)(c)
-
         self.rec_list = bcast_by_root(c.comm)(self.distribute_obs_tasks)(c)
 
-        self.obs_inds = {}         ##will be created by assimilator.assign_obs()
-        self.obs_seq = {}          ##will be created by prepare_obs()
-        self.obs_prior_seq = {}    ##will be created by prepare_obs_from_state()
-        self.lobs = {}             ##will be created by transpose_to_ensemble_complete()
-        self.lobs_prior = {}
-        self.lobs_post = {}        ##will be created by assimilator.assimilate()
-        self.obs_post_seq = {}     ##will be created by transpose_to_field_complete()
-        self.data = {}             ##will be created by pack_obs_data, for use in assimilate()
-
-    def distribute_obs_tasks(self, c: Coordinator):
+    def distribute_obs_tasks(self, c: Context):
         """
         Distribute obs_rec_id across processors
 
         Args:
-            c (Coordinator): the coordinator object.
+            c (Context): the runtime context object.
 
         Returns:
             dict: Dictionary {pid_rec (int): list[obs_rec_id (int)]}

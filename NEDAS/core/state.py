@@ -1,8 +1,13 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import numpy as np
-from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
 from NEDAS.utils.progress import progress_bar
-from NEDAS.core import Coordinator
+from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
+from NEDAS.core import Context, IOBackend, types
+from .types import ProcIDMem, ProcIDRec, MemID, FieldRecordID, PartitionID, FieldEns, StateEns
 from .state_info import StateInfo
+if TYPE_CHECKING:
+    from .context import Context
 
 class State:
     """
@@ -34,30 +39,26 @@ class State:
     It is easier to perform i/o and pre/post processing on field-complete state,
     while easier to run assimilation algorithms with ensemble-complete state.
     """
-    def __init__(self, c: Coordinator):
+    info: StateInfo
+    mem_list: dict[ProcIDMem, list[MemID]]
+    rec_list: dict[ProcIDRec, list[FieldRecordID]]
+    partitions: list[tuple] = []  # will be created by assimilator.partition_grid()
+    par_list: dict[ProcIDMem, list[PartitionID]] = {}
+    fields_prior: FieldEns = {}   # will be created by self.prepare_state()
+    z_fields: FieldEns = {}
+    state_prior: StateEns = {}    # will be created by self.transpose_to_ensemble_complete() 
+    z_state: StateEns = {}
+    state_post: StateEns = {}     # will be created by assimilator.assimilate()
+    fields_post: FieldEns = {}    # will be created by self.transpose_to_field_complete()
+    data = {}                     # will be created by self.pack_state_data(), for use in assmilator.assimilate()
+
+    def __init__(self, c: Context):
         self.info = bcast_by_root(c.comm)(StateInfo)(c)
         self.mem_list, self.rec_list = bcast_by_root(c.comm)(self.distribute_state_tasks)(c)
 
-        self.partitions = {}  ##will be setup by assimilator.partition_grid()
-        self.par_list = {}
-        self.fields_prior = {}  ##will be created by prepare_obs()
-        self.z_fields = {}
-        self.state_prior = {}   ##will be created by transpose_to_ensemble_complete()
-        self.z_state = {}
-        self.state_post = {}    ##will be created by assimilator.assimilate()
-        self.fields_post = {}   ##will be created by transpose_to_field_complete()
-        self.data = {}  ##will be created by pack_state_data, for use in assimilate()
-
-    def distribute_state_tasks(self, c: Coordinator) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
+    def distribute_state_tasks(self, c: Context) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
         """
         Distribute mem_id and rec_id across processors
-
-        Args:
-        c (Coordinator): the coordinator obj
-
-        Returns:
-            dict: mem_list {pid_mem: list[mem_id]}
-            dict: rec_list {pid_rec: list[rec_id]}
         """
         ##list of mem_id as tasks
         mem_list = distribute_tasks(c.comm_mem, [m for m in range(c.config.nens)])
@@ -171,7 +172,7 @@ class State:
     #     if c.z_coords_from == 'mean':
     #         self.output_ens_mean(c, self.z_fields, self.z_coords_file)
 
-    def prepare_state(self, c: Coordinator) -> None:
+    def prepare_state(self, c: Context) -> None:
         """
         Main method to collect fields from model to form the complete state (field-complete distributed)
         """
@@ -179,7 +180,7 @@ class State:
         #self.output_z_coords(c) !!!need this?
         #self.scalars_prior = self.collect_scalars(c)
 
-    def collect_prior_fields(self, c: Coordinator) -> None:
+    def collect_prior_fields(self, c: Context) -> None:
         """
         Collect fields from prior model state, convert them to the analysis grid,
         preprocess (coarse-graining etc), save to fields[mem_id, rec_id] pointing to the uniq fields
@@ -209,7 +210,7 @@ class State:
         for m, mem_id in enumerate(self.mem_list[c.pid_mem]):
             for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
                 rec = self.info.fields[rec_id]
-                if c.debug:
+                if c.config.debug:
                     print(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
                 else:
                     c.print_1p(progress_bar(m*nr+r, nm*nr))

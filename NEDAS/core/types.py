@@ -1,5 +1,7 @@
+from typing import Annotated
 from dataclasses import dataclass, asdict
 from datetime import datetime
+import numpy as np
 
 @dataclass
 class ErrorModel:
@@ -64,7 +66,6 @@ class ObsRecord:
     def asdict(self) -> dict:
         return asdict(self)
 
-
 @dataclass
 class FieldRecord:
     """
@@ -95,3 +96,19 @@ class FieldRecord:
 
     def asdict(self) -> dict:
         return asdict(self)
+
+ProcID = Annotated[int, 'process id in comm']
+ProcIDMem = Annotated[int, 'process id in comm_mem']
+ProcIDRec = Annotated[int, 'process id in comm_rec']
+
+MemID = Annotated[int, 'member id']
+FieldRecordID = Annotated[int, 'field record id']
+ObsRecordID = Annotated[int, 'obs record id']
+PartitionID = Annotated[int, 'partition id']
+
+FieldEns = Annotated[dict[tuple[MemID, FieldRecordID], np.ndarray], 'field-complete ensemble data']
+StateEns = Annotated[dict[tuple[MemID, FieldRecordID], dict[PartitionID, np.ndarray]], 'state-complete ensemble data']
+ObsSeq = Annotated[dict[ObsRecordID, dict[str, np.ndarray]], 'obs sequence']
+ObsEns = Annotated[dict[tuple[MemID, ObsRecordID], np.ndarray], 'obs ensemble data']
+LocalObsSeq = Annotated[dict[ObsRecordID, dict[PartitionID, dict[str, np.ndarray]]], 'local obs sequence']
+LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.ndarray]], 'local obs ensemble data']

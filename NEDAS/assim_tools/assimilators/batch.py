@@ -3,7 +3,7 @@ from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.utils.progress import progress_bar
-from NEDAS.assim_tools.assimilators.base import Assimilator
+from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
     def init_partitions(self, c) -> list[tuple]:
@@ -13,7 +13,7 @@ class BatchAssimilator(Assimilator):
         for each partition indexed by par_id, the tuple contains indices for slicing the domain
         Using regular slicing is more efficient than fancy indexing (used in irregular grid)
         """
-        if len(c.grid.x.shape) == 2:
+        if len(c.grid.x.shape) == 2:  ##check for Grid type is better here, even better should as the Grid object to do the partitioning
             ny, nx = c.grid.x.shape
 
             ##divide into square tiles with nx_tile grid points in each direction
@@ -133,29 +133,29 @@ class BatchAssimilator(Assimilator):
 
         return par_list
 
-    def assimilation_algorithm(self, c, state, obs):
+    def assimilation_algorithm(self, c: Context):
         """
         batch assimilation solves the matrix version EnKF analysis for each local state,
         the local states in each partition are processed in parallel
         """
-        state.state_post = copy.deepcopy(state.state_prior)
-        obs.lobs_post = copy.deepcopy(obs.lobs_prior)
+        c.state.state_post = copy.deepcopy(c.state.state_prior)
+        c.obs.lobs_post = copy.deepcopy(c.obs.lobs_prior)
 
         ##pid with the most obs in its task list with show progress message
-        obs_count = np.array([np.sum([len(obs.obs_inds[r][p])
-                                      for r in obs.info['records'].keys()
+        obs_count = np.array([np.sum([len(c.obs.obs_inds[r][p])
+                                      for r in c.obs.info.records.keys()
                                       for p in lst])
-                              for lst in state.par_list.values()])
+                              for lst in c.state.par_list.values()])
         c.pid_show = np.argsort(obs_count)[-1]
 
         ##count number of tasks
         ntask = 0
-        for par_id in state.par_list[c.pid_mem]:
+        for par_id in c.state.par_list[c.pid_mem]:
             if len(c.grid.x.shape)==2:
-                ist,ied,di,jst,jed,dj = state.partitions[par_id]
+                ist,ied,di,jst,jed,dj = c.state.partitions[par_id]
                 msk = c.grid.mask[jst:jed:dj, ist:ied:di]
             else:
-                inds = state.partitions[par_id]
+                inds = c.state.partitions[par_id]
                 msk = c.grid.mask[inds]
             for loc_id in range(np.sum((~msk).astype(int))):
                 ntask += 1
@@ -163,19 +163,19 @@ class BatchAssimilator(Assimilator):
         ##now the actual work starts, loop through partitions stored on pid_mem
         c.print_1p('>>> assimilate in batch mode:\n')
         task = 0
-        for par_id in state.par_list[c.pid_mem]:
-            state_data = state.pack_local_state_data(c, par_id, state.state_prior, state.z_state)
+        for par_id in c.state.par_list[c.pid_mem]:
+            state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.z_state)
             nloc = state_data['state_prior'].shape[-1]
             ##skip forward if the partition is empty
             if nloc == 0:
                 continue
 
-            obs_data = obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
+            obs_data = c.obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
             nlobs = obs_data['x'].size
             ##if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:
                 task += nloc
-                if c.debug:
+                if c.config.debug:
                     print(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)", flush=True)
                 else:
                     c.print_1p(progress_bar(task-1, ntask))
@@ -203,7 +203,7 @@ class BatchAssimilator(Assimilator):
                 hlfactor = hlfactor[ind1]
 
                 if len(ind1) == 0:
-                    if c.debug:
+                    if c.config.debug:
                         print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
                     else:
                         c.print_1p(progress_bar(task, ntask))
@@ -213,14 +213,14 @@ class BatchAssimilator(Assimilator):
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
 
                 ##add progress message
-                if c.debug:
+                if c.config.debug:
                     print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
                 else:
                     c.print_1p(progress_bar(task, ntask))
                 task += 1
 
-            state.unpack_local_state_data(c, par_id, state.state_post, state_data)
-            obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
+            c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
+            c.obs.unpack_local_obs_data(c, c.state, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
     @abstractmethod

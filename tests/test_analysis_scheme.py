@@ -1,12 +1,12 @@
 import unittest
 from NEDAS.config import Config
-from NEDAS.schemes.get_analysis_scheme import get_analysis_scheme
+from NEDAS.core.scheme import get_scheme
 
 class TestAnalysisScheme(unittest.TestCase):
     def test_raise_exception_when_not_implemented(self):        
         with self.assertRaises(NotImplementedError):
-            c = Config(analysis_scheme='foo')
-            get_analysis_scheme(c)
+            cf = Config(analysis_scheme='foo')
+            get_scheme(cf)
 
 if __name__ == '__main__':
     unittest.main()

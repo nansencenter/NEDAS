@@ -1,7 +1,7 @@
 import numpy as np
 from NEDAS.utils.conversion import type_size, t2h, h2t, dt1h, ensure_list
-from .coordinator import Coordinator
-from .types import FieldRecord
+from NEDAS.core.context import Context
+from NEDAS.core.types import FieldRecord
 
 class StateInfo:
     """
@@ -21,7 +21,7 @@ class StateInfo:
     variables: set[str]
     err_types: set[str]
     
-    def __init__(self, c: Coordinator):
+    def __init__(self, c: Context):
         """Parse the configuration to generate the state info object"""
         self.c = c
         self.shape = c.grid.x.shape
@@ -50,13 +50,13 @@ class StateInfo:
             else:
                 raise NotImplementedError(f"{vtype} is not supported in the state vector.")
 
-    def add_fields_for_variable(self, c: Coordinator, vrec: dict) -> None:
+    def add_fields_for_variable(self, c: Context, vrec: dict) -> None:
         """
         Add fields for a variable in the state. The state variable has dimensions t, z, y, x
         while the 'field' is the 2D part with y, x dimensions.
 
         Args:
-            c (Coordinator): the coordinator
+            c (Context): the runtime context object
             vrec (dict): the variable record defining its properties
         """
         vname = vrec['name']

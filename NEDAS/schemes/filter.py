@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS import assim_tools
-from NEDAS.config import Config
 from NEDAS.utils.progress import timer
-from NEDAS.core import Scheme, State, Obs
+from NEDAS.core import Scheme, Context
+from assim_tools.state.state import State
+from assim_tools.obs.obs import Obs
 
 class FilterAnalysisScheme(Scheme, ABC):
     """
@@ -26,9 +27,9 @@ class FilterAnalysisScheme(Scheme, ABC):
             if self.check_cycle_complete(cf, c.time):
                 continue
 
-            if c.run_preproc:
+            if cf.run_preproc:
                 self.preprocess(cf)
-                if c.perturb:
+                if cf.perturb:
                     self.perturb(cf)
 
             ##assimilation step

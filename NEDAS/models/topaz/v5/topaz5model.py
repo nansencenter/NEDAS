@@ -149,8 +149,6 @@ class Topaz5Model(Model[RegularGrid]):
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         if self.basedir and os.path.exists(grid_info_file):
             self.grid = get_topaz_grid(grid_info_file)
-        else:
-            raise RuntimeError(f"Cannot find topaz.v5 grid info: {grid_info_file}")
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
         if self.depthfile and os.path.exists(self.depthfile):

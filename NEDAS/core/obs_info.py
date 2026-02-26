@@ -1,7 +1,7 @@
 import numpy as np
 from NEDAS.utils.conversion import dt1h, ensure_list
 from .types import ErrorModel, ObsRecord
-from .coordinator import Coordinator
+from .context import Context
 
 class ObsInfo:
     """
@@ -16,12 +16,12 @@ class ObsInfo:
     variables: set[str]
     err_types: set[str]
 
-    def __init__(self, c: Coordinator):
+    def __init__(self, c: Context):
         """
         Parse the configuration to generate the observation info object.
 
         Args:
-            c (Coordinator): the coordinator object.
+            c (Context): the runtime context object.
 
         Returns:
             dict: A dictionary with some dimensions and list of unique obs records
@@ -48,12 +48,12 @@ class ObsInfo:
             print(f"number of unique observation records = {len(self.records)}", flush=True)
             print(f"observation variables: {self.variables}", flush=True)
 
-    def add_obs_record(self, c: Coordinator, vrec: dict):
+    def add_obs_record(self, c: Context, vrec: dict):
         """
         Add observation record
 
         Args:
-            c (Coordinator): the coordinator object
+            c (Context): the runtime context object
             vrec (dict): the observation record defining its properties 
         """
         vname = vrec['name']
@@ -96,7 +96,7 @@ class ObsInfo:
                 time=time,
                 dt=0,
                 err=err,
-                hroi=vrec['hroi'] * c.localize_scale_fac[c.iter],
+                hroi=vrec['hroi'] * c.config.localize_scale_fac[c.iter],
                 vroi=vrec['vroi'],
                 troi=vrec['troi'],
                 impact_on_state=impact_on_state,
