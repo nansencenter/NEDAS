@@ -57,7 +57,7 @@ class Config:
     shuffle_obs: bool
     z_coords_from: Literal['mean', 'member']
     perturb: Optional[dict]
-    analysis_scheme: str
+    scheme: str
     niter: int
     iter: int
     resolution_level: list[int]

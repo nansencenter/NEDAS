@@ -63,7 +63,7 @@ dataset_def:
 
 perturb:
 
-analysis_scheme: offline_filter
+scheme: offline_filter
 
 niter: 1
 iter: 0

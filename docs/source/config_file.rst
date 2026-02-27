@@ -636,7 +636,7 @@ If no perturbation is needed, you can also leave ``perturb`` as None.
 Assimilation method
 ^^^^^^^^^^^^^^^^^^^
 
-The following parameters helps :func:`get_analysis_scheme` to locate the right subclass of :class:`AnalysisScheme`.
+The following parameters helps :func:`get_scheme` to locate the right subclass of :class:`Scheme`.
 Currently only 'offline_filter' scheme is implemented.
 For the specific ``filter_type``, the corresponding :class:`Assimilator` subclass will be chosen to perform the filter step.
 
@@ -647,7 +647,7 @@ For the specific ``filter_type``, the corresponding :class:`Assimilator` subclas
    * - Key
      - Description
      - Example
-   * - ``analysis_scheme``
+   * - ``scheme``
      - Type of analysis scheme to use.
      - 'offline_filter'
    * - ``assimilator``

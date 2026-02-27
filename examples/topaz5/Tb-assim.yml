@@ -188,7 +188,7 @@ perturb:
   tcorr: 48
   bounds: [0, inf]
 
-analysis_scheme: offline_filter
+scheme: offline_filter
 
 niter: 1
 iter:
