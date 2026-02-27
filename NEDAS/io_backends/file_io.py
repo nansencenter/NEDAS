@@ -2,6 +2,7 @@ import os
 import struct
 import numpy as np
 from datetime import datetime
+from NEDAS.core.model import Model
 from NEDAS.utils.conversion import type_dic, type_size
 from NEDAS.core import Context, IOBackend
 from NEDAS.core.types import FieldRecord
@@ -10,12 +11,14 @@ class FileIO(IOBackend):
     """
     IO Backend using restart files to hold model state (a pause-restart strategy)
     """
-    directories: dict
+    dictionaries: dict
+    niter: int
 
     def __init__(self, c: Context):
         if c.config.directories is None:
             raise ValueError
         self.directories = c.config.directories
+        self.niter = c.config.niter
 
     def cycle_dir(self, time: datetime) -> str:
         """
@@ -53,27 +56,36 @@ class FileIO(IOBackend):
         Returns:
             str: Directory path for the analysis step.
         """
-        if self.cf.niter == 1:
+        if self.niter == 1:
             iter_dir= ''
         else:
             iter_dir = f"iter{iter}"
         return self.directories['analysis_dir'].format(time=time, step=iter_dir)
 
+    def binfile_name(self, c: Context, tag: str) -> str:
+        """
+        Name of the binary file that stores the state data.
 
-    @property
-    def binfile_name(self, tag):
-        analysis_dir = '.'
-        # analysis_dir = self.analysis_dir(self.c.time, self.c.iter)
-        return os.path.join(analysis_dir, 'prior_state.bin')
+        Args:
+            c (Context): the runtime context
+            tag (str): which version of the state
 
-    def read_field(self, c: Context, rec: FieldRecord, member: int) -> np.ndarray:
-        """Read a field from a binary file"""
+        Returns:
+            str: file name
+        """
+        analysis_dir = self.analysis_dir(c.time, c.iter)
+        return os.path.join(analysis_dir, f'{tag}.bin')
 
+    def read_field(self, c: Context, tag: str, rec: FieldRecord, member: int) -> np.ndarray:
+        """
+        Read a field from a binary file
+        """
         nv = 2 if rec.is_vector else 1
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
         fld_size = np.sum((~c.grid.mask).astype(int))
 
-        with open(self.prior_file, 'rb') as f:
+        binfile = self.binfile_name(c, tag)
+        with open(binfile, 'rb') as f:
             f.seek(member*c.state.info.size + rec.pos)
             fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
                             f.read(nv*fld_size*type_size[rec.dtype])))
@@ -84,8 +96,10 @@ class FileIO(IOBackend):
                 fld[~c.grid.mask] = fld_
             return fld
 
-    def write_field(self, c: Context, fld: np.ndarray, rec: FieldRecord, member: int) -> None:
-        """Write a field to a binary file"""
+    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec: FieldRecord, member: int) -> None:
+        """
+        Write a field to a binary file
+        """
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
         assert fld.shape == fld_shape, f'fld shape incorrect: expected {fld_shape}, got {fld.shape}'
 
@@ -94,15 +108,18 @@ class FileIO(IOBackend):
         else:
             fld_ = fld[~c.grid.mask]
 
-        with open(self.prior_file, 'r+b') as f:
+        binfile = self.binfile_name(c, tag)
+        with open(binfile, 'r+b') as f:
             f.seek(member*c.state.info.size + rec.pos)
             f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
 
-    # def get_model_z_coords(self, c, model_name, **kwargs) -> np.ndarray:
-    #     """
-    #     Get z coordinates from model class using its z_coords method
-    #     """
-    #     path = c.forecast_dir(kwargs['time'], model_name)
-    #     model = c.models[model_name]
-    #     zfld = model.z_coords(path=path, **kwargs)
-    #     return zfld
+    def call_model_io(self, c: Context, model_name: str, method: str, **kwargs):
+        # additional info from input args to form the path prefix
+        time = kwargs['time']
+        path = self.forecast_dir(time, model_name)
+
+        # obtain method
+        model = c.models[model_name]
+        func = getattr(model, method)
+
+        return func(path=path, **kwargs)

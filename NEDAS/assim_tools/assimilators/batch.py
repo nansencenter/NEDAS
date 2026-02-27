@@ -6,21 +6,21 @@ from NEDAS.utils.progress import progress_bar
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
-    def init_partitions(self, c) -> list[tuple]:
+    def init_partitions(self, c: Context) -> list[tuple]:
         """
         Generate spatial partitioning of the domain
         partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
         for each partition indexed by par_id, the tuple contains indices for slicing the domain
         Using regular slicing is more efficient than fancy indexing (used in irregular grid)
         """
-        if len(c.grid.x.shape) == 2:  ##check for Grid type is better here, even better should as the Grid object to do the partitioning
+        if len(c.grid.x.shape) == 2:
             ny, nx = c.grid.x.shape
 
             ##divide into square tiles with nx_tile grid points in each direction
             ##the workload on each tile is uneven since there are masked points
             ##so we divide into 3*nproc tiles so that they can be distributed
             ##according to their load (number of unmasked points)
-            ntile = c.nproc_mem * 3
+            ntile = c.config.nproc_mem * 3
             nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / ntile))), 1)
 
             ##a list of (istart, iend, di, jstart, jend, dj) for tiles
@@ -31,10 +31,9 @@ class BatchAssimilator(Assimilator):
                           for i in np.arange(0, nx, nx_tile) ]
 
         else:
-            npoints = c.grid.x.size
             ##divide the domain into sqaure tiles, similar to regular_grid case, but collect
             ##the grid points inside each tile and return the indices
-            ntile = c.nproc_mem * 3
+            ntile = c.config.nproc_mem * 3
 
             if c.grid.Ly==0:
                 ##for 1D grid, just divide into equal sections, no y dimension
@@ -55,7 +54,7 @@ class BatchAssimilator(Assimilator):
 
         return partitions
 
-    def assign_obs(self, c, state, obs) -> dict:
+    def assign_obs(self, c: Context) -> dict:
         """
         Assign the observation sequence to each partition par_id
 
@@ -66,9 +65,9 @@ class BatchAssimilator(Assimilator):
         """
         ##each pid_rec has a subset of obs_rec_list
         obs_inds_pid = {}
-        for obs_rec_id in obs.obs_rec_list[c.pid_rec]:
+        for obs_rec_id in c.obs.obs_rec_list[c.pid_rec]:
             ##screen horizontally for obs inside hroi of each partition
-            obs_inds_pid[obs_rec_id] = self.assign_obs_to_tiles(c, state, obs, obs_rec_id)
+            obs_inds_pid[obs_rec_id] = self.assign_obs_to_tiles(c, c.state, c.obs, obs_rec_id)
 
         ##now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
         ##gather all obs_rec_id from different pid_rec to form the complete obs_inds dict
@@ -110,22 +109,22 @@ class BatchAssimilator(Assimilator):
 
         return obs_inds
 
-    def distribute_partitions(self, c, state, obs) -> dict:
-        par_list_full = np.arange(len(state.partitions))
+    def distribute_partitions(self, c: Context) -> dict:
+        par_list_full = np.arange(len(c.state.partitions))
 
         ##distribute the list of par_id according to workload to each pid
         ##number of unmasked grid points in each tile
         if len(c.grid.x.shape) == 2:
             nlpts_loc = np.array([np.sum((~c.grid.mask[jst:jed:dj, ist:ied:di]).astype(int))
-                                 for ist,ied,di,jst,jed,dj in state.partitions] )
+                                 for ist,ied,di,jst,jed,dj in c.state.partitions] )
         else:
             nlpts_loc = np.array([np.sum((~c.grid.mask[inds]).astype(int))
-                                 for inds in state.partitions] )
+                                 for inds in c.state.partitions] )
 
         ##number of observations within the hroi of each tile, at loc,
         ##sum over the len of obs_inds for obs_rec_id over all obs_rec_ids
-        nlobs_loc = np.array([np.sum([len(obs.obs_inds[r][p])
-                                      for r in obs.info['records'].keys()])
+        nlobs_loc = np.array([np.sum([len(c.obs.obs_inds[r][p])
+                                      for r in c.obs.info.records.keys()])
                               for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)

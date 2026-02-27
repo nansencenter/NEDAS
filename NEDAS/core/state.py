@@ -146,7 +146,7 @@ class State:
         pass
         # TODO: implement scalars here for simultaneous state parameter estimation (SSPE)
 
-    # def save_state(self, c,
+    # def output_state(self, c,
     #                state_file: Optional[str]=None,
     #                mem_id_out: Optional[int]=None,
     #                rec_id_out: Optional[int]=None) -> None:
@@ -188,7 +188,7 @@ class State:
     #             fld = fields[mem_id, rec_id]
 
     #             ##write the data to binary file
-    #             self.io.write_field(state_file, self.info, c.grid.mask, mem_id, rec_id, fld)
+    #             c.io.write_field#state_file, self.info, c.grid.mask, mem_id, rec_id, fld)
 
     #     c.comm.Barrier()
     #     c.print_1p(' done.\n')

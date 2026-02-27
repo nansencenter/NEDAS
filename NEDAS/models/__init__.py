@@ -1,6 +1,6 @@
 import importlib
 from typing import Type
-from NEDAS.core import Model
+from NEDAS.core.model import Model
 
 registry = {
     'lorenz96': 'Lorenz96Model',

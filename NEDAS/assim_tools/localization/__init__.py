@@ -1,4 +1,7 @@
-from NEDAS.core import Context
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from NEDAS.core import Context
 
 """Localization funcs needs to be pure functions (they need to be used in numba njit)"""
 

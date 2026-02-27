@@ -4,8 +4,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
 from NEDAS.utils import parallel
-from NEDAS import assim_tools, grid, config, models, datasets
-from .transform import Transform
+from NEDAS import grid, config, models, datasets, assim_tools
 if TYPE_CHECKING:
     from . import Model, Dataset, IOBackend, State, Obs, Transform, Inflation, Assimilator, Updator
 

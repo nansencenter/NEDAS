@@ -1,5 +1,8 @@
+from __future__ import annotations
 import importlib
-from NEDAS.core import Context, Updator
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from NEDAS.core import Context, Updator
 
 registry = {
     'additive': 'AdditiveUpdator',

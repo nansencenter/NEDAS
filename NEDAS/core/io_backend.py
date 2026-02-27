@@ -4,7 +4,6 @@ import os
 import numpy as np
 from .context import Context
 from .types import FieldRecord
-from .model import Model
 
 class IOBackend(ABC):
     """
@@ -14,7 +13,7 @@ class IOBackend(ABC):
         tags (list[str]): List of names for copies of state/obs data
 
     """
-    tags = ['fields_prior', 'fields_post', 'obs_seq', 'obs_prior', 'obs_post']
+    tags = ['prior', 'prior_mean', 'post', 'post_mean', 'z_coords']
 
     def __init__(self, c: Context):
         pass

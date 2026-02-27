@@ -1,5 +1,5 @@
 import numpy as np
-from NEDAS.core.model import get_model_class
+from NEDAS.models import get_model_class
 from NEDAS.core import Dataset
 
 class SyntheticObs(Dataset):

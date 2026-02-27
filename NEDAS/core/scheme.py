@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from NEDAS.config import Config
+from NEDAS import assim_tools, config
 from .context import Context
-
 
 class Scheme(ABC):
     """
@@ -12,7 +11,7 @@ class Scheme(ABC):
     c: Context
     supported_io_modes: list[str] = ['online', 'offline']
 
-    def __init__(self, config: Config):
+    def __init__(self, config: config.Config):
         self.c = Context(config)
 
     @abstractmethod
