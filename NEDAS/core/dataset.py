@@ -1,14 +1,21 @@
 import os
 import inspect
+from typing import Optional, Callable, Annotated
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
+from .types import VarName, VarDesc
+
+ModelName = Annotated[str, 'model name']
 
 class Dataset(ABC):
     """
     Dataset class (template for specific dataset sources)
     """
-    def  __init__(self, config_file=None, parse_args=False, **kwargs):
+    variables: dict[VarName, VarDesc] = {}
+    obs_operator: dict[ModelName, Callable] = {}
+
+    def  __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -44,7 +51,7 @@ class Dataset(ABC):
             assert isinstance(kwargs['time'], datetime), "kwargs 'time' is not a datetime object"
 
         if 'units' not in kwargs:
-            kwargs['units'] = self.variables[kwargs['name']]['units']
+            kwargs['units'] = self.variables[kwargs['name']].units
 
         ##other args, set default values if not specified
         for key in ['model', 'grid', 'mask']:

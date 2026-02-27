@@ -5,6 +5,7 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 
 def M_nl(x, F, T, dt):
     """
@@ -37,7 +38,9 @@ class Lorenz96Model(Model[Grid1D]):
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
         self.grid.mask = np.full(self.grid.x.shape, False)
 
-        self.variables = {'state': {'name':'state', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'*'}, }
+        self.variables = {
+            'state': VarDesc(name='state', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='*', z_units='*'),
+        }
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -82,7 +85,9 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        var = nc_read_var(fname, self.variables[name]['name'])[0, ...]
+        var_name = self.variables[name].name
+        assert isinstance(var_name, str)
+        var = nc_read_var(fname, var_name)[0, ...]
         return var
 
     def write_var(self, var, **kwargs):
@@ -107,7 +112,9 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        nc_write_var(fname, {'t':None, 'x':self.nx}, self.variables[name]['name'], var, recno={'t':0})
+        var_name = self.variables[name].name
+        assert isinstance(var_name, str)
+        nc_write_var(fname, {'t':None, 'x':self.nx}, var_name, var, recno={'t':0})
 
     def z_coords(self, **kwargs):
         return np.zeros(self.nx)

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import netCDF4
 from NEDAS.utils.conversion import dt1h
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class ArgoObs(Dataset):
     ONEM: float
@@ -19,9 +20,9 @@ class ArgoObs(Dataset):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.variables = {
-            'ocean_temp':{'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
-            'ocean_saln':{'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'psu'},
-            }
+            'ocean_temp': VarDesc(name='TEMP', dtype='float', is_vector=False, dt=24, levels=np.array([]), z_units='m', units='K'),
+            'ocean_saln': VarDesc(name='SALN', dtype='float', is_vector=False, dt=24, levels=np.array([]), z_units='m', units='psu'),
+        }
         self.obs_operator = {}
 
     def filename(self, **kwargs):

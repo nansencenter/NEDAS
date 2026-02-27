@@ -4,9 +4,10 @@ from pyproj import Proj
 from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
+from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 # from .namelist import namelist
 # from .bin_io import read_
-from NEDAS.core import Model
 
 class WRFModel(Model[RegularGrid]):
     map_proj: str
@@ -23,6 +24,8 @@ class WRFModel(Model[RegularGrid]):
     model_code_dir: str
     nproc_per_run: int
     walltime: int
+    z_units: str
+    restart_dt: float
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -34,11 +37,11 @@ class WRFModel(Model[RegularGrid]):
         levels = np.arange(1, self.e_vert[0]+1, 1)  ##use domain 1 setting for z levels
         level_sfc = np.array([0])
         self.variables = {
-            'atmos_velocity': {'name':('u_1', 'v_1'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-            'atmos_surf_velocity': {'name':('U10', 'V10'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_temp': {'name':'T', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-            'atmos_pres': {'name':'P', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-            'atmos_q_vapor': {'name':'QVAPOR', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'kg/kg'},
+            'atmos_velocity': VarDesc(name=('u_1', 'v_1'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'atmos_surf_velocity': VarDesc(name=('U10', 'V10'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_temp': VarDesc(name='T', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='K', z_units=self.z_units),
+            'atmos_pres': VarDesc(name='P', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'atmos_q_vapor': VarDesc(name='QVAPOR', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='kg/kg', z_units=self.z_units),
             }
 
         self.read_grid()

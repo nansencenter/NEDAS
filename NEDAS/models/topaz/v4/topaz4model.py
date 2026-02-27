@@ -7,6 +7,7 @@ from NEDAS.utils.conversion import units_convert, dt1h
 from NEDAS.utils.shell_utils import run_job
 from NEDAS.grid import RegularGrid
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from ..abfile import ABFileRestart, ABFileBathy
 from ..model_grid import get_topaz_grid
 from .namelist import namelist
@@ -19,6 +20,8 @@ class Topaz4Model(Model[RegularGrid]):
     V: str
     X: str
     onem: float
+    z_units: str
+    restart_dt: int
     ens_init_dir: str
     forcing_frc: str
     era5_path: str
@@ -33,21 +36,19 @@ class Topaz4Model(Model[RegularGrid]):
         super().__init__(config_file, parse_args, **kwargs)
 
         levels = np.arange(1, 51, 1)
-        level_sfc = np.array([0])
+        levels_sfc = np.array([0])
         self.variables = {
-            'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-            'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-            'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
-            'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
-            'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
-            'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-            'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-            }
+            'ocean_velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick': VarDesc(name='dp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='K', z_units=self.z_units),
+            'ocean_saln': VarDesc(name='saln', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_surf_height': VarDesc(name='msshb', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_temp': VarDesc(name='sstb', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='K', z_units=self.z_units),
+            'ocean_b_velocity':  VarDesc(name=('ubavg', 'vbavg'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels_sfc, units='m/s', z_units=self.z_units),
+            'ocean_b_press': VarDesc(name='pbavg', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='Pa', z_units=self.z_units),
+            'ocean_mixl_depth': VarDesc(name='dpmixl', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='Pa', z_units=self.z_units),
+        }
 
-        self.z_units = 'm'
-        
         ##model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
@@ -79,7 +80,7 @@ class Topaz4Model(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
         if rec['is_vector']:
@@ -97,7 +98,7 @@ class Topaz4Model(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         ##open the restart file for over-writing
         ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
@@ -135,7 +136,7 @@ class Topaz4Model(Model[RegularGrid]):
         else:
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick']['units']
+            rec['units'] = self.variables['ocean_layer_thick'].units
             if self.z_units == 'm':
                 dz = - self.read_var(**rec) / self.onem
             elif self.z_units == 'Pa':

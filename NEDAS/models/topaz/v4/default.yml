@@ -7,6 +7,8 @@ T: '01'
 R: 'TP4b0.12'
 basedir: /cluster/work/users/yingyue/TP4b0.12
 nproc: 256
+z_units: 'm'
+restart_dt: 168
 
 era5_path: /cluster/projects/nn2993k/ERA5
 

@@ -6,8 +6,8 @@ import pyproj
 import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
-from NEDAS.utils.random_perturb import random_field_gaussian
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 from .rtm_amsr_fcts import simulated_tb_v03
 
 class AMSR2Obs(Dataset):
@@ -28,17 +28,17 @@ class AMSR2Obs(Dataset):
         self.channels = ['tb19v', 'tb19h', 'tb37v', 'tb37h']  ##need to be the same order as listed in self.coefficients_file
 
         self.variables = {
-            'dal': {'name': 'dal_SICCI3LF_corrSICCI3LF', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 100},
-            'eia': {'name': 'eia', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'deg'},
-            'sic': {'name': 'ct_SICCI3LF_corrSICCI3LF', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 100},
-            'owf': {'name': 'owf_SICCI3LF_corrSICCI3LF', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 1},
-            'wind_speed': {'name': 'wind_speed@tb37', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'm/s'},
-            'water_vapor': {'name': 'tcwv@tb37', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'g/kg'},
-            'liquid_water': {'name': 'tclw@tb37', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'g/kg'},
-            'air_temp': {'name': 'air_temp@tb37', 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'K'},
+            'dal': VarDesc(name='dal_SICCI3LF_corrSICCI3LF', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units=100),
+            'eia': VarDesc(name='eia', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units='deg'),
+            'sic': VarDesc(name='ct_SICCI3LF_corrSICCI3LF', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units=100),
+            'owf': VarDesc(name='owf_SICCI3LF_corrSICCI3LF', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units=1),
+            'wind_speed': VarDesc(name='wind_speed@tb37', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units='m/s'),
+            'water_vapor': VarDesc(name='tcwv@tb37', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units='g/kg'),
+            'liquid_water': VarDesc(name='tclw@tb37', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units='g/kg'),
+            'air_temp': VarDesc(name='air_temp@tb37', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units='K'),
         }
         for ch in self.channels:
-            self.variables[ch] = {'name': ch, 'dtype': 'float', 'is_vector': False, 'z_units': 'm', 'units': 'K'}
+            self.variables[ch] = VarDesc(name=ch, dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='K')
 
         ##obs is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
@@ -92,10 +92,11 @@ class AMSR2Obs(Dataset):
         kwargs = super().parse_kwargs(**kwargs)
         time = kwargs['time']
         obs_name = kwargs['name']
-        native_name = self.variables[obs_name]['name']
-        native_units = self.variables[obs_name]['units']
+        native_name = self.variables[obs_name].name
+        assert isinstance(native_name, str)
+        native_units = self.variables[obs_name].units
 
-        is_vector = self.variables[obs_name]['is_vector']
+        is_vector = self.variables[obs_name].is_vector
 
         obs_err_std = self.obs_err_std
         if 'err' in kwargs:

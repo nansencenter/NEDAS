@@ -7,6 +7,7 @@ from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.shell_utils import run_job, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from . import restart, forcing, namelist, dgLimit
 
 class NextsimDGModel(Model[RegularGrid]):
@@ -34,30 +35,34 @@ class NextsimDGModel(Model[RegularGrid]):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.native_variables = {
-             'seaice_conc_dg': {'name':'data/cice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':1},
-             'seaice_thick_dg': {'name':'data/hice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':np.arange(self.dg_comp), 'units':'m'},
-             'seaice_damage': {'name':'data/damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
-             'snow_thick': {'name':'data/hsnow', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
-             'seaice_temp_k': {'name':'data/tice', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0,1,2], 'units':'K'},
-             'seaice_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
+             'seaice_conc_dg': VarDesc(name='data/cice', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.arange(self.dg_comp), units=1, z_units='m'),
+             'seaice_thick_dg': VarDesc(name='data/hice', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.arange(self.dg_comp), units='m', z_units='m'),
+             'seaice_damage': VarDesc(name='data/damage', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units=1, z_units='m'),
+             'snow_thick': VarDesc(name='data/hsnow', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='m', z_units='m'),
+             'seaice_temp_k': VarDesc(name='data/tice', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0,1,2]), units='K', z_units='m'),
+             'seaice_velocity': VarDesc(name=('data/u', 'data/v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=np.array([0]), units='m/s', z_units='m'),
              }
         self.diag_variables = {
-             'seaice_conc': {'name':'data/sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1},
-             'seaice_thick': {'name':'data/sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m'},
+             'seaice_conc': VarDesc(name='data/sic', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units=1, z_units='m'),
+             'seaice_thick': VarDesc(name='data/sit', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='m', z_units='m'),
              }
+        self.operator = {
+            'seaice_conc': self.get_seaice_conc,
+            'seaice_thick': self.get_seaice_thick,
+        }
         self.atmos_forcing_variables = {
-            'atmos_surf_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
-            'atmos_surf_press': {'name':'data/pair', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
-            'atmos_surf_temp': {'name':'data/tair', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'C'},
-            'atmos_surf_dewpoint': {'name':'data/dew2m', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'C'},
-            'atmos_down_shortwave': {'name':'data/sw_in', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'W/m2'},
-            'atmos_down_longwave': {'name':'data/lw_in', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'W/m2'},
+            'atmos_surf_velocity': VarDesc(name=('data/u', 'data/v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=np.array([0]), units='m/s', z_units='m'),
+            'atmos_surf_press': VarDesc(name='data/pair', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='Pa', z_units='m'),
+            'atmos_surf_temp': VarDesc(name='data/tair', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='C', z_units='m'),
+            'atmos_surf_dewpoint': VarDesc(name='data/dew2m', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='C', z_units='m'),
+            'atmos_down_shortwave': VarDesc(name='data/sw_in', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='W/m2', z_units='m'),
+            'atmos_down_longwave': VarDesc(name='data/lw_in', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='W/m2', z_units='m'),
         }
         self.ocean_forcing_variables = {
-            'ocean_surf_velocity': {'name':('data/u', 'data/v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s'},
-            'ocean_surf_temp': {'name':'data/sst', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
-            'ocean_surf_salinity': {'name':'data/sss', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
-            'ocean_mixl_depth': {'name':'data/mld', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'Pa'},
+            'ocean_surf_velocity': VarDesc(name=('data/u', 'data/v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=np.array([0]), units='m/s', z_units='m'),
+            'ocean_surf_temp': VarDesc(name='data/sst', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='Pa', z_units='m'),
+            'ocean_surf_salinity': VarDesc(name='data/sss', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='Pa', z_units='m'),
+            'ocean_mixl_depth': VarDesc(name='data/mld', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='Pa', z_units='m'),
         }
         self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables, **self.ocean_forcing_variables}
 
@@ -119,7 +124,7 @@ class NextsimDGModel(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         if name in self.native_variables:
             if rec['is_vector']:
@@ -139,8 +144,13 @@ class NextsimDGModel(Model[RegularGrid]):
                     var = nc_read_var(fname, rec['name'])
 
         elif name in self.diag_variables:
-            var = rec['operator'](**kwargs)
-            np.save(fname, var)
+            ## if the npy file exists, one could just read it to get the variable.
+            ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
+            if not os.path.exists(fname):
+                var = self.operator[name](**kwargs)
+                np.save(fname, var)
+            else:
+                var = np.load(fname)
 
         else:
             if name in self.atmos_forcing_variables:
@@ -169,7 +179,7 @@ class NextsimDGModel(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         var = units_convert(kwargs['units'], rec['units'], var)
 

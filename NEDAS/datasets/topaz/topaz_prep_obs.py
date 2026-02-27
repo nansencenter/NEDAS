@@ -4,6 +4,7 @@ import numpy as np
 from NEDAS.utils.conversion import dt1h
 from NEDAS.models.topaz.time_format import datetojul
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 from .uf_data import read_uf_data
 
 class TopazPrepObs(Dataset):
@@ -14,18 +15,18 @@ class TopazPrepObs(Dataset):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.variables = {
-            'ocean_temp': {'name':'TEM', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'C'},
-            'ocean_saln': {'name':'SAL', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'psu'},
-            'ocean_surf_temp': {'name':'SST', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'C'},
-            'ocean_surf_height_anomaly': {'name':'TSLA', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
-            'seaice_conc': {'name':'ICEC', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1},
-            'seaice_thick': {'name':'HICE', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
-            'seaice_drift': {'name':'IDRFT', 'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km'},
-            }
+            'ocean_temp': VarDesc(name='TEM', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='C'),
+            'ocean_saln': VarDesc(name='SAL', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='psu'),
+            'ocean_surf_temp': VarDesc(name='SST', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='C'),
+            'ocean_surf_height_anomaly': VarDesc(name='TSLA', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='m'),
+            'seaice_conc': VarDesc(name='ICEC', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units=1),
+            'seaice_thick': VarDesc(name='HICE', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='m'),
+            'seaice_drift': VarDesc(name='IDRFT', dtype='float', is_vector=True, dt=168, levels=np.array([0]), z_units='m', units='km'),
+        }
 
         self.obs_operator = {
             'seaice_drift': self.get_seaice_drift,
-            }
+        }
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -33,7 +34,8 @@ class TopazPrepObs(Dataset):
         time = kwargs['time']
         path = kwargs['path']
 
-        vname = self.variables[name]['name']
+        vname = self.variables[name].name
+        assert isinstance(vname, str)
         dirname = vname
         native_name = vname
         if name == 'seaice_drift':
@@ -65,7 +67,7 @@ class TopazPrepObs(Dataset):
                 print("WARNING: topaz.dataset: model.z levels are not provided, setting vthin to False")
                 self.vthin = False
 
-        is_vector = self.variables[name]['is_vector']
+        is_vector = self.variables[name].is_vector
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[],
                    'ipiv':[], 'jpiv':[], 'ns':[], 'in_coords':[], 'stat':[], 'i_orig_grid':[], 'j_orig_grid':[], 'h':[], 'date':[]}
 

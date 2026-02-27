@@ -6,6 +6,8 @@ import pyproj
 from scipy.spatial import KDTree
 from NEDAS.grid import IrregularGrid
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
+
 from .utils import get_data_traj_pairs, get_triangulation, get_velocity, get_velocity_gradients, get_deform_div, get_deform_shear, get_deform_vort
 
 class RgpsObs(Dataset):
@@ -22,11 +24,11 @@ class RgpsObs(Dataset):
 
         ##variable dictionary for RGPS naming convention
         self.variables = {
-            'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km/day'},
-            'seaice_deform_shear': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'1/day'},
-            'seaice_deform_div': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'1/day'},
-            'seaice_deform_vort': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'1/day'},
-            }
+            'seaice_drift': VarDesc(name='null', dtype='float', is_vector=True, dt=24, levels=np.array([0]), z_units='m', units='km/day'),
+            'seaice_deform_shear': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='1/day'),
+            'seaice_deform_div': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='1/day'),
+            'seaice_deform_vort': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='1/day'),
+        }
 
         ##RGPS trajectory data (x,y) is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
@@ -164,7 +166,7 @@ class RgpsObs(Dataset):
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
             obs_seq_arr[key] = np.array(obs_seq[key])
 
-        if self.variables[obs_name]['is_vector']:
+        if self.variables[obs_name].is_vector:
             obs_seq_arr['obs'] = obs_seq_arr['obs'].T
 
         ##superob to target grid, coarsen and keep the valid grid points
@@ -179,9 +181,9 @@ class RgpsObs(Dataset):
         obs_grid = IrregularGrid(grid.proj, obs_x, obs_y, triangles=obs_grid.tri.triangles[~msk,:])
         ##convert to target grid with coarse graining (superobing)
         obs_grid.set_destination_grid(grid)
-        obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name]['is_vector'], coarse_grain=True)
+        obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name].is_vector, coarse_grain=True)
         ##overwrite the obs info with superobs
-        if self.variables[obs_name]['is_vector']:
+        if self.variables[obs_name].is_vector:
             msk = np.isnan(obs_on_grid[0,...])
             obs_seq_arr['obs'] = np.array([obs_on_grid[0,~msk].flatten(), obs_on_grid[1,~msk].flatten()])
         else:
@@ -289,7 +291,7 @@ class RgpsObs(Dataset):
         xo, yo, tri, r, i = kwargs['x'], kwargs['y'], kwargs['triangles'], kwargs['record'], kwargs['index']
         nobs = xo.size
 
-        if self.variables[obs_name]['is_vector']:
+        if self.variables[obs_name].is_vector:
             obs_seq = np.full((2, nobs), np.nan)
         else:
             obs_seq = np.full(nobs, np.nan)
@@ -300,7 +302,7 @@ class RgpsObs(Dataset):
             ind = i[rind]            ##indices in x0 that forms the record rec part of xo
             obs_value = compute_func(x0, y0, t0, x1, y1, t1)
 
-            if self.variables[obs_name]['is_vector']:
+            if self.variables[obs_name].is_vector:
                 obs_seq[:, rind] = obs_value[:, ind]
             else:
                 obs_seq[rind] = obs_value[ind]

@@ -1,23 +1,25 @@
 import numpy as np
 from NEDAS.models.vort2d import Vort2DModel
 from NEDAS.datasets.synthetic import SyntheticObs
+from NEDAS.core.types import VarDesc
 
 class Vort2DObs(SyntheticObs):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
+        restart_dt = 6
         self.variables = {
-            'velocity': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'m/s'},
-            'vortex_position': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'m'},
-            'vortex_intensity': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m/s'},
-            'vortex_size':  {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
-            }
+            'velocity': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='m', units='m/s'),
+            'vortex_position': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='m', units='m'),
+            'vortex_intensity': VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='m', units='m/s'),
+            'vortex_size':  VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='m', units='m'),
+        }
 
         self.obs_operator = {
             'vortex_position': self.get_vortex_position,
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
-            }
+        }
 
     def random_network(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

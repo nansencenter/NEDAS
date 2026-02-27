@@ -11,6 +11,7 @@ from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
 from NEDAS.grid import RegularGrid
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
@@ -23,6 +24,7 @@ class Topaz5Model(Model[RegularGrid]):
     """
     TOPAZ5 model class.
     """
+    io_mode = 'offline'
     nhc_root: str
     basedir: str
     model_env: Optional[str]
@@ -76,68 +78,76 @@ class Topaz5Model(Model[RegularGrid]):
         level_ncat = np.arange(5)   ##some ice variables have 5 categories, treating them as levels also indexed by k
 
         self.restart_variables = {
-            'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'Pa'},
-            'ocean_temp':        {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'C'},
-            'ocean_saln':        {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'psu'},
-            'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'ocean_b_press':     {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_mixl_depth':  {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_bot_press':   {'name':'pbot', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
-            'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
-            }
+            'ocean_velocity':    VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick': VarDesc(name='dp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp':        VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='C', z_units=self.z_units),
+            'ocean_saln':        VarDesc(name='saln', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_b_velocity':  VarDesc(name=('ubavg', 'vbavg'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'ocean_b_press':     VarDesc(name='pbavg', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_mixl_depth':  VarDesc(name='dpmixl', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_bot_press':   VarDesc(name='pbot', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_bot_dense':   VarDesc(name='thkk', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='?', z_units=self.z_units),
+            'ocean_bot_montg_pot': VarDesc(name='psikk', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='?', z_units=self.z_units),
+        }
 
         self.archive_variables = {
-            'ocean_velocity_daily': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick_daily': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'Pa'},
-            'ocean_temp_daily': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'C'},
-            'ocean_saln_daily': {'name':'salin', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
-            'ocean_mixl_depth_daily': {'name':'mix_dpth', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'?'},
-            'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_velocity_daily': VarDesc(name=('u-vel.', 'v-vel.'), dtype='float', is_vector=True, dt=self.output_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick_daily': VarDesc(name='thknss', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp_daily': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='C', z_units=self.z_units),
+            'ocean_saln_daily': VarDesc(name='salin', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_mixl_depth_daily': VarDesc(name='mix_dpth', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_dense_daily': VarDesc(name='dense', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='?', z_units=self.z_units),
+            'ocean_surf_height_daily': VarDesc(name='srfhgt', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
             }
 
         self.iced_variables = {
-            'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':1},
-            'seaice_volume_ncat':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
-            'snow_volume_ncat':  {'name':'vsnon', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
-            'seaice_age_ncat': {'name':'iage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'days'},
+            'seaice_velocity': VarDesc(name=('uvel', 'vvel'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'seaice_conc_ncat':   VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units=1, z_units=self.z_units),
+            'seaice_volume_ncat':  VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='m', z_units=self.z_units),
+            'snow_volume_ncat':  VarDesc(name='vsnon', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='m', z_units=self.z_units),
+            'seaice_age_ncat': VarDesc(name='iage', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='days', z_units=self.z_units),
             }
 
         self.iceh_variables = {
-            'seaice_velocity_daily': {'name':('uvel_d', 'vvel_d'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick_daily': {'name':'hi_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            'seaice_surf_temp_daily': {'name':'Tsfc_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'psu'},
-            'snow_thick_daily': {'name':'hs_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            'seaice_age_daily': {'name':'iage_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'days'},
+            'seaice_velocity_daily': VarDesc(name=('uvel_d', 'vvel_d'), dtype='float', is_vector=True, dt=self.output_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'seaice_conc_daily': VarDesc(name='aice_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units=1, z_units=self.z_units),
+            'seaice_thick_daily': VarDesc(name='hi_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'seaice_surf_temp_daily': VarDesc(name='Tsfc_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'seaice_saln_daily': VarDesc(name='sice_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='psu', z_units=self.z_units),
+            'snow_thick_daily': VarDesc(name='hs_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'seaice_age_daily': VarDesc(name='iage_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='days', z_units=self.z_units),
             }
 
         self.atmos_forcing_variables = {
-            'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'dtype':'float', 'is_vector':True, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_surf_temp':     {'name':'airtmp', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'C'},
-            'atmos_surf_dewpoint': {'name':'dewpt', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'K'},
-            'atmos_surf_press':    {'name':'mslprs', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'Pa'},
-            'atmos_precip':        {'name':'precip', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_down_longwave': {'name':'radflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
-            'atmos_down_shortwave': {'name':'shwflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
-            'atmos_surf_vapor_mix': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
-            'atmos_column_vapor': {'name':'tcwv', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/m2'},
-            'atmos_column_liquid': {'name':'tclw', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/m2'},
+            'atmos_surf_velocity': VarDesc(name=('wndewd', 'wndnwd'), dtype='float', is_vector=True, dt=self.forcing_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_surf_temp':     VarDesc(name='airtmp', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'atmos_surf_dewpoint': VarDesc(name='dewpt', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='K', z_units=self.z_units),
+            'atmos_surf_press':    VarDesc(name='mslprs', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'atmos_precip':        VarDesc(name='precip', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_down_longwave': VarDesc(name='radflx', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='W/m2', z_units=self.z_units),
+            'atmos_down_shortwave': VarDesc(name='shwflx', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='W/m2', z_units=self.z_units),
+            'atmos_surf_vapor_mix': VarDesc(name='vapmix', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/kg', z_units=self.z_units),
+            'atmos_column_vapor': VarDesc(name='tcwv', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/m2', z_units=self.z_units),
+            'atmos_column_liquid': VarDesc(name='tclw', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/m2', z_units=self.z_units),
             }
-        self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
+        self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r.name if isinstance(r.name, tuple) else [r.name])]
 
         self.diag_variables = {
-            'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_height': VarDesc(name='ssh', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_height_anomaly': VarDesc(name='sla', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_temp': VarDesc(name='sst', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'seaice_conc': VarDesc(name='sic', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units),
+            'seaice_thick': VarDesc(name='sit', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'snow_thick': VarDesc(name='snwt', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
             }
+        self.operator = {
+            'ocean_surf_height': self.get_ocean_surf_height,
+            'ocean_surf_height_anomaly': self.get_ocean_surf_height_anomaly,
+            'ocean_surf_temp': self.get_ocean_surf_temp,
+            'seaice_conc': self.get_seaice_conc, 
+            'seaice_thick': self.get_seaice_thick, 
+            'snow_thick': self.get_snow_thick,
+        }
 
         self.variables = {**self.restart_variables,
                           **self.iced_variables,
@@ -227,7 +237,7 @@ class Topaz5Model(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         ##get the variable from restart files
         if name in self.restart_variables:
@@ -284,7 +294,7 @@ class Topaz5Model(Model[RegularGrid]):
             ## if the npy file exists, one could just read it to get the variable.
             ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
             if not os.path.exists(fname):
-                var = rec['operator'](**kwargs)
+                var = self.operator[name](**kwargs)
                 np.save(fname, var)
             else:
                 var = np.load(fname)
@@ -312,7 +322,7 @@ class Topaz5Model(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         ##convert back to old units
         var = units_convert(kwargs['units'], rec['units'], var)
@@ -400,7 +410,7 @@ class Topaz5Model(Model[RegularGrid]):
             ##get layer thickness and convert to units
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+            rec['units'] = self.variables['ocean_layer_thick'].units ##should be Pa
             if self.z_units == 'm':
                 dz = - self.read_var(**rec) / self.ONEM ##in meters, negative relative to surface
             elif self.z_units == 'Pa':
@@ -427,7 +437,7 @@ class Topaz5Model(Model[RegularGrid]):
 
         ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  ##valid points to calculate ssh on
 
-        levels = list(self.variables['ocean_layer_thick']['levels'])
+        levels = list(self.variables['ocean_layer_thick'].levels)
         idm, jdm, kdm = self.grid.nx, self.grid.ny, len(levels)
         pres = np.zeros((kdm+1, jdm, idm))     # cumulative pressure
         thstar = np.zeros((kdm, jdm, idm))
@@ -486,13 +496,13 @@ class Topaz5Model(Model[RegularGrid]):
         ##try to read it from iced file
         try:
             rec['name'] = 'seaice_conc_ncat'  ##can use iceh or iced files
-            rec['units'] = self.variables[rec['name']]['units']
-            for k in range(len(self.variables[rec['name']]['levels'])):
+            rec['units'] = self.variables[rec['name']].units
+            for k in range(len(self.variables[rec['name']].levels)):
                 seaice_conc += self.read_var(**{**rec, 'k':k})
         except FileNotFoundError:
             ##if failed, try to read from iceh file
             rec['name'] = 'seaice_conc_daily'
-            rec['units'] = self.variables[rec['name']]['units']
+            rec['units'] = self.variables[rec['name']].units
             seaice_conc = self.read_var(**rec)
         
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
@@ -510,8 +520,8 @@ class Topaz5Model(Model[RegularGrid]):
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         rec['name'] = 'seaice_volume_ncat'
-        rec['units'] = self.variables[rec['name']]['units']
-        for k in range(len(self.variables[rec['name']]['levels'])):
+        rec['units'] = self.variables[rec['name']].units
+        for k in range(len(self.variables[rec['name']].levels)):
             seaice_volume += self.read_var(**{**rec, 'k':k})
         
         seaice_thick = np.zeros(self.grid.x.shape)
@@ -532,8 +542,8 @@ class Topaz5Model(Model[RegularGrid]):
         snow_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         rec['name'] = 'snow_volume_ncat'
-        rec['units'] = self.variables['snow_volume_ncat']['units']
-        for k in range(len(self.variables['snow_volume_ncat']['levels'])):
+        rec['units'] = self.variables['snow_volume_ncat'].units
+        for k in range(len(self.variables['snow_volume_ncat'].levels)):
             snow_volume += self.read_var(**{**rec, 'k':k})
         
         snow_thick = np.zeros(self.grid.x.shape)
@@ -716,8 +726,8 @@ class Topaz5Model(Model[RegularGrid]):
         ##adjust ocean layer thickness dp
         rec = kwargs.copy()
         rec['name'] = 'ocean_layer_thick'
-        rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
-        levels = list(self.variables['ocean_layer_thick']['levels'])
+        rec['units'] = self.variables['ocean_layer_thick'].units ##should be Pa
+        levels = list(self.variables['ocean_layer_thick'].levels)
         dp = np.zeros((len(levels), self.grid.ny, self.grid.nx))
         for ilev, k in enumerate(levels):
             dp[ilev, ...] = self.read_var(**{**rec, 'k':k})

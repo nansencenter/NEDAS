@@ -3,6 +3,22 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import numpy as np
 
+# variable description for dataset and model classes
+VarName = Annotated[str, 'variable name']
+
+@dataclass
+class VarDesc:
+    name: str | tuple[str, str]   # scalar or vector with two components
+    dtype: str
+    is_vector: bool
+    dt: float
+    levels: np.ndarray
+    units: str | float
+    z_units: str | float
+
+    def asdict(self) -> dict:
+        return asdict(self)
+
 @dataclass
 class FieldRecord:
     """

@@ -5,6 +5,7 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from .util import initial_condition, advance_time
 
 class Vort2DModel(Model[RegularGrid]):
@@ -20,7 +21,6 @@ class Vort2DModel(Model[RegularGrid]):
     loc_sprd: int
     gen: float
     diss: float
-    truth_dir: str
     memory: dict = {}
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
@@ -34,7 +34,9 @@ class Vort2DModel(Model[RegularGrid]):
         self.grid.mask = np.full(self.grid.x.shape, False)  ##no mask
 
         levels = np.array([0])  ##there is no vertical levels
-        self.variables = {'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'restart_dt':self.restart_dt, 'levels':levels, 'units':'m/s'}, }
+        self.variables = {
+            'velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units='m'),
+        }
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -78,7 +80,7 @@ class Vort2DModel(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
 
-        rec = self.variables[kwargs['name']]
+        rec = self.variables[kwargs['name']].asdict()
         comm = kwargs['comm']
         if rec['is_vector']:
             u = nc_read_var(fname, rec['name'][0], comm=comm)[0, ...]
@@ -110,7 +112,7 @@ class Vort2DModel(Model[RegularGrid]):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
 
-        rec = self.variables[kwargs['name']]
+        rec = self.variables[kwargs['name']].asdict()
         comm = kwargs['comm']
         if rec['is_vector']:
             for i in range(2):

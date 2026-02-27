@@ -6,6 +6,7 @@ import netCDF4
 import pyproj
 from NEDAS.grid import Grid
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class OsisafSeaIceConcObs(Dataset):
     source: str
@@ -22,7 +23,7 @@ class OsisafSeaIceConcObs(Dataset):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1}, }
+        self.variables = {'seaice_conc': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=1), }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))

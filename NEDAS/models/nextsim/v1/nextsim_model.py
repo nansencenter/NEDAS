@@ -8,6 +8,7 @@ from NEDAS.utils.shell_utils import run_command, makedir, run_job
 from NEDAS.utils.progress import watch_files
 from NEDAS.grid import Grid, IrregularGrid
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from .gmshlib import read_mshfile, proj
 from .bin_io import read_data, write_data
 from .drift_utils import get_deformation_nodes
@@ -36,35 +37,36 @@ class NextsimModel(Model):
 
         ##Note: we only work with restart files, normal nextsim binfile have some variables names that
         ##are different from restart files, e.g. Concentration instead of M_conc
+        levels = np.array([0])
         self.native_variables = {
-            'seaice_conc': {'name':'M_conc', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'seaice_thick': {'name':'M_thick', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
-            'seaice_velocity': {'name':'M_VT', 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'m/s' },
-            'seaice_damage': {'name':'M_damage', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'seaice_ridge_ratio': {'name':'M_ridge_ratio', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'seaice_conc_young': {'name':'M_conc_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'seaice_thick_young': {'name':'M_h_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
-            'seaice_age': {'name':'M_age', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'year' },
-            'seaice_conc_myi': {'name':'M_conc_myi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'seaice_thick_myi': {'name':'M_thick_myi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':1 },
-            'snow_thick': {'name':'M_snow_thick', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
-            'snow_thick_young': {'name':'M_hs_young', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'m' },
+            'seaice_conc': VarDesc(name='M_conc', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'seaice_thick': VarDesc(name='M_thick', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='m', z_units='m'),
+            'seaice_velocity': VarDesc(name='M_VT', dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units='m'),
+            'seaice_damage': VarDesc(name='M_damage', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'seaice_ridge_ratio': VarDesc(name='M_ridge_ratio', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'seaice_conc_young': VarDesc(name='M_conc_young', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'seaice_thick_young': VarDesc(name='M_h_young', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='m', z_units='m'),
+            'seaice_age': VarDesc(name='M_age', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='year', z_units='m'),
+            'seaice_conc_myi': VarDesc(name='M_conc_myi', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'seaice_thick_myi': VarDesc(name='M_thick_myi', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
+            'snow_thick': VarDesc(name='M_snow_thick', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='m', z_units='m'),
+            'snow_thick_young': VarDesc(name='M_hs_young', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='m', z_units='m'),
             }
         self.diag_variables = {
-            'seaice_drift': {'name':'drift', 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':[0], 'units':'km/day' },
-            'seaice_deform_div': {'name':'deform_e1', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
-            'seaice_deform_shear': {'name':'deform_e2', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
-            'seaice_deform_vort': {'name':'deform_e3', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':[0], 'units':'1/day' },
+            'seaice_drift': VarDesc(name='drift', dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='km/day', z_units='m'),
+            'seaice_deform_div': VarDesc(name='deform_e1', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='1/day', z_units='m'),
+            'seaice_deform_shear': VarDesc(name='deform_e2', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='1/day', z_units='m'),
+            'seaice_deform_vort': VarDesc(name='deform_e3', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='1/day', z_units='m'),
             }
         self.atmos_forcing_variables = {
-            'atmos_surf_velocity': {'name':('x_wind_10m', 'y_wind_10m'), 'is_vector':True, 'dt':self.forcing_dt, 'levels':[0], 'units':'m/s'},
-            'atmos_surf_temp': {'name':'air_temperature_2m', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'K'},
-            'atmos_surf_dew_temp': {'name':'dew_point_temperature_2m', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'K'},
-            'atmos_surf_press': {'name':'atm_pressure', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'Pa'},
-            'atmos_precip': {'name':'total_precipitation_rate', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'kg/m2/s'},
-            'atmos_snowfall': {'name':'snowfall_rate', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'kg/m2/s'},
-            'atmos_down_shortwave': {'name':'instantaneous_downwelling_shortwave_radiation', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'W/m2'},
-            'atmos_down_longwave': {'name':'instantaneous_downwelling_longwave_radiation', 'is_vector':False, 'dt':self.forcing_dt, 'levels':[0], 'units':'W/m2'},
+            'atmos_surf_velocity': VarDesc(name=('x_wind_10m', 'y_wind_10m'), dtype='float', is_vector=True, dt=self.forcing_dt, levels=levels, units='m/s', z_units='m'),
+            'atmos_surf_temp': VarDesc(name='air_temperature_2m', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='K', z_units='m'),
+            'atmos_surf_dew_temp': VarDesc(name='dew_point_temperature_2m', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='K', z_units='m'),
+            'atmos_surf_press': VarDesc(name='atm_pressure', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='Pa', z_units='m'),
+            'atmos_precip': VarDesc(name='total_precipitation_rate', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='kg/m2/s', z_units='m'),
+            'atmos_snowfall': VarDesc(name='snowfall_rate', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='kg/m2/s', z_units='m'),
+            'atmos_down_shortwave': VarDesc(name='instantaneous_downwelling_shortwave_radiation', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='W/m2', z_units='m'),
+            'atmos_down_longwave': VarDesc(name='instantaneous_downwelling_longwave_radiation', dtype='float', is_vector=False, dt=self.forcing_dt, levels=levels, units='W/m2', z_units='m'),
             }
         self.variables = {**self.native_variables, **self.diag_variables, **self.atmos_forcing_variables}
 
@@ -226,7 +228,7 @@ class NextsimModel(Model):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         ##always update model.grid with given kwargs:
         ##this is a nextsim specific requirement: mesh is changing in time
@@ -262,7 +264,7 @@ class NextsimModel(Model):
         kwargs = super().parse_kwargs(**kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         ##convert units back if necessary
         var = units_convert(kwargs['units'], rec['units'], var)

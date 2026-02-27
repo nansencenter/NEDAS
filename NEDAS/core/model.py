@@ -1,33 +1,29 @@
 import os
 import inspect
-from typing import Literal, Generic, TypeVar, Annotated
+from typing import Literal, Generic, TypeVar, Annotated, Optional
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
+from .types import VarName, VarDesc
 
 GridT = TypeVar("GridT", bound=GridType)
-# VarName = Annotated['str', 'variable name']
-
-# @dataclass
-# class VarDesc:
-#     name: str | tuple[str, str]
 
 class Model(Generic[GridT], ABC):
     """
     Class for configuring and running a model
     """
     io_mode: Literal['online', 'offline']
-    variables: dict #[VarName, VarDesc]
+    variables: dict[VarName, VarDesc]
     grid: GridT
-    z_untis: str
-    z = None
+    z: np.ndarray
     mask: np.ndarray
+    truth_dir: Optional[str]
     run_process = None
     run_status = 'pending'
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
+    def __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
         ##parse config file and obtain a list of attributes
         ##get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -35,7 +31,7 @@ class Model(Generic[GridT], ABC):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
-    def parse_kwargs(self, **kwargs):
+    def parse_kwargs(self, **kwargs) -> dict:
         ##args that pinpoints a certain model state variable
         if 'path' not in kwargs:
             kwargs['path'] = '.'  ##default path is current dir
@@ -54,13 +50,13 @@ class Model(Generic[GridT], ABC):
         if kwargs['time'] is not None:
             assert isinstance(kwargs['time'], datetime), "kwargs 'time' is expected to be a datetime object'"
 
-        levels = list(self.variables[kwargs['name']]['levels'])
+        levels = list(self.variables[kwargs['name']].levels)
         if 'k' not in kwargs:
             kwargs['k'] = levels[0]  ##set to the first level if not specified
         assert kwargs['k'] in levels, f"level {kwargs['k']} is not available for variable {kwargs['name']}"
 
         if 'units' not in kwargs:
-            kwargs['units'] = self.variables[kwargs['name']]['units']
+            kwargs['units'] = self.variables[kwargs['name']].units
 
         for key in ['restart_dir', 'forecast_period', 'comm']:
             if key not in kwargs:

@@ -4,6 +4,7 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.grid import Grid
 from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
@@ -13,7 +14,6 @@ class QGFortranModel(Model):
     Class for configuring and running the qg model
     """
     io_mode = 'offline'
-    z_units = 1
     kmax: int
     nz: int
     restart_dt: float
@@ -36,11 +36,11 @@ class QGFortranModel(Model):
         levels = np.arange(0, self.nz, self.dz)
 
         self.variables = {
-            'velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':1},
-            'streamfunc': {'name':'psi', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
-            'vorticity': {'name':'zeta', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
-            'temperature': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':1},
-            }
+            'velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units=1, z_units=1),
+            'streamfunc': VarDesc(name='psi', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
+            'vorticity': VarDesc(name='zeta', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
+            'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
+        }
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -218,4 +218,3 @@ class QGFortranModel(Model):
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
         run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
-

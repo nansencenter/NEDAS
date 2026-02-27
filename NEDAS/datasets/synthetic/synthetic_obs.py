@@ -10,19 +10,9 @@ class SyntheticObs(Dataset):
         if 'model_src' in kwargs:
             Model = get_model_class(kwargs['model_src'])
             model = Model()
-
-            self.variables = {}
             for vname, vrec in model.variables.items():
-                self.variables[vname] = {}
-                for key in ['dtype', 'is_vector', 'units']:
-                    self.variables[vname][key] = model.variables[vname][key]
-                self.variables[vname]['z_units'] = 'm'
-
+                self.variables[vname] = model.variables[vname]
             self.grid = model.grid
-
-        else:
-            self.variables = {}
-            self.grid = None
 
     def random_network(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

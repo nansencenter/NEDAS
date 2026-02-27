@@ -4,6 +4,7 @@ import numpy as np
 from NEDAS.utils.conversion import units_convert, s2t, dt1h
 from NEDAS.grid import Grid
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 from NEDAS.datasets.ecmwf import atmos_utils
 
 from NEDAS.datasets.ecmwf.era5 import ERA5Data
@@ -14,17 +15,23 @@ class EcmwfForecastData(Dataset):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
+
+        level_sfc = np.array([0])
         self.variables = {
-            'atmos_surf_velocity': {'name':("10 metre U wind component", "10 metre V wind component"), 'is_vector':True, 'units':'m/s'},
-            'atmos_surf_temp': {'name':"2 metre temperature", 'is_vector':False, 'units':'K'},
-            'atmos_surf_dewpoint':  {'name':"2 metre dewpoint temperature", 'is_vector':False, 'units':'K'},
-            'atmos_surf_press': {'name':"Mean sea level pressure", 'is_vector':False, 'units':'Pa'},
-            'atmos_cloud_cover':  {'name':"Total cloud cover", 'is_vector':False, 'units':1},
-            'atmos_precip': {'name':"Total precipitation", 'is_vector':False, 'units':'m/s'},
-            'atmos_down_longwave': {'name':"Surface long-wave (thermal) radiation downwards", 'is_vector':False, 'units':'W/m2'},
-            'atmos_down_shortwave': {'name':"Surface short-wave (solar) radiation downwards", 'is_vector':False, 'units':'W/m2'},
-            'atmos_surf_vapor_mix': {'getter':self.get_vapmix, 'is_vector':False, 'units':'kg/kg'},
-            }
+            'atmos_surf_velocity': VarDesc(name=("10 metre U wind component", "10 metre V wind component"), dtype='float', is_vector=True, dt=self.dt_hours, z_units='Pa', units='m/s', levels=level_sfc),
+            'atmos_surf_temp': VarDesc(name="2 metre temperature", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='K', levels=level_sfc),
+            'atmos_surf_dewpoint':  VarDesc(name="2 metre dewpoint temperature", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='K', levels=level_sfc),
+            'atmos_surf_press': VarDesc(name="Mean sea level pressure", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='Pa', levels=level_sfc),
+            'atmos_cloud_cover':  VarDesc(name="Total cloud cover", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units=1, levels=level_sfc),
+            'atmos_precip': VarDesc(name="Total precipitation", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='m/s', levels=level_sfc),
+            'atmos_down_longwave': VarDesc(name="Surface long-wave (thermal) radiation downwards", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='W/m2', levels=level_sfc),
+            'atmos_down_shortwave': VarDesc(name="Surface short-wave (solar) radiation downwards", dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='W/m2', levels=level_sfc),
+            'atmos_surf_vapor_mix': VarDesc(name='vapmix', dtype='float', is_vector=False, dt=self.dt_hours, z_units='Pa', units='kg/kg', levels=level_sfc),
+        }
+        self.diag_variable_getter = {
+            'atmos_surf_vapor_mix': self.get_vapmix,
+        }
+        
         self.files = {}
         self.lookup = {}
         self.grid = None
@@ -90,12 +97,14 @@ class EcmwfForecastData(Dataset):
         k = kwargs.get('k', 0)
         member = kwargs['member']
         assert member is not None, 'please specify which member (member=?) to get'
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
-        if 'name' in rec:
+        if name in self.diag_variable_getter:
+            var = self.diag_variable_getter[name](**kwargs)
+
+        else:
             fname = self.filename(**kwargs)
             self.open_file(fname)
-
             if rec['is_vector']:
                 var1 = self.read_data_from_grb(fname, time, member, rec['name'][0], rec['units'])
                 var2 = self.read_data_from_grb(fname, time, member, rec['name'][1], rec['units'])
@@ -119,9 +128,7 @@ class EcmwfForecastData(Dataset):
                     var -= self.read_data_from_grb(fname, prev_time, member, rec['name'], rec['units'])
                     ##need to convert the fluxes to per second units
                     var /= 3600. * self.dt_hours
-                var[np.where(var<0.)] = 0. ##ensure positive definite
-        else:
-            var = rec['getter'](**kwargs)
+                var[np.where(var<0.)] = 0. ##ensure positive definite        
 
         ##convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)

@@ -6,6 +6,7 @@ import netCDF4
 import pyproj
 from NEDAS.grid import RegularGrid
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class OsisafSeaIceDriftObs(Dataset):
     proj: str
@@ -21,7 +22,7 @@ class OsisafSeaIceDriftObs(Dataset):
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
 
-        self.variables = {'seaice_drift': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'km/day'}, }
+        self.variables = {'seaice_drift': VarDesc(name='null', dtype='float', is_vector=True, dt=24, levels=np.array([0]), z_units='m', units='km/day'), }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
@@ -146,7 +147,7 @@ class OsisafSeaIceDriftObs(Dataset):
         obs_t = kwargs['t']
         model = kwargs['model']
         model.grid.set_destination_grid(grid)
-        drift_units = self.variables['seaice_drift']['units']
+        drift_units = self.variables['seaice_drift'].units
 
         ##just return model variable seaice_velocity_daily snapshot, convert to km/day units
         u = np.full(obs_x.shape, np.nan)

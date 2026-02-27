@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class Cs2SmosObs(Dataset):
     proj: str
@@ -23,10 +24,10 @@ class Cs2SmosObs(Dataset):
         super().__init__(config_file, parse_args, **kwargs)
 
         self.variables = {
-            'seaice_thick': {'name':'analysis_sea_ice_thickness', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'}, 
-            'seaice_conc': {'name':'sea_ice_concentration', 'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':100},
-            'seaice_type': {'name':'sea_ice_type', 'dtype':'int', 'is_vector':False, 'z_units':'m', 'units':1},
-            }
+            'seaice_thick': VarDesc(name='analysis_sea_ice_thickness', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='m'), 
+            'seaice_conc': VarDesc(name='sea_ice_concentration', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=100),
+            'seaice_type': VarDesc(name='sea_ice_type', dtype='int', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=1),
+        }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
@@ -100,7 +101,8 @@ class Cs2SmosObs(Dataset):
         grid = kwargs['grid']
         mask = kwargs['mask']
         name = kwargs['name']
-        native_name = self.variables[name]['name']
+        native_name = self.variables[name].name
+        assert isinstance(native_name, str)
 
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
