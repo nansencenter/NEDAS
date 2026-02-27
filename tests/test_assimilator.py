@@ -2,8 +2,8 @@ import unittest
 import importlib
 from NEDAS.config import Config
 from NEDAS.core import Context
-from NEDAS.core.io_backend import get_io_backend
-from NEDAS.core.assimilator import registry, get_assimilator
+from NEDAS.io_backends import get_io_backend
+from NEDAS.assim_tools.assimilators import registry, get_assimilator
 
 class TestAnalysisScheme(unittest.TestCase):
     def setUp(self):

@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import Any
+import os
 import numpy as np
 from .context import Context
 from .types import FieldRecord
+from .model import Model
 
 class IOBackend(ABC):
     """
@@ -13,18 +16,18 @@ class IOBackend(ABC):
     """
     tags = ['fields_prior', 'fields_post', 'obs_seq', 'obs_prior', 'obs_post']
 
-    @abstractmethod
     def __init__(self, c: Context):
-        ...
+        pass
 
     @abstractmethod
-    def read_field(self, c: Context, rec: FieldRecord, member: int) -> np.ndarray:
+    def read_field(self, c: Context, tag: str, rec: FieldRecord, member: int) -> np.ndarray:
         """
-        Read a 2D field from the State
+        Read a 2D field data from the state
 
         Args:
             c (Context): the runtime context
-            rec (FieldRecord): field record object
+            tag (str): which copy of the state to read from
+            rec (FieldRecord): field record
             member (int): ensemble member index from 0 to nens-1
 
         Returns:
@@ -33,36 +36,35 @@ class IOBackend(ABC):
         ...
 
     @abstractmethod
-    def write_field(self, c: Context, fld: np.ndarray, rec: FieldRecord, member: int) -> None:
+    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec: FieldRecord, member: int) -> None:
         """
-        Write a 2D field to the State
+        Write a 2D field data to the state
 
         Args:
-            c (Context): the runtime context
             fld (np.ndarray): the 2D field data
+            c (Context): the runtime context
+            tag (str): which copy of the state to write to
             rec (FieldRecord): field record object
             member (int): ensemble member index
         """
         ...
 
-def get_io_backend(c: Context) -> IOBackend:
-    """
-    Factory function to return the correct IOBackend subclass instance.
+    @abstractmethod
+    def call_model_io(self, c: Context, model_name: str, method: str, **kwargs) -> Any:
+        """
+        Call a model class method to perform some io tasks.
 
-    Args:
-        c (Context): the runtime context
+        Args:
+            c (Context): the runtime context
+            model_name (str): the model module name
+            method (str): method name
+            **kwargs: will be passed to the method
 
-    Returns:
-        IOBackend: Corresponding io backend subclass instance
-    """
-    cf = c.config
-    if cf.io_mode == 'offline':
-        from NEDAS.io_backends.file_io import FileIO
-        return FileIO(c)
+        Returns:
+            Any: whatever the getattr(model, method)(**kwargs) returns
+        """
+        ...
 
-    elif cf.io_mode == 'online':
-        from NEDAS.io_backends.memory_io import MemoryIO
-        return MemoryIO(c)
-
-    else:
-        raise ValueError(f"Unsupported io_mode '{cf.io_mode}', only 'online' or 'offline'.")
+    def save_debug_data(self, c: Context, filename: str, data: dict) -> None:
+        file = os.path.join(c.config.work_dir, f"{filename}.npz")
+        np.savez(file, **data)

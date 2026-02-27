@@ -27,7 +27,7 @@ class TestFileIO(unittest.TestCase):
         cf = Config(work_dir='./', time=time, directories=dir_def)
         c = Context(cf)
         io = FileIO(c)
-        self.assertEqual(io.prior_file, '.')
+        self.assertEqual(io.binfile_name(c, 'prior'), '.')
 
 if __name__ == '__main__':
     unittest.main()

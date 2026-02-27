@@ -68,7 +68,7 @@ class Config:
     updator_def: dict
     covariance_def: dict
     inflation_def: dict
-    localiazation_def: dict
+    localization_def: dict
     transform_def: dict
     diag: Optional[dict]
 

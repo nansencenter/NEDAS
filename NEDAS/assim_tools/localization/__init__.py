@@ -1,5 +1,7 @@
 from NEDAS.core import Context
 
+"""Localization funcs needs to be pure functions (they need to be used in numba njit)"""
+
 registry = {
     'gaspari_cohn': ('distance_based', 'gaspari_cohn_func'),
     'step': ('distance_based', 'step_func'),
@@ -8,13 +10,13 @@ registry = {
 
 def get_localization_funcs(c: Context) -> dict:
     local_funcs = {}
-    assert c.localization_def is not None, "c.localization_def needs to be defined in the config file"
+    assert c.config.localization_def is not None, "c.localization_def needs to be defined in the config file"
     for key in ['horizontal', 'vertical', 'temporal']:
-        assert key in c.localization_def, f"{key} needs to be defined in c.localization_def"
-        if c.localization_def[key]:
-            if 'type' not in c.localization_def[key]:
+        assert key in c.config.localization_def, f"{key} needs to be defined in c.localization_def"
+        if c.config.localization_def[key]:
+            if 'type' not in c.config.localization_def[key]:
                 raise KeyError(f"'type' needs to be specified for c.localization['{key}']")
-            local_funcs[key] = get_localization_func_component(c.localization_def[key]['type'])
+            local_funcs[key] = get_localization_func_component(c.config.localization_def[key]['type'])
         else:
             local_funcs[key] = None
     return local_funcs
@@ -38,3 +40,5 @@ def get_localization_func_component(localization_types):
     else:
         raise ValueError(f"Unknown localization type {type}")
     return local_func
+
+__all__ = ['registry', 'get_localization_funcs']

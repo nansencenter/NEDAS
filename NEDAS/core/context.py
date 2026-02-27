@@ -1,18 +1,13 @@
 from __future__ import annotations
-from typing import get_args, TYPE_CHECKING
+from typing import get_args, Callable, TYPE_CHECKING
 import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
 from NEDAS.utils import parallel
-from NEDAS.grid import Grid, GridType
-from NEDAS.config import Config
-from .model import Model, get_model_class
-from .dataset import Dataset, get_dataset_class
+from NEDAS import assim_tools, grid, config, models, datasets
 from .transform import Transform
 if TYPE_CHECKING:
-    from .io_backend import IOBackend
-    from .state import State
-    from .obs import Obs
+    from . import Model, Dataset, IOBackend, State, Obs, Transform, Inflation, Assimilator, Updator
 
 class Context:
     """
@@ -22,38 +17,54 @@ class Context:
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
-    grid: GridType
+    grid: grid.GridType
+    grid_orig: grid.GridType
     time: datetime
     iter: int
     models: dict[str, Model]
     datasets: dict[str, Dataset]
+    assimilator: Assimilator
+    updator: Updator
     transform_funcs: list[Transform]
-    #localization_funcs: list[Callable]
-    #inflation_func: Inflation
+    localization_funcs: dict[str, Callable]
+    inflation_func: Inflation
     io: IOBackend
     state: State
     obs: Obs
 
-    def __init__(self, cf: Config):
+    def __init__(self, cf: config.Config):
         self.config = cf
 
-        ##initialize the current time pointer
-        ##prev_time and next_time properties provide the time for previous/next analysis cycle 
+        # initialize the current time pointer
+        # prev_time and next_time properties provide the time for previous/next analysis cycle 
         self.time = self.config.time
 
-        ##initialize the current iteration
+        # initialize the current iteration
         self.iter = self.config.iter
 
-        ##initialize the pid that shows progress (default to the root process pid=0)
+        # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
 
-        ##setup a few living objects
+        # setup a few living objects
         self.set_comm()
-        self.set_analysis_grid()
+        self.set_grid()
         self.set_models()
         self.set_datasets()
 
-        ##more living objects (io, state, obs) will be created in the Scheme class
+        # more living objects (io, state, obs, and assim_tools components)
+        # will be created by self.init_scheme() in runtime by the Scheme methods
+    
+    def init_scheme(self):
+        # update grid with current iteration settings
+        res_lev = self.config.resolution_level[self.iter]
+        self.grid = self.grid_orig.change_resolution_level(res_lev)
+
+        # initialize a few func components in the assimilation algorithm
+        self.assimilator = assim_tools.assimilators.get_assimilator(self)
+        self.updator = assim_tools.updators.get_updator(self)
+        self.localization_funcs = assim_tools.localization.get_localization_funcs(self)
+        self.inflation_func = assim_tools.inflation.get_inflation_func(self)
+        self.transform_funcs = assim_tools.transforms.get_transform_funcs(self)
 
     @property
     def prev_time(self) -> datetime:
@@ -108,7 +119,7 @@ class Context:
             self.comm_mem = self.comm
             self.comm_rec = self.comm
 
-    def set_analysis_grid(self):
+    def set_grid(self):
         """
         Initialize the analysis grid based on the configuration.
 
@@ -126,13 +137,13 @@ class Context:
             dx = grid_def['dx']
             known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx', 'mask'}
             other_opts = {k: v for k, v in grid_def.items() if k not in known_keys}
-            self.grid = Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
+            self.grid = grid.Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
             ##mask for invalid grid points (none for now, add option later)
             self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
             if 'mask' in grid_def and grid_def['mask'] is not None:
                 model_name = grid_def['mask']
-                Model = get_model_class(model_name)
+                Model = models.get_model_class(model_name)
                 model = Model()
                 prepare_mask = getattr(model, 'prepare_mask', None)
                 if prepare_mask is not None:
@@ -145,12 +156,15 @@ class Context:
             if model_def is None or model_name not in model_def:
                 raise KeyError(f"'{model_name}' not defined in config file model_def section")
             kwargs = model_def[model_name]
-            Model = get_model_class(model_name)
+            Model = models.get_model_class(model_name)
             model = Model(**kwargs)
             model_grid = getattr(model, 'grid')
-            if not isinstance(model_grid, get_args(GridType)):
+            if not isinstance(model_grid, get_args(grid.GridType)):
                 raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
             self.grid = model_grid
+
+        # make a copy of the original analysis grid
+        self.grid_orig = self.grid
 
     def set_models(self):
         """
@@ -160,7 +174,7 @@ class Context:
         self.models = {}
         for model_name, kwargs in self.config.model_def.items():
             #instantiate the model class
-            ModelClass = get_model_class(model_name)
+            ModelClass = models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
             kwargs['io_mode'] = self.config.io_mode
@@ -175,7 +189,7 @@ class Context:
         """
         self.datasets = {}
         for dataset_name, kwargs in self.config.dataset_def.items():
-            DatasetClass = get_dataset_class(dataset_name)
+            DatasetClass = datasets.get_dataset_class(dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
             kwargs['io_mode'] = self.config.io_mode

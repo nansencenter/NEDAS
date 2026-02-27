@@ -4,6 +4,37 @@ from datetime import datetime
 import numpy as np
 
 @dataclass
+class FieldRecord:
+    """
+    Represents a single 2D slice in the state vector.
+
+    Attributes:
+        name (str): name of the state variable
+        model_src (str): name of the model source module for this variable
+        dtype (str): data type
+        is_vector (bool): if this variable is a vector
+        units (str): physical units of this variable
+        err_type (str): type of error model to use for this variable
+        time (datetime): time coordinate for this field
+        dt (float): representative time interval (hours) for this field
+        k (float): vertical z coordinate index for this field
+        pos (int): seek position (number of bytes) for the start of this field in the binary file
+    """
+    name: str
+    model_src: str
+    dtype: str
+    is_vector: bool
+    units: str
+    err_type: str
+    time: datetime
+    dt: float
+    k: float
+    pos: int  # Byte offset in the binary file
+
+    def asdict(self) -> dict:
+        return asdict(self)
+
+@dataclass
 class ErrorModel:
     """
     Parameters defining an error model
@@ -63,37 +94,6 @@ class ObsRecord:
     vroi: float
     troi: float
     impact_on_state: dict
-    def asdict(self) -> dict:
-        return asdict(self)
-
-@dataclass
-class FieldRecord:
-    """
-    Represents a single 2D slice in the state vector.
-
-    Attributes:
-        name (str): name of the state variable
-        model_src (str): name of the model source module for this variable
-        dtype (str): data type
-        is_vector (bool): if this variable is a vector
-        units (str): physical units of this variable
-        err_type (str): type of error model to use for this variable
-        time (datetime): time coordinate for this field
-        dt (float): representative time interval (hours) for this field
-        k (float): vertical z coordinate index for this field
-        pos (int): seek position (number of bytes) for the start of this field in the binary file
-    """
-    name: str
-    model_src: str
-    dtype: str
-    is_vector: bool
-    units: str
-    err_type: str
-    time: datetime
-    dt: float
-    k: float
-    pos: int  # Byte offset in the binary file
-
     def asdict(self) -> dict:
         return asdict(self)
 

@@ -4,8 +4,11 @@ from NEDAS.config import Config
 from .context import Context
 
 """
-Registry is a dict with key=module_name value=class_name
-module_name is f"{io_mode}_{analysis_scheme}" from the config file
+Scheme class controls the runtime workflow.
+
+registry is a dict with key=module_name value=class_name
+
+get_scheme: factory function to obtain the right scheme subclass instance
 """
 registry = {
     'offline_filter': 'OfflineFilterAnalysisScheme',
@@ -52,4 +55,4 @@ def get_scheme(cf: Config) -> Scheme:
     module = importlib.import_module('NEDAS.schemes.'+scheme_name)
     SchemeClass = getattr(module, registry[scheme_name])
 
-    return SchemeClass()
+    return SchemeClass(cf)

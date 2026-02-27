@@ -1,32 +1,14 @@
-from __future__ import annotations
-from typing import TYPE_CHECKING
 import os
 import inspect
-import importlib
 from abc import ABC, abstractmethod
 import numpy as np
 from NEDAS.config import parse_config
 from NEDAS.utils.parallel import bcast_by_root
 from NEDAS.utils.progress import timer
-if TYPE_CHECKING:
-    from .context import Context
-
-"""
-Assimilator classes
-"""
-
-registry = {
-    'ETKF': 'ETKFAssimilator',
-    'EAKF': 'EAKFAssimilator',
-    'TopazDEnKF': 'TopazDEnKFAssimilator',
-    #'PDAF': 'PDAFAssimilator',
-    #'RHF'
-}
+from .context import Context
 
 class Assimilator(ABC):
     def __init__(self, c: Context):
-        #self.analysis_dir = c.io.analysis_dir(c.time, c.iter)
-
         ##get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, parse_args=False, **c.config.assimilator_def)
@@ -37,65 +19,77 @@ class Assimilator(ABC):
         """
         Main method to run the batch assimilation algorithm
         """
+        # prior inflation step
+        c.inflation_func(c, 'prior')
 
-        # self.prior_inflation(c)
-        # self.partition_grid(c)
-        # timer(c)(self.transpose_to_ensemble_complete)(c)
-        # timer(c)(self.assimilation_algorithm)(c)
-        # self.transpose_to_field_complete(c)
-        # self.posterior_inflation(c)
+        # transpose c.state.fields_prior to ensemble-complete c.state.state_prior
+        self.partition_grid(c)
+        timer(c)(self.transpose_to_ensemble_complete)(c)
 
-    def prior_inflation(self, c, state, obs):
-        """
-        Apply covariance inflation for the prior ensemble
-        """
-        state.output_ens_mean(c, state.fields_prior, state.prior_mean_file)
-        c.inflation_func(c, state, obs, 'prior')
-        state.output_state(c, state.fields_prior, state.prior_file)
+        # the core assimilation algorithm
+        # assimilates c.obs.obs_seq into c.state.state_prior to get c.state.state_post
+        timer(c)(self.assimilation_algorithm)(c)
 
-    def posterior_inflation(self, c, state, obs):
-        """
-        Apply covariance inflation for the posterior ensemble
-        """
-        obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
-        state.output_ens_mean(c, state.fields_post, state.post_mean_file)
-        c.inflation_func(c, state, obs, 'posterior')
-        state.output_state(c, state.fields_post, state.post_file)
+        # transpose c.state.state_post back to field-complete c.state.fields_post
+        self.transpose_to_field_complete(c)
 
-    def partition_grid(self, c, state, obs):
+        # posterior inflation
+        c.inflation_func(c, 'posterior')
+
+    # def prior_inflation(self, c, state, obs):
+    #     """
+    #     Apply covariance inflation for the prior ensemble
+    #     """
+    #     state.output_ens_mean(c, state.fields_prior, state.prior_mean_file)
+    #     c.inflation_func(c, state, obs, 'prior')
+    #     state.output_state(c, state.fields_prior, state.prior_file)
+
+    # def posterior_inflation(self, c, state, obs):
+    #     """
+    #     Apply covariance inflation for the posterior ensemble
+    #     """
+    #     obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
+    #     state.output_ens_mean(c, state.fields_post, state.post_mean_file)
+    #     c.inflation_func(c, state, obs, 'posterior')
+    #     state.output_state(c, state.fields_post, state.post_file)
+
+    def partition_grid(self, c: Context) -> None:
         """
         Partition the analysis grid into several parts and distribute the workload over the mpi ranks.
         """
-        state.partitions = bcast_by_root(c.comm)(self.init_partitions)(c)
-        obs.obs_inds = bcast_by_root(c.comm_mem)(self.assign_obs)(c, state, obs)
-        state.par_list = bcast_by_root(c.comm)(self.distribute_partitions)(c, state, obs)
+        c.state.partitions = bcast_by_root(c.comm)(self.init_partitions)(c)
+        c.obs.obs_inds = bcast_by_root(c.comm_mem)(self.assign_obs)(c)
+        c.state.par_list = bcast_by_root(c.comm)(self.distribute_partitions)(c)
 
-    def init_partitions(self, c):
-        raise NotImplementedError
+    @abstractmethod
+    def init_partitions(self, c: Context) -> list[tuple]:
+        ...
 
-    def assign_obs(self, c, state, obs):
-        raise NotImplementedError
+    @abstractmethod
+    def assign_obs(self, c: Context) -> dict:
+        ...
 
-    def distribute_partitions(self, c, state, obs):
-        raise NotImplementedError
+    @abstractmethod
+    def distribute_partitions(self, c: Context) -> dict[int, list[int]]:
+        ...
 
-    def transpose_to_ensemble_complete(self, c, state, obs):
+    def transpose_to_ensemble_complete(self, c: Context) -> None:
         """
         Communicate among mpi ranks and transpose the locally-stored state/obs chunks to ensemble-complete
         """
         c.print_1p('>>> transpose to ensemble complete:\n')
 
         c.print_1p('state variables: ')
-        state.state_prior = state.transpose_to_ensemble_complete(c, state.fields_prior)
+        c.state.state_prior = c.state.transpose_to_ensemble_complete(c, c.state.fields_prior)
 
         c.print_1p('z coords: ')
-        state.z_state = state.transpose_to_ensemble_complete(c, state.z_fields)
+        c.state.z_state = c.state.transpose_to_ensemble_complete(c, c.state.z_fields)
 
         c.print_1p('obs sequences: ')
-        obs.lobs = obs.transpose_to_ensemble_complete(c, state, obs.obs_seq)
+        c.obs.lobs = c.obs.transpose_obs_seq(c, c.obs.obs_seq)
 
         c.print_1p('obs prior sequences: ')
-        obs.lobs_prior = obs.transpose_to_ensemble_complete(c, state, obs.obs_prior_seq, ensemble=True)
+        c.obs.lobs_prior = c.obs.transpose_to_ensemble_complete(c, c.obs.obs_prior)
 
         # if c.debug:
         #     np.save(os.path.join(self.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state.state_prior)
@@ -123,28 +117,3 @@ class Assimilator(ABC):
         The main assimilation algorithm will be implemented by subclasses
         """
         ...
-
-
-def get_assimilator(c: Context) -> Assimilator:
-    """
-    Get the correct Assimilator subclass instance based on the configuration.
-
-    Args:
-        c (Context): the runtime context object.
-
-    Returns:
-        Assimilator: Corresponding Assimilator subclass instance.
-    """
-    if c.config.assimilator_def is None:
-        raise ValueError("assimilator_def not found in Config")
-    if 'type' not in c.config.assimilator_def.keys():
-        raise KeyError("'type' needs to be specified in assimilator_def")
-    assimilator_type = c.config.assimilator_def['type']
-
-    if assimilator_type not in registry:
-        raise NotImplementedError(f"Assimilator type '{assimilator_type}' is not implemented")
-
-    module = importlib.import_module('NEDAS.assim_tools.assimilators.'+assimilator_type)
-    AssimilatorClass = getattr(module, registry[assimilator_type])
-
-    return AssimilatorClass(c)

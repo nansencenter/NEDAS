@@ -1,39 +1,33 @@
 import os
 import inspect
-import importlib
-from typing import Literal, Generic, TypeVar, Type
+from typing import Literal, Generic, TypeVar, Annotated
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
 
-"""
-Model module
-
-    Model base class
-
-    registry
-
-    get_model_class
-"""
-
 GridT = TypeVar("GridT", bound=GridType)
+# VarName = Annotated['str', 'variable name']
+
+# @dataclass
+# class VarDesc:
+#     name: str | tuple[str, str]
 
 class Model(Generic[GridT], ABC):
     """
     Class for configuring and running a model
     """
-    io_mode: Literal['online', 'offline'] = 'offline'
+    io_mode: Literal['online', 'offline']
+    variables: dict #[VarName, VarDesc]
     grid: GridT
-    z_untis: str = '*'
+    z_untis: str
     z = None
-    variables: dict = {}
+    mask: np.ndarray
     run_process = None
     run_status = 'pending'
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
-
         ##parse config file and obtain a list of attributes
         ##get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -82,7 +76,7 @@ class Model(Generic[GridT], ABC):
         Args:
             **kwargs: Keyword arguments for reading the grid.
         """
-        pass
+        ...
 
     @abstractmethod
     def read_var(self, **kwargs) -> np.ndarray:
@@ -95,7 +89,7 @@ class Model(Generic[GridT], ABC):
         Returns:
             np.ndarray: The read variable.
         """
-        pass
+        ...
 
     @abstractmethod
     def write_var(self, var, **kwargs) -> None:
@@ -106,7 +100,7 @@ class Model(Generic[GridT], ABC):
             var (np.ndarray): The variable to write.
             **kwargs: Keyword arguments for writing the variable.
         """
-        pass
+        ...
 
     @abstractmethod
     def z_coords(self, **kwargs) -> np.ndarray:
@@ -119,7 +113,7 @@ class Model(Generic[GridT], ABC):
         Returns:
             np.ndarray: The vertical coordinates.
         """
-        pass
+        ...
 
     @abstractmethod
     def preprocess(self, **kwargs) -> None:
@@ -129,7 +123,7 @@ class Model(Generic[GridT], ABC):
         Args:
             **kwargs: Keyword arguments for preprocessing.
         """
-        pass
+        ...
 
     @abstractmethod
     def postprocess(self, **kwargs) -> None:
@@ -139,7 +133,7 @@ class Model(Generic[GridT], ABC):
         Args:
             **kwargs: Keyword arguments for postprocessing.
         """
-        pass
+        ...
 
     @abstractmethod
     def run(self, **kwargs) -> None:
@@ -149,35 +143,4 @@ class Model(Generic[GridT], ABC):
         Args:
             **kwargs: Keyword arguments for running the model.
         """
-        pass
-
-registry = {
-    'lorenz96': 'Lorenz96Model',
-    'qg.fortran': 'QGFortranModel',
-    'qg.fortran.emulator': 'QGFortranModelEmulator',
-    'vort2d': 'Vort2DModel',
-    'topaz.v5': 'Topaz5Model',
-    'nextsim.v1': 'NextsimModel',
-    'nextsim.dg': 'NextsimDGModel',
-    'wrf': 'WRFModel',
-}
-
-def get_model_class(model_name: str) -> Type["Model"]:
-    """
-    Factory function to return the correct Model subclass.
-
-    Args:
-        model_name (str): Model name
-
-    Returns:
-        Type["Model"]: Corresponding Model subclass
-    """
-    model_name = model_name.lower()
-
-    if model_name not in registry.keys():
-        raise NotImplementedError(f"Model class not implemented for '{model_name}'")
-
-    module = importlib.import_module('NEDAS.models.'+model_name)
-    ModelClass = getattr(module, registry[model_name])
-
-    return ModelClass
+        ...

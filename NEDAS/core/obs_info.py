@@ -13,8 +13,8 @@ class ObsInfo:
         err_types (set[str]): set of unique error models used in the observations
     """
     records: dict[int, ObsRecord]
-    variables: set[str]
-    err_types: set[str]
+    variables: list[str]
+    err_types: list[str]
 
     def __init__(self, c: Context):
         """
@@ -27,24 +27,28 @@ class ObsInfo:
             dict: A dictionary with some dimensions and list of unique obs records
         """
         self.records = {}
-        self.variables = set()
-        self.err_types = set()
+        variables = set()
+        err_types = set()
 
         ##loop through variables in obs_def
-        for vrec in ensure_list(c.obs_def):
+        for vrec in ensure_list(c.config.obs_def):
             vname = vrec['name']
-            self.variables.add(vname)
+            variables.add(vname)
 
             if 'err' not in vrec or vrec['err'] is None:
                 vrec['err'] = {}
             assert isinstance(vrec.get('err'), dict), f"obs_def: {vname}: expect 'err' to be a dictionary"
-            self.err_types.add(vrec['err'].get('type', 'normal'))
+            err_types.add(vrec['err'].get('type', 'normal'))
 
             self.add_obs_record(c, vrec)
 
         self.complete_err_cross_corr_matrix()
 
-        if c.debug:
+        # convert set to list, for later indexing
+        self.variables = list(variables)
+        self.err_types = list(err_types)
+
+        if c.config.debug:
             print(f"number of unique observation records = {len(self.records)}", flush=True)
             print(f"observation variables: {self.variables}", flush=True)
 
@@ -70,7 +74,7 @@ class ObsInfo:
                 impact_on_state[state_name] = impact_fac
 
         ##loop through time steps in obs window
-        time_steps = c.time + np.array(c.obs_time_steps)*dt1h
+        time_steps = c.time + np.array(c.config.obs_time_steps)*dt1h
         rec_id = len(self.records)
         for time in time_steps:
             err_opts = vrec['err']
@@ -117,3 +121,38 @@ class ObsInfo:
                 else:
                     if not isinstance(obs_rec.err.cross_corr[vname], float):
                         raise TypeError(f"obs_def: {obs_rec.name} has err.cross_corr.{vname} defined as {obs_rec.err.cross_corr[vname]}, expecting a float")
+
+    # def write_obs_info(self, binfile):
+    #     with open(binfile.replace('.bin','.dat'), 'wt') as f:
+    #         f.write('{} {}\n'.format(self.info['nobs'], self.info['nens']))
+    #         for rec in self.info['obs_seq'].values():
+    #             f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['dataset_src'], rec['model_src'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
+
+    # ##read obs_info from the dat file
+    # def read_obs_info(self, binfile):
+    #     with open(binfile.replace('.bin','.dat'), 'r') as f:
+    #         lines = f.readlines()
+
+    #         ss = lines[0].split()
+    #         self.info = {'nobs':int(ss[0]), 'nens':int(ss[1]), 'obs_seq':{}}
+
+    #         ##following lines of obs records
+    #         obs_id = 0
+    #         for lin in lines[1:]:
+    #             ss = lin.split()
+    #             rec = {'name': ss[0],
+    #                 'dataset_src': ss[1],
+    #                 'model_src': ss[2],
+    #                 'dtype': ss[3],
+    #                 'is_vector': bool(int(ss[4])),
+    #                 'units': ss[5],
+    #                 'z_units':ss[6],
+    #                 'err_type': ss[7],
+    #                 'err': float(ss[8]),
+    #                 'x': float(ss[9]),
+    #                 'y': float(ss[10]),
+    #                 'z': float(ss[11]),
+    #                 'time': h2t(float(ss[12])),
+    #                 'pos': int(ss[13]), }
+    #             self.info['obs_seq'][obs_id] = rec
+    #             obs_id += 1

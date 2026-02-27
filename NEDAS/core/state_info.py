@@ -18,8 +18,8 @@ class StateInfo:
     mask: np.ndarray
     fields: dict[int, FieldRecord]
     size: int
-    variables: set[str]
-    err_types: set[str]
+    variables: list[str]
+    err_types: list[str]
     
     def __init__(self, c: Context):
         """Parse the configuration to generate the state info object"""
@@ -29,17 +29,17 @@ class StateInfo:
         self.fields = {}
         # self.scalars: Dict[int, ScalarRecord] = {}
         self.size = 0
-        self.variables = set()
-        self.err_types = set()
+        variables = set()
+        err_types = set()
         self.pos = 0  ##seek position for rec
 
         ##loop through variables in state_def
         for vrec in ensure_list(c.config.state_def):
             vname = vrec['name']
-            self.variables.add(vname)
+            variables.add(vname)
 
             vtype = vrec['var_type']
-            self.err_types.add(vrec['err_type'])
+            err_types.add(vrec['err_type'])
 
             if vtype == 'field':
                 self.add_fields_for_variable(c, vrec)
@@ -49,6 +49,10 @@ class StateInfo:
 
             else:
                 raise NotImplementedError(f"{vtype} is not supported in the state vector.")
+
+        # convert set to list, for indexing later
+        self.variables = list(variables)
+        self.err_types = list(err_types)
 
     def add_fields_for_variable(self, c: Context, vrec: dict) -> None:
         """

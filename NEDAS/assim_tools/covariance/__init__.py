@@ -15,3 +15,5 @@ def get_covariance(c):
     Covariance = getattr(module, registry[c.covariance])
 
     return Covariance(c)
+
+__all__ = ['registry', 'get_covariance']
