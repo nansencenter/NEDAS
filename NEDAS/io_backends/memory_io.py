@@ -1,6 +1,6 @@
+from typing import Callable
 import numpy as np
 from NEDAS.core import Context, IOBackend
-from NEDAS.core.types import FieldRecord
 
 """
 Memory IO backend. Keep data in the memory and avoid file I/O completely.
@@ -9,62 +9,46 @@ Only works for single processor now, but this is convenient for long experiments
 """
 
 class MemoryIO(IOBackend):
-    nens: int
-    memory: dict[str, dict] = {}
 
     def __init__(self, c: Context):
         assert c.config.nproc == 1, "currently only support serial programs: nproc=1"
 
-        self.nens = c.config.nens
-
-        # allocate memory
-        for tag in self.tags:
-            self.memory[tag] = {}
-            # for mem_id in range(self.nens):
-            #     for rec_id 
-            #         self.memory[tag][mem_id, rec_id] = c.models[model_name].memory[] ##don't, we don't know about this
-
-    def read_field(self, c: Context, tag: str, rec: FieldRecord, member: int) -> np.ndarray:
+    def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """
         Read a field from memory
         """
-        # nv = 2 if rec.is_vector else 1
-        # fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
-        # fld_size = np.sum((~c.grid.mask).astype(int))
+        self.validate_tag(tag)
 
-        # binfile = self.binfile_name(c, tag)
-        # with open(binfile, 'rb') as f:
-        #     f.seek(member*c.state.info.size + rec.pos)
-        #     fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
-        #                     f.read(nv*fld_size*type_size[rec.dtype])))
-        #     fld = np.full(fld_shape, np.nan)
-        #     if rec.is_vector:
-        #         fld[:, ~c.grid.mask] = fld_.reshape((2, -1))
-        #     else:
-        #         fld[~c.grid.mask] = fld_
-        rec_id = ...
-        return self.memory[tag][member, rec_id, ...]
+        ##check if it is available in state cache
+        if rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.state.mem_list[c.pid_mem]:
+            fields = getattr(c.state, f"fields_{tag}")
+            return fields[mem_id, rec_id]
 
-    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec: FieldRecord, member: int) -> None:
+        ##otherwise, get it from model.memory
+        rec = c.state.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        return model.read_var(tag=tag, member=mem_id, **rec.asdict())
+
+    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec_id: int, mem_id: int) -> None:
         """
         Write a field to memory
         """
-        # fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
-        # assert fld.shape == fld_shape, f'fld shape incorrect: expected {fld_shape}, got {fld.shape}'
+        self.validate_tag(tag)
+        rec = c.state.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        model.write_var(fld, tag=tag, member=mem_id, **rec.asdict())
 
-        # if rec.is_vector:
-        #     fld_ = fld[:, ~c.grid.mask].flatten()
-        # else:
-        #     fld_ = fld[~c.grid.mask]
+    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
+        self.validate_tag(tag)
 
-        # binfile = self.binfile_name(c, tag)
-        # with open(binfile, 'r+b') as f:
-        #     f.seek(member*c.state.info.size + rec.pos)
-        #     f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
+        # just append tag to the kwargs, online model classes will read this tag
+        # and look for corresponding dict entries for cached data.
+        kwargs['tag'] = tag
 
-    def call_model_io(self, c: Context, model_name: str, method: str, **kwargs):
-        # obtain method
-        model = c.models[model_name]
-        func = getattr(model, method)
-
-        return func(**kwargs)
+        return method(*args, **kwargs)
+    
+    def output_snapshot(self, c: Context) -> None:
+        """
+        Output a snapshot of data stored in memory to npz files
+        """
+        ...

@@ -1,6 +1,6 @@
 import unittest
 from NEDAS.config import Config
-from NEDAS.core.scheme import get_scheme
+from NEDAS.schemes import get_scheme
 
 class TestAnalysisScheme(unittest.TestCase):
     def test_raise_exception_when_not_implemented(self):        

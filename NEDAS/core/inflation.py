@@ -9,13 +9,13 @@ class Inflation(ABC):
     """
     def __init__(self, coef: float=1.0,
                  adaptive: bool=False,
-                 prior: bool=False, posterior: bool=False):
+                 prior: bool=False, post: bool=False):
         self.coef = coef
         self.adaptive = adaptive
         self.prior = prior
-        self.posterior = posterior
+        self.post = post
 
-    def __call__(self, c: Context, flag: Literal['prior', 'posterior']) -> None:
+    def __call__(self, c: Context, flag: Literal['prior', 'post']) -> None:
         """
         Perform the covariance inflation method
         """
@@ -24,7 +24,7 @@ class Inflation(ABC):
                 self.adaptive_prior_inflation(c)
             self.apply_inflation(c, flag)
 
-        if flag == 'posterior' and self.posterior:
+        if flag == 'post' and self.post:
             if self.adaptive:
                 self.adaptive_post_inflation(c)
             self.apply_inflation(c, flag)
@@ -106,5 +106,5 @@ class Inflation(ABC):
         pass
 
     @abstractmethod
-    def apply_inflation(self, c: Context, flag: Literal['prior', 'posterior']):
+    def apply_inflation(self, c: Context, flag: Literal['prior', 'post']):
         pass

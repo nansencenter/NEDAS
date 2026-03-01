@@ -29,7 +29,7 @@ class FieldRecord:
         model_src (str): name of the model source module for this variable
         dtype (str): data type
         is_vector (bool): if this variable is a vector
-        units (str): physical units of this variable
+        units (str|float): physical units of this variable
         err_type (str): type of error model to use for this variable
         time (datetime): time coordinate for this field
         dt (float): representative time interval (hours) for this field
@@ -40,7 +40,7 @@ class FieldRecord:
     model_src: str
     dtype: str
     is_vector: bool
-    units: str
+    units: str | float
     err_type: str
     time: datetime
     dt: float
@@ -101,8 +101,8 @@ class ObsRecord:
     obs_window_max: int
     dtype: str
     is_vector: bool
-    units: str
-    z_units: str
+    units: str | float
+    z_units: str | float
     time: datetime
     dt: float
     err: ErrorModel

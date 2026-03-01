@@ -70,6 +70,7 @@ class Config:
     inflation_def: dict
     localization_def: dict
     transform_def: dict
+    alignment: Optional[dict]
     diag: Optional[dict]
 
     def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):

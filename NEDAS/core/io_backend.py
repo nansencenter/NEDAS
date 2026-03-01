@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 import os
 import numpy as np
 from .context import Context
-from .types import FieldRecord
 
 class IOBackend(ABC):
     """
@@ -13,21 +12,33 @@ class IOBackend(ABC):
         tags (list[str]): List of names for copies of state/obs data
 
     """
-    tags = ['prior', 'prior_mean', 'post', 'post_mean', 'z_coords']
+    tags: list[str] = ['prior', 'prior_mean', 'posterior', 'posterior_mean', 'truth', 'z']
 
     def __init__(self, c: Context):
         pass
 
+    def validate_tag(self, tag: str):
+        if tag not in self.tags:
+            raise ValueError(f"IOBackend: unknown tag '{tag}', supported: {self.tags}")
+
+    def prepare_collective_io(self, c: Context, tag: str) -> None:
+        """
+        Prepare for collective io, needed typically for offline io modes.
+
+        Creating files for writing if not existing yet. Creating file locks for parallel io, etc.
+        """
+        pass
+
     @abstractmethod
-    def read_field(self, c: Context, tag: str, rec: FieldRecord, member: int) -> np.ndarray:
+    def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """
         Read a 2D field data from the state
 
         Args:
             c (Context): the runtime context
             tag (str): which copy of the state to read from
-            rec (FieldRecord): field record
-            member (int): ensemble member index from 0 to nens-1
+            rec_id (int): field record id
+            mem_id (int): ensemble member index from 0 to nens-1
 
         Returns:
             np.ndarray: the 2D field data
@@ -35,7 +46,7 @@ class IOBackend(ABC):
         ...
 
     @abstractmethod
-    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec: FieldRecord, member: int) -> None:
+    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec_id: int, mem_id: int) -> None:
         """
         Write a 2D field data to the state
 
@@ -43,24 +54,24 @@ class IOBackend(ABC):
             fld (np.ndarray): the 2D field data
             c (Context): the runtime context
             tag (str): which copy of the state to write to
-            rec (FieldRecord): field record object
-            member (int): ensemble member index
+            rec_id (int): field record object
+            mem_id (int): ensemble member index
         """
         ...
 
     @abstractmethod
-    def call_model_io(self, c: Context, model_name: str, method: str, **kwargs) -> Any:
+    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs) -> Any:
         """
-        Call a model class method to perform some io tasks.
+        Call a method to perform some io tasks.
 
         Args:
             c (Context): the runtime context
-            model_name (str): the model module name
-            method (str): method name
-            **kwargs: will be passed to the method
+            tag (str): which copy of the model state to request io from: "prior", "posterior" or "truth"
+            method (Callable): method name
+            *args, **kwargs: will be passed to the method
 
         Returns:
-            Any: whatever the getattr(model, method)(**kwargs) returns
+            Any: whatever the method(**kwargs) returns
         """
         ...
 

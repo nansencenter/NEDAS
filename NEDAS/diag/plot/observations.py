@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.shell_utils import makedir
 from NEDAS.utils.graphics import add_colorbar, adjust_ax_size, get_cmap
-from NEDAS.assim_tools.state import State
-from NEDAS.assim_tools.obs import Obs
+from NEDAS.core.state import State
+from NEDAS.core.obs import Obs
 
 def get_task_list(c, **kwargs) -> list:
 
@@ -22,8 +22,8 @@ def get_task_list(c, **kwargs) -> list:
     nlevels_diff = ensure_list(kwargs['nlevels_diff'])
     cmap_diff = ensure_list(kwargs['cmap_diff'])
 
-    state = State(c)
-    obs = Obs(c, state)
+    c.state = State(c)
+    c.obs = Obs(c)
 
     ##observation time steps within window
     obs_window_min = kwargs.get('obs_window_min', 0)
@@ -35,7 +35,7 @@ def get_task_list(c, **kwargs) -> list:
     tasks = []
     for i, vname in enumerate(variables):
         ##check if obs rec is defined in obs.info
-        obs_rec_query = [id for id,r in obs.info['records'].items() if r['name']==vname and r['dataset_src']==dataset_src[i]]
+        obs_rec_query = [id for id,r in c.obs.info.records.items() if r.name==vname and r.dataset_src==dataset_src[i]]
         assert len(obs_rec_query)>0, f"cannot find obs record for '{vname}' from dataset '{dataset_src[i]}'"
         obs_rec_id = obs_rec_query[0]
 
@@ -61,15 +61,15 @@ def run(c, **kwargs) -> None:
         plot_dir = os.path.join(c.work_dir, 'plots', 'observations')
     makedir(plot_dir)
 
-    state = State(c)
-    obs = Obs(c, state)
+    c.state = State(c)
+    c.obs = Obs(c)
 
     figsize = (kwargs.get('fig_size_x', 16), kwargs.get('fig_size_y', 7))
     landcolor = kwargs.get('land_color', 'gray')
 
     obs_rec_id = kwargs['obs_rec_id']
     member = kwargs['member']
-    obs_rec = obs.info['records'][obs_rec_id]
+    obs_rec = c.obs.info.records[obs_rec_id].asdict()
     vmin = kwargs['vmin']
     vmax = kwargs['vmax']
     nlevels = kwargs['nlevels']
@@ -82,7 +82,7 @@ def run(c, **kwargs) -> None:
     k = kwargs['k']
     t = kwargs['t']
     dt = kwargs['dt']
-    if c.debug:
+    if c.config.debug:
         print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
 
     ##if the viewer html file does not exist, generate it
@@ -94,15 +94,15 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the obs data from analysis_dir/obs_seq
-    obs_seq = np.load(os.path.join(state.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
-    obs_prior_seq = np.load(os.path.join(state.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
+    obs_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
+    obs_prior_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 
     ##filter for the obs within time and vertical level range
     tmask = (obs_seq['t'] > t) & (obs_seq['t'] <= t+dt*dt1h)
     obs_z = np.abs(obs_seq['z'])
     obs_x = obs_seq['x']
     obs_y = obs_seq['y']
-    model_z = np.abs(obs.read_mean_z_coords(c, state, c.time))
+    model_z = np.abs(c.obs.read_mean_z_coords(c, c.time))
     if k == 0:
         zk = c.grid.interp(model_z[k], obs_x, obs_y)
         zmask = (obs_seq['z'] == zk)

@@ -1,5 +1,5 @@
 from NEDAS.config import Config
-from NEDAS.core.scheme import get_scheme
+from NEDAS.schemes import get_scheme
 
 def main() -> None:
     cf = Config(parse_args=True)

@@ -1,17 +1,17 @@
 import numpy as np
-from .base import Updator
+from NEDAS.core import Context, Updator
 
 class AdditiveUpdator(Updator):
 
-    def compute_increment(self, c, state):
+    def compute_increment(self, c: Context):
         """
         Additive updator: just compute the difference between prior and posterior as increments
         """
         self.increment = {}
-        for mem_id, rec_id in state.fields_prior.keys():
-            rec = state.info['fields'][rec_id]
-            fld_prior = state.fields_prior[mem_id, rec_id]
-            fld_post = state.fields_post[mem_id, rec_id]
+        for mem_id, rec_id in c.state.fields_prior.keys():
+            rec = c.state.info.fields[rec_id]
+            fld_prior = c.state.fields_prior[mem_id, rec_id]
+            fld_post = c.state.fields_post[mem_id, rec_id]
 
             ##misc transform inverse
             for transform_func in c.transform_funcs:
@@ -21,23 +21,20 @@ class AdditiveUpdator(Updator):
             ##collect the increments
             self.increment[mem_id, rec_id] = fld_post - fld_prior
 
-    def update_restartfile(self, c, state, mem_id, rec_id):
+    def update_files(self, c, mem_id, rec_id):
         """
         Method to update a single field rec_id in the model restart file.
         This can be overridden by derived classes for specific update methods
         Inputs:
-        - c: config object
-        - state: state object
+        - c: context object
         - mem_id: member index
         - rec_id: record index
         """
-        rec = state.info['fields'][rec_id]
+        rec = c.state.info.fields[rec_id].asdict()
         model = c.models[rec['model_src']]
-        path = c.forecast_dir(rec['time'], rec['model_src'])
-        model.read_grid(path=path, member=mem_id, **rec)
 
         ##convert the posterior variable back to native model grid
-        var_prior = model.read_var(path=path, member=mem_id, **rec)
+        var_prior = c.io.call_io_method(c, 'prior', model.read_var, member=mem_id, **rec)
 
         c.grid.set_destination_grid(model.grid)
         incr = c.grid.convert(self.increment[mem_id, rec_id], is_vector=rec['is_vector'], method='linear')
@@ -61,5 +58,5 @@ class AdditiveUpdator(Updator):
         # if np.isnan(var_post).any():
         #     raise ValueError('nan detected in var_post')
 
-        ##write the posterior variable to restart filediff
-        model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)
+        ##write the posterior variable to restart file
+        c.io.call_io_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)

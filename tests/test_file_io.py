@@ -23,11 +23,10 @@ class TestFileIO(unittest.TestCase):
     def test_filenames(self):
         dir_def = {'analysis_dir': './{time:%Y%m%d}'}
         time = datetime(2023, 1, 1)
-        cwd = os.getcwd()
         cf = Config(work_dir='./', time=time, directories=dir_def)
         c = Context(cf)
         io = FileIO(c)
-        self.assertEqual(io.binfile_name(c, 'prior'), '.')
+        self.assertEqual(io.binfile_name(c, 'prior'), './20230101/fields_prior.bin')
 
 if __name__ == '__main__':
     unittest.main()

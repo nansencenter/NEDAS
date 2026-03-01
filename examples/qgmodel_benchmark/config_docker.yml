@@ -78,7 +78,7 @@ covariance_def:
   type: ensemble
 
 inflation_def:
-  type: posterior,rtpp
+  type: post,rtpp
   adaptive: True
   coef: 1.0
 

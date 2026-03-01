@@ -34,7 +34,7 @@ class Assimilator(ABC):
         self.transpose_to_field_complete(c)
 
         # posterior inflation
-        c.inflation_func(c, 'posterior')
+        c.inflation_func(c, 'post')
 
     # def prior_inflation(self, c, state, obs):
     #     """

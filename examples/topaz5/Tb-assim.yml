@@ -210,7 +210,7 @@ covariance_def:
   config_file:
 
 inflation_def:
-  type: posterior,multiplicative
+  type: post,multiplicative
   adaptive: False
   coef: 1.01
 

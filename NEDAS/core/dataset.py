@@ -1,19 +1,17 @@
 import os
 import inspect
-from typing import Optional, Callable, Annotated
+from typing import Optional, Callable
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
 from .types import VarName, VarDesc
-
-ModelName = Annotated[str, 'model name']
 
 class Dataset(ABC):
     """
     Dataset class (template for specific dataset sources)
     """
     variables: dict[VarName, VarDesc] = {}
-    obs_operator: dict[ModelName, Callable] = {}
+    obs_operator: dict[VarName, Callable] = {}
 
     def  __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
 

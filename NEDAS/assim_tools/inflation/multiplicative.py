@@ -41,11 +41,11 @@ class MultiplicativeInflation(Inflation):
         if flag == 'prior':
             mean_file = c.state.prior_mean_file
             fields = c.state.fields_prior
-        elif flag == 'posterior':
+        elif flag == 'post':
             mean_file = c.state.post_mean_file
             fields = c.state.fields_post
         else:
-            raise ValueError(f"Unknown flag {flag}, should be prior or posterior")
+            raise ValueError(f"Unknown flag {flag}, should be prior or post")
         ##TODO: io backend here
 
         pid_mem_show = [p for p,lst in c.state.mem_list.items() if len(lst)>0][0]

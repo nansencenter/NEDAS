@@ -3,9 +3,9 @@ from NEDAS.config import Config
 from NEDAS.core import Scheme
 
 registry = {
-    'offline_filter': 'OfflineFilterAnalysisScheme',
-    'online_filter': 'OnlineFilterAnalysisScheme',
-    'forecast': 'ForecastScheme',
+    #'offline_filter': 'OfflineFilterAnalysisScheme',
+    #'online_filter': 'OnlineFilterAnalysisScheme',
+    #'forecast': 'ForecastScheme',
 }
 
 def get_scheme(config: Config) -> Scheme:

@@ -71,15 +71,14 @@ class Lorenz96Model(Model[Grid1D]):
 
     def _read_var_from_memory(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
+        tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
-        if name not in self.memory:
-            raise RuntimeError('lorenz96 model online state memory not allocated yet.')
         key = (member, time)
-        if key not in self.memory[name]:
-            raise RuntimeError(f'lorenz96 model online state: {key} not found in memory for {name}')
-        return self.memory[name][key]
+        if key not in self.memory[tag][name]:
+            raise KeyError(f'lorenz96 model online state: {key} not found in memory for {tag, name}')
+        return self.memory[tag][name][key]
 
     def _read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -100,12 +99,15 @@ class Lorenz96Model(Model[Grid1D]):
 
     def _write_var_to_memory(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
+        tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
         ##create memory dict entry if not yet
-        if name not in self.memory:
-            self.memory[name] = {}
+        if tag not in self.memory:
+            self.memory[tag] = {}
+        if name not in self.memory[tag]:
+            self.memory[tag][name] = {}
         self.memory[name][member, time] = var
 
     def _write_var_to_file(self, var, **kwargs):

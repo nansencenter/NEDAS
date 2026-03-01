@@ -111,6 +111,7 @@ obs_def:
 ##if new variables introduced here, they will be appended to the configuration
 dataset_def:
   synthetic:
+    model_src: qg.fortran
     config_file:         ##configuration file (empty for now)
     dataset_dir:         ##path to the dataset files, for qg we use synthetic obs so no need to specify
     obs_window_min: -6   ## observation within the window (in hours) will be considered valid at cycle time
@@ -148,7 +149,7 @@ covariance_def:
 
 ##covariance inflation technique in assimilation
 inflation_def:
-  type: posterior,rtpp      ## type of inflation (posterior/prior, multiplicative/RTPP...)
+  type: post,rtpp      ## type of inflation (posterior/prior, multiplicative/RTPP...)
   adaptive: True            ## if true, run an adaptive version of the inflation scheme
   coef: 1.0                 ## static inflation coefficient
 

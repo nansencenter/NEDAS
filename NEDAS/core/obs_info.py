@@ -42,11 +42,11 @@ class ObsInfo:
 
             self.add_obs_record(c, vrec)
 
-        self.complete_err_cross_corr_matrix()
-
         # convert set to list, for later indexing
         self.variables = list(variables)
         self.err_types = list(err_types)
+
+        self.complete_err_cross_corr_matrix()
 
         if c.config.debug:
             print(f"number of unique observation records = {len(self.records)}", flush=True)
@@ -93,10 +93,10 @@ class ObsInfo:
                 nobs=vrec.get('nobs', 0),  ##for synthetic observation use only, real obs will count nobs later in prepare_obs
                 obs_window_min=vrec.get('obs_window_min', dataset.obs_window_min),
                 obs_window_max=vrec.get('obs_window_max', dataset.obs_window_max),
-                dtype=variables[vname]['dtype'],
-                is_vector=variables[vname]['is_vector'],
-                units=variables[vname]['units'],
-                z_units=variables[vname]['z_units'],
+                dtype=variables[vname].dtype,
+                is_vector=variables[vname].is_vector,
+                units=variables[vname].units,
+                z_units=variables[vname].z_units,
                 time=time,
                 dt=0,
                 err=err,

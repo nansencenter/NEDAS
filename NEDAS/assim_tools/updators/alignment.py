@@ -1,39 +1,41 @@
 import os
 import numpy as np
-from NEDAS.assim_tools.updators.base import Updator
+#open cv
+from NEDAS.core import Context, Updator
 
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique"""
 
-    def compute_increment(self, c, state):
+    def compute_increment(self, c: Context):
         """
         Alignment technique: compute optical flows from the pair of prior/posterior state variable field
         """
-        c.print_1p("Compute alignment based on analysis increment of '"+c.alignment['variable']+"'...\n")
+        if c.config.alignment is None:
+            c.config.alignment = {}
+        c.print_1p("Compute alignment based on analysis increment of '"+c.config.alignment['variable']+"'...\n")
 
-        for rec_id in state.rec_list[c.pid_rec]:
-            rec = state.info['fields'][rec_id]
+        for rec_id in c.state.rec_list[c.pid_rec]:
+            rec = c.state.info.fields[rec_id].asdict()
             model = c.models[rec['model_src']]
-            path = c.forecast_dir(rec['time'], rec['model_src'])
-            if rec['name'] != c.alignment['variable']:
+            if rec['name'] != c.config.alignment['variable']:
                 continue
 
-            for mem_id in state.mem_list[c.pid_mem]:
+            for mem_id in c.state.mem_list[c.pid_mem]:
                 ##compute displacement on analysis grid
-                fld_prior = state.fields_prior[mem_id, rec_id]
-                fld_post = state.fields_post[mem_id, rec_id]
-                displace = optical_flow(c.grid, fld_prior, fld_post, **c.alignment)
-                np.save(os.path.join(state.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
+                fld_prior = c.state.fields_prior[mem_id, rec_id]
+                fld_post = c.state.fields_post[mem_id, rec_id]
+                displace = optical_flow(c.grid, fld_prior, fld_post, **c.config.alignment)
+                # np.save(os.path.join(c.io.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
 
                 ##the model class offer a method to update grid (a lagrangian approach)
                 ##so displace increment will be applied directly to the grid elements
                 if hasattr(model, 'displace'):
                     ##convert the displacement from analysis grid to model grid
-                    model.read_grid(path=path, member=mem_id, **rec)
+                    c.io.call_io_method(c, 'prior', model.read_grid, member=mem_id, **rec)
                     c.grid.set_destination_grid(model.grid)
                     displace_m = c.grid.convert(displace, is_vector=True, method='linear')
                     ##apply the displacement
-                    model.displace(displace_m[0,...], displace_m[1,...], path=path, member=mem_id, **rec)
+                    c.io.call_io_method(c, 'prior', getattr(model, 'displace'), displace_m[0,...], displace_m[1,...], member=mem_id, **rec)
 
         c.comm.Barrier()
 

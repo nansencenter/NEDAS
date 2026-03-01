@@ -73,13 +73,13 @@ class StateInfo:
         time_steps = self.c.time + np.array(self.c.config.state_time_steps)*dt1h
         rec_id = len(self.fields)
         for time in time_steps:
-            for k in model.variables[vname]['levels']:
+            for k in model.variables[vname].levels:
                 rec = FieldRecord(
                     name=vname,
                     model_src=vrec['model_src'],
-                    dtype=model.variables[vname]['dtype'],
-                    is_vector=model.variables[vname]['is_vector'],
-                    units=model.variables[vname]['units'],
+                    dtype=model.variables[vname].dtype,
+                    is_vector=model.variables[vname].is_vector,
+                    units=model.variables[vname].units,
                     err_type=vrec['err_type'],
                     time=time,
                     dt=self.c.config.state_time_scale,

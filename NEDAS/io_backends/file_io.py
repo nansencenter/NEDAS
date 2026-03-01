@@ -1,8 +1,8 @@
 import os
 import struct
+from typing import Callable
 import numpy as np
 from datetime import datetime
-from NEDAS.core.model import Model
 from NEDAS.utils.conversion import type_dic, type_size
 from NEDAS.core import Context, IOBackend
 from NEDAS.core.types import FieldRecord
@@ -74,19 +74,36 @@ class FileIO(IOBackend):
             str: file name
         """
         analysis_dir = self.analysis_dir(c.time, c.iter)
-        return os.path.join(analysis_dir, f'{tag}.bin')
+        return os.path.join(analysis_dir, f'fields_{tag}.bin')
 
-    def read_field(self, c: Context, tag: str, rec: FieldRecord, member: int) -> np.ndarray:
+    def prepare_collective_io(self, c: Context, tag: str):
+        binfile = self.binfile_name(c, tag)
+        if c.pid == 0:
+            ##if file doesn't exist, create the file
+            open(binfile, 'wb')
+            ##write state_info to the accompanying .dat file
+            c.state.info.write_to_file(binfile)
+        c.comm.Barrier()
+
+    def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """
-        Read a field from a binary file
+        Read a field from cache or binary file
         """
+        self.validate_tag(tag)
+        ##check if it is available in cache
+        if rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.state.mem_list[c.pid_mem]:
+            fields = getattr(c.state, f"fields_{tag}")
+            return fields[mem_id, rec_id]
+
+        ##otherwise, read it from binfile
+        rec = c.state.info.fields[rec_id]
         nv = 2 if rec.is_vector else 1
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
         fld_size = np.sum((~c.grid.mask).astype(int))
 
         binfile = self.binfile_name(c, tag)
         with open(binfile, 'rb') as f:
-            f.seek(member*c.state.info.size + rec.pos)
+            f.seek(mem_id*c.state.info.size + rec.pos)
             fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
                             f.read(nv*fld_size*type_size[rec.dtype])))
             fld = np.full(fld_shape, np.nan)
@@ -96,10 +113,12 @@ class FileIO(IOBackend):
                 fld[~c.grid.mask] = fld_
             return fld
 
-    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec: FieldRecord, member: int) -> None:
+    def write_field(self, fld: np.ndarray, c: Context, tag: str, rec_id: int, mem_id: int) -> None:
         """
         Write a field to a binary file
         """
+        self.validate_tag(tag)
+        rec = c.state.info.fields[rec_id]
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
         assert fld.shape == fld_shape, f'fld shape incorrect: expected {fld_shape}, got {fld.shape}'
 
@@ -110,16 +129,32 @@ class FileIO(IOBackend):
 
         binfile = self.binfile_name(c, tag)
         with open(binfile, 'r+b') as f:
-            f.seek(member*c.state.info.size + rec.pos)
+            f.seek(mem_id*c.state.info.size + rec.pos)
             f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
 
-    def call_model_io(self, c: Context, model_name: str, method: str, **kwargs):
+        c.comm.Barrier()
+
+    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
+        self.validate_tag(tag)
+        # form the path in kwargs 
         # additional info from input args to form the path prefix
-        time = kwargs['time']
-        path = self.forecast_dir(time, model_name)
-
-        # obtain method
+        model_name = kwargs['model_src']
         model = c.models[model_name]
-        func = getattr(model, method)
+        time = kwargs['time']
+        if tag == 'prior':
+            path = self.forecast_dir(time, model_name)
 
-        return func(path=path, **kwargs)
+        if tag == 'post':
+            prev_time = time - c.config.cycle_period
+            if prev_time < c.config.time_start:
+                prev_time = c.config.time_start
+            path = self.forecast_dir(prev_time, model_name)
+
+        elif tag == 'truth':
+            path = model.truth_dir
+
+        else:
+            raise ValueError(f"Unknown tag: '{tag}'")
+
+        kwargs['path'] = path
+        return method(*args, **kwargs)

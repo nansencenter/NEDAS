@@ -87,7 +87,7 @@ alignment:
   smoothness_weight: 1
 
 inflation:
-  type: 'posterior,RTPP'
+  type: 'post,RTPP'
   adaptive: True
   coef: 1.0
 

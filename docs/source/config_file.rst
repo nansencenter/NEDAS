@@ -718,8 +718,8 @@ Covariance inflation parameters are stored in the ``inflation`` entry as a dicti
      - Description
      - Example
    * - ``type``
-     - Type of inflation (posterior/prior, multiplicative/RTPP).
-     - 'posterior,RTPP'
+     - Type of inflation (post/prior, multiplicative/RTPP).
+     - 'post,RTPP'
    * - ``adaptive``
      - Whether to run an adaptive inflation scheme.
      - True

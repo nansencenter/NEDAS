@@ -1,5 +1,6 @@
+from typing import Optional
 import numpy as np
-from NEDAS.utils.conversion import t2h, h2t
+from NEDAS.utils.conversion import t2h, h2t, dt1h
 from NEDAS.utils.progress import progress_bar
 from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
 from .context import Context
@@ -42,9 +43,9 @@ class State:
     partitions: list[tuple] = []  # will be created by assimilator.partition_grid()
     par_list: dict[ProcIDMem, list[PartitionID]] = {}
     fields_prior: FieldEns = {}   # will be created by self.prepare_state()
-    z_fields: FieldEns = {}
+    fields_z: FieldEns = {}
     state_prior: StateEns = {}    # will be created by self.transpose_to_ensemble_complete() 
-    z_state: StateEns = {}
+    state_z: StateEns = {}
     state_post: StateEns = {}     # will be created by assimilator.assimilate()
     fields_post: FieldEns = {}    # will be created by self.transpose_to_field_complete()
     data = {}                     # will be created by self.pack_state_data(), for use in assmilator.assimilate()
@@ -72,8 +73,10 @@ class State:
         Main method to collect fields from model to form the complete state (field-complete distributed)
         """
         self.collect_prior_fields(c)
-        #self.output_z_coords(c) !!!need this?
         #self.scalars_prior = self.collect_scalars(c)
+
+        if c.config.io_mode == 'offline':
+            self.output_z(c)
 
     def collect_prior_fields(self, c: Context) -> None:
         """
@@ -86,7 +89,7 @@ class State:
         Returns:
             dict: fields dictionary [(mem_id, rec_id), fld]
                 where fld is np.array defined on c.grid, it's one of the state variable field
-            dict: z_fields dictionary [(mem_id, rec_id), zfld]
+            dict: fields_z dictionary [(mem_id, rec_id), zfld]
                 where zfld is same shape as fld, it's he z coordinates corresponding to each field
         """
         pid_mem_show = [p for p,lst in self.mem_list.items() if len(lst)>0][0]
@@ -95,7 +98,7 @@ class State:
 
         ##pid_show has some workload, it will print progress message
         c.print_1p('>>> prepare state by reading fields from model restart\n')
-        #if self.fields_prior and self.z_fields are not empty, warning that they will be overwritten
+        #if self.fields_prior and self.fields_z are not empty, warning that they will be overwritten
 
         ##process the fields, each proc gets its own workload as a subset of
         ##mem_id,rec_id; all pid goes through their own task list simultaneously
@@ -112,7 +115,7 @@ class State:
 
                 model_name = rec.model_src
                 model = c.models[model_name]
-                model_fld = c.io.call_model_io(c, model_name, 'read_var', member=mem_id, **rec.asdict())
+                model_fld = c.io.call_io_method(c, 'prior', model.read_var, member=mem_id, **rec.asdict())
                 model.grid.set_destination_grid(c.grid)
                 fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
                 if rec.is_vector:
@@ -128,12 +131,12 @@ class State:
 
                 ##read z_coords for the field
                 ##only need to generate the uniq z coords, store in bank
-                model_z = c.io.call_model_io(c, model_name, 'z_coords', member=mem_id, **rec.asdict())
+                model_z = c.io.call_io_method(c, 'prior', model.z_coords, member=mem_id, **rec.asdict())
                 z = model.grid.convert(model_z, is_vector=False, method='linear', coarse_grain=True)
                 if rec.is_vector:
-                    self.z_fields[mem_id, rec_id] = np.array([z, z])
+                    self.fields_z[mem_id, rec_id] = np.array([z, z])
                 else:
-                    self.z_fields[mem_id, rec_id] = z
+                    self.fields_z[mem_id, rec_id] = z
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
@@ -146,107 +149,93 @@ class State:
         pass
         # TODO: implement scalars here for simultaneous state parameter estimation (SSPE)
 
-    # def output_state(self, c,
-    #                state_file: Optional[str]=None,
-    #                mem_id_out: Optional[int]=None,
-    #                rec_id_out: Optional[int]=None) -> None:
-    #     """
-    #     Parallel output the fields to the binary state_file
+    def output_state(self, c: Context, tag: str, mem_id_out: Optional[int]=None, rec_id_out: Optional[int]=None) -> None:
+        """
+        Parallel output the fields to the binary state_file
 
-    #     Args:
-    #         c (Config): config obj
-    #         fields (dict): the locally-stored field-complete fields for output, [(mem_id, rec_id), fld]
-    #         state_file (str, optional): path to the output binary file.
-    #         mem_id_out (int, optional): member id to be output, if None all available ids will output.
-    #         rec_id_out (int, optional): record id to be output, if None all available ids will output.
-    #     """
-    #     c.print_1p('>>> save state to '+state_file+'\n')
+        Args:
+            c (Context): the runtime context obj
+            tag (str): which version of state this is: 'prior', 'post' or 'z' coords?
+            mem_id_out (int, optional): member id to be output, if None all available ids will output.
+            rec_id_out (int, optional): record id to be output, if None all available ids will output.
+        """
+        c.print_1p('>>> saving data to fields_'+tag+'\n')
 
-    #     if c.pid == 0:
-    #         ##if file doesn't exist, create the file
-    #         open(state_file, 'wb')
-    #         ##write state_info to the accompanying .dat file
-    #         self.write_state_info(state_file)
-    #     c.comm.Barrier()
+        c.io.prepare_collective_io(c, tag)
 
-    #     nm = len(self.mem_list[c.pid_mem])
-    #     nr = len(self.rec_list[c.pid_rec])
-    #     for m, mem_id in enumerate(self.mem_list[c.pid_mem]):
-    #         if mem_id_out is not None and mem_id != mem_id_out:
-    #             continue
-    #         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
-    #             if rec_id_out is not None and rec_id != rec_id_out:
-    #                 continue
+        nm = len(self.mem_list[c.pid_mem])
+        nr = len(self.rec_list[c.pid_rec])
+        for m, mem_id in enumerate(self.mem_list[c.pid_mem]):
+            if mem_id_out is not None and mem_id != mem_id_out:
+                continue
+            for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
+                if rec_id_out is not None and rec_id != rec_id_out:
+                    continue
 
-    #             if c.debug:
-    #                 rec = self.info['fields'][rec_id]
-    #                 print(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
-    #             else:
-    #                 c.print_1p(progress_bar(m*nr+r, nm*nr))
+                if c.config.debug:
+                    rec = self.info.fields[rec_id]
+                    print(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
+                else:
+                    c.print_1p(progress_bar(m*nr+r, nm*nr))
 
-    #             ##get the field record for output
-    #             fld = fields[mem_id, rec_id]
+                ##get the field record for output
+                fields = getattr(self, f"fields_{tag}")
+                fld = fields[mem_id, rec_id]
 
-    #             ##write the data to binary file
-    #             c.io.write_field#state_file, self.info, c.grid.mask, mem_id, rec_id, fld)
+                c.io.write_field(fld, c, tag, rec_id, mem_id)
 
-    #     c.comm.Barrier()
-    #     c.print_1p(' done.\n')
+        c.print_1p(' done.\n')
 
-    # def output_ens_mean(self, c, fields, mean_file):
-    #     """
-    #     Compute ensemble mean of a field stored distributively on all pid_mem
-    #     collect means on pid_mem=0, and output to mean_file
+    def output_ens_mean(self, c: Context, tag: str) -> None:
+        """
+        Compute ensemble mean of a field stored distributively on all pid_mem
+        collect means on pid_mem=0, and output to mean_file
 
-    #     Args:
-    #         c (Config): config obj
-    #         fields (dict): the locally stored field-complete fields for output
-    #         mean_file (str): path to the output binary file for the ensemble mean
-    #     """
-    #     c.print_1p('>>> compute ensemble mean, save to '+mean_file+'\n')
+        Args:
+            c (Context): the runtime context obj
+            tag (str): which version of state this is: 'prior_mean', 'post_mean', or 'z'
+            mean_file (str): path to the output binary file for the ensemble mean
+        """
+        c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'\n')
 
-    #     if c.pid == 0:
-    #         ##if file doesn't exist, create the file, write state_info
-    #         open(mean_file, 'wb')
-    #         self.write_state_info(mean_file)
-    #     c.comm.Barrier()
+        fields = getattr(self, f"fields_{tag}")
+        c.io.prepare_collective_io(c, tag)
 
-    #     for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
-    #         rec = self.info['fields'][rec_id]
-    #         if c.debug:
-    #             print(f"PID {c.pid:4}: saving mean field '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
-    #         else:
-    #             c.print_1p(progress_bar(r, len(self.rec_list[c.pid_rec])))
+        for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
+            rec = self.info.fields[rec_id]
+            if c.config.debug:
+                print(f"PID {c.pid:4}: saving mean field '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
+            else:
+                c.print_1p(progress_bar(r, len(self.rec_list[c.pid_rec])))
 
-    #         ##initialize a zero field with right dimensions for rec_id
-    #         fld_shape = (2,)+self.info['shape'] if rec['is_vector'] else self.info['shape']
-    #         sum_fld_pid = np.zeros(fld_shape)
+            ##initialize a zero field with right dimensions for rec_id
+            fld_shape = (2,)+self.info.shape if rec.is_vector else self.info.shape
+            sum_fld_pid = np.zeros(fld_shape)
 
-    #         ##sum over all fields locally stored on pid
-    #         for mem_id in self.mem_list[c.pid_mem]:
-    #             sum_fld_pid += fields[mem_id, rec_id]
+            ##sum over all fields locally stored on pid
+            for mem_id in self.mem_list[c.pid_mem]:
+                sum_fld_pid += fields[mem_id, rec_id]
 
-    #         ##sum over all field sums on different pids together to get the total sum
-    #         ##TODO:reduce is expensive if only part of pid holds state in memory
-    #         sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
+            ##sum over all field sums on different pids together to get the total sum
+            ##TODO:reduce is expensive if only part of pid holds state in memory
+            sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
 
-    #         if c.pid_mem == 0:
-    #             mean_fld = sum_fld / c.nens
-    #             self.write_field(mean_file, c.grid.mask, 0, rec_id, mean_fld)
+            if c.pid_mem == 0:
+                mean_fld = sum_fld / c.config.nens
+                c.io.write_field(mean_fld, c, tag, rec_id, mem_id=0)
 
-    #     c.comm.Barrier()
-    #     c.print_1p(' done.\n')
+        c.print_1p(' done.\n')
 
-    # def output_z_coords(self, c):
-    #     ##topaz uses the first ensemble member z coords as the reference z for obs
-    #     ##include this here for backward compatibility
-    #     ##there is no need for choosing which member also, just use the first one
-    #     if c.z_coords_from == 'member':
-    #         self.output_state(c, self.z_fields, self.z_coords_file, mem_id_out=0)
+    def output_z(self, c):
+        ##topaz uses the first ensemble member z coords as the reference z for obs
+        ##include this here for backward compatibility
+        ##there is no need for choosing which member also, just use the first one
+        if c.z_coords_from == 'member':
+            self.output_state(c, 'z', mem_id_out=0)
 
-    #     ##we use by default the ensemble mean z coords as the reference z for obs
-    #     if c.z_coords_from == 'mean':
-    #         self.output_ens_mean(c, self.z_fields, self.z_coords_file)
+        ##we use by default the ensemble mean z coords as the reference z for obs
+        if c.z_coords_from == 'mean':
+            self.output_ens_mean(c, 'z')
 
     def pack_field_chunk(self, c: Context, fld, is_vector, dst_pid):
         fld_chk = {}
@@ -435,7 +424,7 @@ class State:
         c.print_1p(' done.\n')
         return fields
 
-    def pack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, z_state: StateEns) -> dict:
+    def pack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, state_z: StateEns) -> dict:
         """pack state dict into arrays to be more easily handled by jitted funcs"""
         data = {}
 
@@ -473,7 +462,7 @@ class State:
             data['err_type'][n] = self.info.err_types.index(rec.err_type)
             data['var_id'][n] = self.info.variables.index(rec.name)
             for m in range(c.config.nens):
-                data['z'][n, :] += np.squeeze(z_state[m, rec_id][par_id][v, :]).astype(np.float32) / c.config.nens  ##ens mean z
+                data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.config.nens  ##ens mean z
                 data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
 
         return data

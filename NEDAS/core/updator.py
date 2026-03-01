@@ -43,37 +43,52 @@ class Updator(ABC):
         nr_max = np.max([len(lst) for _,lst in rec_list.items()])
         for r in range(nr_max):
             for m in range(nm_max):
-                ##get file names for sync io
                 pid_active = ( m < len(mem_list[c.pid_mem]) and r < len(rec_list[c.pid_rec]) )
+
+                self.prepare_async_file_io(c, r, m, pid_active)
+
                 if pid_active:
                     mem_id = mem_list[c.pid_mem][m]
                     rec_id = rec_list[c.pid_rec][r]
                     rec = c.state.info.fields[rec_id].asdict()
-                    ##TODO: this is specific to offline io
-                    file = c.io.call_model_io(c, rec['model_src'], 'filename', member=mem_id, **rec)
-                else:
-                    mem_id = 0
-                    rec_id = 0
-                    rec = {}
-                    file = None
-                all_files = c.comm.allgather(file)
-                ##create the file locks
-                for file in all_files:
-                    c.comm.init_file_lock(file)
-
-                if pid_active:
                     if c.config.debug:
                         print(f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
                     else:
                         c.print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
 
-                    ##apply the increment to restart files
-                    ##IO backend here
+                    ##apply the increment to restart files (use io backend)
                     self.update_files(c, mem_id, rec_id)
 
         c.comm.Barrier()
         #c.comm.cleanup_file_locks()
         c.print_1p(' done.\n')
+
+    def prepare_async_file_io(self, c: Context, r: int, m: int, pid_active: bool):
+        """
+        Prepare file locks for asynchronous io, needed for blocking write (e.g. in netcdf without parallel support)
+        """
+        if c.config.io_mode != 'offline':
+            return
+
+        ##get file names for sync io
+        mem_list = c.state.mem_list
+        rec_list = c.state.rec_list
+        if pid_active:
+            mem_id = mem_list[c.pid_mem][m]
+            rec_id = rec_list[c.pid_rec][r]
+            rec = c.state.info.fields[rec_id].asdict()
+            model = c.models[rec['model_src']]
+            file = c.io.call_io_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
+        else:
+            mem_id = 0
+            rec_id = 0
+            rec = {}
+            file = None
+        all_files = c.comm.allgather(file)
+
+        ##create the file locks
+        for file in all_files:
+            c.comm.init_file_lock(file)
 
     @abstractmethod
     def compute_increment(self, c: Context) -> None:
