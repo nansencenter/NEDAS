@@ -162,105 +162,7 @@ class OfflineFilterAnalysisScheme(FilterAnalysisScheme):
         The ``perturb`` section in configuration file defines the scheme and parameters for the perturbation.
         The `utils.random_perturb`` module implements the random field generator functions.
         """
-        if c.perturb is None:
-            c.print_1p(f"No perturbation defined in config, exiting.\n")
-            return
-        c.print_1p(f"Perturbing state:")
-
-        ##clean perturb files in current cycle dir
-        for rec in c.perturb:
-            perturb_dir = os.path.join(c.forecast_dir(c.time, rec['model_src']), 'perturb')
-            if c.pid==0:
-                run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
-        c.comm.Barrier()
-
-        ##distribute perturbation items among MPI ranks
-        task_list = bcast_by_root(c.comm)(self.distribute_perturb_tasks)(c)
-
-        c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
-
-        ##first go through the fields to count how many (for showing progress)
-        nfld = 0
-        for rec in task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]
-            vname = ensure_list(rec['variable'])[0]
-            dt = model.variables[vname]['dt']
-            niter = c.cycle_period // dt + 1
-            for n in range(niter):
-                for k in model.variables[vname]['levels']:
-                    nfld += 1
-
-        ##actually go through the fields to perturb now
-        fld_id = 0
-        for rec in task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]  ##model class object
-            mem_id = rec['member']
-            mstr = f'_mem{mem_id+1:03d}'
-            path = c.forecast_dir(c.time, model_name)
-            variable_list = ensure_list(rec['variable'])
-
-            ##check if previous perturb is available from past cycles
-            perturb = {}
-            for vname in variable_list:
-                psfile = os.path.join(c.forecast_dir(c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
-                if os.path.exists(psfile):
-                    perturb[vname] = np.load(psfile)
-                else:
-                    perturb[vname] = None
-
-            # get number of time steps for this set of variables
-            # perturbation will be generated for all time steps if variable is available
-            dt = max([model.variables[v]['dt'] for v in variable_list])
-            nstep = c.cycle_period // dt + 1
-            for n in range(nstep):
-                t = c.time + n * dt * dt1h
-
-                # TODO: perturbation for each k level is drawn independently, can be improved
-                # by introducing a vertical correlation length scale, or using EOF modes.
-                # Note: assuming all variables in the list have the same k levels
-                for k in model.variables[variable_list[0]]['levels']:
-                    fld_id += 1
-                    if c.debug:
-                        print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
-                    else:
-                        c.print_1p(progress_bar(fld_id, nfld+1))
-
-                    vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
-                    model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
-                    model.grid.set_destination_grid(c.grid)
-                    c.grid.set_destination_grid(model.grid)
-
-                    # collect variable fields
-                    fields = {}
-                    for vname in variable_list:
-                        ##read variable from model state
-                        fld = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
-                        ##convert to analysis grid
-                        fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname]['is_vector'])
-
-                    ##generate perturbation on analysis grid
-                    fields_pert, perturb = random_perturb(c.grid, fields, prev_perturb=perturb, dt=dt, n=n, **rec)
-
-                    if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
-                        ##use model internal method to apply displacement perturbations directly
-                        model.displace(perturb, path=path, time=t, member=mem_id, k=k)
-                    else:
-                        ##convert from analysis grid to model grid, and
-                        ##write the perturbed variables back to model state files
-                        for vname in variable_list:
-                            fld = c.grid.convert(fields_pert[vname], is_vector=model.variables[vname]['is_vector'])
-                            model.write_var(fld, path=path, name=vname, time=t, member=mem_id, k=k)
-
-            ##save a copy of perturbation at next_t, for use by next cycle
-            for vname in variable_list:
-                psfile = os.path.join(path, 'perturb', vname+mstr+'.npy')
-                run_command(f"mkdir -p {os.path.dirname(psfile)}")
-                np.save(psfile, perturb[vname])
-
-        c.comm.Barrier()
-        c.print_1p(' done.\n')
+        pass
 
     def diagnose(self, c):
         """
@@ -271,33 +173,7 @@ class OfflineFilterAnalysisScheme(FilterAnalysisScheme):
         The ``diag`` section in configuration file defines the methods and parameters of the diagnostics,
         corresponding to the ``diag.method`` module that implements the particular diagnostic method.
         """
-        c.print_1p(f"Running diagnostics:")
-
-        ##get task list for each rank
-        task_list = bcast_by_root(c.comm)(self.distribute_diag_tasks)(c)
-
-        ##the processor with most work load will show progress messages
-        c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
-
-        ##init file locks for collective i/o
-        self.init_file_locks(c)
-
-        ntask = len(task_list[c.pid])
-        for task_id, rec in enumerate(task_list[c.pid]):
-            if c.debug:
-                print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
-            else:
-                c.print_1p(progress_bar(task_id, ntask))
-
-            method_name = f"NEDAS.diag.{rec['method']}"
-            mod = importlib.import_module(method_name)
-
-            ##perform the diag task
-            mod.run(c, **rec)
-
-        c.comm.Barrier()
-        c.print_1p(' done.\n')
-        c.comm.cleanup_file_locks()
+        pass
 
     def run_step(self, c, step, mpi):
         """
@@ -398,32 +274,6 @@ class OfflineFilterAnalysisScheme(FilterAnalysisScheme):
         scheduler.start_queue() ##start the job queue
         scheduler.shutdown()
         print(' done.', flush=True)
-
-    def distribute_perturb_tasks(self, c):
-        task_list_full = []
-        for perturb_rec in ensure_list(c.perturb):
-            for mem_id in range(c.nens):
-                task_list_full.append({**perturb_rec, 'member':mem_id})
-        task_list = distribute_tasks(c.comm, task_list_full)
-        return task_list
-
-    def distribute_diag_tasks(self, c):
-        """Build the full task list and distribute among mpi ranks"""
-        task_list_full = []
-        for rec in ensure_list(c.diag):
-            ##load the module for the given method
-            method_name = f"NEDAS.diag.{rec['method']}"
-            module = importlib.import_module(method_name)
-            ##module returns a list of tasks to be done by each processor
-            if not hasattr(module, 'get_task_list'):
-                task_list_full.append(rec)
-                continue
-            task_list_rec = module.get_task_list(c, **rec)
-            for task in task_list_rec:
-                task_list_full.append(task)
-        ##collected full list of tasks is evenly distributed across the mpi communicator
-        task_list = distribute_tasks(c.comm, task_list_full)
-        return task_list
 
     def init_file_locks(self, c):
         """Build the full task list for the diagnostics part of the config"""

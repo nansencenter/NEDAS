@@ -42,7 +42,7 @@ class Obs:
     lobs_post: LocalObsEns = {}    # will be created by assimilator.assimilate()
     obs_post: ObsEns = {}          # will be created by self.transpose_to_field_complete()
     data: dict = {}                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
- 
+
     def __init__(self, c: Context):
         self.info = bcast_by_root(c.comm)(ObsInfo)(c)
         self.obs_rec_list = bcast_by_root(c.comm)(self.distribute_obs_tasks)(c)
@@ -63,7 +63,7 @@ class Obs:
 
         return obs_rec_list
 
-    def read_mean_z_coords(self, c: Context, time: datetime) -> np.ndarray:
+    def get_model_z(self, c: Context, time: datetime) -> np.ndarray:
         """
         Read the ensemble-mean z coords from z_file at obs time
 
@@ -88,7 +88,13 @@ class Obs:
             rec = c.state.info.fields[rec_id]
 
             ##read the z field with (mem_id=0, rec_id) from fields_z
-            z_fld = c.io.read_field(c, 'z', rec_id, mem_id=0)
+            if c.config.z_coords_from == 'mean':
+                ztag = 'z_mean'
+            elif c.config.z_coords_from == 'member':
+                ztag = 'z'
+            else:
+                raise ValueError
+            z_fld = c.io.read_field(c, ztag, rec_id, mem_id=0)
 
             ##assign the coordinates to z(k)
             if rec.is_vector:
@@ -185,7 +191,71 @@ class Obs:
                     z_ = model.grid.convert(model_z, method='nearest')
                     z = np.array([z_, z_]) if is_vector else z_
 
-                self.v_interp(c, fld, k, levels, is_vector, z, obs_x, obs_y, obs_z, seq)
+                ##horizontal interp field to obs_x,y, for current layer k
+                ##TODO: move vertical interp to a separate function
+                if is_vector:
+                    z = c.grid.interp(z[0, ...], obs_x, obs_y, method='nearest')
+                    zc = np.array([z, z])
+                    v1 = c.grid.interp(fld[0, ...], obs_x, obs_y, method='nearest')
+                    v2 = c.grid.interp(fld[1, ...], obs_x, obs_y, method='nearest')
+                    vc = np.array([v1, v2])
+                else:
+                    zc = c.grid.interp(z, obs_x, obs_y, method='nearest')
+                    vc = c.grid.interp(fld, obs_x, obs_y, method='nearest')
+
+                ##vertical interp to obs_z, take ocean depth as example:
+                ##    -------------------------------------------
+                ##k-1 -  -  -  -  v[k-1], vp  }dzp  prevous layer
+                ##    ----------  z[k-1], zp --------------------
+                ##k   -  -  -  -  v[k],   vc  }dzc  current layer
+                ##    ----------  z[k],   zc --------------------
+                ##k+1 -  -  -  -  v[k+1]
+                ##
+                ##z at current level k denoted as zc, previous level as zp
+                ##variables are considered layer averages, so they are at layer centers
+                zp = None; vp = None; dzp = None; dzc = None;
+                if k == 0:
+                    dzc = zc  ##layer thickness for first level
+
+                    ##the first level: constant vc from z=0 to dzc/2
+                    inds = (obs_z >= np.minimum(0, 0.5*dzc)) & (obs_z <= np.maximum(0, 0.5*dzc))
+                    seq[..., inds] = vc[..., inds]
+
+                if k > 0:
+                    dzc = zc - zp  ##layer thickness for level k
+
+                    ##in between levels: linear interp between vp and vc
+                    assert dzp is not None
+                    assert vp is not None
+                    z_vp = zp - 0.5*dzp
+                    z_vc = zp + 0.5*dzc
+                    inds = (obs_z >= np.minimum(z_vp, z_vc)) & (obs_z <= np.maximum(z_vp, z_vc))
+                    ##there can be collapsed layers if z_vc=z_vp
+                    zdiff = z_vc - z_vp
+                    collapsed = (zdiff == 0)
+                    zdiff = np.where(collapsed, 1, zdiff)
+                    vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp) / zdiff
+                    vi = np.where(collapsed, vp, vi)
+
+                    ##TODO: still got some warnings here
+                    #with np.errstate(divide='ignore'):
+                    #    vi = np.where(z_vp==z_vc,
+                    #                vp,   ##for collapsed layers just use previous value
+                    #                ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
+                    seq[..., inds] = vi[..., inds]
+
+                if k == len(levels)-1:
+                    ##the last level: constant vc from z=zc-dzc/2 to zc
+                    assert dzc is not None
+                    inds = (obs_z >= np.minimum(zc-0.5*dzc, zc)) & (obs_z <= np.maximum(zc-0.5*dzc, zc))
+                    seq[..., inds] = vc[..., inds]
+
+                if k < len(levels)-1:
+                    assert dzc is not None
+                    ##make a copy of current layer as 'previous' for next k
+                    zp = zc.copy()
+                    vp = vc.copy()
+                    dzp = dzc.copy()
 
         elif obs_name in dataset.obs_operator:
             ##option 2:
@@ -199,73 +269,6 @@ class Obs:
             raise ValueError('unable to obtain obs prior for '+obs_name)
 
         return seq
-
-    def v_interp(self, c: Context, fld: np.ndarray, k: int, levels: np.ndarray, is_vector: bool, z: np.ndarray,
-                 obs_x: np.ndarray, obs_y: np.ndarray, obs_z: np.ndarray, seq: np.ndarray):
-        ##horizontal interp field to obs_x,y, for current layer k
-        if is_vector:
-            z = c.grid.interp(z[0, ...], obs_x, obs_y, method='nearest')
-            zc = np.array([z, z])
-            v1 = c.grid.interp(fld[0, ...], obs_x, obs_y, method='nearest')
-            v2 = c.grid.interp(fld[1, ...], obs_x, obs_y, method='nearest')
-            vc = np.array([v1, v2])
-        else:
-            zc = c.grid.interp(z, obs_x, obs_y, method='nearest')
-            vc = c.grid.interp(fld, obs_x, obs_y, method='nearest')
-
-        ##vertical interp to obs_z, take ocean depth as example:
-        ##    -------------------------------------------
-        ##k-1 -  -  -  -  v[k-1], vp  }dzp  prevous layer
-        ##    ----------  z[k-1], zp --------------------
-        ##k   -  -  -  -  v[k],   vc  }dzc  current layer
-        ##    ----------  z[k],   zc --------------------
-        ##k+1 -  -  -  -  v[k+1]
-        ##
-        ##z at current level k denoted as zc, previous level as zp
-        ##variables are considered layer averages, so they are at layer centers
-        zp = None; vp = None; dzp = None; dzc = None;
-        if k == 0:
-            dzc = zc  ##layer thickness for first level
-
-            ##the first level: constant vc from z=0 to dzc/2
-            inds = (obs_z >= np.minimum(0, 0.5*dzc)) & (obs_z <= np.maximum(0, 0.5*dzc))
-            seq[..., inds] = vc[..., inds]
-
-        if k > 0:
-            dzc = zc - zp  ##layer thickness for level k
-
-            ##in between levels: linear interp between vp and vc
-            assert dzp is not None
-            assert vp is not None
-            z_vp = zp - 0.5*dzp
-            z_vc = zp + 0.5*dzc
-            inds = (obs_z >= np.minimum(z_vp, z_vc)) & (obs_z <= np.maximum(z_vp, z_vc))
-            ##there can be collapsed layers if z_vc=z_vp
-            zdiff = z_vc - z_vp
-            collapsed = (zdiff == 0)
-            zdiff = np.where(collapsed, 1, zdiff)
-            vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp) / zdiff
-            vi = np.where(collapsed, vp, vi)
-
-            ##TODO: still got some warnings here
-            #with np.errstate(divide='ignore'):
-            #    vi = np.where(z_vp==z_vc,
-            #                vp,   ##for collapsed layers just use previous value
-            #                ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
-            seq[..., inds] = vi[..., inds]
-
-        if k == len(levels)-1:
-            ##the last level: constant vc from z=zc-dzc/2 to zc
-            assert dzc is not None
-            inds = (obs_z >= np.minimum(zc-0.5*dzc, zc)) & (obs_z <= np.maximum(zc-0.5*dzc, zc))
-            seq[..., inds] = vc[..., inds]
-
-        if k < len(levels)-1:
-            assert dzc is not None
-            ##make a copy of current layer as 'previous' for next k
-            zp = zc.copy()
-            vp = vc.copy()
-            dzp = dzc.copy()
 
     def validate_seq_shape(self, seq: np.ndarray, is_vector: bool) -> None:
         """

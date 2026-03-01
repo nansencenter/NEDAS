@@ -1,11 +1,21 @@
-from abc import ABC, abstractmethod
+import os
+import sys
+import tempfile
+import importlib.util
+import subprocess
+import numpy as np
 from datetime import datetime
-from NEDAS.utils.progress import timer
+from NEDAS.utils.conversion import ensure_list, dt1h
+from NEDAS.utils.progress import timer, progress_bar
+from NEDAS.utils.shell_utils import makedir, run_command, run_job
+from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
+from NEDAS.utils.random_perturb import random_perturb
+from NEDAS import assim_tools
 from NEDAS.core import Scheme, Context, State, Obs
 
-class FilterAnalysisScheme(Scheme, ABC):
+class FilterAnalysisScheme(Scheme):
     """
-    Base scheme for filtering analysis.
+    Scheme subclass for performing filter analysis.
 
     This scheme runs the 4D analysis by cycling through time steps. Running the ensemble forecast first,
     pause the model at a certain time step (`analysis cycle`), then perform data assimilation at the
@@ -13,9 +23,16 @@ class FilterAnalysisScheme(Scheme, ABC):
     as new initial conditions, the ensemble forecast is run again to reach the next analysis cycle, until
     the end of the period of interest. The length of forecasts between cycles is called the `cycling period`.
     """
+
     def __call__(self) -> None:
         c = self.c
         c.show_summary()
+
+        if c.config.step:
+            ##if --step=STEP is specified at runtime, just run STEP and quit
+            self.run_step(c, c.config.step)
+            return
+
         print("Cycling start.", flush=True)
         while c.time < c.config.time_end:
             print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
@@ -48,7 +65,7 @@ class FilterAnalysisScheme(Scheme, ABC):
 
         print("Cycling complete.", flush=True)
 
-    @abstractmethod
+
     def check_cycle_complete(self, c: Context, time: datetime) -> bool:
         """
         Method checks on a given cycle to see if it's complete or not
@@ -62,21 +79,18 @@ class FilterAnalysisScheme(Scheme, ABC):
         """
         ...
 
-    @abstractmethod
     def preprocess(self, c: Context) -> None:
         """
         Pre-processing step before the forecast.
         """
         ...
 
-    @abstractmethod
     def postprocess(self, c: Context) -> None:
         """
         Post-processing step after the assimilation and before the next forecast.
         """
         ...
 
-    @abstractmethod
     def ensemble_forecast(self, c: Context) -> None:
         """
         Ensemble forecast step.
@@ -259,3 +273,17 @@ class FilterAnalysisScheme(Scheme, ABC):
         # c.comm.Barrier()
         # c.print_1p(' done.\n')
         # c.comm.cleanup_file_locks()
+
+
+if __name__ == '__main__':
+    # get config from runtime args, including the step to run (from --step)
+    from NEDAS.config import Config
+    config = Config(parse_args=True)
+    if not config.step:
+        raise RuntimeError("no step specified for offline filter scheme")
+
+    scheme = FilterAnalysisScheme(config)
+    step = getattr(scheme, config.step)
+    timer(scheme.c)(step)(scheme.c)
+
+    scheme.c.comm.finalize()

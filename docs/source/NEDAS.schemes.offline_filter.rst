@@ -104,10 +104,10 @@ Functions:
 * `update()`: Take `state_prior` and `state_post`, apply miscellaneous user-defined inverse transforms, compute `analysis_incr()`, convert the increment back to model native grid and add the increments to the model variables int he restart files. Apart from simply adding the increments, some other post-processing steps can be implemented, for example using the increments to compute optical flows and align the model variables instead.
 
 
-NEDAS.schemes.offline\_filter module
-------------------------------------
+NEDAS.schemes.filter module
+---------------------------
 
-.. automodule:: NEDAS.schemes.offline_filter
+.. automodule:: NEDAS.schemes.filter
    :members:
    :show-inheritance:
    :undoc-members:

@@ -176,7 +176,7 @@ perturb:
   hcorr: 2.5e5
   tcorr: 48
 
-scheme: offline_filter
+scheme: filter
 
 niter: 1
 iter:

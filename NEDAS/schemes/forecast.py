@@ -244,17 +244,12 @@ class ForecastScheme(BaseScheme):
 
     def run_step(self, c, step, mpi):
         """
-        Helper function to run this script (``offline_filter.py``) from an external call.
+        Helper function to run this script (``forecast.py``) from an external call.
 
         Args:
             c (Config): Configuration.
             step (str): Step to run.
             mpi (bool): Whether to run the step within mpi environment.
-
-        This is useful when each step uses different strategies in parallelization.
-        For the ``filter`` , ``diagnose`` and ``perturb`` steps, an mpirun call starts the program with mpi4py support,
-        while the ``ensemble_forecast``, ``preprocess`` and ``postprocess`` steps start as a serial call to python,
-        and utilize a custom scheduler implemented in ``utils.parallel.Scheduler`` to spawn the tasks to multiple processors.
         """
         script_file = os.path.abspath(__file__)
 

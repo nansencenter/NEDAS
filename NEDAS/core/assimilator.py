@@ -36,23 +36,6 @@ class Assimilator(ABC):
         # posterior inflation
         c.inflation_func(c, 'post')
 
-    # def prior_inflation(self, c, state, obs):
-    #     """
-    #     Apply covariance inflation for the prior ensemble
-    #     """
-    #     state.output_ens_mean(c, state.fields_prior, state.prior_mean_file)
-    #     c.inflation_func(c, state, obs, 'prior')
-    #     state.output_state(c, state.fields_prior, state.prior_file)
-
-    # def posterior_inflation(self, c, state, obs):
-    #     """
-    #     Apply covariance inflation for the posterior ensemble
-    #     """
-    #     obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
-    #     state.output_ens_mean(c, state.fields_post, state.post_mean_file)
-    #     c.inflation_func(c, state, obs, 'posterior')
-    #     state.output_state(c, state.fields_post, state.post_file)
-
     def partition_grid(self, c: Context) -> None:
         """
         Partition the analysis grid into several parts and distribute the workload over the mpi ranks.
@@ -83,7 +66,7 @@ class Assimilator(ABC):
         c.state.state_prior = c.state.transpose_to_ensemble_complete(c, c.state.fields_prior)
 
         c.print_1p('z coords: ')
-        c.state.z_state = c.state.transpose_to_ensemble_complete(c, c.state.z_fields)
+        c.state.state_z = c.state.transpose_to_ensemble_complete(c, c.state.fields_z)
 
         c.print_1p('obs sequences: ')
         c.obs.lobs = c.obs.transpose_obs_seq(c, c.obs.obs_seq)

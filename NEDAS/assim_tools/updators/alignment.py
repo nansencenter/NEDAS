@@ -5,6 +5,7 @@ from NEDAS.core import Context, Updator
 
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique"""
+    displace = {}
 
     def compute_increment(self, c: Context):
         """
@@ -25,7 +26,8 @@ class AlignmentUpdator(Updator):
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 displace = optical_flow(c.grid, fld_prior, fld_post, **c.config.alignment)
-                # np.save(os.path.join(c.io.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
+                self.displace[mem_id, rec['k']] = displace
+                #np.save(os.path.join(c.io.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
 
                 ##the model class offer a method to update grid (a lagrangian approach)
                 ##so displace increment will be applied directly to the grid elements
@@ -39,22 +41,20 @@ class AlignmentUpdator(Updator):
 
         c.comm.Barrier()
 
-    def update_restartfile(self, c, state, mem_id, rec_id):
+    def update_files(self, c, mem_id, rec_id):
         """
         Alignment technique, use the displace increment to adjust the model grid to
         precondition all the analysis variables for next assimilation step
         See more details in Ying 2019
         """
-        rec = state.info['fields'][rec_id]
+        rec = c.state.info.fields[rec_id].asdict()
         model = c.models[rec['model_src']]
-        path = c.forecast_dir(rec['time'], rec['model_src'])
-        fld_prior = state.fields_prior[mem_id, rec_id]
-        fld_post = state.fields_post[mem_id, rec_id]
+        fld_prior = c.state.fields_prior[mem_id, rec_id]
+        fld_post = c.state.fields_post[mem_id, rec_id]
 
         ##get model state variable prior
-        model.read_grid(path=path, member=mem_id, **rec)
+        var_prior = c.io.call_io_method(c, 'prior', model.read_var, member=mem_id, **rec)
         c.grid.set_destination_grid(model.grid)
-        var_prior = model.read_var(path=path, member=mem_id, **rec)
 
         if rec['is_vector']:
             fld_shape = var_prior.shape[1:]
@@ -62,7 +62,8 @@ class AlignmentUpdator(Updator):
             fld_shape = var_prior.shape
 
         ##read the corresponding displacement and convert to model grid
-        displace = np.load(os.path.join(state.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"))
+        #displace = np.load(os.path.join(state.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"))
+        displace = self.displace[mem_id, rec['k']]
 
         ##warp the prior field with displacement
         fld_prior_warp = fld_prior.copy()
@@ -98,7 +99,7 @@ class AlignmentUpdator(Updator):
         var_post[ind] = var_prior[ind]
         #if np.isnan(var_post).any():
         #    raise ValueError('nan detected in var_post')
-        model.write_var(var_post, path=path, member=mem_id, comm=c.comm, **rec)
+        c.io.call_io_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
 
 def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1, **kwargs):
     ni = int(2**np.ceil(np.log(np.max(fld1.shape))/np.log(2)))

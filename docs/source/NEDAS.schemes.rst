@@ -1,10 +1,10 @@
-Analysis schemes
-================
+Schemes
+=======
 
-NEDAS.schemes.get\_analysis\_scheme module
+NEDAS.schemes.get\_scheme module
 ------------------------------------------
 
-.. automodule:: NEDAS.schemes.get_analysis_scheme
+.. automodule:: NEDAS.schemes.get_scheme
    :members:
    :show-inheritance:
    :undoc-members:
@@ -21,4 +21,4 @@ NEDAS.schemes.base module
    :maxdepth: 2
    :caption: Available schemes
 
-   NEDAS.schemes.offline_filter
+   NEDAS.schemes.filter

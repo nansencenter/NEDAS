@@ -190,7 +190,7 @@ Analysis scheme design parameters
        major steps in the workflow.
      - True
    * - ``step``
-     - Used by :mod:`NEDAS.schemes.offline_filter`.
+     - Used by :mod:`NEDAS.schemes.filter`.
 
        If None, will run the entire workflow.
 
@@ -637,7 +637,7 @@ Assimilation method
 ^^^^^^^^^^^^^^^^^^^
 
 The following parameters helps :func:`get_scheme` to locate the right subclass of :class:`Scheme`.
-Currently only 'offline_filter' scheme is implemented.
+Currently only 'filter' and 'forecast' schemes are implemented.
 For the specific ``filter_type``, the corresponding :class:`Assimilator` subclass will be chosen to perform the filter step.
 
 .. list-table::
@@ -649,7 +649,7 @@ For the specific ``filter_type``, the corresponding :class:`Assimilator` subclas
      - Example
    * - ``scheme``
      - Type of analysis scheme to use.
-     - 'offline_filter'
+     - 'filter'
    * - ``assimilator``
      - Type of filter
      - 'ETKF' (for batch mode), 'EAKF' (for serial mode)
