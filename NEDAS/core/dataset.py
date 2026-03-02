@@ -55,9 +55,9 @@ class Dataset(ABC):
         # other args, set default values if not specified
         ##TODO: how to type hint these runtime kwargs?
         # model (Model): model class instance
-        # grid (GridType): target grid
-        # mask (np.ndarray): target grid mask (True if grid point is not part of the state)
-        # z (dict[LevelID, np.ndarray]): z coordinates at each level k
+        # grid (GridType): target analysis grid
+        # mask (np.ndarray): target analysis grid mask (True if grid point is not part of the state)
+        # z (dict[LevelID, np.ndarray]): z coordinates at each level k on analysis grid
         for key in ['model', 'grid', 'mask', 'z']:
             if key not in kwargs:
                 kwargs[key] = None

@@ -6,7 +6,7 @@ from NEDAS.utils.progress import progress_bar
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
-from .types import ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
+from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
 from .obs_info import ObsInfo
 
 class Obs:
@@ -63,6 +63,45 @@ class Obs:
 
         return obs_rec_list
 
+    def get_ref_z(self, c: Context, model_name: str, time: datetime) -> dict[LevelID, np.ndarray]:
+        """
+        Get the reference z coords at level k on the analysis grid from a model,
+        to be used in dataset modules for generating random_network or superobing/thinning in read_obs.
+
+        Args:
+            c (Context): the runtime context
+            model_name (str): the model name
+            time (datetime): the time of the model state
+
+        Returns:
+            dict[LevelID, np.ndarray]: the z coords field at each level
+        """
+        if c.config.z_coords_from == 'mean':
+            # will read the ensemble mean z coords as reference
+            ztag = 'z_mean'
+        elif c.config.z_coords_from == 'member':
+            # will just read z coords from the first member as reference
+            ztag = 'z'
+        else:
+            raise ValueError("unknown config.z_coords_from: {c.config.z_coords_from}")
+
+        # get the full list of vertical level ids
+        k_list = list(set([r.k for r in c.state.info.fields.values() if r.time==time and r.model_src==model_name]))
+        z = {}
+        for k in k_list:
+            # get the rec_id corresponding to this level
+            # there can be multiple records (different state variables), we only need to take the first one
+            rec_id_find = [i for i,r in c.state.info.fields.items() if r.time==time and r.model_src==model_name and r.k==k]
+            if len(rec_id_find) == 0:
+                raise RuntimeError(f"no record in state.info.fields found for vertical level id {k}")
+            rec_id = rec_id_find[0]
+            rec = c.state.info.fields[rec_id]
+
+            # read the z field with (mem_id=0, rec_id) from state.fields_z and add to z dict
+            z_fld = c.io.read_field(c, ztag, rec_id, mem_id=0)
+            z[k] = z_fld[0, ...] if rec.is_vector else z_fld
+        return z
+
     def state_to_obs(self, c: Context, tag: str, **kwargs) -> np.ndarray:
         """
         Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
@@ -91,195 +130,138 @@ class Obs:
         Returns:
             np.ndarray: Values corresponding to the obs_seq but from the state identified by kwargs
         """
-        # obs dataset source module
+        obs_name = kwargs['name']
+        obs_x = np.array(kwargs['x'])
+        obs_y = np.array(kwargs['y'])
+        obs_z = np.array(kwargs['z'])
         dataset = c.datasets[kwargs['dataset_src']]
+        model = c.models[kwargs['model_src']]
 
-        # model source module
-        model_name = kwargs['model_src']
-        model = c.models[model_name]
-
-        # z coords
-        z = {}
-        
-
-        if kwargs['name'] in model.variables:
+        if obs_name in model.variables:
             # option 1:
-            # if obs variable is one of the state variable, or can be computed by the model,
+            # obs_name is one of the variables provided by the model.read_var
             # then we just need to collect the 3D variable and interpolate in x,y,z
-
-            obs_x = np.array(kwargs['x'])
-            obs_y = np.array(kwargs['y'])
-            obs_z = np.array(kwargs['z'])
             nobs = len(obs_x)
-            if kwargs['is_vector']:
-                seq = np.full((2, nobs), np.nan)
-            else:
-                seq = np.full(nobs, np.nan)
+            seq = np.full((2, nobs), np.nan) if kwargs['is_vector'] else np.full(nobs, np.nan)
 
-            levels = model.variables[kwargs['name']].levels
-            zp = None; vp = None; dzp = None; dzc = None;
-            for k in range(len(levels)):
+            levels = model.variables[obs_name].levels
+            fp, zp, dzp = None, None, None
+            for k in levels:
+                # get model fld and z values at level k
                 kwargs['k'] = k
+                fld, zfld = self.get_model_fld_z_on_grid(c, tag, **kwargs)
 
-                fld_k = self.get_field(c, tag, **kwargs)
-                z_k = self.get_z(c, **kwargs)
-                
-                horizontal_interp()
-                seq, vp, zp, dzp = self.vertical_interp()
+                # interpolate fld to the obs location in x,y,z
+                f, z = self.horizontal_interp(c, fld, zfld, kwargs['is_vector'], obs_x, obs_y)
+                seq, fp, zp, dzp = self.vertical_interp(seq, k, levels, f, fp, z, zp, dzp, obs_z)
 
         elif kwargs['name'] in dataset.obs_operator:
             # option 2:
-            # if dataset module provides an obs_operator, use it to compute obs
+            # if dataset module provides an obs_operator, we use it to compute obs seq
             operator = dataset.obs_operator[kwargs['name']]
 
             # get the obs seq from operator
-            seq = c.io.call_io_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, z=z, **kwargs)
+            seq = c.io.call_io_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
 
         return seq
 
-    def get_field(self, c: Context, tag: str, **kwargs) -> np.ndarray:
-        """ Get a variable (2D field) from a model and conver to the analysis grid """
-        name = kwargs['name']
-        time = kwargs['time']
-        k = kwargs['k']
-        is_vector = kwargs['is_vector']
-        model_name = kwargs['model_src']
-        model = c.models[model_name]
-        mem_id = kwargs['member']
+    def get_model_fld_z_on_grid(self, c: Context, tag: str, **kwargs) -> tuple[np.ndarray, np.ndarray]:
+        """ Get obs variable field and z coords at level k and convert to c.grid """
+        model = c.models[kwargs['model_src']]
 
-        if name in [r['name'] for r in ensure_list(c.config.state_def)]:
-            # the variable (name) is one of the state variables
+        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)]:
+            # the obs variable is one of the state variables
             # we can find its corresponding rec_id and call io.read_field to get it
-            rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==name and r.time==time and r.k==k]
+            rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==kwargs['name'] and r.time==kwargs['time'] and r.k==kwargs['k']]
             if len(rec_id_found) == 0:
-                raise RuntimeError("field '{name}' is defined in state_def but not found in state.info.fields")
+                raise RuntimeError("field '{obs_name}' is defined in state_def but not found in state.info.fields")
             rec_id = rec_id_found[0]
-            fld = c.io.read_field(c, tag, rec_id, mem_id)
+            fld = c.io.read_field(c, tag, rec_id, kwargs['member'])
+            zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
+
         else:
             # otherwise, we get the field from by calling model.read_var
             model_fld = c.io.call_io_method(c, tag, model.read_var, **kwargs)
-
-            # convert the model field to the analysis c.grid
+            model_z = c.io.call_io_method(c, 'z', model.z_coords, **kwargs)
+            # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)
-            fld = model.grid.convert(model_fld, is_vector=is_vector, method=c.config.interp_method)
-        return fld
+            fld = model.grid.convert(model_fld, is_vector=kwargs['is_vector'], method=c.config.interp_method)
+            z_ = model.grid.convert(model_z, is_vector=False, method=c.config.interp_method)
+            zfld = np.array([z_, z_]) if kwargs['is_vector'] else z_
 
-    def get_z(self, c: Context, tag: str, **kwargs) -> np.ndarray:
-        """ Get the z coords at level k on the analysis grid for a model """
-        name = kwargs['name']
-        time = kwargs['time']
-        k = kwargs['k']
-        model_name = kwargs['model_src']
-        model = c.models[model_name]
+        return fld, zfld
 
-        if c.config.z_coords_from == 'mean':
-            ztag = 'z_mean'
-        elif c.config.z_coords_from == 'member':
-            ztag = 'z'
-        else:
-            raise ValueError("unknown config.z_coords_from: {c.config.z_coords_from}")
+    def horizontal_interp(self, c: Context, fld: np.ndarray, zfld: np.ndarray, is_vector: bool,
+                          obs_x: np.ndarray, obs_y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """ Interpolate fld and zfld horizontally to the obs_x,obs_y locations"""
 
-        if name in [r['name'] for r in ensure_list(c.config.state_def)]:
-            # the variable is one of the state variables
-            # we can find its corresponding rec_id and call io.read_field to get z coords
-            # there can be multiple records (different state variables), we just take the first one
-            rec_id = [i for i,r in c.state.info.fields.items() if r.time==time and r.model_src==model_name and r.k==k][0]
-            rec = c.state.info.fields[rec_id]
-
-            # read the z field with (mem_id=0, rec_id) from fields_z
-            z_fld = c.io.read_field(c, ztag, rec_id, mem_id=0)
-            if rec.is_vector:
-                return z_fld[0, ...]
-            else:
-                return z_fld
-        else:
-            # otherwise, we get the z coords by calling model.z_coords
-            if model.z and k in model.z:
-                # just return the cached z coords from model
-                model_z_fld = model.z[k]
-            else:
-                # TODO: ensemble mean of z calculation may take a lot of cost here? just use member=0 now
-                model_z_fld = c.io.call_io_method(c, tag, model.z_coords, **kwargs)
-
-            # convert to analysis c.grid
-            model.grid.set_destination_grid(c.grid)
-            z_fld = model.grid.convert(model_z_fld, is_vector=False, method=c.config.interp_method)
-            return z_fld
-
-    def horizontal_interp(self, ):
-
-        ##horizontal interp field to obs_x,y, for current layer k
-        ##TODO: move vertical interp to a separate function
         if is_vector:
-            z = c.grid.interp(z[0, ...], obs_x, obs_y, method='nearest')
-            zc = np.array([z, z])
-            v1 = c.grid.interp(fld[0, ...], obs_x, obs_y, method='nearest')
-            v2 = c.grid.interp(fld[1, ...], obs_x, obs_y, method='nearest')
-            vc = np.array([v1, v2])
+            z1 = c.grid.interp(zfld[0, ...], obs_x, obs_y, method=c.config.interp_method)
+            z = np.array([z1, z1])
+            f1 = c.grid.interp(fld[0, ...], obs_x, obs_y, method=c.config.interp_method)
+            f2 = c.grid.interp(fld[1, ...], obs_x, obs_y, method=c.config.interp_method)
+            f = np.array([f1, f2])
         else:
-            zc = c.grid.interp(z, obs_x, obs_y, method='nearest')
-            vc = c.grid.interp(fld, obs_x, obs_y, method='nearest')
-        return vc, zc
+            z = c.grid.interp(zfld, obs_x, obs_y, )
+            f = c.grid.interp(fld, obs_x, obs_y, method=c.config.interp_method)
+        return f, z
 
+    def vertical_interp(self, seq: np.ndarray, k: int, levels: Levels, f: np.ndarray,
+                        fp: np.ndarray|None, z: np.ndarray, zp: np.ndarray|None, dzp: np.ndarray|None,
+                        obs_z: np.ndarray) -> tuple:
+        """
+        Interpolate f(k) with z(k) coords vertically to the obs z locations.
 
-    def vertical_interp(self,):
-        ##vertical interp to obs_z, take ocean depth as example:
-        ##    -------------------------------------------
-        ##k-1 -  -  -  -  v[k-1], vp  }dzp  prevous layer
-        ##    ----------  z[k-1], zp --------------------
-        ##k   -  -  -  -  v[k],   vc  }dzc  current layer
-        ##    ----------  z[k],   zc --------------------
-        ##k+1 -  -  -  -  v[k+1]
-        ##
-        ##z at current level k denoted as zc, previous level as zp
-        ##variables are considered layer averages, so they are at layer centers
+        Vertical interp to obs_z, take ocean depth as example:
+        :   -  -  -  -                       :
+            ------------z[k-2] ------------------------
+        k-1 -  -  -  -  f[k-1], fp  }dzp  prevous layer
+            ----------  z[k-1], zp --------------------
+        k   -  -  -  -  v[k],   f   }dz   current layer
+            ----------  z[k],   z  --------------------
+        k+1 -  -  -  -  v[k+1]
         
-        if k == 0:
-            dzc = zc  ##layer thickness for first level
+        height at current level k denoted as z, previous level as zp.
+        variable f are considered layer averages, so they are defined at layer centers.
+        """
+        i = list(levels).index(k)  # index of current layer in all levels
+        dz = z # layer thickness for the first level
 
-            ##the first level: constant vc from z=0 to dzc/2
-            inds = (obs_z >= np.minimum(0, 0.5*dzc)) & (obs_z <= np.maximum(0, 0.5*dzc))
-            seq[..., inds] = vc[..., inds]
+        if i == 0:
+            ##the first level: constant f from z0 to dz/2
+            inds = (obs_z >= np.minimum(0, 0.5*dz)) & (obs_z <= np.maximum(0, 0.5*dz))
+            seq[..., inds] = f[..., inds]
 
-        if k > 0:
-            dzc = zc - zp  ##layer thickness for level k
+        if i > 0:
+            dz = z - zp  ##layer thickness for level k
 
-            ##in between levels: linear interp between vp and vc
+            ##in between levels: linear interp between fp and f
+            assert fp is not None
+            assert zp is not None
             assert dzp is not None
-            assert vp is not None
-            z_vp = zp - 0.5*dzp
-            z_vc = zp + 0.5*dzc
-            inds = (obs_z >= np.minimum(z_vp, z_vc)) & (obs_z <= np.maximum(z_vp, z_vc))
-            ##there can be collapsed layers if z_vc=z_vp
-            zdiff = z_vc - z_vp
+            z_fp = zp - 0.5*dzp
+            z_f = zp + 0.5*dz
+            inds = (obs_z >= np.minimum(z_fp, z_f)) & (obs_z <= np.maximum(z_fp, z_f))
+            ##there can be collapsed layers if z_f=z_fp
+            zdiff = z_f - z_fp
             collapsed = (zdiff == 0)
             zdiff = np.where(collapsed, 1, zdiff)
-            vi = ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp) / zdiff
-            vi = np.where(collapsed, vp, vi)
+            fi = ((z_f - obs_z)*fp + (obs_z - z_fp)*f) / zdiff
+            fi = np.where(collapsed, fp, fi)
+            seq[..., inds] = fi[..., inds]
 
-            ##TODO: still got some warnings here
-            #with np.errstate(divide='ignore'):
-            #    vi = np.where(z_vp==z_vc,
-            #                vp,   ##for collapsed layers just use previous value
-            #                ((z_vc - obs_z)*vc + (obs_z - z_vp)*vp)/(z_vc - z_vp) )  ##otherwise linear interp between layer
-            seq[..., inds] = vi[..., inds]
+        if i == len(levels)-1:
+            ##the last level: constant f from z-dz/2 to z
+            inds = (obs_z >= np.minimum(z-0.5*dz, z)) & (obs_z <= np.maximum(z-0.5*dz, z))
+            seq[..., inds] = f[..., inds]
 
-        if k == len(levels)-1:
-            ##the last level: constant vc from z=zc-dzc/2 to zc
-            assert dzc is not None
-            inds = (obs_z >= np.minimum(zc-0.5*dzc, zc)) & (obs_z <= np.maximum(zc-0.5*dzc, zc))
-            seq[..., inds] = vc[..., inds]
+        # save a copy of the current layer as 'previous' layer for use in next k
+        fp, zp, dzp = f.copy(), z.copy(), dz.copy()
 
-        if k < len(levels)-1:
-            assert dzc is not None
-            ##make a copy of current layer as 'previous' for next k
-            zp = zc.copy()
-            vp = vc.copy()
-            dzp = dzc.copy()
-        return vp, zp, dzp
+        return seq, fp, zp, dzp
 
     def validate_seq_shape(self, seq: np.ndarray, is_vector: bool) -> None:
         """
@@ -320,51 +302,47 @@ class Obs:
         if c.pid == 0:
             print('>>> read observation sequence from datasets', flush=True)
 
-        ##get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
+        # get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
         obs_seq = {}
         for obs_rec_id in self.obs_rec_list[c.pid_rec]:
             obs_rec = self.info.records[obs_rec_id]
 
-            ##load the dataset module
+            # load the dataset module
             dataset = c.datasets[obs_rec.dataset_src]
             if obs_rec.name not in dataset.variables:
                 raise ValueError(f"variable '{obs_rec.name}' not defined in dataset.{obs_rec.dataset_src}.variables")
 
             model = c.models[obs_rec.model_src]
-
-            # get z coords on all z levels (to be sent to dataset class methods)
-            k_list = list(set([r.k for i,r in c.state.info.fields.items() if r.time==obs_rec.time and r.model_src==obs_rec.model_src]))
-            z = {}
-            for k in k_list:
-                z[k] = self.get_z(c, k=k, **obs_rec.asdict())
+            ref_z = self.get_ref_z(c, obs_rec.model_src, obs_rec.time)
 
             if isinstance(dataset, SyntheticObs):  #using synthetic observation
-                ##generate synthetic obs network
-                seq = dataset.random_network(model=model, grid=c.grid, mask=c.grid.mask, z=z, **obs_rec.asdict())
+                # generate synthetic obs network
+                seq = dataset.random_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
 
-                ##compute obs values
+                # compute obs values
                 seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
 
-                ##perturb with obs err
+                # perturb with obs err
+                # TODO: only support normal err_type here
                 seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
 
             else:
-                ##read dataset files and obtain obs sequence
-                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, z=z, **obs_rec.asdict())
+                # read dataset files and obtain obs sequence
+                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
 
             self.validate_seq_shape(seq['obs'], obs_rec.is_vector)
 
             if c.pid_mem == 0:
                 print(f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}", flush=True)
 
-            ##misc. transform here
+            # misc. transform here
             for transform_func in c.transform_funcs:
                 seq = transform_func.forward_obs(c, obs_rec, seq)
 
             obs_seq[obs_rec_id] = seq
-            obs_rec.nobs = seq['obs'].shape[-1]  ##update nobs in obs_rec
+            obs_rec.nobs = seq['obs'].shape[-1]  # update nobs in obs_rec
 
-        ##output obs sequence for debugging
+        # output obs sequence for debugging
         if c.config.debug and c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
                 c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
