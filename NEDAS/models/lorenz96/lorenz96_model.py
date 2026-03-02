@@ -18,7 +18,7 @@ def M_nl(x, F, T, dt):
     Output:
     -x: np.array, the updated model state after simulation
     """
-    for n in range(int(T/dt)):
+    for _ in range(int(T/dt)):
         x += ((np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F) * dt
     return x
 

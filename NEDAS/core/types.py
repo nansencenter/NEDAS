@@ -1,21 +1,23 @@
-from typing import Annotated
-from dataclasses import dataclass, asdict
+from typing import Annotated, Sequence
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import numpy as np
 
 # variable description for dataset and model classes
 VarName = Annotated[str, 'variable name']
+LevelID = Annotated[int, 'z level index']
+Levels = Annotated[np.ndarray | Sequence, 'z levels']
+Unit = Annotated[str | float, 'physical unit']
 
 @dataclass
 class VarDesc:
-    name: str | tuple[str, str]   # scalar or vector with two components
-    dtype: str
-    is_vector: bool
-    dt: float
-    levels: np.ndarray
-    units: str | float
-    z_units: str | float
-
+    name: str | tuple[str, str]    # scalar or vector with two components
+    is_vector: bool                # if the variable is a vector quantity
+    dtype: str = 'float'           # data type for this variable
+    dt: float = 1                  # restart intervals in hours
+    levels: Levels = field(default_factory=lambda: [0])  # vertical level indices 
+    units: Unit = 1                # physical units (default is nondimensional)
+    z_units: Unit = 1              # units for vertical coordinates
     def asdict(self) -> dict:
         return asdict(self)
 
@@ -33,20 +35,19 @@ class FieldRecord:
         err_type (str): type of error model to use for this variable
         time (datetime): time coordinate for this field
         dt (float): representative time interval (hours) for this field
-        k (float): vertical z coordinate index for this field
+        k (int): vertical z coordinate index for this field
         pos (int): seek position (number of bytes) for the start of this field in the binary file
     """
     name: str
     model_src: str
     dtype: str
     is_vector: bool
-    units: str | float
+    units: Unit
     err_type: str
     time: datetime
     dt: float
-    k: float
+    k: LevelID
     pos: int  # Byte offset in the binary file
-
     def asdict(self) -> dict:
         return asdict(self)
 
@@ -69,7 +70,6 @@ class ErrorModel:
     vcorr: float
     tcorr: float
     cross_corr: dict[str, float]
-        
     def asdict(self) -> dict:
         return asdict(self)
 
@@ -101,8 +101,8 @@ class ObsRecord:
     obs_window_max: int
     dtype: str
     is_vector: bool
-    units: str | float
-    z_units: str | float
+    units: Unit
+    z_units: Unit
     time: datetime
     dt: float
     err: ErrorModel

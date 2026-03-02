@@ -56,6 +56,7 @@ class Config:
     dataset_def: dict
     shuffle_obs: bool
     z_coords_from: Literal['mean', 'member']
+    interp_method: str
     perturb: Optional[dict]
     scheme: str
     niter: int

@@ -6,7 +6,7 @@ import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
-from .types import VarName, VarDesc
+from .types import VarName, VarDesc, LevelID
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -17,7 +17,7 @@ class Model(Generic[GridT], ABC):
     io_mode: Literal['online', 'offline']
     variables: dict[VarName, VarDesc]
     grid: GridT
-    z: np.ndarray
+    z: dict[LevelID, np.ndarray]
     mask: np.ndarray
     truth_dir: Optional[str]
     run_process = None

@@ -1,10 +1,11 @@
 import os
 import inspect
+import numpy as np
 from typing import Optional, Callable
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
-from .types import VarName, VarDesc
+from .types import VarName, VarDesc, LevelID
 
 class Dataset(ABC):
     """
@@ -49,12 +50,20 @@ class Dataset(ABC):
             assert isinstance(kwargs['time'], datetime), "kwargs 'time' is not a datetime object"
 
         if 'units' not in kwargs:
-            kwargs['units'] = self.variables[kwargs['name']].units
+            kwargs['units'] = self.variables[kwargs['name']].units   ##TODO: potential key error here if variables is not defined.
 
-        ##other args, set default values if not specified
-        for key in ['model', 'grid', 'mask']:
+        # other args, set default values if not specified
+        ##TODO: how to type hint these runtime kwargs?
+        # model (Model): model class instance
+        # grid (GridType): target grid
+        # mask (np.ndarray): target grid mask (True if grid point is not part of the state)
+        # z (dict[LevelID, np.ndarray]): z coordinates at each level k
+        for key in ['model', 'grid', 'mask', 'z']:
             if key not in kwargs:
                 kwargs[key] = None
+        # nobs (int): number of observations
+        # obs_window_min (int)
+        # obs_window_max (int)  ##TODO: maybe setting them both to 0 is incorrect? need to iterate from min to max...
         for key in ['nobs', 'obs_window_min', 'obs_window_max']:
             if key not in kwargs:
                 kwargs[key] = 0
@@ -62,9 +71,19 @@ class Dataset(ABC):
         return kwargs
 
     @abstractmethod
-    def read_obs(self, **kwargs) -> dict:
+    def read_obs(self, **kwargs) -> dict[str, np.ndarray]:
         """
         Return observation sequence matching the given kwargs
         """
-        obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
+        obs_seq = {
+            'obs':np.array([]),
+            't':np.array([]),
+            'z':np.array([]),
+            'y':np.array([]),
+            'x':np.array([]),
+            'err_std':np.array([]),
+        }
         return obs_seq
+
+    def random_network(self, **kwargs) -> dict[str, np.ndarray]:
+        raise NotImplementedError(f"'random_network is not implemented for {self.__class__.__name__}")

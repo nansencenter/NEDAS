@@ -78,6 +78,8 @@ class State:
         if c.config.io_mode == 'offline':
             self.output_z(c)
 
+        # compute and save ensemble mean
+
     def collect_prior_fields(self, c: Context) -> None:
         """
         Collect fields from prior model state, convert them to the analysis grid,
@@ -222,7 +224,7 @@ class State:
 
             if c.pid_mem == 0:
                 mean_fld = sum_fld / c.config.nens
-                c.io.write_field(mean_fld, c, tag, rec_id, mem_id=0)
+                c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.print_1p(' done.\n')
 

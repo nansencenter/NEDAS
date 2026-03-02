@@ -61,8 +61,10 @@ class TopazPrepObs(Dataset):
         time = kwargs['time']
         grid = kwargs['grid']
         model = kwargs.get('model')
+        z = kwargs.get('z')
         if self.vthin:
             ##check if model.z is available for vertical thinning
+            ##TODO: should use kwargs['z'] instead...
             if model is None or not hasattr(model, 'z') or model.z is None:
                 print("WARNING: topaz.dataset: model.z levels are not provided, setting vthin to False")
                 self.vthin = False

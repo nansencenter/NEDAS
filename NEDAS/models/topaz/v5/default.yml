@@ -208,6 +208,7 @@ jfport: [760, 2]   ##'jfport   ' = first j-index
 jlport: [760, 2]   ##'jlport   ' = last  j-index (=jfport for north/south port)
 
 ##ice_in
+ncat: 5
 cice_dt: 900.0  ##cice model time step (seconds)
 
 Nilayer  : 7   ## vertical layers for ice

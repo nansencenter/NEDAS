@@ -77,6 +77,9 @@ class ArgoObs(Dataset):
         assert model is not None, 'read_obs: ERROR: model is required for argo dataset'
         model.grid.set_destination_grid(grid)
       
+        z = kwargs['z']
+        assert z is not None  ##TODO: model.z below should be z[k] -> 2d fields
+
         obs_seq = {'obs':[],
                    't':[], 'z':[], 'y':[], 'x':[],
                    'err_std':[],
@@ -239,9 +242,3 @@ class ArgoObs(Dataset):
             obs_seq_arr[key] = np.array(obs_seq[key])
 
         return obs_seq_arr
-
-    def random_network(self, model, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        raise NotImplementedError
-        obs_seq = {}
-        return obs_seq

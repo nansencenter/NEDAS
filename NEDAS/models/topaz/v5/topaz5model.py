@@ -60,6 +60,7 @@ class Topaz5Model(Model[RegularGrid]):
     MAX_OCEAN_TEMP: float
     MIN_OCEAN_SALN: float
     MAX_OCEAN_SALN: float
+    ncat: int
     Nilayer: int
     saltmax: float
     min_salin: float
@@ -75,7 +76,6 @@ class Topaz5Model(Model[RegularGrid]):
 
         levels = np.arange(self.kdm) + 1  ##ocean levels, from top to bottom, k=1..kdm
         level_sfc = np.array([0])    ##some variables are only defined on surface level k=0
-        level_ncat = np.arange(5)   ##some ice variables have 5 categories, treating them as levels also indexed by k
 
         self.restart_variables = {
             'ocean_velocity':    VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
@@ -98,15 +98,16 @@ class Topaz5Model(Model[RegularGrid]):
             'ocean_mixl_depth_daily': VarDesc(name='mix_dpth', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
             'ocean_dense_daily': VarDesc(name='dense', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='?', z_units=self.z_units),
             'ocean_surf_height_daily': VarDesc(name='srfhgt', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
-            }
+        }
 
         self.iced_variables = {
             'seaice_velocity': VarDesc(name=('uvel', 'vvel'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
-            'seaice_conc_ncat':   VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units=1, z_units=self.z_units),
-            'seaice_volume_ncat':  VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='m', z_units=self.z_units),
-            'snow_volume_ncat':  VarDesc(name='vsnon', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='m', z_units=self.z_units),
-            'seaice_age_ncat': VarDesc(name='iage', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_ncat, units='days', z_units=self.z_units),
-            }
+        } ##TODO: the _ncat logic needs to change throughout
+        for n in range(self.ncat):
+            self.iced_variables[f"seaice_conc_cat{n}"] = VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units)
+            self.iced_variables[f"seaice_volume_cat{n}"] = VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
+            self.iced_variables[f"snow_volume_cat{n}"] = VarDesc(name='vsnon', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
+            self.iced_variables[f"seaice_age_cat{n}"] = VarDesc(name='iage', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='days', z_units=self.z_units)
 
         self.iceh_variables = {
             'seaice_velocity_daily': VarDesc(name=('uvel_d', 'vvel_d'), dtype='float', is_vector=True, dt=self.output_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
@@ -167,6 +168,8 @@ class Topaz5Model(Model[RegularGrid]):
         self.meanssh = None
         if self.meanssh_file and os.path.exists(self.meanssh_file):
             self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
+
+        #TODO: z bank cache can be implemented (similar to grid bank for nextsim)
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
