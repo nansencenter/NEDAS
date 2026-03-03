@@ -224,15 +224,17 @@ class Obs:
             ----------  z[k],   z  --------------------
         k+1 -  -  -  -  v[k+1]
         
-        height at current level k denoted as z, previous level as zp.
-        variable f are considered layer averages, so they are defined at layer centers.
+        layer thickness of the current level k is denoted as z, for the previous level as zp;
+        the variable f are considered layer averages, so they are defined at layer centers.
         """
-        i = list(levels).index(k)  # index of current layer in all levels
+        # index of current layer in all levels
+        # we use index instead of k directly, since k is allowed to be either increasing or decreasing
+        i = list(levels).index(k)
         dz = z # layer thickness for the first level
 
         if i == 0:
             ##the first level: constant f from z0 to dz/2
-            inds = (obs_z >= np.minimum(0, 0.5*dz)) & (obs_z <= np.maximum(0, 0.5*dz))
+            inds = (obs_z >= np.minimum(0, 0.5*dz)) & (obs_z < np.maximum(0, 0.5*dz))
             seq[..., inds] = f[..., inds]
 
         if i > 0:
@@ -244,7 +246,7 @@ class Obs:
             assert dzp is not None
             z_fp = zp - 0.5*dzp
             z_f = zp + 0.5*dz
-            inds = (obs_z >= np.minimum(z_fp, z_f)) & (obs_z <= np.maximum(z_fp, z_f))
+            inds = (obs_z >= np.minimum(z_fp, z_f)) & (obs_z < np.maximum(z_fp, z_f))
             ##there can be collapsed layers if z_f=z_fp
             zdiff = z_f - z_fp
             collapsed = (zdiff == 0)
