@@ -3,14 +3,9 @@ import sys
 import tempfile
 import importlib.util
 import subprocess
-import numpy as np
 from datetime import datetime
-from NEDAS.utils.conversion import ensure_list, dt1h
-from NEDAS.utils.progress import timer, progress_bar
-from NEDAS.utils.shell_utils import makedir, run_command, run_job
+from NEDAS.utils.progress import timer
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
-from NEDAS.utils.random_perturb import random_perturb
-from NEDAS import assim_tools
 from NEDAS.core import Scheme, Context, State, Obs
 
 class FilterAnalysisScheme(Scheme):
@@ -30,7 +25,8 @@ class FilterAnalysisScheme(Scheme):
 
         if c.config.step:
             ##if --step=STEP is specified at runtime, just run STEP and quit
-            self.run_step(c, c.config.step)
+            stepfunc = getattr(self, c.config.step)
+            stepfunc(c)
             return
 
         print("Cycling start.", flush=True)
