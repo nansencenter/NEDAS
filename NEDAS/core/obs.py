@@ -138,14 +138,14 @@ class Obs:
         model = c.models[kwargs['model_src']]
 
         if obs_name in model.variables:
-            # option 1:
+            # option 1: -------------------
             # obs_name is one of the variables provided by the model.read_var
             # then we just need to collect the 3D variable and interpolate in x,y,z
             nobs = len(obs_x)
             seq = np.full((2, nobs), np.nan) if kwargs['is_vector'] else np.full(nobs, np.nan)
 
             levels = model.variables[obs_name].levels
-            fp, zp, dzp = None, None, None
+            fp, zp, dzp = None, None, None  # previous layer no yet available for first level
             for k in levels:
                 # get model fld and z values at level k
                 kwargs['k'] = k
@@ -156,7 +156,7 @@ class Obs:
                 seq, fp, zp, dzp = self.vertical_interp(seq, k, levels, f, fp, z, zp, dzp, obs_z)
 
         elif kwargs['name'] in dataset.obs_operator:
-            # option 2:
+            # option 2: ---------------------
             # if dataset module provides an obs_operator, we use it to compute obs seq
             operator = dataset.obs_operator[kwargs['name']]
 
@@ -197,7 +197,6 @@ class Obs:
     def horizontal_interp(self, c: Context, fld: np.ndarray, zfld: np.ndarray, is_vector: bool,
                           obs_x: np.ndarray, obs_y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """ Interpolate fld and zfld horizontally to the obs_x,obs_y locations"""
-
         if is_vector:
             z1 = c.grid.interp(zfld[0, ...], obs_x, obs_y, method=c.config.interp_method)
             z = np.array([z1, z1])
@@ -354,13 +353,13 @@ class Obs:
     def prepare_obs(self, c: Context) -> None:
         self.obs_seq = bcast_by_root(c.comm_mem)(self.collect_obs_seq)(c)
 
-    def prepare_obs_from_state(self, c: Context, flag: str) -> None:
+    def prepare_obs_from_state(self, c: Context, tag: str) -> None:
         """
         Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
         Args:
             c (Context): the runtime context object
-            flag (str): 'prior' or 'post', or 'truth' if we are generating synthetic obs
+            tag (str): 'prior' or 'post' ensemble model states
         """
         mem_list = c.state.mem_list
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
@@ -387,28 +386,23 @@ class Obs:
                 for key in ['x', 'y', 'z', 't', 'err_std']:
                     seq[key] = self.obs_seq[obs_rec_id][key]
                 ##obtain obs_prior values from model state
-                seq['obs'] = self.state_to_obs(c, flag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
+                seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
 
                 ##misc. transform here
                 for transform_func in c.transform_funcs:
                     seq = transform_func.forward_obs(c, obs_rec, seq)
 
-                ##collect obs priors together
-                if flag == 'prior':
-                    self.obs_prior[mem_id, obs_rec_id] = seq['obs']
-                elif flag == 'posterior':
-                    self.obs_post[mem_id, obs_rec_id] = seq['obs']
-                else:
-                    raise ValueError
+                ##collect obs ensemble data to the local memory
+                getattr(self, f"obs_{tag}")[mem_id, obs_rec_id] = seq['obs']
         c.comm.Barrier()
         c.print_1p(' done.\n')
 
-        ##output obs_prior sequeneces
+        ##output the obs sequeneces for debugging
         if c.config.debug:
-            for key, seq in self.obs_prior.items():
+            for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
-                file = f'obs_prior_seq.rec{obs_rec_id}.mem{mem_id:03}'
-                c.io.save_debug_data(c, file, {'obs_prior':seq})
+                file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
+                c.io.save_debug_data(c, file, {f'obs_{tag}':seq})
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, Optional[int], ProcID, int]]:
         ##form the global list of obs (in serial mode the main loop is over this list)
