@@ -1,10 +1,11 @@
 import os
 import numpy as np
-from typing import Optional, Any
+from typing import Optional, Callable, Any
 from NEDAS.utils.shell_utils import run_command
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.progress import progress_bar
 from NEDAS.utils import random_perturb, spatial_operation, parallel
+from NEDAS.grid import GridType, Grid, RegularGrid
 from .context import Context
 from NEDAS.io_backends.file_io import FileIO
 
@@ -12,27 +13,40 @@ class Perturbation:
     """
     Perturbation scheme
     """
+    grid: GridType
+    mask: np.ndarray
+    perturb_methods: dict[str, Callable]
     perturb_type: str
     other_opts: list[str] = []
     params: dict[str, dict[str, Any]]= {}
-    perturb: dict = {}
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         # get seed, if not specified get a random seed from system entropy
         seed = kwargs.get('seed', int.from_bytes(os.urandom(4), 'little'))
         assert isinstance(seed, int)
         # set the random seed
         np.random.seed(seed)
 
+        self.grid = kwargs.get('grid', Grid.regular_grid(None, 0, 100, 0, 100, 1))
+        self.mask = kwargs.get('mask', np.full(self.grid.x.shape, False))
+
+        self.perturb_methods = {
+            'gaussian': self.perturb_random_gaussian,
+            'powerlaw': self.perturb_random_powerlaw,
+            'displace': self.perturb_random_displace,
+        }
+
         # parse kwargs and init the perturbation parameters
         self.parse_perturb_opts(**kwargs)
 
-
-    def parse_perturb_opts(self, **kwargs):
+    def parse_perturb_opts(self, **kwargs) -> None:
         ##perturb['type'] string format:
         #main option (gaussian/powerlaw/displace) followed by , then additional options separated by ,
         opts = kwargs['type'].split(',')
         self.perturb_type = opts[0]
+        if self.perturb_type not in self.perturb_methods:
+            raise NotImplementedError(f"Perturbation type: '{self.perturb_type}' is not implemented")
+
         self.other_opts = []
         for opt in opts[1:]:
             self.other_opts.append(opt)
@@ -76,61 +90,190 @@ class Perturbation:
             self.params[vname]['nscale'] = nscale
             ##check if all keys are lists with same len
             for key in key_list[1:]:
-                assert len(kwargs[key][v]) == nscale, f"perturb option: {key} has different number of entries from {key_list[0]}, check config"
+                if len(kwargs[key][v]) != nscale:
+                    raise ValueError(f"perturb option: {key} has different number of entries from {key_list[0]}, check config")
             ##assign the parameters
             for key in key_list:
                 self.params[vname][key] = kwargs[key][v]
 
-    def __call__(self, c: Context):
+    def generate_perturb(self, grid: GridType,
+                        fields: dict[str, np.ndarray],
+                        prev_perturb: dict[str, np.ndarray],
+                        dt: float=1,
+                        n: int=0,):
+        """
+        Add random perturbation to the given 2D field
 
-        if c.config.perturb is None:
-            c.print_1p(f"No perturbation defined in config, exiting.\n")
-            return
-        c.print_1p(f"Perturbing state:")
+        Args:
+            grid: Grid object describing the 2d domain
+            fields: list of np.array shape[...,ny,nx]
+            prev_perturb; list of np.array from previous perturbation data, None if unavailable
+            dt: float, interval (hours) between time steps
+            n: int, current time step index
+            variable: str, or list of str
+            type: str: 'gaussian', 'powerlaw', or 'displace'
+            amplitude: float, (or list of floats, in multiscale approach)
+            hcorr: float, or list of float, horizontal corr length (meters)
+            tcorr: float, or list of float, time corr length (hours)
+            **kwargs: other arguments
+        """
+        perturb = {}
+        for vname,rec in self.params.items():
+            fld = fields[vname]
+            assert grid.x.shape == fld.shape[-2:], f"input fields[{vname}] dimension mismatch with grid"
 
-        ##clean perturb files in current cycle dir
-        assert isinstance(c.io, FileIO) 
-        for rec in c.config.perturb:
-            perturb_dir = os.path.join(c.io.forecast_dir(c.time, rec['model_src']), 'perturb')
-            if c.pid==0:
-                run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
-        c.comm.Barrier()
+            ns = rec['nscale']
+            if self.perturb_type == 'displace':
+                perturb[vname] = np.zeros((ns,2)+fld.shape[-2:])
+            else:
+                perturb[vname] = np.zeros((ns,)+fld.shape)
 
+            if prev_perturb[vname] is not None and n==0:
+                perturb[vname] = prev_perturb[vname]
+                continue
+
+            ##loop over scale s and generate perturbation
+            for s in range(ns):
+                ##draw a random field for each 2d field component in fields
+                for ind in np.ndindex(fld.shape[:-2]):
+                    perturb[vname][(s,)+ind] = self.perturb_methods[self.perturb_type](rec, s)
+                
+                # make perturb temporally correlated by blending with prev_perturb
+                if prev_perturb[vname] is not None:
+                    perturb[vname][s] = self.make_correlated_perturb(prev_perturb[vname][s],
+                                                                     perturb[vname][s],
+                                                                     rec['tcorr'][s] / dt)
+
+        if 'press_wind_relate' in self.other_opts:
+            perturb = self.make_wind_perturb_from_press(perturb)
+
+        return perturb
+
+    def add_perturb(self, fields: dict, perturb: dict, **kwargs) -> tuple[dict, dict]:
+        """ Add perturbations to each field """
+        for vname,rec in self.params.items():
+            for s in range(rec['nscale']):
+                if self.perturb_type == 'displace':
+                    fields[vname] = spatial_operation.warp(self.grid, fields[vname],
+                                                           perturb[vname][s,0,...],
+                                                           perturb[vname][s,1,...])
+                else:
+                    if 'exp' in self.other_opts:
+                        ##add lognormal perturbations
+                        fields[vname] *= np.exp(perturb[vname][s,...] - 0.5*rec['amp'][s]**4)
+                    else:
+                        ##just add the gaussian perturbations
+                        fields[vname] += perturb[vname][s,...]
+
+            ##respect value bounds after perturbing
+            if 'bounds' in kwargs:
+                vmin, vmax = kwargs['bounds']
+                fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
+        return fields, perturb
+
+    def perturb_random_gaussian(self, rec: dict[str, Any], s: int) -> np.ndarray:
+        """ Generate a random perturbation using the Gaussian random field method """
+        grid = self.grid
+        assert isinstance(grid, RegularGrid), "perturbation by random_field_gaussian only support RegularGrid"
+        p = random_perturb.random_field_gaussian(grid.nx, grid.ny, rec['amp'][s], rec['hcorr'][s]/grid.dx)
+        return p
+
+    def perturb_random_powerlaw(self, rec: dict[str, Any], s: int) -> np.ndarray:
+        """ Generate a random perturbation using the powerlaw method """
+        grid = self.grid
+        assert isinstance(grid, RegularGrid), "perturbation by random_field_powerlaw only support RegularGrid"
+        p = random_perturb.random_field_powerlaw(grid.nx, grid.ny, rec['amp'][s], rec['powerlaw'][s])
+        return p
+
+    def perturb_random_displace(self, rec: dict[str, Any], s: int) -> np.ndarray:
+        """ Generate a random perturbation using the displacement method (returns a vector field) """
+        du, dv = random_perturb.random_displacement(self.grid, self.mask, rec['amp'][s], rec['hcorr'][s]/self.grid.dx)
+        return np.array([du, dv])
+
+    def make_correlated_perturb(self, prev_perturb: np.ndarray, perturb: np.ndarray, corr: float) -> np.ndarray:
+        """ Create perturbations that are correlated in time """
+        autocorr = 0.75
+        alpha = autocorr**(1.0 / corr)
+        return np.sqrt(1-alpha**2) * perturb + alpha * prev_perturb
+
+    def make_wind_perturb_from_press(self, perturb: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """
+        Legacy option in TOPAZ prsflg==1,2 options in force_perturb program, reproduced here.
+        Expecting the vnames 'atmos_surf_press' for pressure field and 'atmos_surf_velocity' for the wind field.
+        Derive the wind perturbation from pressure perturbations, so that they are in wind-pressure relation (prsflg==1)
+        Additionally, derived wind perturbations are rescaled to match the specified amp (prsflg==2)
+        """
+        wind_to_press = random_perturb.get_velocity_from_press
+        for vname in ['atmos_surf_velocity', 'atmos_surf_press']:
+            assert vname in self.params.keys(), f'{vname} not in variable list, cannot run press_wind_relate option'
+
+        for s in range(self.params['atmos_surf_press']['nscale']):
+            pres_pert = perturb['atmos_surf_press'][s]
+            scale_wind = ('scale_wind' in self.other_opts)
+            pres_amp = self.params['atmos_surf_press']['amp'][s]
+            pres_hcorr = self.params['atmos_surf_press']['hcorr'][s]
+            wind_amp = self.params['atmos_surf_velocity']['amp'][s]
+            wind_pert = wind_to_press(self.grid, pres_pert, scale_wind, pres_amp, pres_hcorr, wind_amp)
+            perturb['atmos_surf_velocity'][s] = wind_pert
+        return perturb
+
+class PerturbationScheme:
+    """
+    Perturbation scheme manages 
+    """
+    nfld: int = 0
+    task_list: dict[int, list[dict]] = {}
+    perturb: dict = {}
+
+    def __init__(self, c: Context):
         ##distribute perturbation items among MPI ranks
-        task_list = parallel.bcast_by_root(c.comm)(self.distribute_perturb_tasks)(c)
+        self.task_list = parallel.bcast_by_root(c.comm)(self.distribute_perturb_tasks)(c)
 
-        c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
+        # go through the opts to count how many fields will be perturbed (for showing progress)
+        self.count_num_fields(c)
+    
+    def distribute_perturb_tasks(self, c: Context) -> dict[int, list[dict]]:
+        task_list_full = []
+        for perturb_rec in ensure_list(c.config.perturb):
+            for mem_id in range(c.config.nens):
+                task_list_full.append({**perturb_rec, 'member':mem_id})
+        task_list = parallel.distribute_tasks(c.comm, task_list_full)
+        return task_list
 
+    def count_num_fields(self, c: Context):
         ##first go through the fields to count how many (for showing progress)
-        nfld = 0
-        for rec in task_list[c.pid]:
+        for rec in self.task_list[c.pid]:
             model_name = rec['model_src']
             model = c.models[model_name]
             vname = ensure_list(rec['variable'])[0]
             dt = model.variables[vname].dt
-            niter = int(c.config.cycle_period / dt) + 1
-            for n in range(niter):
-                for k in model.variables[vname].levels:
-                    nfld += 1
+            nstep = int(c.config.cycle_period / dt) + 1
+            for _ in range(nstep):
+                for _ in model.variables[vname].levels:
+                    self.nfld += 1
 
-        ##actually go through the fields to perturb now
+    def __call__(self, c):
+        if c.config.io_mode == 'offline':
+            self.prepare_perturb_dir(c)
+
+        c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
+
+        ##go through the tasks
         fld_id = 0
-        for rec in task_list[c.pid]:
+        for rec in self.task_list[c.pid]:
             model_name = rec['model_src']
             model = c.models[model_name]  ##model class object
             mem_id = rec['member']
             mstr = f'_mem{mem_id+1:03d}'
-            path = c.io.forecast_dir(c.time, model_name)
             variable_list = ensure_list(rec['variable'])
 
             ##check if previous perturb is available from past cycles
-            perturb = {}
             for vname in variable_list:
                 psfile = os.path.join(c.io.forecast_dir(c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
                 if os.path.exists(psfile):
-                    perturb[vname] = np.load(psfile)
+                    self.perturb[vname] = np.load(psfile)
                 else:
-                    perturb[vname] = None
+                    self.perturb[vname] = None
 
             # get number of time steps for this set of variables
             # perturbation will be generated for all time steps if variable is available
@@ -163,7 +306,8 @@ class Perturbation:
                         fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
 
                     ##generate perturbation on analysis grid
-                    fields_pert, perturb = gen_random_perturb(c.grid, fields, prev_perturb=perturb, dt=dt, n=n, **rec)
+                    self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n, )
+                    fields_pert = p.add_perturb(fields, perturb, **rec)
 
                     if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
                         ##use model internal method to apply displacement perturbations directly
@@ -176,107 +320,28 @@ class Perturbation:
                             model.write_var(fld, path=path, name=vname, time=t, member=mem_id, k=k)
 
             ##save a copy of perturbation at next_t, for use by next cycle
-            for vname in variable_list:
-                psfile = os.path.join(path, 'perturb', vname+mstr+'.npy')
-                run_command(f"mkdir -p {os.path.dirname(psfile)}")
-                np.save(psfile, perturb[vname])
+            if c.config.io_mode == 'offline':
+                self.save_perturb_data(c, **rec)
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
 
-    def distribute_perturb_tasks(self, c: Context) -> dict[int, list[dict]]:
-        task_list_full = []
-        for perturb_rec in ensure_list(c.config.perturb):
-            for mem_id in range(c.config.nens):
-                task_list_full.append({**perturb_rec, 'member':mem_id})
-        task_list = parallel.distribute_tasks(c.comm, task_list_full)
-        return task_list
-    
+    def prepare_perturb_dir(self, c):
+        assert isinstance(c.io, FileIO)
+        # clean up perturb files in current cycle dir
+        for rec in c.config.perturb:
+            path = c.io.forecast_dir(c.time, rec['model_src'])
+            perturb_dir = os.path.join(path, 'perturb')
+            if c.pid==0:
+                run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
+        c.comm.Barrier()
 
-
-    def gen_random_perturb(self, grid, fields, prev_perturb, dt: float=1, n=0, seed=None, **kwargs):
-        """
-        Add random perturbation to the given 2D field
-
-        Args:
-            grid: Grid object describing the 2d domain
-            fields: list of np.array shape[...,ny,nx]
-            prev_perturb; list of np.array from previous perturbation data, None if unavailable
-            dt: float, interval (hours) between time steps
-            n: int, current time step index
-            variable: str, or list of str
-            type: str: 'gaussian', 'powerlaw', or 'displace'
-            amplitude: float, (or list of floats, in multiscale approach)
-            hcorr: float, or list of float, horizontal corr length (meters)
-            tcorr: float, or list of float, time corr length (hours)
-            **kwargs: other arguments
-        """
-
-        for vname,rec in params.items():
-            fld = fields[vname]
-            assert grid.x.shape == fld.shape[-2:], f"input fields[{vname}] dimension mismatch with grid"
-
-            ns = rec['nscale']
-            if perturb_type == 'displace':
-                perturb[vname] = np.zeros((ns,2)+fld.shape[-2:])
-            else:
-                perturb[vname] = np.zeros((ns,)+fld.shape)
-
-            if prev_perturb[vname] is not None and n==0:
-                perturb[vname] = prev_perturb[vname]
-                continue
-
-            ##loop over scale s and generate perturbation
-            for s in range(ns):
-                ##draw a random field for each 2d field component in fields
-                for ind in np.ndindex(fld.shape[:-2]):
-                    if perturb_type == 'gaussian':
-                        perturb[vname][(s,)+ind] = random_perturb.random_field_gaussian(grid.nx, grid.ny, rec['amp'][s], rec['hcorr'][s]/grid.dx)
-
-                    elif perturb_type == 'powerlaw':
-                        perturb[vname][(s,)+ind] = random_perturb.random_field_powerlaw(grid.nx, grid.ny, rec['amp'][s], rec['powerlaw'][s])
-
-                    elif perturb_type == 'displace':
-                        mask = np.full(grid.x.shape, False)
-                        du, dv = random_perturb.random_displacement(grid, mask, rec['amp'][s], rec['hcorr'][s]/grid.dx)
-                        perturb[vname][s] = np.array([du, dv])
-
-                    else:
-                        raise NotImplementedError('unknown perturbation type: '+perturb_type)
-
-                ##create perturbations that are correlated in time
-                autocorr = 0.75
-                ncorr = rec['tcorr'][s] / dt  ##time steps at decorrelation
-                alpha = autocorr**(1.0 / ncorr)
-                if prev_perturb[vname] is not None:
-                    perturb[vname][s] = np.sqrt(1-alpha**2) * perturb[vname][s] + alpha * prev_perturb[vname][s]
-
-        ###legacy prsflg==1,2 options in force_perturb program, reproduced here
-        if 'press_wind_relate' in other_opts:
-            for vname in ['atmos_surf_velocity', 'atmos_surf_press']:
-                assert vname in params.keys(), f'{vname} not in variable list, cannot run press_wind_relate option'
-
-            for s in range(params['atmos_surf_press']['nscale']):
-                perturb['atmos_surf_velocity'][s] = random_perturb.get_velocity_from_press(grid, perturb['atmos_surf_press'][s], ('scale_wind' in other_opts), params['atmos_surf_press']['amp'][s], params['atmos_surf_press']['hcorr'][s], params['atmos_surf_velocity']['amp'][s])
-
-        ##now add perturbations to each field
-        for vname,rec in params.items():
-            for s in range(rec['nscale']):
-                if perturb_type == 'displace':
-                    fields[vname] = spatial_operation.warp(grid, fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
-
-                else:
-                    if 'exp' in other_opts:
-                        ##add lognormal perturbations
-                        fields[vname] *= np.exp(perturb[vname][s,...] - 0.5*rec['amp'][s]**4)
-
-                    else:
-                        ##just add the gaussian perturbations
-                        fields[vname] += perturb[vname][s,...]
-
-            ##respect value bounds after perturbing
-            if 'bounds' in kwargs:
-                vmin, vmax = kwargs['bounds']
-                fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
-
-        return fields, perturb
+    def save_perturb_data(self, c: Context, **rec):
+        assert isinstance(c.io, FileIO)
+        path = c.io.forecast_dir(c.time, rec['model_src'])
+        member = rec['member']
+        for vname in ensure_list(rec['variable']):
+            psfile = os.path.join(path, 'perturb', f"{vname}_{member+1:03d}.npy")
+            run_command(f"mkdir -p {os.path.dirname(psfile)}")
+            np.save(psfile, self.perturb[vname])
+            ##TODO: io_backend here

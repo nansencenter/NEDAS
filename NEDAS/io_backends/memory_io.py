@@ -9,7 +9,7 @@ Only works for single processor now, but this is convenient for long experiments
 """
 
 class MemoryIO(IOBackend):
-
+    debug_data: dict = {}
     def __init__(self, c: Context):
         assert c.config.nproc == 1, "currently only support serial programs: nproc=1"
 
@@ -46,7 +46,7 @@ class MemoryIO(IOBackend):
         kwargs['tag'] = tag
 
         return method(*args, **kwargs)
-    
+
     def output_snapshot(self, c: Context) -> None:
         """
         Output a snapshot of data stored in memory to npz files

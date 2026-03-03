@@ -34,7 +34,6 @@ class TestObsClassInit(unittest.TestCase):
     def test_state_to_obs(self):
         ...
 
-
 class TestVerticalInterp(unittest.TestCase):
     """Test vertical_interp method for Obs class"""
 
@@ -66,12 +65,12 @@ class TestVerticalInterp(unittest.TestCase):
         i = 0
         f = np.ones(self.nobs) * self.fz[i]  # field value is 10.0
         z = np.ones(self.nobs) * self.dz[i]  # z(0) thickness is 1 so dz is 1.0
-        
+
         # At i=0, code looks for obs_z between [0, 0.5*dz)
         seq_out, fp, zp, dzp = self.c.obs.vertical_interp(
             self.seq.copy(), self.levels[i], self.levels, f, None, z, None, None, self.obs_z
         )
-        
+
         self.assertEqual(seq_out[0], 10.0) # obs_z[0]=0.1 is in range. It should be 10.0
         self.assertEqual(seq_out[1], 0.0) # out of range
         self.assertEqual(seq_out[2], 0.0)
@@ -90,13 +89,13 @@ class TestVerticalInterp(unittest.TestCase):
         # Current layer (i=1)
         f = np.ones(self.nobs) * self.fz[i]
         z = np.ones(self.nobs) * self.z[i]  # dz = 2.0 - 1.0 = 1.0. z_f = 1.0 + 0.5 = 1.5
-        
+
         # Range is [0.5, 1.5). Midpoint is 1.0. 
         # At obs_z=1.0, value should be 15.0 (avg of 10 and 20)
         seq_out, fp, zp, dzp = self.c.obs.vertical_interp(
             self.seq.copy(), self.levels[i], self.levels, f, fp, z, zp, dzp, self.obs_z
         )
-        
+
         # prev level values shouldn't be changed
         self.assertEqual(seq_out[0], 0.0)  # prev layer shouldn't be changed
         self.assertEqual(seq_out[1], 10.0) # Exactly at z_fp
@@ -114,7 +113,7 @@ class TestVerticalInterp(unittest.TestCase):
         fp = np.ones(self.nobs) * self.fz[i-1]
         zp = np.ones(self.nobs) * self.z[i-1]
         dzp = np.ones(self.nobs) * self.dz[i-1] # z_fp = 2.0 - 0.5 = 1.5
-        
+
         # current layer (i=2)
         f = np.ones(self.nobs) * self.fz[i]
         z = np.ones(self.nobs) * self.z[i] # dz = 1.0. Range: [2.0 - 0.5, 2.0] = [1.5, 2.0]
@@ -141,11 +140,11 @@ class TestVerticalInterp(unittest.TestCase):
         fp = np.ones(self.nobs) * self.fz[i-1]  # 10.
         zp = np.ones(self.nobs) * self.z[i-1]   # 1.0
         dzp = np.ones(self.nobs) * self.dz[i-1] # dzp=1.0, z_fp = 1.0 - 0.5 = 0.5
-        
+
         # current layer (i=2)
         f = np.ones(self.nobs) * self.fz[i]  # 10.
         z = np.ones(self.nobs) * self.z[i]   # dz = 0, z = zp = 1.0, range is [0.5, 1.0)
-        
+
         # Function should handle this via the 'collapsed' mask
         seq_out, _, _, _ = self.c.obs.vertical_interp(
             self.seq.copy(), self.levels[i], self.levels, f, fp, z, zp, dzp, self.obs_z

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 import os
 import numpy as np
 from .context import Context
@@ -75,6 +75,18 @@ class IOBackend(ABC):
         """
         ...
 
-    def save_debug_data(self, c: Context, filename: str, data: dict) -> None:
-        file = os.path.join(c.config.work_dir, f"{filename}.npz")
+    def save_debug_data(self, c: Context, name: str, data: dict, path: Optional[str]=None) -> None:
+        """
+        Save debug data in npz format
+
+        Args:
+            c (Context): the runtime context
+            name (str): the name of the data
+            data (dict): the data
+            path (str, optional): system path to save the data (if using file io)
+        """
+        if path is None:
+            path = c.config.work_dir  # default path
+
+        file = os.path.join(path, f"{name}.npz")
         np.savez(file, **data)

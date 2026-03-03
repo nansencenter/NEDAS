@@ -12,7 +12,7 @@ from .obs_info import ObsInfo
 class Obs:
     """
     Class for handling observations.
-    
+
     The observation has dimensions: variable, time, z, y, x
     Since the observation network is typically irregular, we store the obs record
     for each variable in a 1d sequence, with coordinates (t,z,y,x), and size nobs
@@ -21,7 +21,7 @@ class Obs:
 
     for batch assimilation mode, each pid stores the list of local obs within the
     hroi of its tiles, with size nlobs (number of local obs)
-    
+
     for serial mode, each pid stores a non-overlapping subset of the obs list,
     here 'local' obs (in storage sense) is broadcast to all pid before computing
     its update to the state/obs near that obs.
