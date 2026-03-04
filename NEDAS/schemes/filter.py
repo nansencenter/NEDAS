@@ -97,7 +97,6 @@ class FilterAnalysisScheme(Scheme):
         """
         Main method for performing the analysis step
         """
-
         # outer loop (iter = 0, ..., niter-1)
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
@@ -105,7 +104,7 @@ class FilterAnalysisScheme(Scheme):
             c.print_1p(f"Running analysis for outer iteration step {c.iter}:")
 
             # initialize
-            c.init_scheme()
+            c.update_assim_tools()
 
             # prepare the state variables
             c.state = State(c)
@@ -128,9 +127,6 @@ class FilterAnalysisScheme(Scheme):
 
         This step adds random perturbations to the model initial and/or boundary conditions,
         at the first or all the analysis cycles.
-
-        The ``perturb`` section in configuration file defines the scheme and parameters for the perturbation.
-        The `utils.random_perturb`` module implements the random field generator functions.
         """
         if c.config.perturb is None:
             c.print_1p(f"No perturbation defined in config, exiting.\n")
@@ -138,6 +134,7 @@ class FilterAnalysisScheme(Scheme):
         c.print_1p(f"Perturbing state:")
 
         perturb_scheme = PerturbationScheme(c)
+        timer(c)(perturb_scheme)(c)
 
     def diagnose(self, c: Context):
         """
@@ -161,10 +158,7 @@ class FilterAnalysisScheme(Scheme):
 
         # ntask = len(task_list[c.pid])
         # for task_id, rec in enumerate(task_list[c.pid]):
-        #     if c.debug:
-        #         print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
-        #     else:
-        #         c.print_1p(progress_bar(task_id, ntask))
+        #     c.show_progress(f"PID {c.pid:4} running diagnostics '{rec['method']}'", task_id, ntask)
 
         #     method_name = f"NEDAS.diag.{rec['method']}"
         #     mod = importlib.import_module(method_name)

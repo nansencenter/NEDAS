@@ -174,10 +174,7 @@ class BatchAssimilator(Assimilator):
             ##if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:
                 task += nloc
-                if c.config.debug:
-                    print(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)", flush=True)
-                else:
-                    c.print_1p(progress_bar(task-1, ntask))
+                c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)", task-1, ntask)
                 continue
 
             ##loop through the unmasked grid points in the partition
@@ -202,20 +199,13 @@ class BatchAssimilator(Assimilator):
                 hlfactor = hlfactor[ind1]
 
                 if len(ind1) == 0:
-                    if c.config.debug:
-                        print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", flush=True)
-                    else:
-                        c.print_1p(progress_bar(task, ntask))
-                    task += 1
+                    c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)", task, ntask)
                     continue ##if all obs has no impact on state, just skip to next location
 
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
 
                 ##add progress message
-                if c.config.debug:
-                    print(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", flush=True)
-                else:
-                    c.print_1p(progress_bar(task, ntask))
+                c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}", task, ntask)
                 task += 1
 
             c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)

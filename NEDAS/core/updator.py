@@ -51,10 +51,8 @@ class Updator(ABC):
                     mem_id = mem_list[c.pid_mem][m]
                     rec_id = rec_list[c.pid_rec][r]
                     rec = c.state.info.fields[rec_id].asdict()
-                    if c.config.debug:
-                        print(f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}", flush=True)
-                    else:
-                        c.print_1p(progress_bar(m*nr_max+r, nm_max*nr_max))
+                    c.show_progress(f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}",
+                                    m*nr_max+r, nm_max*nr_max)
 
                     ##apply the increment to restart files (use io backend)
                     self.update_files(c, mem_id, rec_id)

@@ -65,10 +65,7 @@ class MultiplicativeInflation(Inflation):
             #c.io.read_field()
             fields_mean = c.state.read_field(mean_file, c.grid.mask, 0, rec_id)
             for m, mem_id in enumerate(c.state.mem_list[c.pid_mem]):
-                if c.debug:
-                    print(f"PID {c.pid:4}: inflating mem{mem_id+1:03}", flush=True)
-                else:
-                    c.print_1p(progress_bar(m*nr+r, nm*nr))
+                c.show_progress(f"PID {c.pid:4}: inflating mem{mem_id+1:03}", m*nr+r, nm*nr)
 
                 ##inflate the ensemble perturbations by coef
                 fields[mem_id, rec_id] = self.coef*(fields[mem_id, rec_id] - fields_mean) + fields_mean

@@ -376,10 +376,7 @@ class Obs:
                 ##this is the obs record to process
                 obs_rec = self.info.records[obs_rec_id]
 
-                if c.config.debug:
-                    print(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec.name:20}", flush=True)
-                else:
-                    c.print_1p(progress_bar(m*nr+r, nr*nm))
+                c.show_progress(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec.name:20}", m*nr+r, nr*nm)
 
                 seq = {}
                 ##need the coordinates for transform later
@@ -461,13 +458,8 @@ class Obs:
                 if m < len(mem_list[c.pid_mem]):
                     mem_id = mem_list[c.pid_mem][m]
 
-                if c.config.debug:
-                    if mem_id:
-                        print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
-                    else:
-                        print(f"PID {c.pid:4}: transposing obs: waiting")
-                else:
-                    c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+                status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
 
                 ##prepare the obs seq for sending if not at the end of mem_list
                 if m < len(mem_list[c.pid_mem]):
@@ -569,13 +561,8 @@ class Obs:
                     mem_id = mem_list[c.pid_mem][m]
                     seq = input_obs[mem_id, obs_rec_id].copy()
 
-                if c.config.debug:
-                    if mem_id:
-                        print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
-                    else:
-                        print(f"PID {c.pid:4}: transposing obs: waiting")
-                else:
-                    c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+                status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
 
                 ##the collective send/recv follows the same idea under state.transpose_field_to_state
                 ##1) receive lobs_seq from src_pid, for src_pid<pid first
@@ -661,13 +648,8 @@ class Obs:
                     else:
                         seq = np.full((rec.nobs,), np.nan)
 
-                if c.config.debug:
-                    if mem_id:
-                        print(f"PID {c.pid:4}: transposing obs: mem{mem_id+1:03} obs_rec{obs_rec_id}")
-                    else:
-                        print(f"PID {c.pid:4}: transposing obs: waiting")
-                else:
-                    c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+                status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
 
                 ##this is just the reverse of transpose_obs_to_lobs
                 ## we take the exact steps, but swap send and recv operations here

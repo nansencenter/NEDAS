@@ -165,10 +165,7 @@ class ForecastScheme(BaseScheme):
                 # Note: assuming all variables in the list have the same k levels
                 for k in model.variables[variable_list[0]]['levels']:
                     fld_id += 1
-                    if c.debug:
-                        print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
-                    else:
-                        c.print_1p(progress_bar(fld_id, nfld+1))
+                    c.show_progress(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", fld_id, nfld+1)
 
                     vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
                     model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
@@ -227,10 +224,7 @@ class ForecastScheme(BaseScheme):
 
         ntask = len(task_list[c.pid])
         for task_id, rec in enumerate(task_list[c.pid]):
-            if c.debug:
-                print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
-            else:
-                c.print_1p(progress_bar(task_id, ntask))
+            c.show_progress(f"PID {c.pid:4} running diagnostics '{rec['method']}'", task_id, ntask)
 
             method_name = f"NEDAS.diag.{rec['method']}"
             mod = importlib.import_module(method_name)

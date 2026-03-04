@@ -110,10 +110,7 @@ class State:
         for m, mem_id in enumerate(self.mem_list[c.pid_mem]):
             for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
                 rec = self.info.fields[rec_id]
-                if c.config.debug:
-                    print(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
-                else:
-                    c.print_1p(progress_bar(m*nr+r, nm*nr))
+                c.show_progress(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", m*nr+r, nm*nr)
 
                 model_name = rec.model_src
                 model = c.models[model_name]
@@ -174,11 +171,8 @@ class State:
                 if rec_id_out is not None and rec_id != rec_id_out:
                     continue
 
-                if c.config.debug:
-                    rec = self.info.fields[rec_id]
-                    print(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
-                else:
-                    c.print_1p(progress_bar(m*nr+r, nm*nr))
+                rec = self.info.fields[rec_id]
+                c.show_progress(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", m*nr+r, nm*nr)
 
                 ##get the field record for output
                 fields = getattr(self, f"fields_{tag}")
@@ -205,10 +199,8 @@ class State:
 
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
             rec = self.info.fields[rec_id]
-            if c.config.debug:
-                print(f"PID {c.pid:4}: saving mean field '{rec.name:20}' {rec.time} k={rec.k}", flush=True)
-            else:
-                c.print_1p(progress_bar(r, len(self.rec_list[c.pid_rec])))
+            c.show_progress(f"PID {c.pid:4}: saving mean field '{rec.name:20}' {rec.time} k={rec.k}",
+                            r, len(self.rec_list[c.pid_rec]))
 
             ##initialize a zero field with right dimensions for rec_id
             fld_shape = (2,)+self.info.shape if rec.is_vector else self.info.shape
@@ -292,15 +284,10 @@ class State:
 
             ##all pid goes through their own mem_list simultaneously
             nm_max = np.max([len(lst) for p,lst in self.mem_list.items()])
+            mem_list_own = self.mem_list[c.pid_mem]
             for m in range(nm_max):
-                if c.config.debug:
-                    if m < len(self.mem_list[c.pid_mem]):
-                        mem_id = self.mem_list[c.pid_mem][m]
-                        print(f"PID {c.pid:4}: transposing field: mem{mem_id+1:03} rec{rec_id}")
-                    else:
-                        print(f"PID {c.pid:4}: transposing field: waiting")
-                else:
-                    c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+                status = f"processing mem{mem_list_own[m]+1:03} rec{rec_id}" if m < len(mem_list_own) else "waiting"
+                c.show_progress(f"PID {c.pid:4}: transposing field: {status}", r*nm_max+m, nr*nm_max)
 
                 ##prepare the fld for sending if not at the end of mem_list
                 fld = None
@@ -366,16 +353,11 @@ class State:
 
             ##all pid goes through their own mem_list simultaneously
             nm_max = np.max([len(lst) for p,lst in self.mem_list.items()])
+            mem_list_own = self.mem_list[c.pid_mem]
 
             for m in range(nm_max):
-                if c.config.debug:
-                    if m < len(self.mem_list[c.pid_mem]):
-                        mem_id = self.mem_list[c.pid_mem][m]
-                        print(f"PID {c.pid:4}: transposing field: mem{mem_id+1:03} rec{rec_id}")
-                    else:
-                        print(f"PID {c.pid:4}: transposing field: waiting")
-                else:
-                    c.print_1p(progress_bar(r*nm_max+m, nr*nm_max))
+                status = f"processing mem{mem_list_own[m]} rec{rec_id}" if m < len(mem_list_own) else "waiting"
+                c.show_progress(f"PID {c.pid:4}: transposing field: {status}", r*nm_max+m, nr*nm_max)
 
                 ##prepare an empty fld for receiving if not at the end of mem_list
                 mem_id = None

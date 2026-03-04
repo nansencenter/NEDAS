@@ -101,10 +101,7 @@ class SerialAssimilator(Assimilator):
         for p in range(len(obs_list)):
             obs_rec_id, v, owner_pid, i = obs_list[p]
 
-            if c.debug:
-                print(f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}", flush=True)
-            else:
-                c.print_1p(progress_bar(p, len(obs_list)))
+            c.show_progress(f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}", p, len(obs_list))
 
             ##1. if the pid owns this obs, broadcast it to all pid
             if c.pid_mem == owner_pid:

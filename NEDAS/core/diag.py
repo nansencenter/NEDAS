@@ -24,10 +24,7 @@ class Diagnostics:
 
         ntask = len(task_list[c.pid])
         for task_id, rec in enumerate(task_list[c.pid]):
-            if c.debug:
-                print(f"PID {c.pid:4} running diagnostics '{rec['method']}'", flush=True)
-            else:
-                c.print_1p(progress_bar(task_id, ntask))
+            c.show_progress(f"PID {c.pid:4} running diagnostics '{rec['method']}'", task_id, ntask)
 
             method_name = f"NEDAS.diag.{rec['method']}"
             mod = importlib.import_module(method_name)

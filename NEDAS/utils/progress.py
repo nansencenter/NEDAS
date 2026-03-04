@@ -1,7 +1,6 @@
 import os
 import subprocess
 import time
-from typing import Optional
 import numpy as np
 from functools import wraps
 
@@ -26,8 +25,12 @@ def timer(c=None):
                 return func(*args, **kwargs)
             finally:
                 t1 = time.time()
+                # show the timing message on processor c.pid_show
                 if c is None or (hasattr(c, 'comm') and c.comm.Get_rank() == getattr(c, 'pid_show', 0)):
-                    print(f"timer: {func.__name__} took {t1 - t0} seconds", flush=True)
+                    # try to get func name
+                    func_name = getattr(func, '__name__', type(func).__name__)
+                    # show the message
+                    print(f"timer: {func_name} took {t1 - t0} seconds", flush=True)
         return wrapper
 
     return decorator

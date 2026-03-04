@@ -3,7 +3,7 @@ from typing import get_args, Callable, TYPE_CHECKING
 import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
-from NEDAS.utils import parallel
+from NEDAS.utils import parallel, progress
 from NEDAS import grid, config, models, datasets, assim_tools
 if TYPE_CHECKING:
     from . import Model, Dataset, IOBackend, State, Obs, Transform, Inflation, Assimilator, Updator
@@ -50,10 +50,11 @@ class Context:
         self.set_models()
         self.set_datasets()
 
-        # more living objects (io, state, obs, and assim_tools components)
-        # will be created by self.init_scheme() in runtime by the Scheme methods
+        # more living objects (io, state, obs, other components)
+        # will be created by scheme class methods at runtime
     
-    def init_scheme(self):
+    def update_assim_tools(self):
+        """ Update the assimilation tool components based on runtime configuration """
         # update grid with current iteration settings
         res_lev = self.config.resolution_level[self.iter]
         self.grid = self.grid_orig.change_resolution_level(res_lev)
@@ -204,6 +205,18 @@ class Context:
         """
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(parallel.print_with_cache)
+
+    def show_progress(self, debug_message: str, task: int, total_ntask: int) -> None:
+        """
+        Show progress
+
+        If debug=True, print the debug_message with flush=True
+        Otherwise, show a progress bar, indicating current task/total_ntask percentage.
+        """
+        if self.config.debug:
+            print(debug_message, flush=True)
+        else:
+            self.print_1p(progress.progress_bar(task, total_ntask))
 
     def show_summary(self):
         self.config.show_summary()
