@@ -1,6 +1,7 @@
 import os
 import numpy as np
-from typing import Optional, Callable, Any
+from datetime import datetime
+from typing import Callable, Any
 from NEDAS.utils.shell_utils import run_command
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.progress import progress_bar
@@ -98,24 +99,21 @@ class Perturbation:
 
     def generate_perturb(self, grid: GridType,
                         fields: dict[str, np.ndarray],
-                        prev_perturb: dict[str, np.ndarray],
+                        prev_perturb: dict[str, Any],
                         dt: float=1,
-                        n: int=0,):
+                        n: int=0,) -> dict[str, np.ndarray]:
         """
-        Add random perturbation to the given 2D field
+        Add random perturbation to the given 2D fields
 
         Args:
-            grid: Grid object describing the 2d domain
-            fields: list of np.array shape[...,ny,nx]
-            prev_perturb; list of np.array from previous perturbation data, None if unavailable
-            dt: float, interval (hours) between time steps
-            n: int, current time step index
-            variable: str, or list of str
-            type: str: 'gaussian', 'powerlaw', or 'displace'
-            amplitude: float, (or list of floats, in multiscale approach)
-            hcorr: float, or list of float, horizontal corr length (meters)
-            tcorr: float, or list of float, time corr length (hours)
-            **kwargs: other arguments
+            grid (GridType): Grid object describing the 2d domain
+            fields (dict[str, np.ndarray]): the input fields
+            prev_perturb (dict[str, Any]): previous perturbation data, dict[str, None] if unavailable
+            dt (float): interval (hours) between time steps
+            n (int), current time step index
+
+        Returns:
+            dict[str, np.ndarray]: the generated perturbations
         """
         perturb = {}
         for vname,rec in self.params.items():
@@ -139,24 +137,21 @@ class Perturbation:
                     perturb[vname][(s,)+ind] = self.perturb_methods[self.perturb_type](rec, s)
                 
                 # make perturb temporally correlated by blending with prev_perturb
-                if prev_perturb[vname] is not None:
-                    perturb[vname][s] = self.make_correlated_perturb(prev_perturb[vname][s],
-                                                                     perturb[vname][s],
-                                                                     rec['tcorr'][s] / dt)
+                pp = prev_perturb[vname]
+                if pp is not None:
+                    perturb[vname][s] = self.make_correlated_perturb(pp[s], perturb[vname][s], rec['tcorr'][s] / dt)
 
         if 'press_wind_relate' in self.other_opts:
             perturb = self.make_wind_perturb_from_press(perturb)
 
         return perturb
 
-    def add_perturb(self, fields: dict, perturb: dict, **kwargs) -> tuple[dict, dict]:
+    def add_perturb(self, fields: dict[str, np.ndarray], perturb: dict[str, np.ndarray], **kwargs) -> dict[str, np.ndarray]:
         """ Add perturbations to each field """
         for vname,rec in self.params.items():
             for s in range(rec['nscale']):
                 if self.perturb_type == 'displace':
-                    fields[vname] = spatial_operation.warp(self.grid, fields[vname],
-                                                           perturb[vname][s,0,...],
-                                                           perturb[vname][s,1,...])
+                    fields[vname] = spatial_operation.warp(self.grid, fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
                 else:
                     if 'exp' in self.other_opts:
                         ##add lognormal perturbations
@@ -169,7 +164,7 @@ class Perturbation:
             if 'bounds' in kwargs:
                 vmin, vmax = kwargs['bounds']
                 fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
-        return fields, perturb
+        return fields
 
     def perturb_random_gaussian(self, rec: dict[str, Any], s: int) -> np.ndarray:
         """ Generate a random perturbation using the Gaussian random field method """
@@ -223,7 +218,7 @@ class PerturbationScheme:
     """
     nfld: int = 0
     task_list: dict[int, list[dict]] = {}
-    perturb: dict = {}
+    perturb: dict[str, Any] = {}
 
     def __init__(self, c: Context):
         ##distribute perturbation items among MPI ranks
@@ -252,28 +247,22 @@ class PerturbationScheme:
                 for _ in model.variables[vname].levels:
                     self.nfld += 1
 
-    def __call__(self, c):
+    def __call__(self, c: Context) -> None:
         if c.config.io_mode == 'offline':
             self.prepare_perturb_dir(c)
 
         c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
 
-        ##go through the tasks
+        # go through the tasks
         fld_id = 0
         for rec in self.task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]  ##model class object
-            mem_id = rec['member']
-            mstr = f'_mem{mem_id+1:03d}'
+            p = Perturbation(**rec)
+            model = c.models[rec['model_src']]  ##model class object
+            member = rec['member']
             variable_list = ensure_list(rec['variable'])
 
-            ##check if previous perturb is available from past cycles
-            for vname in variable_list:
-                psfile = os.path.join(c.io.forecast_dir(c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
-                if os.path.exists(psfile):
-                    self.perturb[vname] = np.load(psfile)
-                else:
-                    self.perturb[vname] = None
+            # check if previous perturb is available from past cycles
+            self.load_perturb_data(c, **rec)
 
             # get number of time steps for this set of variables
             # perturbation will be generated for all time steps if variable is available
@@ -287,46 +276,21 @@ class PerturbationScheme:
                 # Note: assuming all variables in the list have the same k levels
                 for k in model.variables[variable_list[0]].levels:
                     fld_id += 1
-                    if c.config.debug:
-                        print(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", flush=True)
-                    else:
-                        c.print_1p(progress_bar(fld_id, nfld+1))
+                    c.show_progress(f"PID {c.pid:4}: perturbing mem{member+1:03} {variable_list} at {t} level {k}", fld_id, self.nfld+1)
 
-                    vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
-                    model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
-                    model.grid.set_destination_grid(c.grid)
-                    c.grid.set_destination_grid(model.grid)
+                    fields = self.collect_fields(c, t, k, **rec)
+                    self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n)
+                    fields = p.add_perturb(fields, self.perturb, **rec)
 
-                    # collect variable fields
-                    fields = {}
-                    for vname in variable_list:
-                        ##read variable from model state
-                        fld = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
-                        ##convert to analysis grid
-                        fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
+                    self.output_perturbed_fields(c, fields, t, k, **rec)
 
-                    ##generate perturbation on analysis grid
-                    self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n, )
-                    fields_pert = p.add_perturb(fields, perturb, **rec)
-
-                    if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
-                        ##use model internal method to apply displacement perturbations directly
-                        getattr(model, 'displace')(perturb, path=path, time=t, member=mem_id, k=k)
-                    else:
-                        ##convert from analysis grid to model grid, and
-                        ##write the perturbed variables back to model state files
-                        for vname in variable_list:
-                            fld = c.grid.convert(fields_pert[vname], is_vector=model.variables[vname].is_vector)
-                            model.write_var(fld, path=path, name=vname, time=t, member=mem_id, k=k)
-
-            ##save a copy of perturbation at next_t, for use by next cycle
-            if c.config.io_mode == 'offline':
-                self.save_perturb_data(c, **rec)
+            self.save_perturb_data(c, **rec)
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
 
     def prepare_perturb_dir(self, c):
+        """ Prepare and clear the directory where perturbation data will be stored (offline mode) """
         assert isinstance(c.io, FileIO)
         # clean up perturb files in current cycle dir
         for rec in c.config.perturb:
@@ -337,11 +301,59 @@ class PerturbationScheme:
         c.comm.Barrier()
 
     def save_perturb_data(self, c: Context, **rec):
-        assert isinstance(c.io, FileIO)
-        path = c.io.forecast_dir(c.time, rec['model_src'])
-        member = rec['member']
+        """ Save a copy of perturbation data, for use by the next analysis cycle """
+        path = None
+        if isinstance(c.io, FileIO):
+            path = os.path.join(c.io.forecast_dir(c.time, rec['model_src']), 'perturb')
+
         for vname in ensure_list(rec['variable']):
-            psfile = os.path.join(path, 'perturb', f"{vname}_{member+1:03d}.npy")
-            run_command(f"mkdir -p {os.path.dirname(psfile)}")
-            np.save(psfile, self.perturb[vname])
-            ##TODO: io_backend here
+            data = self.perturb[vname]
+            assert data is not None
+            c.io.save_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", data, path)
+
+    def load_perturb_data(self, c: Context, **rec):
+        """ Load the perturbation data """
+        path = None
+        if isinstance(c.io, FileIO):
+            path = os.path.join(c.io.forecast_dir(c.time, rec['model_src']), 'perturb')
+
+        for vname in ensure_list(rec['variable']):
+            data = c.io.load_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", path)
+            self.perturb[vname] = data
+
+    def collect_fields(self, c: Context, t: datetime, k: int, **rec) -> dict[str, np.ndarray]:
+        """ Collect all model fields to be perturbed """
+        variable_list = ensure_list(rec['variable'])
+        member = rec['member']
+        model = c.models[rec['model_src']]
+
+        # set up grids
+        vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
+        c.io.call_io_method(c, 'prior', model.read_grid, name=vname, time=t, member=member, k=k)
+        model.grid.set_destination_grid(c.grid)
+        c.grid.set_destination_grid(model.grid)
+
+        # collect model variable fields
+        fields = {}
+        for vname in variable_list:
+            ##read variable from model state
+            fld = c.io.call_io_method(c, 'prior', model.read_var, name=vname, time=t, member=member, k=k)
+            ##convert to analysis grid
+            fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
+        return fields
+
+    def output_perturbed_fields(self, c: Context, fields: dict[str, np.ndarray], t: datetime, k:int, **rec) -> None:
+        variable_list = ensure_list(rec['variable'])
+        member = rec['member']
+        model = c.models[rec['model_src']]
+
+        if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
+            ##use model internal method to apply displacement perturbations directly
+            displace_method = getattr(model, 'displace')
+            c.io.call_io_method(c, 'prior', displace_method, self.perturb, time=t, member=member, k=k)
+        else:
+            ##convert from analysis grid to model grid, and
+            ##write the perturbed variables back to model state files
+            for vname in variable_list:
+                fld = c.grid.convert(fields[vname], is_vector=model.variables[vname].is_vector)
+                c.io.call_io_method(c, 'prior', model.write_var, fld, name=vname, time=t, member=member, k=k)

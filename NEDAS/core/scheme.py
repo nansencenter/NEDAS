@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from NEDAS import assim_tools, config
+from NEDAS import config, io_backends
 from .context import Context
 
 class Scheme(ABC):
@@ -9,10 +9,13 @@ class Scheme(ABC):
     The Scheme coordinates all runtime generation and manipulation of objects.
     """
     c: Context
-    supported_io_modes: list[str] = ['online', 'offline']
 
-    def __init__(self, config: config.Config):
+    def __init__(self, config: config.Config) -> None:
+        # parse configuration
         self.c = Context(config)
+
+        # initialize io backend
+        self.c.io = io_backends.get_io_backend(self.c)
 
     @abstractmethod
     def __call__(self) -> None:

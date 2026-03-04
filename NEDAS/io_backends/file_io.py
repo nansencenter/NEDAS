@@ -158,3 +158,27 @@ class FileIO(IOBackend):
 
         kwargs['path'] = path
         return method(*args, **kwargs)
+
+    def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:
+        if path is None:
+            path = c.config.work_dir  # default path
+
+        file = os.path.join(path, f"{name}.npy")
+
+        # make sure directory exists
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+
+        # save the data to file
+        np.save(file, data)
+
+    def load_ndarray(self, c: Context, name: str, path: str | None = None) -> np.ndarray | None:
+        if path is None:
+            path = c.config.work_dir # default path
+
+        file = os.path.join(path, f"{name}.npy")
+
+        # load data from file
+        if os.path.exists(file):
+            return np.load(file)
+        else:
+            return None

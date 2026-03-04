@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 import os
 import numpy as np
 from .context import Context
@@ -75,7 +75,35 @@ class IOBackend(ABC):
         """
         ...
 
-    def save_debug_data(self, c: Context, name: str, data: dict, path: Optional[str]=None) -> None:
+    @abstractmethod
+    def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None=None) -> None:
+        """
+        Save ndarray data
+
+        Args:
+            c (Context): the runtime context
+            name (str): the name of the data
+            data (np.ndarray): the data
+            path (str, optional): system path to save the data to.
+        """
+        ...
+
+    @abstractmethod
+    def load_ndarray(self, c: Context, name: str, path: str | None=None) -> np.ndarray | None:
+        """
+        Load ndarray from saved data
+        
+        Args:
+            c (Context): the runtime context
+            name (str): the name of the data
+            path (str, optional): system path to the saved data.
+
+        Returns:
+            np.ndarray: the data
+        """
+        ...
+
+    def save_debug_data(self, c: Context, name: str, data: dict, path: str | None=None) -> None:
         """
         Save debug data in npz format
 
@@ -83,10 +111,15 @@ class IOBackend(ABC):
             c (Context): the runtime context
             name (str): the name of the data
             data (dict): the data
-            path (str, optional): system path to save the data (if using file io)
+            path (str, optional): system path to save the data to.
         """
         if path is None:
             path = c.config.work_dir  # default path
 
         file = os.path.join(path, f"{name}.npz")
+
+        # make sure directory exists
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+
+        # save the data to file
         np.savez(file, **data)
