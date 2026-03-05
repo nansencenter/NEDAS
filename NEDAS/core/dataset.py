@@ -86,4 +86,10 @@ class Dataset(ABC):
         return obs_seq
 
     def random_network(self, **kwargs) -> dict[str, np.ndarray]:
-        raise NotImplementedError(f"'random_network is not implemented for {self.__class__.__name__}")
+        """
+        Generate a random observing network for use in synthetic observation experiments.
+
+        Args:
+            **kwargs
+        """
+        raise NotImplementedError(f"'random_network' is not implemented for {self.__class__.__name__}")

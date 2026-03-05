@@ -197,9 +197,6 @@ class RgpsObs(Dataset):
 
         return obs_seq_arr
 
-    def random_network(self):
-        raise NotImplementedError
-
     def get_model_files(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
 

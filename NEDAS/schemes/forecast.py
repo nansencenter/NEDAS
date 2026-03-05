@@ -5,20 +5,19 @@ import importlib.util
 import subprocess
 import numpy as np
 from NEDAS.utils.conversion import ensure_list, dt1h
-from NEDAS.utils.progress import timer, progress_bar
+from NEDAS.utils.progress import timer
 from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
-from NEDAS.utils.random_perturb import random_perturb
-from .base import BaseScheme
+from NEDAS.core import Scheme
 
-class ForecastScheme(BaseScheme):
+class ForecastScheme(Scheme):
     """
     Forecast scheme class.
 
     This scheme runs only the ensemble forecasts for the start times defined by time_start time_end every cycle_period.
     The length of each forecast between cycles is forecast_period, which can be different from cycle_period.
     """
-    def __call__(self, c) -> None:
+    def __call__(self):
         c.show_summary()
 
         if c.step:

@@ -174,17 +174,18 @@ class Config:
             yaml.dump(self.__dict__, f, sort_keys=False)
 
 
-    def show_summary(self):
+    def summary(self) -> str:
         """
-        Print a summary of the configuration.
+        Return a summary of the configuration.
         """
-        print(f"""Initializing config...
- working directory: {self.work_dir}
- parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
- cycling from {self.time_start} to {self.time_end}
- analysis start at {self.time_analysis_start}
- cycle_period = {self.cycle_period} hours
- current time: {self.time}
- nens: {self.nens}
- Assimilation scheme: TODO
- """, flush=True)
+        summary_text = f"""  working directory: {self.work_dir}
+  parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
+  cycling from {self.time_start} to {self.time_end}
+  analysis start at {self.time_analysis_start}
+  cycle_period = {self.cycle_period} hours
+  ensemble size: nens = {self.nens}
+  scheme = {self.scheme}, io_mode = {self.io_mode}
+  state: models
+  obs: datasets
+ """
+        return summary_text

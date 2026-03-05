@@ -149,9 +149,6 @@ class AMSR2Obs(Dataset):
 
         return obs_seq
 
-    def random_network(self):
-        raise NotImplementedError
-
     def _load_coeffs_biases(self, date):
         import pandas as pd
         if self.coeffs is None:

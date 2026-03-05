@@ -3,9 +3,10 @@ import sys
 import tempfile
 import importlib.util
 import subprocess
+from typing import Any, Callable
 from datetime import datetime
 from NEDAS.utils.progress import timer
-from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
+from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks, by_rank
 from NEDAS.core import Scheme, Context, State, Obs, PerturbationScheme
 
 class FilterAnalysisScheme(Scheme):
@@ -21,6 +22,7 @@ class FilterAnalysisScheme(Scheme):
 
     def __call__(self) -> None:
         c = self.c
+        c.print_1p("Initializing...\n")
         c.show_summary()
 
         if c.config.step:
@@ -29,9 +31,12 @@ class FilterAnalysisScheme(Scheme):
             stepfunc(c)
             return
 
-        print("Cycling start.", flush=True)
+        self.generate_truth(c)
+        self.generate_init_ensemble(c)
+
+        c.print_1p("Cycling start.\n")
         while c.time < c.config.time_end:
-            print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
+            c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}\n")
 
             if self.check_cycle_complete(c, c.time):
                 continue
@@ -59,8 +64,22 @@ class FilterAnalysisScheme(Scheme):
             ##advance to next cycle
             c.time = c.next_time
 
-        print("Cycling complete.", flush=True)
+        c.print_1p("Cycling complete.\n")
 
+    def generate_truth(self, c: Context):
+        ...
+
+    def generate_init_ensemble(self, c: Context):
+        for model_name, model in c.models.items():
+            c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
+            opts = self.get_task_opts(c)
+            # opts['nproc_per_run'] = 1
+            # self.run_ensemble_tasks_in_scheduler(c, f"init_ens_{model_name}", c.io.call_io_method, c, '', model.generate_init_ensemble, **opts)
+            print(c.state.mem_list)
+            for mem_id in range(c.config.nens):
+                opts['member'] = mem_id
+                model.generate_init_ensemble(**opts)
+            c.print_1p(f"{model.memory} \n") #debug
 
     def check_cycle_complete(self, c: Context, time: datetime) -> bool:
         """
@@ -73,13 +92,13 @@ class FilterAnalysisScheme(Scheme):
         Returns:
             bool: True of this cycle has completed.
         """
-        ...
+        return False
 
     def preprocess(self, c: Context) -> None:
         """
         Pre-processing step before the forecast.
         """
-        ...
+        
 
     def postprocess(self, c: Context) -> None:
         """
@@ -91,7 +110,22 @@ class FilterAnalysisScheme(Scheme):
         """
         Ensemble forecast step.
         """
-        ...
+        for model_name, model in c.models.items():
+            path = c.forecast_dir(c.time, model_name)
+            makedir(path)
+            print(f"Running {model_name} ensemble forecast:", flush=True)
+
+            if model.ens_run_type == 'batch':
+                opts = self.get_task_opts(c, path=path, nens=c.nens)
+                model.run_batch(**opts)
+
+            elif model.ens_run_type == 'scheduler':
+                opts = self.get_task_opts(c, path=path)
+                walltime = getattr(model, 'walltime', None)
+                self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
+
+            else:
+                raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")
 
     def filter(self, c: Context) -> None:
         """
@@ -103,15 +137,11 @@ class FilterAnalysisScheme(Scheme):
         for c.iter in range(c.config.niter):
             c.print_1p(f"Running analysis for outer iteration step {c.iter}:")
 
-            # initialize
             c.update_assim_tools()
 
-            # prepare the state variables
-            c.state = State(c)
             timer(c)(c.state.prepare_state)(c)
 
             # prepare the observations
-            c.obs = Obs(c)
             timer(c)(c.obs.prepare_obs)(c)
             timer(c)(c.obs.prepare_obs_from_state)(c, 'prior')
 
@@ -170,6 +200,42 @@ class FilterAnalysisScheme(Scheme):
         # c.print_1p(' done.\n')
         # c.comm.cleanup_file_locks()
 
+    def get_task_opts(self, c: Context, **other_opts) -> dict[str, Any]:
+        """
+        Get common kwargs from configuration and return as task options dict        
+        """
+        opts = {
+            'time': c.time,
+            'forecast_period': c.config.cycle_period,
+            'time_start': c.config.time_start,
+            'time_end': c.config.time_end,
+            'debug': c.config.debug,
+            **(c.config.job_submit or {}),
+            **other_opts,
+            }
+        return opts
+
+    def run_ensemble_tasks_in_scheduler(self, c: Context, task_name: str, func: Callable, *args, **kwargs) -> None:
+        walltime = kwargs.get('walltime', None)
+        nproc_per_run = kwargs['nproc_per_run']
+
+        ##get number of workers to initialize the scheduler
+        if c.config.job_submit and c.config.job_submit.get('run_separate_jobs', False):
+            ##all jobs will be submitted to external scheduler's queue
+            ##just assign a worker to each ensemble member
+            nworker = min(c.config.nens, c.config.nproc_util)
+        else:
+            ##Scheduler will use nworkers to spawn ensemble member runs to
+            ##the available nproc processors
+            nworker = c.config.nproc // nproc_per_run
+        scheduler = Scheduler(nworker, walltime, debug=c.config.debug)
+
+        for mem_id in range(c.config.nens):
+            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", func, *args, member=mem_id, **kwargs)
+
+        scheduler.start_queue() ##start the job queue
+        scheduler.shutdown()
+        c.print_1p(' done.\n')
 
 if __name__ == '__main__':
     # get config from runtime args, including the step to run (from --step)

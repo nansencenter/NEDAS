@@ -23,7 +23,6 @@ class StateInfo:
     
     def __init__(self, c: Context):
         """Parse the configuration to generate the state info object"""
-        self.c = c
         self.shape = c.grid.x.shape
         self.mask = c.grid.mask
         self.fields = {}
@@ -65,12 +64,12 @@ class StateInfo:
         """
         vname = vrec['name']
         model_name = vrec['model_src']
-        model = self.c.models[model_name]
+        model = c.models[model_name]
         if vname not in model.variables:
             raise RuntimeError(f"variable '{vname}' not defined in {model_name} model.variables")
 
         #now go through time (t) and zlevels (k) to form a uniq field record
-        time_steps = self.c.time + np.array(self.c.config.state_time_steps)*dt1h
+        time_steps = c.time + np.array(c.config.state_time_steps)*dt1h
         rec_id = len(self.fields)
         for time in time_steps:
             for k in model.variables[vname].levels:
@@ -82,7 +81,7 @@ class StateInfo:
                     units=model.variables[vname].units,
                     err_type=vrec['err_type'],
                     time=time,
-                    dt=self.c.config.state_time_scale,
+                    dt=c.config.state_time_scale,
                     k=k,
                     pos=self.pos,
                 )
@@ -155,7 +154,7 @@ class StateInfo:
                     err_type=ss[5],
                     time=h2t(float(ss[6])),
                     dt=float(ss[7]),
-                    k=float(ss[8]),
+                    k=int(ss[8]),
                     pos=int(ss[9])
                     )
                 rec_id += 1

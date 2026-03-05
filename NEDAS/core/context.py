@@ -31,8 +31,8 @@ class Context:
     state: State
     obs: Obs
 
-    def __init__(self, cf: config.Config):
-        self.config = cf
+    def __init__(self, config: config.Config):
+        self.config = config
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -219,6 +219,9 @@ class Context:
             self.print_1p(progress.progress_bar(task, total_ntask))
 
     def show_summary(self):
-        self.config.show_summary()
-        
-        print("current time: ", self.time)  ##TODO: more details
+        conf_summary = self.config.summary()
+        summary_text = f"""Configuration:\n{conf_summary}
+current time: {self.time}
+...
+"""
+        self.print_1p(summary_text)

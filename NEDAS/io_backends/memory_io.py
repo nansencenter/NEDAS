@@ -1,17 +1,24 @@
-from typing import Callable
+from typing import Callable, Any
 import numpy as np
 from NEDAS.core import Context, IOBackend
 
-"""
-Memory IO backend. Keep data in the memory and avoid file I/O completely.
-
-Only works for single processor now, but this is convenient for long experiments and simple models
-"""
-
 class MemoryIO(IOBackend):
-    data: dict = {}
+    """
+    Memory IO backend. Keep data in the memory and avoid file I/O completely.
+
+    Only works for single processor now, but this is convenient for long experiments and simple models
+    """
+    shared_data: dict[str, Any] = {}
+
     def __init__(self, c: Context):
-        assert c.config.nproc == 1, "currently only support serial programs: nproc=1"
+        #assert c.config.nproc == 1, "currently only support serial programs: nproc=1"
+
+        # allocate shared data in mpi environment
+        #c.config.nproc > 1
+
+        # allocate shared memory
+        #self.memory = np.zeros((100, 100, 3))
+        pass
 
     def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """
@@ -45,7 +52,7 @@ class MemoryIO(IOBackend):
         # and look for corresponding dict entries for cached data.
         kwargs['tag'] = tag
 
-        return method(*args, **kwargs)
+        self.shared_data[type(method).__name__] = method(*args, **kwargs)
 
     def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:
         # form the key in the data dict
@@ -54,7 +61,7 @@ class MemoryIO(IOBackend):
             key = f"{path}_{name}"
 
         # save data to dict
-        self.data[key] = data
+        self.shared_data[key] = data
     
     def load_ndarray(self, c: Context, name: str, path: str | None = None) -> np.ndarray | None:
         # form the key in the data dict
@@ -63,8 +70,8 @@ class MemoryIO(IOBackend):
             key = f"{path}_{name}"
 
         # read from dict to obtain data
-        if key in self.data:
-            return self.data[key]
+        if key in self.shared_data:
+            return self.shared_data[key]
         else:
             return None
  

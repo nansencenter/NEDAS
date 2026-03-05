@@ -93,16 +93,16 @@ def run(c, **kwargs) -> None:
     ##plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
-    ##read the obs data from analysis_dir/obs_seq
+    ##read the obs data from debug data
     obs_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
     obs_prior_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 
     ##filter for the obs within time and vertical level range
     tmask = (obs_seq['t'] > t) & (obs_seq['t'] <= t+dt*dt1h)
-    obs_z = np.abs(obs_seq['z'])
+    obs_z = obs_seq['z']
     obs_x = obs_seq['x']
     obs_y = obs_seq['y']
-    model_z = np.abs(c.obs.read_mean_z_coords(c, c.time))
+    model_z = c.obs.get_ref_z(c, obs_rec['model_src'], c.time)
     if k == 0:
         zk = c.grid.interp(model_z[k], obs_x, obs_y)
         zmask = (obs_seq['z'] == zk)

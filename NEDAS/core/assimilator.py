@@ -6,6 +6,7 @@ from NEDAS.config import parse_config
 from NEDAS.utils.parallel import bcast_by_root
 from NEDAS.utils.progress import timer
 from .context import Context
+from .types import ObsRecordID, PartitionID, ProcIDMem
 
 class Assimilator(ABC):
     def __init__(self, c: Context):
@@ -46,14 +47,30 @@ class Assimilator(ABC):
 
     @abstractmethod
     def init_partitions(self, c: Context) -> list[tuple]:
+        """
+        Generate spatial partitioning of the domain
+        """
         ...
 
     @abstractmethod
-    def assign_obs(self, c: Context) -> dict:
+    def assign_obs(self, c: Context) -> dict[ObsRecordID, dict[PartitionID, np.ndarray]]:
+        """
+        Assign the observation sequence to each partition par_id
+
+        Args:
+            c (Context): the runtime context object
+
+        Returns:
+            dict[ObsRecordID, dict[PartitionID, np.ndarray]]:
+               Indices in the full obs_seq for the subset of obs that belongs to partition par_id
+        """
         ...
 
     @abstractmethod
-    def distribute_partitions(self, c: Context) -> dict[int, list[int]]:
+    def distribute_partitions(self, c: Context) -> dict[ProcIDMem, list[PartitionID]]:
+        """
+        Distribute partitions across processors
+        """
         ...
 
     def transpose_to_ensemble_complete(self, c: Context) -> None:

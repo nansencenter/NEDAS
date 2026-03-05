@@ -19,9 +19,14 @@ class Model(Generic[GridT], ABC):
     grid: GridT
     z: dict[LevelID, np.ndarray]
     mask: np.ndarray
+    ens_run_type: Literal['scheduler', 'batch']
+    ens_init_dir: Optional[str]
     truth_dir: Optional[str]
+    nproc_per_run: int = 1
+    nproc_per_util: int = 1
+    walltime: int|None = None
     run_process = None
-    run_status = 'pending'
+    run_status: str = 'pending'
 
     def __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
         ##parse config file and obtain a list of attributes
@@ -134,9 +139,34 @@ class Model(Generic[GridT], ABC):
     @abstractmethod
     def run(self, **kwargs) -> None:
         """
-        Run the model.
+        Run the model (one member at a time).
 
         Args:
             **kwargs: Keyword arguments for running the model.
         """
         ...
+
+    def run_batch(self, **kwargs) -> None:
+        """
+        Run the model for all ensemble members in batch mode.
+
+        """
+        raise NotImplementedError(f"'run_batch' is not implemented for {self.__class__.__name__}")
+
+    def generate_truth(self, **kwargs) -> None:
+        """
+        Generate truth (nature run) model states.
+
+        """
+        raise NotImplementedError(f"'generate_truth' is not implemented for {self.__class__.__name__}")
+
+
+    def generate_init_ensemble(self, *args, **kwargs) -> None:
+        """
+        Generate initial perturbed model states for ensemble forecasts.
+        
+        Args:
+            nens (int): ensemble size
+            **kwargs
+        """
+        raise NotImplementedError(f"'generate_init_ensemble' is not implemented for {self.__class__.__name__}")

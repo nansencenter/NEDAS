@@ -108,7 +108,7 @@ class Lorenz96Model(Model[Grid1D]):
             self.memory[tag] = {}
         if name not in self.memory[tag]:
             self.memory[tag][name] = {}
-        self.memory[name][member, time] = var
+        self.memory[tag][name][member, time] = var
 
     def _write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -146,3 +146,18 @@ class Lorenz96Model(Model[Grid1D]):
         self.write_var(next_state, **{**kwargs, 'time':next_time})
 
         self.run_status = 'complete'
+
+    def generate_truth(self, **kwargs):
+
+        ...
+
+    def generate_init_ensemble(self, *args, **kwargs):
+        time = kwargs['time']
+        member = kwargs['member']
+
+        if self.io_mode == 'offline':
+            path = ''
+
+        state = self.generate_initial_condition()
+        print(self)
+        self.write_var(state, tag='prior', name='state', **kwargs)

@@ -9,3 +9,5 @@ nproc_per_run: 1
 nproc_per_util: 1
 walltime: 10
 
+ens_init_dir:
+truth_dir:

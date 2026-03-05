@@ -2,7 +2,6 @@ import copy
 from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import distribute_tasks
-from NEDAS.utils.progress import progress_bar
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
@@ -57,11 +56,6 @@ class BatchAssimilator(Assimilator):
     def assign_obs(self, c: Context) -> dict:
         """
         Assign the observation sequence to each partition par_id
-
-        Returns:
-        - obs_inds: dict[obs_rec_id, dict[par_id, inds]]
-        where inds is np.array with indices in the full obs_seq, for the subset of obs
-        that belongs to partition par_id
         """
         ##each pid_rec has a subset of obs_rec_list
         obs_inds_pid = {}
@@ -109,7 +103,7 @@ class BatchAssimilator(Assimilator):
 
         return obs_inds
 
-    def distribute_partitions(self, c: Context) -> dict:
+    def distribute_partitions(self, c: Context):
         par_list_full = np.arange(len(c.state.partitions))
 
         ##distribute the list of par_id according to workload to each pid
@@ -163,13 +157,13 @@ class BatchAssimilator(Assimilator):
         c.print_1p('>>> assimilate in batch mode:\n')
         task = 0
         for par_id in c.state.par_list[c.pid_mem]:
-            state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.z_state)
+            state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z)
             nloc = state_data['state_prior'].shape[-1]
             ##skip forward if the partition is empty
             if nloc == 0:
                 continue
 
-            obs_data = c.obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
+            obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
             nlobs = obs_data['x'].size
             ##if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:
@@ -209,11 +203,11 @@ class BatchAssimilator(Assimilator):
                 task += 1
 
             c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
-            c.obs.unpack_local_obs_data(c, c.state, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
+            c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
     @abstractmethod
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         """Local analysis scheme for each model state variable (grid point)
         to be implemented by derived classes"""
-        pass
+        ...

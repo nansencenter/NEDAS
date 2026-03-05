@@ -2,7 +2,6 @@ import copy
 from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
-from NEDAS.utils.progress import progress_bar
 from NEDAS.core import Context, Assimilator
 
 class SerialAssimilator(Assimilator):
@@ -24,8 +23,8 @@ class SerialAssimilator(Assimilator):
             ##pick the last factoring that is most 'square', so that the interval
             ##is relatively even in both directions for each pid
             nx_intv, ny_intv = [(i, int(c.config.nproc_mem / i))
-                                for i in range(1, int(np.ceil(np.sqrt(c.nproc_mem))) + 1)
-                                if c.nproc_mem % i == 0][-1]
+                                for i in range(1, int(np.ceil(np.sqrt(c.config.nproc_mem))) + 1)
+                                if c.config.nproc_mem % i == 0][-1]
 
             ##a list of (ist, ied, di, jst, jed, dj) for slicing
             ##note: we have nproc_mem entries in the list
@@ -35,32 +34,20 @@ class SerialAssimilator(Assimilator):
         else:
             npoints = c.grid.x.size
             ##just divide the list of points into nproc_mem parts, each part spanning the entire domain
-            nparts = c.nproc_mem
-            partitions = [np.arange(i, npoints, nparts) for i in np.arange(nparts)]
+            nparts = c.config.nproc_mem
+            partitions = [tuple(np.arange(i, npoints, nparts)) for i in np.arange(nparts)]
 
         return partitions
 
-    def assign_obs(self, c, state, obs) -> dict:
-        """
-        Assign the observation sequence to each partition par_id
-
-        Args:
-            c (Config): configuration object
-            state (State): state object
-            obs (Obs): observation object
-
-        Returns:
-            dict[obs_rec_id, dict[par_id, np.ndarray]]:
-               Indices in the full obs_seq for the subset of obs that belongs to partition par_id
-        """
+    def assign_obs(self, c: Context):
         obs_inds_pid = {}
-        for obs_rec_id in obs.obs_rec_list[c.pid_rec]:
-            full_inds = np.arange(obs.obs_seq[obs_rec_id]['obs'].shape[-1])
+        for obs_rec_id in c.obs.obs_rec_list[c.pid_rec]:
+            full_inds = np.arange(c.obs.obs_seq[obs_rec_id]['obs'].shape[-1])
             obs_inds_pid[obs_rec_id] = {}
 
             ##locality doesn't matter, we just divide obs_rec into nproc_mem parts
             inds = distribute_tasks(c.comm_mem, full_inds)
-            for par_id in range(c.nproc_mem):
+            for par_id in range(c.config.nproc_mem):
                 obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
 
         ##now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
@@ -72,12 +59,12 @@ class SerialAssimilator(Assimilator):
 
         return obs_inds
 
-    def distribute_partitions(self, c, state, obs) -> dict:
+    def distribute_partitions(self, c: Context):
         ##just assign each partition to each pid, pid==par_id
-        par_list = {p:np.array([p]) for p in range(c.nproc_mem)}
+        par_list = {p:[p] for p in range(c.config.nproc_mem)}
         return par_list
 
-    def assimilation_algorithm(self, c, state, obs):
+    def assimilation_algorithm(self, c: Context):
         """
         Implementation of the serial assimilation algorithm.
 
@@ -86,15 +73,15 @@ class SerialAssimilator(Assimilator):
             for each obs the near by state variables are updated one by one.
             so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
         """
-        state.state_post = copy.deepcopy(state.state_prior)
-        obs.lobs_post =copy.deepcopy(obs.lobs_prior)
+        c.state.state_post = copy.deepcopy(c.state.state_prior)
+        c.obs.lobs_post =copy.deepcopy(c.obs.lobs_prior)
 
         par_id = c.pid_mem
 
-        state_data = state.pack_local_state_data(c, par_id, state.state_prior, state.z_state)
+        state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z)
 
-        obs_data = obs.pack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_prior)
-        obs_list = bcast_by_root(c.comm)(obs.global_obs_list)(c)
+        obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
+        obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c)
 
         c.print_1p('>>> assimilate in serial mode:\n')
         ##go through the entire obs list, indexed by p, one scalar obs at a time
@@ -143,8 +130,8 @@ class SerialAssimilator(Assimilator):
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                             c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
-        state.unpack_local_state_data(c, par_id, state.state_post, state_data)
-        obs.unpack_local_obs_data(c, state, par_id, obs.lobs, obs.lobs_post, obs_data)
+        c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
+        c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
     @abstractmethod

@@ -1,5 +1,4 @@
 import numpy as np
-from NEDAS.utils.progress import progress_bar
 from NEDAS.core.inflation import Inflation
 
 class MultiplicativeInflation(Inflation):
@@ -38,15 +37,9 @@ class MultiplicativeInflation(Inflation):
             self.coef = np.sqrt((omb2-varo-amb2)/vara)
 
     def apply_inflation(self, c, flag):
-        if flag == 'prior':
-            mean_file = c.state.prior_mean_file
-            fields = c.state.fields_prior
-        elif flag == 'post':
-            mean_file = c.state.post_mean_file
-            fields = c.state.fields_post
-        else:
+        if flag not in ['prior', 'post']:
             raise ValueError(f"Unknown flag {flag}, should be prior or post")
-        ##TODO: io backend here
+        fields = getattr(c.state, f"fields_{flag}")
 
         pid_mem_show = [p for p,lst in c.state.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
@@ -63,7 +56,7 @@ class MultiplicativeInflation(Inflation):
 
             ##read the mean field with rec_id
             #c.io.read_field()
-            fields_mean = c.state.read_field(mean_file, c.grid.mask, 0, rec_id)
+            fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
             for m, mem_id in enumerate(c.state.mem_list[c.pid_mem]):
                 c.show_progress(f"PID {c.pid:4}: inflating mem{mem_id+1:03}", m*nr+r, nm*nr)
 

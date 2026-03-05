@@ -1,7 +1,6 @@
 from typing import Optional
 import numpy as np
 from NEDAS.utils.conversion import t2h, h2t, dt1h
-from NEDAS.utils.progress import progress_bar
 from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
 from .context import Context
 from .types import ProcIDMem, ProcIDRec, MemID, FieldRecordID, PartitionID, FieldRecord, FieldEns, StateEns
