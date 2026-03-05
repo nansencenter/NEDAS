@@ -159,5 +159,5 @@ class Lorenz96Model(Model[Grid1D]):
             path = ''
 
         state = self.generate_initial_condition()
-        print(self)
+        
         self.write_var(state, tag='prior', name='state', **kwargs)

@@ -12,7 +12,7 @@ class IOBackend(ABC):
         tags (list[str]): List of names for copies of state/obs data
 
     """
-    tags: list[str] = ['prior', 'prior_mean', 'posterior', 'posterior_mean', 'truth', 'z']
+    tags: list[str] = ['prior', 'prior_mean', 'posterior', 'posterior_mean', 'truth', 'z', 'z_mean']
 
     def __init__(self, c: Context):
         pass

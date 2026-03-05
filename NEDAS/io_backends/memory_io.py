@@ -52,7 +52,7 @@ class MemoryIO(IOBackend):
         # and look for corresponding dict entries for cached data.
         kwargs['tag'] = tag
 
-        self.shared_data[type(method).__name__] = method(*args, **kwargs)
+        return method(*args, **kwargs)
 
     def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:
         # form the key in the data dict

@@ -19,7 +19,7 @@ time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-30T00:00:00Z
 time_analysis_start: 2001-01-02T00:00:00Z
 time_analysis_end: 2001-01-28T00:00:00Z
-cycle_period: 12
+cycle_period: 24
 time:
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -66,12 +66,12 @@ shuffle_obs: False
 interp_method: linear
 
 perturb:
-- variable: state
-  model_src: lorenz96
-  type: 'gaussian'
-  amp: 0.1
-  hcorr: 1
-  tcorr: 0
+#- variable: state
+#  model_src: lorenz96
+#  type: 'gaussian'
+#  amp: 0.1
+#  hcorr: 1
+#  tcorr: 0
 
 scheme: filter
 

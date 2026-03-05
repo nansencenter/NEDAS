@@ -75,11 +75,10 @@ class FilterAnalysisScheme(Scheme):
             opts = self.get_task_opts(c)
             # opts['nproc_per_run'] = 1
             # self.run_ensemble_tasks_in_scheduler(c, f"init_ens_{model_name}", c.io.call_io_method, c, '', model.generate_init_ensemble, **opts)
-            print(c.state.mem_list)
-            for mem_id in range(c.config.nens):
+            for mem_id in c.state.mem_list[c.pid_mem]:
                 opts['member'] = mem_id
                 model.generate_init_ensemble(**opts)
-            c.print_1p(f"{model.memory} \n") #debug
+            print(f"{c.pid}, {model.memory} \n") #debug
 
     def check_cycle_complete(self, c: Context, time: datetime) -> bool:
         """
@@ -111,21 +110,27 @@ class FilterAnalysisScheme(Scheme):
         Ensemble forecast step.
         """
         for model_name, model in c.models.items():
-            path = c.forecast_dir(c.time, model_name)
-            makedir(path)
-            print(f"Running {model_name} ensemble forecast:", flush=True)
+            #path = c.forecast_dir(c.time, model_name)
+            #makedir(path)
+            c.print_1p(f"Running {model_name} ensemble forecast:\n")
 
             if model.ens_run_type == 'batch':
                 opts = self.get_task_opts(c, path=path, nens=c.nens)
                 model.run_batch(**opts)
 
             elif model.ens_run_type == 'scheduler':
-                opts = self.get_task_opts(c, path=path)
-                walltime = getattr(model, 'walltime', None)
-                self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
+                #opts = self.get_task_opts(c, path=path)
+                #walltime = getattr(model, 'walltime', None)
+                #self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
+                opts = self.get_task_opts(c)
+                for mem_id in c.state.mem_list[c.pid_mem]:
+                    opts['member'] = mem_id
+                    c.io.call_io_method(c, 'prior', model.run, **opts)
 
             else:
                 raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")
+            
+            print(f"{c.pid}, {model.memory} \n") #debug
 
     def filter(self, c: Context) -> None:
         """

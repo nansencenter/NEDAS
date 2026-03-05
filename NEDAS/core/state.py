@@ -142,6 +142,7 @@ class State:
         ##additonal output of debugging
         if c.config.debug:
             c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
+            ##TODO: data is (mem, rec) -> ndarray, but savez needs str keys
 
     def collect_scalar_variables(self, c):
         pass
