@@ -172,7 +172,7 @@ class Obs:
         """ Get obs variable field and z coords at level k and convert to c.grid """
         model = c.models[kwargs['model_src']]
 
-        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)]:
+        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)] and tag != 'truth':
             # the obs variable is one of the state variables
             # we can find its corresponding rec_id and call io.read_field to get it
             rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==kwargs['name'] and r.time==kwargs['time'] and r.k==kwargs['k']]
@@ -361,7 +361,7 @@ class Obs:
             c (Context): the runtime context object
             tag (str): 'prior' or 'post' ensemble model states
         """
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
@@ -435,7 +435,7 @@ class Obs:
         Returns,
             LocalObsSeq: the lobs dict[obs_rec_id, dict[par_id, dict[key, np.array]]], key = 'obs','x','y','z','t'...
         """
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         nproc_mem = c.config.nproc_mem
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -536,7 +536,7 @@ class Obs:
         Returns,
             LocalObsEns: the lobs_prior dict[(mem_id, obs_rec_id), dict[par_id, np.array]]
         """
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         nproc_mem = c.config.nproc_mem
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -621,7 +621,7 @@ class Obs:
         Returns:
             ObsEns: field-complete obs_seq ensemble
         """
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         nproc_mem = c.config.nproc_mem
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]

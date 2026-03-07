@@ -12,14 +12,14 @@ run_forecast: True
 run_analysis: True
 run_postproc: True
 run_diagnose: True
-debug: True
+debug: False
 timer: True
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-30T00:00:00Z
 time_analysis_start: 2001-01-02T00:00:00Z
 time_analysis_end: 2001-01-28T00:00:00Z
-cycle_period: 24
+cycle_period: 6
 time:
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -40,6 +40,7 @@ model_def:
     config_file:
     nproc_per_run: 1
     ens_run_type: scheduler
+    truth_dir: '{work_dir}/truth'
 
 # observation definition (a list of definitions, one for each variable)
 obs_def:

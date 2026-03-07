@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable
 import os
 import numpy as np
+
 from .context import Context
 
 class IOBackend(ABC):
@@ -12,7 +13,7 @@ class IOBackend(ABC):
         tags (list[str]): List of names for copies of state/obs data
 
     """
-    tags: list[str] = ['prior', 'prior_mean', 'posterior', 'posterior_mean', 'truth', 'z', 'z_mean']
+    tags: list[str] = ['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
 
     def __init__(self, c: Context):
         pass

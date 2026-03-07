@@ -37,7 +37,7 @@ class BatchAssimilator(Assimilator):
             if c.grid.Ly==0:
                 ##for 1D grid, just divide into equal sections, no y dimension
                 Dx = c.grid.Lx / ntile
-                partitions = [tuple(np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0])
+                partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
             else:
@@ -46,8 +46,8 @@ class BatchAssimilator(Assimilator):
                 ntile_x = max(ntile // ntile_y, 1)
                 Dx = c.grid.Lx / ntile_x
                 Dy = c.grid.Ly / ntile_y
-                partitions = [tuple(np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
-                                                            np.logical_and(c.grid.y>=y, c.grid.y<y+Dy))))
+                partitions = [np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
+                                                            np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))
                               for y in np.arange(c.grid.ymin, c.grid.ymax, Dy)
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
@@ -73,7 +73,7 @@ class BatchAssimilator(Assimilator):
         return obs_inds
 
     def assign_obs_to_tiles(self, c, state, obs, obs_rec_id):
-        hroi = obs.info['records'][obs_rec_id]['hroi']
+        hroi = obs.info.records[obs_rec_id].hroi
 
         xo = np.array(obs.obs_seq[obs_rec_id]['x'])  ##obs x,y
         yo = np.array(obs.obs_seq[obs_rec_id]['y'])

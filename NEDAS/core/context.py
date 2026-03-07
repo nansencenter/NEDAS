@@ -7,6 +7,7 @@ from NEDAS.utils import parallel, progress
 from NEDAS import grid, config, models, datasets, assim_tools
 if TYPE_CHECKING:
     from . import Model, Dataset, IOBackend, State, Obs, Transform, Inflation, Assimilator, Updator
+    from .types import ProcIDMem, MemID
 
 class Context:
     """
@@ -16,6 +17,8 @@ class Context:
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
+    mem_list: dict[ProcIDMem, list[MemID]]
+    nens: int
     grid: grid.GridType
     grid_orig: grid.GridType
     time: datetime
@@ -32,7 +35,7 @@ class Context:
     obs: Obs
 
     def __init__(self, config: config.Config):
-        self.config = config
+        self.config = config        
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -44,17 +47,34 @@ class Context:
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
 
-        # setup a few living objects
+        # setup the parallel (serial or MPI program) communicator and runtime executor
         self.set_comm()
+        self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
+        # self.set_exec()
+
+        # setup the analysis grid object
         self.set_grid()
+
+        # setup the model and obs dataset objects
         self.set_models()
         self.set_datasets()
 
         # more living objects (io, state, obs, other components)
-        # will be created by scheme class methods at runtime
-    
+        # will be created by scheme class __init__ and methods at runtime
+
+    def distribute_mem_tasks(self) -> dict[int, list[int]]:
+        """
+        Distribute mem_id across processors
+        """
+        ##list of mem_id as tasks
+        mem_list_full = [m for m in range(self.config.nens)]
+        mem_list = parallel.distribute_tasks(self.comm_mem, mem_list_full)
+        return mem_list
+
     def update_assim_tools(self):
-        """ Update the assimilation tool components based on runtime configuration """
+        """
+        Update the assimilation tool components based on runtime configuration
+        """
         # update grid with current iteration settings
         res_lev = self.config.resolution_level[self.iter]
         self.grid = self.grid_orig.change_resolution_level(res_lev)

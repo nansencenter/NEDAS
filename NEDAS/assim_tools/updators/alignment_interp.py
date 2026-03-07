@@ -20,7 +20,7 @@ class AlignmentUpdator(Updator):
             if rec['name'] != c.config.alignment['variable']:
                 continue
 
-            for mem_id in c.state.mem_list[c.pid_mem]:
+            for mem_id in c.mem_list[c.pid_mem]:
                 ##compute displacement on analysis grid
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]

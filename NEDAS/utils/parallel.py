@@ -41,6 +41,8 @@ class Comm:
         parallel_io (bool): If netCDF4.Dataset is built with parallel I/O support.
 
     """
+    parallel_io: bool
+    mpi: bool = False
 
     def __init__(self):
         ##detect if mpi environment exists
@@ -52,6 +54,7 @@ class Comm:
                 from mpi4py import MPI   #type: ignore
                 self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
+                self.mpi = True
 
             except ImportError:
                 print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)

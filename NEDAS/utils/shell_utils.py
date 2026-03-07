@@ -5,7 +5,7 @@ from NEDAS.job_submitters import get_job_submitter
 def makedir(dirname:str) -> None:
     """
     Create a directory if it does not exist.
- 
+
     FileExistsError can happen if multiple processors are trying to make the same directory.
     This function will ignore this error and continue.
 
@@ -35,7 +35,7 @@ def run_command(shell_cmd:str) -> None:
 def run_job(commands:str, **kwargs):
      """
      Run a shell command by submitting it to a job scheduler using JobSubmitter class.
-     
+
      Args:
         commands (str): Shell command to be executed.
         **kwargs: Key-value pairs to passed to the job submitter run method.

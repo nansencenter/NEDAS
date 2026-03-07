@@ -91,7 +91,7 @@ class FileIO(IOBackend):
         """
         self.validate_tag(tag)
         ##check if it is available in cache
-        if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.state.mem_list[c.pid_mem]:
+        if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem]:
             fields = getattr(c.state, f"fields_{tag}")
             return fields[mem_id, rec_id]
 
@@ -144,7 +144,7 @@ class FileIO(IOBackend):
         if tag == 'prior':
             path = self.forecast_dir(time, model_name)
 
-        if tag == 'post':
+        elif tag == 'post':
             prev_time = time - c.config.cycle_period
             if prev_time < c.config.time_start:
                 prev_time = c.config.time_start
@@ -155,6 +155,9 @@ class FileIO(IOBackend):
 
         else:
             raise ValueError(f"Unknown tag: '{tag}'")
+        # make sure path exists
+        if path:
+            os.makedirs(path, exist_ok=True)  # use shell_utils makedir
 
         kwargs['path'] = path
         return method(*args, **kwargs)

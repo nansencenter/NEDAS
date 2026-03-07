@@ -34,14 +34,14 @@ class RTPPInflation(Inflation):
                 self.coef = -1
 
     def apply_inflation(self, c: Context, flag: str):
-        pid_mem_show = [p for p,lst in c.state.mem_list.items() if len(lst)>0][0]
+        pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
         c.print_1p(f'relaxing to prior ensemble perturbations with coef={self.coef}\n')
 
         ##process the fields, each processor goes through its own subset of
         ##mem_id,rec_id simultaneously
-        nm = len(c.state.mem_list[c.pid_mem])
+        nm = len(c.mem_list[c.pid_mem])
         nr = len(c.state.rec_list[c.pid_rec])
 
         for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
@@ -49,7 +49,7 @@ class RTPPInflation(Inflation):
             fld_prior_mean = c.io.read_field(c, 'prior_mean', rec_id, mem_id=0)
             fld_post_mean = c.io.read_field(c, 'post_mean', rec_id, mem_id=0)
 
-            for m, mem_id in enumerate(c.state.mem_list[c.pid_mem]):
+            for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
                 c.show_progress(f"PID {c.pid:4}: relax_to_prior_perturb mem{mem_id+1:03}", m*nr+r, nm*nr)
 
                 ##inflate the ensemble perturbations by relaxing to prior perturbations

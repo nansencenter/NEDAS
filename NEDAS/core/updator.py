@@ -25,7 +25,7 @@ class Updator(ABC):
         Top-level routine to apply the analysis increments to the original model
         restart files (as initial conditions for the next forecast)
         """
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         rec_list = c.state.rec_list
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in rec_list.items() if len(lst)>0][0]
@@ -69,7 +69,7 @@ class Updator(ABC):
             return
 
         ##get file names for sync io
-        mem_list = c.state.mem_list
+        mem_list = c.mem_list
         rec_list = c.state.rec_list
         if pid_active:
             mem_id = mem_list[c.pid_mem][m]

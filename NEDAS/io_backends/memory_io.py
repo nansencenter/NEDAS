@@ -26,24 +26,29 @@ class MemoryIO(IOBackend):
         """
         self.validate_tag(tag)
 
-        ##check if it is available in state cache
-        if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.state.mem_list[c.pid_mem]:
-            fields = getattr(c.state, f"fields_{tag}")
-            return fields[mem_id, rec_id]
-
-        ##otherwise, get it from model.memory
-        rec = c.state.info.fields[rec_id]
-        model = c.models[rec.model_src]
-        return model.read_var(tag=tag, member=mem_id, **rec.asdict())
+        fields = getattr(c.state, f"fields_{tag}")
+        return fields[mem_id, rec_id]
+        
+        ##otherwise, get it from model.read_var, z_coords? no, they are on model grid, need c.grid here
+        # raise error
+        # rec = c.state.info.fields[rec_id]
+        # model = c.models[rec.model_src]
+        # return model.read_var(tag=tag, member=mem_id, **rec.asdict())
 
     def write_field(self, fld: np.ndarray, c: Context, tag: str, rec_id: int, mem_id: int) -> None:
         """
         Write a field to memory
         """
         self.validate_tag(tag)
-        rec = c.state.info.fields[rec_id]
-        model = c.models[rec.model_src]
-        model.write_var(fld, tag=tag, member=mem_id, **rec.asdict())
+
+        if not hasattr(c.state, f"fields_{tag}"):
+            setattr(c.state, f"fields_{tag}", {})
+        fields = getattr(c.state, f"fields_{tag}")
+        fields[mem_id, rec_id] = fld
+        #rec = c.state.info.fields[rec_id]
+        #model = c.models[rec.model_src]
+        #model.write_var(fld, tag=tag, member=mem_id, **rec.asdict())
+        # write to state.fields_xxx
 
     def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)

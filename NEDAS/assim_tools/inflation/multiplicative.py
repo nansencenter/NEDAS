@@ -41,7 +41,7 @@ class MultiplicativeInflation(Inflation):
             raise ValueError(f"Unknown flag {flag}, should be prior or post")
         fields = getattr(c.state, f"fields_{flag}")
 
-        pid_mem_show = [p for p,lst in c.state.mem_list.items() if len(lst)>0][0]
+        pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
 
@@ -49,7 +49,7 @@ class MultiplicativeInflation(Inflation):
 
         ##process the fields, each processor goes through its own subset of
         ##mem_id,rec_id simultaneously
-        nm = len(c.state.mem_list[c.pid_mem])
+        nm = len(c.mem_list[c.pid_mem])
         nr = len(c.state.rec_list[c.pid_rec])
 
         for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
@@ -57,7 +57,7 @@ class MultiplicativeInflation(Inflation):
             ##read the mean field with rec_id
             #c.io.read_field()
             fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
-            for m, mem_id in enumerate(c.state.mem_list[c.pid_mem]):
+            for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
                 c.show_progress(f"PID {c.pid:4}: inflating mem{mem_id+1:03}", m*nr+r, nm*nr)
 
                 ##inflate the ensemble perturbations by coef

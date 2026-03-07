@@ -41,6 +41,7 @@ class Lorenz96Model(Model[Grid1D]):
         self.variables = {
             'state': VarDesc(name='state', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units='*', z_units='*'),
         }
+        self.z = {0: np.zeros(self.nx)}
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -77,7 +78,7 @@ class Lorenz96Model(Model[Grid1D]):
         time = kwargs['time']
         key = (member, time)
         if key not in self.memory[tag][name]:
-            raise KeyError(f'lorenz96 model online state: {key} not found in memory for {tag, name}')
+            raise KeyError(f'lorenz96 model online state: {key} not found in memory[{tag}][{name}]')
         return self.memory[tag][name][key]
 
     def _read_var_from_file(self, **kwargs):
@@ -119,7 +120,7 @@ class Lorenz96Model(Model[Grid1D]):
         nc_write_var(fname, {'t':None, 'x':self.nx}, var_name, var, recno={'t':0})
 
     def z_coords(self, **kwargs):
-        return np.zeros(self.nx)
+        return self.z[kwargs['k']]
 
     def generate_initial_condition(self):
         state = np.random.normal(0, 1, self.nx)
@@ -147,9 +148,14 @@ class Lorenz96Model(Model[Grid1D]):
 
         self.run_status = 'complete'
 
-    def generate_truth(self, **kwargs):
-
-        ...
+    def generate_truth(self, *args, **kwargs):
+        state = self.generate_initial_condition()
+        kwargs['time'] = kwargs['time_start']
+        kwargs['member'] = None
+        while kwargs['time'] <= kwargs['time_end']:
+            self.write_var(state, name='state', **kwargs)
+            state = M_nl(state, self.F, kwargs['forecast_period']/24, self.dt)
+            kwargs['time'] += kwargs['forecast_period'] * dt1h
 
     def generate_init_ensemble(self, *args, **kwargs):
         time = kwargs['time']
@@ -160,4 +166,4 @@ class Lorenz96Model(Model[Grid1D]):
 
         state = self.generate_initial_condition()
         
-        self.write_var(state, tag='prior', name='state', **kwargs)
+        self.write_var(state, name='state', **kwargs)

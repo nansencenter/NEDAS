@@ -9,6 +9,9 @@ from NEDAS.utils.progress import timer
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks, by_rank
 from NEDAS.core import Scheme, Context, State, Obs, PerturbationScheme
 
+from NEDAS.io_backends.file_io import FileIO
+from NEDAS.datasets.synthetic import SyntheticObs
+
 class FilterAnalysisScheme(Scheme):
     """
     Scheme subclass for performing filter analysis.
@@ -67,18 +70,20 @@ class FilterAnalysisScheme(Scheme):
         c.print_1p("Cycling complete.\n")
 
     def generate_truth(self, c: Context):
-        ...
+        for model_name, model in c.models.items():
+            c.print_1p(f"Generating truth for '{model_name}' model...\n")
+            opts = self.get_task_opts(c)
+            opts['model_src'] = model_name
+            c.io.call_io_method(c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self, c: Context):
         for model_name, model in c.models.items():
             c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
             opts = self.get_task_opts(c)
-            # opts['nproc_per_run'] = 1
-            # self.run_ensemble_tasks_in_scheduler(c, f"init_ens_{model_name}", c.io.call_io_method, c, '', model.generate_init_ensemble, **opts)
-            for mem_id in c.state.mem_list[c.pid_mem]:
+            for mem_id in c.mem_list[c.pid_mem]:
+                opts['model_src'] = model_name
                 opts['member'] = mem_id
-                model.generate_init_ensemble(**opts)
-            print(f"{c.pid}, {model.memory} \n") #debug
+                c.io.call_io_method(c, 'prior', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self, c: Context, time: datetime) -> bool:
         """
@@ -115,23 +120,23 @@ class FilterAnalysisScheme(Scheme):
             c.print_1p(f"Running {model_name} ensemble forecast:\n")
 
             if model.ens_run_type == 'batch':
-                opts = self.get_task_opts(c, path=path, nens=c.nens)
-                model.run_batch(**opts)
+                # opts = self.get_task_opts(c, path=path, nens=c.nens)
+                # model.run_batch(**opts)
+                ...
 
             elif model.ens_run_type == 'scheduler':
                 #opts = self.get_task_opts(c, path=path)
                 #walltime = getattr(model, 'walltime', None)
                 #self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
                 opts = self.get_task_opts(c)
-                for mem_id in c.state.mem_list[c.pid_mem]:
+                for mem_id in c.mem_list[c.pid_mem]:
                     opts['member'] = mem_id
+                    opts['model_src'] = model_name
                     c.io.call_io_method(c, 'prior', model.run, **opts)
 
             else:
                 raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")
             
-            print(f"{c.pid}, {model.memory} \n") #debug
-
     def filter(self, c: Context) -> None:
         """
         Main method for performing the analysis step
@@ -144,9 +149,11 @@ class FilterAnalysisScheme(Scheme):
 
             c.update_assim_tools()
 
+            c.state = State(c)
             timer(c)(c.state.prepare_state)(c)
 
             # prepare the observations
+            c.obs = Obs(c)
             timer(c)(c.obs.prepare_obs)(c)
             timer(c)(c.obs.prepare_obs_from_state)(c, 'prior')
 
@@ -242,15 +249,26 @@ class FilterAnalysisScheme(Scheme):
         scheduler.shutdown()
         c.print_1p(' done.\n')
 
-if __name__ == '__main__':
-    # get config from runtime args, including the step to run (from --step)
+def main():
+    # get config from runtime args, including the step to run (from --step) if specified
     from NEDAS.config import Config
     config = Config(parse_args=True)
-    if not config.step:
-        raise RuntimeError("no step specified for offline filter scheme")
 
+    # initialize scheme
     scheme = FilterAnalysisScheme(config)
-    step = getattr(scheme, config.step)
-    timer(scheme.c)(step)(scheme.c)
+
+    # decide how to run based on runtime 
+    if config.step:
+        stepfunc = getattr(scheme, config.step)
+        timer(scheme.c)(stepfunc)(scheme.c)
+
+    else:
+        if config.io_mode == 'offline':
+            raise RuntimeError("no step specified for offline scheme")
+        else:
+            scheme()
 
     scheme.c.comm.finalize()
+
+if __name__ == '__main__':
+    main()

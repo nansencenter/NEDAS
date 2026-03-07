@@ -42,6 +42,8 @@ class Grid1D:
         self._dst_grid = None
         if dst_grid is not None:
             self.set_destination_grid(dst_grid)
+        else:
+            self.set_destination_grid(self)
 
     def __eq__(self, other):
         if not isinstance(other, Grid1D):

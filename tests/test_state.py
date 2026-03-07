@@ -16,7 +16,7 @@ class TestStateClass(unittest.TestCase):
 
     def test_state_init(self):
         self.assertIsNotNone(self.c.state.info)
-        self.assertIsNotNone(self.c.state.mem_list)
+        self.assertIsNotNone(self.c.mem_list)
         self.assertIsNotNone(self.c.state.rec_list)
 
     def test_state_info_check(self):
@@ -24,8 +24,8 @@ class TestStateClass(unittest.TestCase):
         self.assertIsInstance(self.c.state.info.fields, dict)
 
     def test_task_lists_check(self):
-        self.assertIsInstance(self.c.state.mem_list, dict)
-        self.assertIsInstance(self.c.state.mem_list[self.c.pid_mem], list)
+        self.assertIsInstance(self.c.mem_list, dict)
+        self.assertIsInstance(self.c.mem_list[self.c.pid_mem], list)
         self.assertIsInstance(self.c.state.rec_list, dict)
         self.assertIsInstance(self.c.state.rec_list[self.c.pid_rec], list)
 
