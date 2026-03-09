@@ -11,14 +11,7 @@ class OnlineRuntime(Runtime):
     shared_data: dict[str, Any] = {}
 
     def __init__(self, c: Context):
-        #assert c.config.nproc == 1, "currently only support serial programs: nproc=1"
-
-        # allocate shared data in mpi environment
-        #c.config.nproc > 1
-
-        # allocate shared memory
-        #self.memory = np.zeros((100, 100, 3))
-        pass
+        super().__init__(c)
 
     def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """

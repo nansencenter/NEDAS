@@ -44,6 +44,7 @@ class Grid2DBase(ABC):
     dy: float
     Lx: float
     Ly: float
+    mask: np.ndarray
     regular: bool
     cyclic_dim: Optional[str]
 

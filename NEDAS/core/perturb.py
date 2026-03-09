@@ -8,9 +8,9 @@ from NEDAS.grid import GridType, Grid, RegularGrid
 from .context import Context
 from NEDAS.runtimes.offline import OfflineRuntime
 
-class Perturbation:
+class PerturbField:
     """
-    Perturbation scheme
+    Generates and applies perturbation on given 2D field(s)
     """
     grid: GridType
     mask: np.ndarray
@@ -210,9 +210,9 @@ class Perturbation:
             perturb['atmos_surf_velocity'][s] = wind_pert
         return perturb
 
-class PerturbationScheme:
+class Perturbation:
     """
-    Perturbation scheme manages 
+    Perturbation top-level manager 
     """
     nfld: int = 0
     task_list: dict[int, list[dict]] = {}
@@ -254,7 +254,7 @@ class PerturbationScheme:
         # go through the tasks
         fld_id = 0
         for rec in self.task_list[c.pid]:
-            p = Perturbation(**rec)
+            p = PerturbField(**rec)
             model = c.models[rec['model_src']]  ##model class object
             member = rec['member']
             variable_list = ensure_list(rec['variable'])

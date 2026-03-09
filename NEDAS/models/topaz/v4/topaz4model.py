@@ -57,7 +57,7 @@ class Topaz4Model(Model[RegularGrid]):
         depth = f.read_field('depth')
         f.close()
         self.depth = -depth.data
-        self.grid.mask = depth.mask
+        self.grid.mask = np.asarray(depth.mask, dtype=bool)
         
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

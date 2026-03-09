@@ -217,23 +217,23 @@ class ABFile:
         return self._fileb.readline()
 
     def bminmax(self,*arks,**kwargs) -> tuple:
-        raise BFileError("bminmax not implemented for this class")
+        raise NotImplementedError("bminmax not implemented for this class")
 
     @property
     def fieldnames(self) :
         return set([elem["field"] for elem in self._fields.values()])
 
     def write_field(self,*args,**kwargs) -> None:
-        raise BFileError("write_field not implemented for this class")
+        raise NotImplementedError("write_field not implemented for this class")
 
-    def read_field(self,*args,**kwargs) -> None:
-        raise BFileError("read_field not implemented for this class")
+    def read_field(self,*args,**kwargs):
+        raise NotImplementedError("read_field not implemented for this class")
 
     def write_header(self,*args,**kwargs) -> None:
-        raise BFileError("write_header not implemented for this class")
+        raise NotImplementedError("write_header not implemented for this class")
 
     def read_header(self,*args,**kwargs) -> None:
-        raise BFileError("read_header not implemented for this class")
+        raise NotImplementedError("read_header not implemented for this class")
 
     def _open_filea_if_necessary(self,field) :
         if self._filea is None :

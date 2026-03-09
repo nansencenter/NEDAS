@@ -15,6 +15,7 @@ class OfflineRuntime(Runtime):
     niter: int
 
     def __init__(self, c: Context):
+        super().__init__(c)
         if c.config.directories is None:
             raise ValueError
         self.directories = c.config.directories

@@ -1,5 +1,5 @@
 import unittest
-from NEDAS.core.perturb import Perturbation
+from NEDAS.core.perturb import PerturbField
 
 class TestPerturbParseConfig(unittest.TestCase):
     """ Test if the input kwargs dict get parsed correctly into perturb_opts"""
@@ -12,7 +12,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'hcorr': 2e6,
             'tcorr': 48,
         }
-        p = Perturbation(**input_dict)
+        p = PerturbField(**input_dict)
         self.assertEqual(p.perturb_type, 'gaussian')
         self.assertEqual(p.other_opts, [])
         self.assertEqual(p.params['atmos_surf_temp']['nscale'], 1)
@@ -28,7 +28,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'hcorr': [2e6, 2e6],
             'tcorr': [48, 48],
         }
-        p = Perturbation(**input_dict)
+        p = PerturbField(**input_dict)
         self.assertEqual(p.perturb_type, 'gaussian')
         self.assertIn('press_wind_relate', p.other_opts)
         self.assertEqual(p.params['atmos_surf_velocity']['nscale'], 1)
@@ -45,7 +45,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'tcorr': 48,
         }
         with self.assertRaises((ValueError,)):
-            Perturbation(**input_dict)
+            PerturbField(**input_dict)
 
     def test_raise_error_when_param_size_mismatch2(self):
         input_dict = {
@@ -56,7 +56,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'tcorr': [48, 48, 48],
         }
         with self.assertRaises((ValueError,)):
-            Perturbation(**input_dict)
+            PerturbField(**input_dict)
 
     def test_parse_single_variable_multi_scale(self):
         input_dict = {
@@ -66,7 +66,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'hcorr': [2e6, 1e5],
             'tcorr': [48, 6],
         }
-        p = Perturbation(**input_dict)
+        p = PerturbField(**input_dict)
         self.assertEqual(p.perturb_type, 'gaussian')
         self.assertEqual(p.other_opts, [])
         self.assertEqual(p.params['atmos_surf_temp']['nscale'], 2)
@@ -82,7 +82,7 @@ class TestPerturbParseConfig(unittest.TestCase):
             'hcorr': [[2e6, 1e5], [2e6, 1e5]],
             'tcorr': [[120, 48], [120, 48]],
         }
-        p = Perturbation(**input_dict)
+        p = PerturbField(**input_dict)
         self.assertEqual(p.perturb_type, 'gaussian')
         self.assertEqual(p.params['atmos_surf_temp']['nscale'], 2)
         self.assertEqual(p.params['atmos_surf_temp']['amp'], [1.0, 0.5])

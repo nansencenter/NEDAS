@@ -19,6 +19,8 @@ class RegularGrid(Grid2DBase):
             Since specifying neighbors already take care of cyclic boundary conditions, `cyclic_dim` will be discarded if `neighbors` is set.
 
     """
+    nx: int
+    ny: int
     pole_dim: Optional[str]
     pole_index: Optional[list[int]]
 

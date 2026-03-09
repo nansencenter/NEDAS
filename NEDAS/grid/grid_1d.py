@@ -9,11 +9,18 @@ class Grid1D:
     This introduces y coordinates in Grid1D class, although y is not defined for 1D grid, this makes the code that
     calles Grid/Grid1D methods to be easier to maintain.
     """
+    x: np.ndarray
+    nx: int
+    dx: float
+    Lx: float
     mask: np.ndarray
+    regular: bool
+    cyclic: bool
 
-    def __init__(self, x, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
+    def __init__(self, x: np.ndarray, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
 
         ##coordinates and properties of the 2D grid
+        assert len(np.array(x).shape) == 1
         self.x = x
         self.y = np.zeros(x.size)  ##dummy y coords
         self.regular = regular
@@ -31,7 +38,7 @@ class Grid1D:
             self.dx = (self.xmax - self.xmin) / (self.nx - 1)
             self.Lx = self.nx * self.dx
         else:
-            self.dx = np.mean(np.diff(np.sort(self.x)))
+            self.dx = float(np.mean(np.diff(np.sort(self.x))))
             self.Lx = self.xmax - self.xmin
         self.Ly = 0
         self.mfx, self.mfy = 1, 1

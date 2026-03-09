@@ -2,8 +2,8 @@
 from typing import Any, Callable
 from datetime import datetime
 from NEDAS.utils.progress import timer
-from NEDAS.utils.parallel import Scheduler, bcast_by_root, by_rank
-from NEDAS.core import Scheme, Context, State, Obs, PerturbationScheme
+from NEDAS.utils.parallel import Scheduler, by_rank
+from NEDAS.core import Scheme, Context, State, Obs, Perturbation, Diagnostics
 
 class FilterAnalysisScheme(Scheme):
     """
@@ -163,13 +163,10 @@ class FilterAnalysisScheme(Scheme):
         This step adds random perturbations to the model initial and/or boundary conditions,
         at the first or all the analysis cycles.
         """
-        if c.config.perturb is None:
-            c.print_1p(f"No perturbation defined in config, exiting.\n")
-            return
         c.print_1p(f"Perturbing state:")
 
-        perturb_scheme = PerturbationScheme(c)
-        timer(c)(perturb_scheme)(c)
+        pert = Perturbation(c)
+        timer(c)(pert)(c)
 
     def diagnose(self, c: Context):
         """
@@ -182,6 +179,8 @@ class FilterAnalysisScheme(Scheme):
         """
         c.print_1p(f"Running diagnostics:")
 
+        diag = Diagnostics(c)
+        timer(c)(diag)(c)
         # ##get task list for each rank
         # task_list = bcast_by_root(c.comm)(self.distribute_diag_tasks)(c)
 

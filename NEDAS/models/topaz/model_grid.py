@@ -21,7 +21,7 @@ def get_depth(depthfile, grid):
 
     d = -depth.data  ##depth is negative for ocean variables
     
-    mask = depth.mask
+    mask = np.asarray(depth.mask, bool)
     d[mask] = np.nan
     
     return d, mask
