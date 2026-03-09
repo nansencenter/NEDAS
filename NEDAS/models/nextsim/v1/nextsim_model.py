@@ -4,7 +4,6 @@ import numpy as np
 from datetime import datetime, timedelta
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.utils.conversion import t2s, s2t, dt1h, units_convert
-from NEDAS.utils.shell_utils import run_command, makedir, run_job
 from NEDAS.utils.progress import watch_files
 from NEDAS.grid import Grid, IrregularGrid
 from NEDAS.core import Model
@@ -29,7 +28,7 @@ class NextsimModel(Model):
     atmos_forcing_path: str
     forcing_dt: float
     nproc_per_run: int
-    walltime: int
+    walltime: int|None
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
 
@@ -368,7 +367,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        makedir(run_dir)
+        self.runtime.make_dir(run_dir)
 
         ##prepare restart files
         restart_file = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
@@ -380,7 +379,7 @@ class NextsimModel(Model):
         mesh_dat = mesh_bin.replace('.bin', '.dat')
         for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
             shell_cmd += f"cp -fL {file} .; "
-        run_command(shell_cmd)
+        self.runtime.run_command(shell_cmd)
 
         ##prepare other input data (bathymetry, forcing, etc.) for the model run
         shell_cmd = f"cd {run_dir}; "
@@ -395,7 +394,7 @@ class NextsimModel(Model):
         while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
             t += 24 * dt1h  ##forcing files are stored daily
-        run_command(shell_cmd)
+        self.runtime.run_command(shell_cmd)
 
     def postprocess(self, task_id=0, **kwargs):
         ##place holder for now
@@ -440,7 +439,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        makedir(run_dir)
+        self.runtime.make_dir(run_dir)
 
         ##check input files
         field_bin = input_file
@@ -454,7 +453,7 @@ class NextsimModel(Model):
         ##build command to run the model
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
-        run_command("touch "+log_file)
+        self.runtime.run_command("touch "+log_file)
 
         shell_cmd = f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
@@ -473,11 +472,11 @@ class NextsimModel(Model):
             ##this creates nextsim.cfg.in in run_dir/config
             ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
-            makedir(config_dir)
+            self.runtime.make_dir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
        ##run the model and wait for results
-            run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
+            self.runtime.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
                     nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

@@ -4,7 +4,6 @@ import numpy as np
 from pyproj import Proj
 from NEDAS.grid import RegularGrid, Grid
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
-from NEDAS.utils.shell_utils import run_job, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
@@ -26,7 +25,7 @@ class NextsimDGModel(Model[RegularGrid]):
     model_env: str
     model_config_file: str
     nproc_per_run: int
-    walltime: int
+    walltime: int|None
     parallel_mode: str
     run_separate_jobs: bool
     use_job_array: bool
@@ -282,7 +281,7 @@ class NextsimDGModel(Model[RegularGrid]):
 
         # directory where files are being collected to, and where the model will be run
         run_dir = os.path.join(kwargs['path'], ens_mem_dir)
-        makedir(run_dir)
+        self.runtime.make_dir(run_dir)
 
         # get all required filenames for the initial ensemble
         # 1. get current and next time
@@ -312,6 +311,7 @@ class NextsimDGModel(Model[RegularGrid]):
                   flush=True)
             # we we do not perturb the restart file
             # simply link the restart files
+            # TODO: use runtime file manipulation
             os.system(f'ln -fs {fname_restart} {run_dir}')
             # we we do not perturb the forcing file
             # simply link the forcing files
@@ -323,7 +323,7 @@ class NextsimDGModel(Model[RegularGrid]):
         np.random.seed(time.second+ens_mem_id)
         # here, if 'restart section is not under perturb section
         # we only link the restart file to each ensemble directory
-        if 'restart' not in self.perturb or kwargs['time'] != kwargs['time_start']:
+        if 'restart' not in self.perturb or kwargs['time'] != time_start:
             # we we do not perturb the restart file
             # simply copy over the restart files
             os.system(f'cp -L {fname_restart} {run_dir}')
@@ -406,7 +406,7 @@ class NextsimDGModel(Model[RegularGrid]):
             run_dir:str = os.path.join(kwargs['path'], f"ens_{member+1:02}")
         else:
             run_dir = kwargs['path']
-        makedir(run_dir)
+        self.runtime.make_dir(run_dir)
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
@@ -416,7 +416,7 @@ class NextsimDGModel(Model[RegularGrid]):
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += "JOB_EXECUTE $NDG_BLD_DIR/nextsim --config-file nextsim.cfg > time.step"
 
-        run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
+        self.runtime.run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
         ##check if the restart file at next_time is produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
@@ -438,7 +438,7 @@ class NextsimDGModel(Model[RegularGrid]):
         nens:int = kwargs['nens']
         for member in range(nens):
             ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
-            makedir(ens_dir)
+            self.runtime.make_dir(ens_dir)
 
             kwargs['member'] = member
             ##this creates run_dir/ens_??/nextsim.cfg
@@ -461,7 +461,7 @@ class NextsimDGModel(Model[RegularGrid]):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
+        self.runtime.run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
 
         ##check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)

@@ -4,9 +4,9 @@ import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
 from NEDAS.utils import parallel, progress
-from NEDAS import grid, config, models, datasets, assim_tools
+from NEDAS import grid, config, models, datasets, assim_tools, runtimes
 if TYPE_CHECKING:
-    from . import Model, Dataset, IOBackend, State, Obs, Transform, Inflation, Assimilator, Updator
+    from . import Model, Dataset, Runtime, State, Obs, Transform, Inflation, Assimilator, Updator
     from .types import ProcIDMem, MemID
 
 class Context:
@@ -30,7 +30,7 @@ class Context:
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
-    io: IOBackend
+    runtime: Runtime
     state: State
     obs: Obs
 
@@ -51,6 +51,9 @@ class Context:
         self.set_comm()
         self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
         # self.set_exec()
+
+        # initialize io backend
+        self.runtime = runtimes.get_runtime_class(self.config.io_mode)(self)
 
         # setup the analysis grid object
         self.set_grid()
@@ -197,7 +200,7 @@ class Context:
             ModelClass = models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            kwargs['io_mode'] = self.config.io_mode
+            kwargs['runtime'] = self.runtime
             model = ModelClass(**kwargs)
 
             self.models[model_name] = model

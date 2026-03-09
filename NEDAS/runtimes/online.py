@@ -1,10 +1,10 @@
 from typing import Callable, Any
 import numpy as np
-from NEDAS.core import Context, IOBackend
+from NEDAS.core import Context, Runtime
 
-class MemoryIO(IOBackend):
+class OnlineRuntime(Runtime):
     """
-    Memory IO backend. Keep data in the memory and avoid file I/O completely.
+    Online runtime backend. Keep data in the memory and avoid file I/O completely.
 
     Only works for single processor now, but this is convenient for long experiments and simple models
     """
@@ -28,7 +28,7 @@ class MemoryIO(IOBackend):
 
         fields = getattr(c.state, f"fields_{tag}")
         return fields[mem_id, rec_id]
-        
+
         ##otherwise, get it from model.read_var, z_coords? no, they are on model grid, need c.grid here
         # raise error
         # rec = c.state.info.fields[rec_id]
@@ -67,7 +67,7 @@ class MemoryIO(IOBackend):
 
         # save data to dict
         self.shared_data[key] = data
-    
+
     def load_ndarray(self, c: Context, name: str, path: str | None = None) -> np.ndarray | None:
         # form the key in the data dict
         key = name
@@ -79,7 +79,7 @@ class MemoryIO(IOBackend):
             return self.shared_data[key]
         else:
             return None
- 
+
     def output_snapshot(self, c: Context) -> None:
         """
         Output a snapshot of data stored in memory to npz files

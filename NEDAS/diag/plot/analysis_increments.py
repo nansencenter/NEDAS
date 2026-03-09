@@ -4,7 +4,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from NEDAS.utils.conversion import ensure_list, dt1h
-from NEDAS.utils.shell_utils import makedir
 from NEDAS.utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 from NEDAS.core.state import State
 
@@ -36,7 +35,7 @@ def run(c, **kwargs) -> None:
         plot_dir = kwargs['plot_dir']
     else:
         plot_dir = os.path.join(c.work_dir, 'plots', 'analysis_increments')
-    makedir(plot_dir)
+    c.runtime.make_dir(plot_dir)
 
     figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
     landcolor = kwargs.get('land_color', 'gray')

@@ -1,6 +1,7 @@
 import os
 import netCDF4
 import numpy as np
+from typing import Literal
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from tensorflow import keras, float32  #type: ignore
@@ -58,7 +59,7 @@ class Att_Res_UNet():
 
         return(result_bn)
 
-    def residual_conv_block(self, x, n_filters, padding = "same", kernel_size=(3,3)):
+    def residual_conv_block(self, x, n_filters, padding: Literal["valid", "same"] = "same", kernel_size=(3,3)):
         conv = keras.layers.Conv2D(n_filters, kernel_size = kernel_size, padding = padding, kernel_initializer = self.kernel_initializer)(x)
         if self.batch_norm == True:
             conv = keras.layers.BatchNormalization(axis = 3)(conv)

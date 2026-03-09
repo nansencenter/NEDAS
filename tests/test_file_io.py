@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from NEDAS.config import Config
 from NEDAS.core import Context
-from NEDAS.io_backends.file_io import FileIO
+from NEDAS.runtimes.offline import OfflineRuntime
 
 class TestFileIO(unittest.TestCase):
 
@@ -15,7 +15,7 @@ class TestFileIO(unittest.TestCase):
         cwd = os.getcwd()
         cf = Config(work_dir='test', time=time, directories=dir_def)
         c = Context(cf)
-        io = FileIO(c)
+        io = OfflineRuntime(c)
         self.assertEqual(io.cycle_dir(time), os.path.join(cwd, 'test', 'cycle', '20230101'))
         self.assertEqual(io.analysis_dir(time), os.path.join(cwd, 'test', 'cycle', '20230101', 'analysis'))
         self.assertEqual(io.forecast_dir(time, 'qg'), os.path.join(cwd, 'test', 'cycle', '20230101', 'qg'))
@@ -25,7 +25,7 @@ class TestFileIO(unittest.TestCase):
         time = datetime(2023, 1, 1)
         cf = Config(work_dir='./', time=time, directories=dir_def)
         c = Context(cf)
-        io = FileIO(c)
+        io = OfflineRuntime(c)
         self.assertEqual(io.binfile_name(c, 'prior'), './20230101/fields_prior.bin')
 
 if __name__ == '__main__':

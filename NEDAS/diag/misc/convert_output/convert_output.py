@@ -6,7 +6,6 @@ from pyproj import Proj
 from NEDAS.grid import Grid
 from NEDAS.utils.netcdf_lib import nc_write_var
 from NEDAS.utils.conversion import ensure_list, proj2dict, s2t, dt1h
-from NEDAS.utils.shell_utils import makedir
 
 def get_task_list(c, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""
@@ -93,7 +92,7 @@ def run(c, **kwargs):
         # read the variable from the model restart file
         rec = model.variables[vname]
         file = kwargs['file'].format(time=time_start, member=member+1)
-        makedir(os.path.dirname(file))
+        c.runtime.makedir(os.path.dirname(file))
 
         lon_name: str = kwargs.get('lon_name', 'lon')
         lat_name: str = kwargs.get('lat_name', 'lat')

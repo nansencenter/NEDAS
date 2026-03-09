@@ -1,4 +1,4 @@
-from typing import Annotated, Sequence
+from typing import Annotated, Sequence, Literal
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import numpy as np
@@ -128,3 +128,6 @@ ObsSeq = Annotated[dict[ObsRecordID, dict[str, np.ndarray]], 'obs sequence']
 ObsEns = Annotated[dict[tuple[MemID, ObsRecordID], np.ndarray], 'obs ensemble data']
 LocalObsSeq = Annotated[dict[ObsRecordID, dict[PartitionID, dict[str, np.ndarray]]], 'local obs sequence']
 LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.ndarray]], 'local obs ensemble data']
+
+IOMode = Literal['online', 'offline']
+EnsRunType = Literal['mpi', 'scheduler', 'batch']

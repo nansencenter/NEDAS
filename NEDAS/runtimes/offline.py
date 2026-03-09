@@ -4,12 +4,12 @@ from typing import Callable
 import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import type_dic, type_size
-from NEDAS.core import Context, IOBackend
+from NEDAS.core import Context, Runtime
 from NEDAS.core.types import FieldRecord
 
-class FileIO(IOBackend):
+class OfflineRuntime(Runtime):
     """
-    IO Backend using restart files to hold model state (a pause-restart strategy)
+    Offline runtime backend using restart files to hold model state (a pause-restart strategy)
     """
     dictionaries: dict
     niter: int

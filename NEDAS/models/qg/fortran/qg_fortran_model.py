@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from NEDAS.utils.conversion import dt1h
-from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.grid import Grid
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
@@ -13,7 +12,6 @@ class QGFortranModel(Model):
     """
     Class for configuring and running the qg model
     """
-    io_mode = 'offline'
     kmax: int
     nz: int
     restart_dt: float
@@ -21,6 +19,7 @@ class QGFortranModel(Model):
     psi_init_type: str
     model_code_dir: str
     model_env: str
+    spinup_hours: int
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -41,6 +40,8 @@ class QGFortranModel(Model):
             'vorticity': VarDesc(name='zeta', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
+
+        assert self.runtime.io_mode == 'offline', 'qg.fortran model only support offline io mode'
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -143,7 +144,7 @@ class QGFortranModel(Model):
         z = np.full(self.grid.x.shape, kwargs['k'])
         return z
 
-    def preprocess(self, task_id=0, **kwargs):
+    def preprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         restart_dir = kwargs['restart_dir']
         restart_file = self.filename(**{**kwargs, 'path':restart_dir})
@@ -153,14 +154,15 @@ class QGFortranModel(Model):
         input_dir = os.path.dirname(input_file)
 
         ##just cp the prepared files to the work_dir location
-        makedir(input_dir)
-        run_command("cp "+restart_file+" "+input_file)
+        self.runtime.make_dir(input_dir)
+        self.runtime.copy_file(restart_file, input_file)
 
-    def postprocess(self, task_id=0, **kwargs):
+    def postprocess(self, *args, **kwargs):
         pass
 
-    def run(self, task_id=0, **kwargs):
+    def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
+        task_id = kwargs['worker_id']
 
         task_nproc = self.nproc_per_run
         assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
@@ -168,7 +170,7 @@ class QGFortranModel(Model):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        makedir(run_dir)
+        self.runtime.make_dir(run_dir)
 
         time_start = kwargs['time_start']
         time = kwargs['time']
@@ -201,7 +203,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+            self.runtime.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
@@ -217,4 +219,90 @@ class QGFortranModel(Model):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+        self.runtime.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+
+    def generate_truth(self, **kwargs) -> None:
+        time_start = kwargs['time_start']
+        time_end = kwargs['time_end']
+        debug = kwargs['debug']
+        forecast_period = kwargs['forecast_period']
+
+        assert self.truth_dir is not None
+        self.runtime.make_dir(self.truth_dir)
+        print(f"Creating truth run for qg model in {self.truth_dir}")
+
+        run_dir = os.path.join(self.truth_dir, 'run')
+        init_file = f"output_{time_start:%Y%m%d_%H}.bin"
+        print(f"Running the model for spinup period to get initial condition: {init_file}")
+        opt = {
+            'path': run_dir,
+            'member': None,
+            'time': time_start - self.spinup_hours * dt1h,
+            'forecast_period': self.spinup_hours,
+            'time_start': time_start,
+            'time_end': time_end,
+            'debug': debug,
+            }
+        self.run(**opt)
+
+        time = time_start
+        while time < time_end:
+            opt['time'] = time
+            opt['forecast_period'] = forecast_period
+
+            file = f"output_{time:%Y%m%d_%H}.bin"
+            next_time = time + forecast_period * dt1h
+            next_file = f"output_{next_time:%Y%m%d_%H}.bin"
+            print(f"Running the model from condition {file} to reach {next_file}")
+            self.run(**opt)
+
+            time = next_time
+        print("done.")
+
+        self.runtime.run_command(f"mv -v {run_dir}/*/output*.bin {self.truth_dir}/.")
+        print(f"removing temporary run directory: {run_dir}")
+        self.runtime.run_command(f"rm -rf {run_dir}")
+
+    def generate_init_ensemble(self, *args, **kwargs) -> None:
+        member = kwargs['member']
+        time = kwargs['time']
+        time_start = kwargs['time_start']
+        time_end = kwargs['time_end']
+        debug = kwargs['debug']
+        forecast_period = kwargs['forecast_period']
+
+        print(f"Creating initial condition for qg model:")
+        init_time = time
+        time -= self.spinup_hours * dt1h
+        next_time = time + self.spinup_hours * dt1h
+        print(f"initial condition type: {self.psi_init_type}")
+        print(f"spinup period: {self.spinup_hours} hours")
+
+        print(f"Running ensemble forecast from {time} to {next_time}")
+        opt = {
+            'path': kwargs['path'],
+            'member': member,
+            'time': time,
+            'forecast_period': self.spinup_hours,
+            'time_start': time_start,
+            'time_end': time_end,
+            'debug': debug,
+        }
+        self.run(**opt)
+
+        # print("Moving output files")
+        # fcst_dir = c.forecast_dir(c.time, 'qg')
+        # cycle_dir = c.cycle_dir(c.time)
+        # ens_init_dir = model.ens_init_dir
+        # basename = f"output_{init_time:%Y%m%d_%H}.bin"
+        # for m in range(c.nens):
+        #     mstr = f"{m+1:04d}"
+
+        #     src_file = os.path.join(fcst_dir, mstr, basename)
+        #     init_file = os.path.join(ens_init_dir, mstr, basename)
+
+        #     os.makedirs(os.path.dirname(init_file), exist_ok=True)
+        #     subprocess.run(f"mv -v {src_file} {init_file}", shell=True, check=True)
+
+        # print(f"removing temporary run directory: {cycle_dir}")
+        # os.system(f"rm -rf {cycle_dir}")

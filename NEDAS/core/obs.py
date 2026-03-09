@@ -98,7 +98,7 @@ class Obs:
             rec = c.state.info.fields[rec_id]
 
             # read the z field with (mem_id=0, rec_id) from state.fields_z and add to z dict
-            z_fld = c.io.read_field(c, ztag, rec_id, mem_id=0)
+            z_fld = c.runtime.read_field(c, ztag, rec_id, mem_id=0)
             z[k] = z_fld[0, ...] if rec.is_vector else z_fld
         return z
 
@@ -161,7 +161,7 @@ class Obs:
             operator = dataset.obs_operator[kwargs['name']]
 
             # get the obs seq from operator
-            seq = c.io.call_io_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
+            seq = c.runtime.call_io_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
@@ -179,13 +179,13 @@ class Obs:
             if len(rec_id_found) == 0:
                 raise RuntimeError("field '{obs_name}' is defined in state_def but not found in state.info.fields")
             rec_id = rec_id_found[0]
-            fld = c.io.read_field(c, tag, rec_id, kwargs['member'])
-            zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
+            fld = c.runtime.read_field(c, tag, rec_id, kwargs['member'])
+            zfld = c.runtime.read_field(c, 'z', rec_id, kwargs['member'])
 
         else:
             # otherwise, we get the field from by calling model.read_var
-            model_fld = c.io.call_io_method(c, tag, model.read_var, **kwargs)
-            model_z = c.io.call_io_method(c, 'z', model.z_coords, **kwargs)
+            model_fld = c.runtime.call_io_method(c, tag, model.read_var, **kwargs)
+            model_z = c.runtime.call_io_method(c, 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)
             fld = model.grid.convert(model_fld, is_vector=kwargs['is_vector'], method=c.config.interp_method)
@@ -346,7 +346,7 @@ class Obs:
         # output obs sequence for debugging
         if c.config.debug and c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
-                c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
+                c.runtime.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
 
         return obs_seq
 
@@ -399,7 +399,7 @@ class Obs:
             for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
-                c.io.save_debug_data(c, file, {f'obs_{tag}':seq})
+                c.runtime.save_debug_data(c, file, {f'obs_{tag}':seq})
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, Optional[int], ProcID, int]]:
         ##form the global list of obs (in serial mode the main loop is over this list)

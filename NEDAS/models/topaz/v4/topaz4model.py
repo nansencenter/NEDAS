@@ -4,7 +4,6 @@ import subprocess
 from functools import lru_cache
 
 from NEDAS.utils.conversion import units_convert, dt1h
-from NEDAS.utils.shell_utils import run_job
 from NEDAS.grid import RegularGrid
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
@@ -13,6 +12,7 @@ from ..model_grid import get_topaz_grid
 from .namelist import namelist
 
 class Topaz4Model(Model[RegularGrid]):
+    io_mode = 'offline'
     basedir: str
     R: str
     T: str
@@ -22,7 +22,6 @@ class Topaz4Model(Model[RegularGrid]):
     onem: float
     z_units: str
     restart_dt: int
-    ens_init_dir: str
     forcing_frc: str
     era5_path: str
     priver: int
@@ -30,7 +29,7 @@ class Topaz4Model(Model[RegularGrid]):
     relax: int
     nproc: int
     nproc_per_run: int
-    walltime: int
+    walltime: int|None
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
@@ -233,7 +232,7 @@ class Topaz4Model(Model[RegularGrid]):
                     break
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
-            run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
+            self.runtime.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
                     nproc=self.nproc, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

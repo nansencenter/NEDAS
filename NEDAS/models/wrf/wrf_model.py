@@ -3,7 +3,6 @@ import numpy as np
 from pyproj import Proj
 from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
-from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
 # from .namelist import namelist
@@ -23,7 +22,7 @@ class WRFModel(Model[RegularGrid]):
     dy: list[float]
     model_code_dir: str
     nproc_per_run: int
-    walltime: int
+    walltime: int|None
     z_units: str
     restart_dt: float
 
@@ -113,7 +112,7 @@ class WRFModel(Model[RegularGrid]):
         shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
-        run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
+        self.runtime.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
                 nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                 walltime=self.walltime, **kwargs)
 

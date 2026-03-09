@@ -56,7 +56,7 @@ class MultiplicativeInflation(Inflation):
 
             ##read the mean field with rec_id
             #c.io.read_field()
-            fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
+            fields_mean = c.runtime.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
             for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
                 c.show_progress(f"PID {c.pid:4}: inflating mem{mem_id+1:03}", m*nr+r, nm*nr)
 

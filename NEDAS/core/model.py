@@ -1,12 +1,13 @@
 import os
 import inspect
-from typing import Literal, Generic, TypeVar, Annotated, Optional
+from typing import Generic, TypeVar
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
-from .types import VarName, VarDesc, LevelID
+from .runtime import Runtime
+from .types import VarName, VarDesc, LevelID, EnsRunType
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -14,27 +15,31 @@ class Model(Generic[GridT], ABC):
     """
     Class for configuring and running a model
     """
-    io_mode: Literal['online', 'offline']
+    runtime: Runtime
     variables: dict[VarName, VarDesc]
     grid: GridT
     z: dict[LevelID, np.ndarray]
     mask: np.ndarray
-    ens_run_type: Literal['scheduler', 'batch']
-    ens_init_dir: Optional[str]
-    truth_dir: Optional[str]
+    ens_run_type: EnsRunType
+    ens_init_dir: str|None
+    truth_dir: str|None
     nproc_per_run: int = 1
     nproc_per_util: int = 1
     walltime: int|None = None
     run_process = None
     run_status: str = 'pending'
 
-    def __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
+    def __init__(self, config_file: str|None=None, parse_args: bool|None=False, runtime: Runtime|None=None, **kwargs):
         ##parse config file and obtain a list of attributes
         ##get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
             setattr(self, key, value)
+
+        # initialize io backend
+        if runtime:
+            self.runtime = runtime
 
     def parse_kwargs(self, **kwargs) -> dict:
         ##args that pinpoints a certain model state variable
@@ -63,7 +68,7 @@ class Model(Generic[GridT], ABC):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']].units
 
-        for key in ['restart_dir', 'forecast_period', 'comm']:
+        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'comm', 'debug']:
             if key not in kwargs:
                 kwargs[key] = None
 

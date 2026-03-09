@@ -2,7 +2,6 @@ import os
 import numpy as np
 from NEDAS.grid import Grid1D
 from NEDAS.utils.conversion import dt1h
-from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
@@ -31,9 +30,6 @@ class Lorenz96Model(Model[Grid1D]):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
-        if 'io_mode' in kwargs:
-            if kwargs['io_mode'] not in ['online', 'offline']:
-                raise ValueError(f"Lorenz96model: unknown io_mode: {kwargs['io_mode']}")
 
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
         self.grid.mask = np.full(self.grid.x.shape, False)
@@ -63,12 +59,12 @@ class Lorenz96Model(Model[Grid1D]):
         pass
 
     def read_var(self, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             return self._read_var_from_file(**kwargs)
-        elif self.io_mode == 'online':
+        elif self.runtime.io_mode == 'online':
             return self._read_var_from_memory(**kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
 
     def _read_var_from_memory(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -91,12 +87,12 @@ class Lorenz96Model(Model[Grid1D]):
         return var
 
     def write_var(self, var, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             self._write_var_to_file(var, **kwargs)
-        elif self.io_mode == 'online':
+        elif self.runtime.io_mode == 'online':
             self._write_var_to_memory(var, **kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
 
     def _write_var_to_memory(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -127,12 +123,12 @@ class Lorenz96Model(Model[Grid1D]):
         return state
 
     def preprocess(self, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             kwargs = super().parse_kwargs(**kwargs)
-            makedir(kwargs['path'])
+            self.runtime.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            run_command(f"cp -fL {file1} {file2}")
+            self.runtime.copy_file(file1, file2)
 
     def postprocess(self, **kwargs):
         pass
@@ -161,7 +157,7 @@ class Lorenz96Model(Model[Grid1D]):
         time = kwargs['time']
         member = kwargs['member']
 
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             path = ''
 
         state = self.generate_initial_condition()

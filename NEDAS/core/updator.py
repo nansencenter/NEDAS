@@ -3,7 +3,6 @@ import inspect
 from abc import ABC, abstractmethod
 import numpy as np
 from NEDAS.config import parse_config
-from NEDAS.utils.progress import progress_bar
 from .context import Context
 from .types import MemID, FieldRecordID
 
@@ -76,7 +75,7 @@ class Updator(ABC):
             rec_id = rec_list[c.pid_rec][r]
             rec = c.state.info.fields[rec_id].asdict()
             model = c.models[rec['model_src']]
-            file = c.io.call_io_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
+            file = c.runtime.call_io_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
         else:
             mem_id = 0
             rec_id = 0

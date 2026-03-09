@@ -2,7 +2,6 @@ import os
 import numpy as np
 from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
-from NEDAS.utils.shell_utils import run_command, makedir
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
@@ -57,12 +56,12 @@ class Vort2DModel(Model[RegularGrid]):
         pass
 
     def read_var(self, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             return self._read_var_from_file(**kwargs)
-        elif self.io_mode == 'online':
+        elif self.runtime.io_mode == 'online':
             return self._read_var_from_memory(**kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
 
     def _read_var_from_memory(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -91,12 +90,12 @@ class Vort2DModel(Model[RegularGrid]):
         return var
 
     def write_var(self, var, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             self._write_var_to_file(var, **kwargs)
-        elif self.io_mode == 'online':
+        elif self.runtime.io_mode == 'online':
             self._write_var_to_memory(var, **kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
 
     def _write_var_to_memory(self, var, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
@@ -128,17 +127,17 @@ class Vort2DModel(Model[RegularGrid]):
         return state
 
     def preprocess(self, **kwargs):
-        if self.io_mode == 'offline':
+        if self.runtime.io_mode == 'offline':
             kwargs = super().parse_kwargs(**kwargs)
-            makedir(kwargs['path'])
+            self.runtime.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            run_command(f"cp -fL {file1} {file2}")
+            self.runtime.run_command(f"cp -fL {file1} {file2}")
 
-    def postprocess(self, **kwargs):
+    def postprocess(self, *args, **kwargs):
         pass
 
-    def run(self, **kwargs):
+    def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)
         self.run_status = 'running'
 
@@ -149,3 +148,46 @@ class Vort2DModel(Model[RegularGrid]):
         self.write_var(next_state, **{**kwargs, 'time':next_time})
 
         self.run_status = 'complete'
+
+    def generate_truth(self, *args, **kwargs) -> None:
+        assert self.truth_dir is not None
+        self.runtime.make_dir(self.truth_dir)
+
+        t = kwargs['time_start']
+        while t < kwargs['time_end']:
+            opts = {
+                'path': self.truth_dir,
+                'name': 'velocity',
+                'is_vector': True,
+                'time': t,
+                }
+
+            if t == kwargs['time_start']:
+                state = self.generate_initial_condition()
+                print(f"generating initial condition {self.filename(**opts)}")
+                self.write_var(state, **opts)
+
+            next_t = t + kwargs['forecast_period'] * dt1h
+            print(f"running model, saving output {self.filename(**{**opts, 'time':next_t})}")
+            self.run(path=self.truth_dir, time=t, forecast_period=kwargs['forecast_period'])
+
+            t = next_t
+        print("done.")
+
+    
+    def generate_init_ensemble(self, *args, **kwargs) -> None:
+        assert self.ens_init_dir is not None
+        self.runtime.make_dir(self.ens_init_dir)
+
+        opts = {
+            'path': self.ens_init_dir,
+            'name': 'velocity',
+            'is_vector': True,
+            'time': kwargs['time'],
+            'member': kwargs['member'],
+            }
+        print(f"generating initial condition for member {kwargs['member']+1}, output to {self.filename(**opts)}")
+
+        state = self.generate_initial_condition()
+
+        self.write_var(state, **opts)

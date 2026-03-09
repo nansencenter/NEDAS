@@ -1,16 +1,9 @@
-import os
-import sys
-import tempfile
-import importlib.util
-import subprocess
+
 from typing import Any, Callable
 from datetime import datetime
 from NEDAS.utils.progress import timer
-from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks, by_rank
+from NEDAS.utils.parallel import Scheduler, bcast_by_root, by_rank
 from NEDAS.core import Scheme, Context, State, Obs, PerturbationScheme
-
-from NEDAS.io_backends.file_io import FileIO
-from NEDAS.datasets.synthetic import SyntheticObs
 
 class FilterAnalysisScheme(Scheme):
     """
@@ -34,8 +27,8 @@ class FilterAnalysisScheme(Scheme):
             stepfunc(c)
             return
 
-        self.generate_truth(c)
-        self.generate_init_ensemble(c)
+        self.generate_truth(c)  # if synthetic
+        self.generate_init_ensemble(c)  # if ens_init_dir is not found
 
         c.print_1p("Cycling start.\n")
         while c.time < c.config.time_end:
@@ -74,7 +67,7 @@ class FilterAnalysisScheme(Scheme):
             c.print_1p(f"Generating truth for '{model_name}' model...\n")
             opts = self.get_task_opts(c)
             opts['model_src'] = model_name
-            c.io.call_io_method(c, 'truth', model.generate_truth, **opts)
+            by_rank(c.comm, 0)(c.runtime.call_io_method)(c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self, c: Context):
         for model_name, model in c.models.items():
@@ -83,7 +76,7 @@ class FilterAnalysisScheme(Scheme):
             for mem_id in c.mem_list[c.pid_mem]:
                 opts['model_src'] = model_name
                 opts['member'] = mem_id
-                c.io.call_io_method(c, 'prior', model.generate_init_ensemble, **opts)
+                c.runtime.call_io_method(c, 'prior', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self, c: Context, time: datetime) -> bool:
         """
@@ -132,7 +125,7 @@ class FilterAnalysisScheme(Scheme):
                 for mem_id in c.mem_list[c.pid_mem]:
                     opts['member'] = mem_id
                     opts['model_src'] = model_name
-                    c.io.call_io_method(c, 'prior', model.run, **opts)
+                    c.runtime.call_io_method(c, 'prior', model.run, **opts)
 
             else:
                 raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")

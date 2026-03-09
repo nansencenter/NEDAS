@@ -1,12 +1,6 @@
-import os
-import sys
-import tempfile
-import importlib.util
-import subprocess
-import numpy as np
+import importlib
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.progress import timer
-from NEDAS.utils.shell_utils import makedir, run_command, run_job
 from NEDAS.utils.parallel import Scheduler, bcast_by_root, distribute_tasks
 from NEDAS.core import Scheme
 
@@ -17,37 +11,38 @@ class ForecastScheme(Scheme):
     This scheme runs only the ensemble forecasts for the start times defined by time_start time_end every cycle_period.
     The length of each forecast between cycles is forecast_period, which can be different from cycle_period.
     """
-    def __call__(self):
+    def __call__(self) -> None:
+        c = self.c
         c.show_summary()
 
-        if c.step:
+        if c.config.step:
             ##if --step=STEP is specified at runtime, just run STEP and quit
-            if c.step in ['perturb', 'diagnose']:
+            if c.config.step in ['perturb', 'diagnose']:
                 mpi = True
             else:
                 mpi = False
-            self.run_step(c, c.step, mpi)
+            self.run_step(c.config.step, mpi)
             return
 
         print("Cycling start...", flush=True)
-        while c.time < c.time_end:
+        while c.time < c.config.time_end:
             print(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}", flush=True)
 
-            os.system("mkdir -p "+c.cycle_dir(c.time))
+            # os.system("mkdir -p "+c.io.cycle_dir(c.time))
 
-            if c.run_preproc:
-                self.run_step(c, 'preprocess', mpi=False)
-                if c.perturb:
-                    self.run_step(c, 'perturb', mpi=True)
+            if c.config.run_preproc:
+                self.run_step('preprocess', mpi=False)
+                if c.config.perturb:
+                    self.run_step('perturb', mpi=True)
 
             ##advance model state to next analysis cycle
-            if c.run_forecast:
-                self.run_step(c, 'ensemble_forecast', mpi=False)
+            if c.config.run_forecast:
+                self.run_step('ensemble_forecast', mpi=False)
 
             ##compute diagnostics
-            if c.run_diagnose:
-                if c.diag:
-                    self.run_step(c, 'diagnose', mpi=True)
+            if c.config.run_diagnose:
+                if c.config.diag:
+                    self.run_step('diagnose', mpi=True)
 
             ##advance to next cycle
             c.time = c.next_time
@@ -61,7 +56,7 @@ class ForecastScheme(Scheme):
         """
         for model_name, model in c.models.items():
             path = c.forecast_dir(c.time, model_name)
-            makedir(path)
+            c.io.makedir(path)
             print(f"Running {model_name} ensemble forecast:", flush=True)
 
             if model.ens_run_type == 'batch':
@@ -88,7 +83,7 @@ class ForecastScheme(Scheme):
         """
         for model_name, model in c.models.items():
             path = c.forecast_dir(c.time, model_name)
-            makedir(path)
+            c.io.makedir(path)
             print(f"Preprocessing {model_name} state:", flush=True)
             restart_dir = self.get_restart_dir(c, model_name)
             opts = self.get_task_opts(c, path=path, restart_dir=restart_dir)
@@ -104,102 +99,6 @@ class ForecastScheme(Scheme):
         The ``perturb`` section in configuration file defines the scheme and parameters for the perturbation.
         The `utils.random_perturb`` module implements the random field generator functions.
         """
-        if c.perturb is None:
-            c.print_1p(f"No perturbation defined in config, exiting.\n")
-            return
-        c.print_1p(f"Perturbing state:")
-
-        ##clean perturb files in current cycle dir
-        for rec in c.perturb:
-            perturb_dir = os.path.join(c.forecast_dir(c.time, rec['model_src']), 'perturb')
-            if c.pid==0:
-                run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
-        c.comm.Barrier()
-
-        ##distribute perturbation items among MPI ranks
-        task_list = bcast_by_root(c.comm)(self.distribute_perturb_tasks)(c)
-
-        c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
-
-        ##first go through the fields to count how many (for showing progress)
-        nfld = 0
-        for rec in task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]
-            vname = ensure_list(rec['variable'])[0]
-            dt = model.variables[vname]['dt']
-            niter = c.forecast_period // dt + 1
-            for n in range(niter):
-                for k in model.variables[vname]['levels']:
-                    nfld += 1
-
-        ##actually go through the fields to perturb now
-        fld_id = 0
-        for rec in task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]  ##model class object
-            mem_id = rec['member']
-            mstr = f'_mem{mem_id+1:03d}'
-            path = c.forecast_dir(c.time, model_name)
-            variable_list = ensure_list(rec['variable'])
-
-            ##check if previous perturb is available from past cycles
-            perturb = {}
-            for vname in variable_list:
-                psfile = os.path.join(c.forecast_dir(c.prev_time, model_name), 'perturb', vname+mstr+'.npy')
-                if os.path.exists(psfile):
-                    perturb[vname] = np.load(psfile)
-                else:
-                    perturb[vname] = None
-
-            # get number of time steps for this set of variables
-            # perturbation will be generated for all time steps if variable is available
-            dt = max([model.variables[v]['dt'] for v in variable_list])
-            nstep = c.forecast_period // dt + 1
-            for n in range(nstep):
-                t = c.time + n * dt * dt1h
-
-                # TODO: perturbation for each k level is drawn independently, can be improved
-                # by introducing a vertical correlation length scale, or using EOF modes.
-                # Note: assuming all variables in the list have the same k levels
-                for k in model.variables[variable_list[0]]['levels']:
-                    fld_id += 1
-                    c.show_progress(f"PID {c.pid:4}: perturbing mem{mem_id+1:03} {variable_list} at {t} level {k}", fld_id, nfld+1)
-
-                    vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
-                    model.read_grid(path=path, name=vname, time=t, member=mem_id, k=k)
-                    model.grid.set_destination_grid(c.grid)
-                    c.grid.set_destination_grid(model.grid)
-
-                    # collect variable fields
-                    fields = {}
-                    for vname in variable_list:
-                        ##read variable from model state
-                        fld = model.read_var(path=path, name=vname, time=t, member=mem_id, k=k)
-                        ##convert to analysis grid
-                        fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname]['is_vector'])
-
-                    ##generate perturbation on analysis grid
-                    fields_pert, perturb = random_perturb(c.grid, fields, prev_perturb=perturb, dt=dt, n=n, **rec)
-
-                    if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
-                        ##use model internal method to apply displacement perturbations directly
-                        model.displace(perturb, path=path, time=t, member=mem_id, k=k)
-                    else:
-                        ##convert from analysis grid to model grid, and
-                        ##write the perturbed variables back to model state files
-                        for vname in variable_list:
-                            fld = c.grid.convert(fields_pert[vname], is_vector=model.variables[vname]['is_vector'])
-                            model.write_var(fld, path=path, name=vname, time=t, member=mem_id, k=k)
-
-            ##save a copy of perturbation at next_t, for use by next cycle
-            for vname in variable_list:
-                psfile = os.path.join(path, 'perturb', vname+mstr+'.npy')
-                run_command(f"mkdir -p {os.path.dirname(psfile)}")
-                np.save(psfile, perturb[vname])
-
-        c.comm.Barrier()
-        c.print_1p(' done.\n')
 
     def diagnose(self, c):
         """
@@ -210,81 +109,7 @@ class ForecastScheme(Scheme):
         The ``diag`` section in configuration file defines the methods and parameters of the diagnostics,
         corresponding to the ``diag.method`` module that implements the particular diagnostic method.
         """
-        c.print_1p(f"Running diagnostics:")
 
-        ##get task list for each rank
-        task_list = bcast_by_root(c.comm)(self.distribute_diag_tasks)(c)
-
-        ##the processor with most work load will show progress messages
-        c.pid_show = [p for p,lst in task_list.items() if len(lst)>0][0]
-
-        ##init file locks for collective i/o
-        self.init_file_locks(c)
-
-        ntask = len(task_list[c.pid])
-        for task_id, rec in enumerate(task_list[c.pid]):
-            c.show_progress(f"PID {c.pid:4} running diagnostics '{rec['method']}'", task_id, ntask)
-
-            method_name = f"NEDAS.diag.{rec['method']}"
-            mod = importlib.import_module(method_name)
-
-            ##perform the diag task
-            mod.run(c, **rec)
-
-        c.comm.Barrier()
-        c.print_1p(' done.\n')
-        c.comm.cleanup_file_locks()
-
-    def run_step(self, c, step, mpi):
-        """
-        Helper function to run this script (``forecast.py``) from an external call.
-
-        Args:
-            c (Config): Configuration.
-            step (str): Step to run.
-            mpi (bool): Whether to run the step within mpi environment.
-        """
-        script_file = os.path.abspath(__file__)
-
-        # create a temporary config yaml file to hold c, and pass into program through runtime arg
-        with tempfile.NamedTemporaryFile(dir=c.work_dir,
-                                         prefix='config-',
-                                         suffix='.yml') as tmp_config_file:
-            c.dump_yaml(tmp_config_file.name)
-
-            print(f"\n\033[1;33mRUNNING\033[0m {step} step")
-            if c.debug:
-                print(f"config file: {tmp_config_file.name}")
-
-            ##build run commands for the ensemble forecast script
-            commands = ""
-            if c.python_env:
-                commands = f". {c.python_env}; "
-            if mpi:
-                if importlib.util.find_spec("mpi4py") is not None:
-                    commands += f"JOB_EXECUTE {sys.executable} {script_file} -c {tmp_config_file.name}"
-                else:
-                    print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
-                    commands += f"{sys.executable} {script_file} -c {tmp_config_file.name} --nproc=1"
-            else:
-                commands += f"{sys.executable} {script_file} -c {tmp_config_file.name}"
-            commands += f" --step {step}"
-
-            if mpi:
-                job_opts = {
-                    'job_name': step,
-                    'run_dir': c.cycle_dir(c.time),
-                    'nproc': c.nproc,
-                    'debug': c.debug,
-                    **(c.job_submit or {}),
-                    }
-                run_job(commands, **job_opts)
-            else:
-                p = subprocess.Popen(commands, shell=True, text=True)
-                p.wait()
-                if p.returncode != 0:
-                    print(f"ForecastScheme: run_step '{step}' exited with error")
-                    sys.exit(1)
 
     def get_task_opts(self, c, **other_opts):
         """
@@ -359,37 +184,28 @@ class ForecastScheme(Scheme):
 
     def init_file_locks(self, c):
         """Build the full task list for the diagnostics part of the config"""
-        for rec in ensure_list(c.diag):
-            ##load the module for the given method
-            method_name = f"NEDAS.diag.{rec['method']}"
-            module = importlib.import_module(method_name)
-            ##module get_file_list returns a list of files for collective i/o
-            if not hasattr(module, 'get_file_list'):
-                continue
-            files = module.get_file_list(c, **rec)
-            for file in files:
-                ##create the file lock across mpi ranks for this file
-                c.comm.init_file_lock(file)
 
-    def validate_mpi_environment(self, c):
-        """
-        Validate the MPI environment and ensure the number of processes is consistent.
-        """
-        nproc = c.nproc
-        nproc_actual = c.comm.Get_size()
-        if nproc != nproc_actual:
-            raise RuntimeError(f"Error: nproc {nproc} != mpi size {nproc_actual}")
+
+def main():
+    # get config from runtime args, including the step to run (from --step) if specified
+    from NEDAS.config import Config
+    config = Config(parse_args=True)
+
+    # initialize scheme
+    scheme = ForecastScheme(config)
+
+    # decide how to run based on runtime 
+    if config.step:
+        stepfunc = getattr(scheme, config.step)
+        timer(scheme.c)(stepfunc)(scheme.c)
+
+    else:
+        if config.io_mode == 'offline':
+            raise RuntimeError("no step specified for offline scheme")
+        else:
+            scheme()
+
+    scheme.c.comm.finalize()
 
 if __name__ == '__main__':
-    # get config from runtime args, including the step to run (from --step)
-    from NEDAS.config import Config
-    c = Config(parse_args=True)
-
-    if not c.step:
-        raise RuntimeError("no step specified for offline filter scheme")
-
-    scheme = ForecastScheme()
-    step = getattr(scheme, c.step)
-    timer(c)(step)(c)
-
-    c.comm.finalize()
+    main()

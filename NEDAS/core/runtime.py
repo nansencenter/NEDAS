@@ -1,22 +1,30 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 import os
+import shutil
+import errno
+import subprocess
 import numpy as np
+from NEDAS.job_submitters import get_job_submitter
+from .types import IOMode
+if TYPE_CHECKING:
+    from .context import Context
 
-from .context import Context
-
-class IOBackend(ABC):
+class Runtime(ABC):
     """
-    Base class for handling input/output for state and observation variables
+    Base class for handling runtime input/output for state and observation variables
+    and OS-level operation such as file manipulation and running commands
 
     Attributes:
         tags (list[str]): List of names for copies of state/obs data
 
     """
+    io_mode: IOMode
     tags: list[str] = ['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
 
     def __init__(self, c: Context):
-        pass
+        self.io_mode = c.config.io_mode
 
     def validate_tag(self, tag: str):
         if tag not in self.tags:
@@ -104,6 +112,45 @@ class IOBackend(ABC):
         """
         ...
 
+    def make_dir(self, dirname:str|None) -> None:
+        """
+        Create a directory if it does not exist.
+
+        FileExistsError can happen if multiple processors are trying to make the same directory.
+        This function will ignore this error and continue.
+
+        Args:
+            dirname (str|None): Directory name to be created.
+        """
+        if dirname is None:
+            return
+        try:
+            os.makedirs(dirname, exist_ok=True)
+        except FileExistsError:
+            pass
+
+    def copy_file(self, file1: str, file2: str) -> None:
+        shutil.copy2(file1, file2, follow_symlinks=True)
+
+    def move_file(self, file1: str, file2: str) -> None:
+        shutil.move(file1, file2)
+
+    def remove_file(self, file: str) -> None:
+        try:
+            os.remove(file)
+        except OSError as e:
+            # ignore if the file was already delected by other process
+            if e.errno != errno.ENOENT:
+                raise
+
+    def remove_dir(self, dirname: str) -> None:
+        try:
+            shutil.rmtree(dirname)
+        except OSError as e:
+            # ignore if the directory is already delected
+            if e.errno != errno.ENOENT:
+                raise
+
     def save_debug_data(self, c: Context, name: str, data: dict, path: str | None=None) -> None:
         """
         Save debug data in npz format
@@ -120,7 +167,36 @@ class IOBackend(ABC):
         file = os.path.join(path, f"{name}.npz")
 
         # make sure directory exists
-        os.makedirs(os.path.dirname(file), exist_ok=True)
+        self.make_dir(os.path.dirname(file))
 
         # save the data to file
         np.savez(file, **data)
+
+    def run_command(self, shell_cmd:str) -> None:
+        """
+        Run a shell command in a subprocess and check for errors.
+
+        Args:
+            shell_cmd (str): Shell command to be executed.
+
+        Raises:
+            RuntimeError: If the command returns a non-zero exit status.
+        """
+        p = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        if p.returncode != 0:
+            raise RuntimeError(f"{p.stderr}")
+
+    def run_job(self, commands:str, **kwargs):
+        """
+        Run a shell command by submitting it to a job scheduler using JobSubmitter class.
+
+        Args:
+            commands (str): Shell command to be executed.
+            **kwargs: Key-value pairs to passed to the job submitter run method.
+        """
+        ##get the right job submitter
+        job_submitter = get_job_submitter(**kwargs)
+
+        ##run job using the submitter
+        job_submitter.run(commands)
