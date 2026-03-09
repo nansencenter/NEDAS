@@ -1,0 +1,51 @@
+interfaces = []
+exclude = [
+    "**/*__pycache__",
+    "**/*egg-info",
+    "**/docs",
+    "**/tests",
+    "**/venv",
+]
+source_roots = [
+    ".",
+]
+
+[[modules ]]
+path = "NEDAS.schemes"
+depends_on = ["NEDAS.config", "NEDAS.core", "NEDAS.utils"]
+
+[[modules ]]
+path = "NEDAS.datasets"
+depends_on = ["NEDAS.core", "NEDAS.models", "NEDAS.grid", "NEDAS.utils"]
+
+[[modules ]]
+path = "NEDAS.core"
+depends_on = ["NEDAS.assim_tools", "NEDAS.grid", "NEDAS.runtimes", "NEDAS.models", "NEDAS.datasets", "NEDAS.config", "NEDAS.utils", "NEDAS.job_submitters"]
+
+[[modules ]]
+path = "NEDAS.runtimes"
+depends_on = ["NEDAS.utils", "NEDAS.core"]
+
+[[modules ]]
+path = "NEDAS.grid"
+depends_on = ["NEDAS.utils"]
+
+[[modules ]]
+path = "NEDAS.utils"
+depends_on = ["NEDAS.grid"]
+
+[[modules ]]
+path = "NEDAS.config"
+depends_on = []
+
+[[modules ]]
+path = "NEDAS.assim_tools"
+depends_on = ["NEDAS.core", "NEDAS.grid", "NEDAS.utils"]
+
+[[modules ]]
+path = "NEDAS.models"
+depends_on = ["NEDAS.grid", "NEDAS.core", "NEDAS.utils"]
+
+[[modules ]]
+path = "NEDAS.job_submitters"
+depends_on = ["NEDAS.utils"]

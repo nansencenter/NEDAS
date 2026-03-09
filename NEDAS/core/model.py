@@ -6,8 +6,8 @@ import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
+from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
 from .runtime import Runtime
-from .types import VarName, VarDesc, LevelID, EnsRunType
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -29,7 +29,7 @@ class Model(Generic[GridT], ABC):
     run_process = None
     run_status: str = 'pending'
 
-    def __init__(self, config_file: str|None=None, parse_args: bool|None=False, runtime: Runtime|None=None, **kwargs):
+    def __init__(self, config_file: str|None=None, parse_args: bool|None=False, **kwargs):
         ##parse config file and obtain a list of attributes
         ##get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -37,9 +37,7 @@ class Model(Generic[GridT], ABC):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
-        # initialize io backend
-        if runtime:
-            self.runtime = runtime
+        ##TODO: self.runtime is needed
 
     def parse_kwargs(self, **kwargs) -> dict:
         ##args that pinpoints a certain model state variable

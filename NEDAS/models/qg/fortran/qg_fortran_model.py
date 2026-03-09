@@ -41,7 +41,7 @@ class QGFortranModel(Model):
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
 
-        assert self.runtime.io_mode == 'offline', 'qg.fortran model only support offline io mode'
+        # assert self.runtime.io_mode == 'offline', 'qg.fortran model only support offline io mode'
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(**kwargs)

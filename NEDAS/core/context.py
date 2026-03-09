@@ -50,10 +50,9 @@ class Context:
         # setup the parallel (serial or MPI program) communicator and runtime executor
         self.set_comm()
         self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
-        # self.set_exec()
 
         # initialize io backend
-        self.runtime = runtimes.get_runtime_class(self.config.io_mode)(self)
+        self.runtime = runtimes.get_runtime(self)
 
         # setup the analysis grid object
         self.set_grid()
@@ -200,7 +199,7 @@ class Context:
             ModelClass = models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            kwargs['runtime'] = self.runtime
+            # kwargs['runtime'] = self.runtime
             model = ModelClass(**kwargs)
 
             self.models[model_name] = model
@@ -215,7 +214,6 @@ class Context:
             DatasetClass = datasets.get_dataset_class(dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            kwargs['io_mode'] = self.config.io_mode
             self.datasets[dataset_name] = DatasetClass(grid=self.grid, mask=self.grid.mask, **kwargs)
 
     @property

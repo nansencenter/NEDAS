@@ -5,16 +5,16 @@ import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import type_dic, type_size
 from NEDAS.core import Context, Runtime
-from NEDAS.core.types import FieldRecord
 
 class OfflineRuntime(Runtime):
     """
     Offline runtime backend using restart files to hold model state (a pause-restart strategy)
     """
-    dictionaries: dict
+    io_mode = 'offline'
+    directories: dict
     niter: int
 
-    def __init__(self, c: Context):
+    def __init__(self, c: Context) -> None:
         super().__init__(c)
         if c.config.directories is None:
             raise ValueError

@@ -8,10 +8,8 @@ class OnlineRuntime(Runtime):
 
     Only works for single processor now, but this is convenient for long experiments and simple models
     """
+    io_mode = 'online'
     shared_data: dict[str, Any] = {}
-
-    def __init__(self, c: Context):
-        super().__init__(c)
 
     def read_field(self, c: Context, tag: str, rec_id: int, mem_id: int) -> np.ndarray:
         """

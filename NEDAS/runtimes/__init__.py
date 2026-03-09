@@ -1,28 +1,30 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import importlib
-from typing import Type
-from NEDAS.core.types import IOMode
 from NEDAS.core.runtime import Runtime
+if TYPE_CHECKING:
+    from NEDAS.core.context import Context
 
 registry = {
     'offline': 'OfflineRuntime',
     'online': 'OnlineRuntime',
 }
 
-def get_runtime_class(io_mode: IOMode) -> Type['Runtime']:
+def get_runtime(c: Context) -> Runtime:
     """
     Factory function to return the correct Runtime subclass instance.
 
     Args:
-        io_mode (IOMode): io mode string: 'online' or 'offline'
+        c (Context): runtime context
 
     Returns:
-        Runtime class: Corresponding runtime subclass
+        Runtime: Corresponding runtime subclass instance
     """
-    if io_mode.lower() not in registry.keys():
-        raise NotImplementedError(f"Unsupported io_mode '{io_mode}'.")
-    module = importlib.import_module('NEDAS.runtimes.'+io_mode)
-    RuntimeClass = getattr(module, registry[io_mode])
+    if c.config.io_mode.lower() not in registry.keys():
+        raise NotImplementedError(f"Unsupported io_mode '{c.config.io_mode}'.")
+    module = importlib.import_module('NEDAS.runtimes.'+c.config.io_mode)
+    RuntimeClass = getattr(module, registry[c.config.io_mode])
 
-    return RuntimeClass
+    return RuntimeClass(c)
 
-__all__ = ['registry', 'get_runtime_class']
+__all__ = ['registry', 'get_runtime']

@@ -20,11 +20,11 @@ class Runtime(ABC):
         tags (list[str]): List of names for copies of state/obs data
 
     """
-    io_mode: IOMode
+    io_mode: IOMode = 'offline'
     tags: list[str] = ['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
 
-    def __init__(self, c: Context):
-        self.io_mode = c.config.io_mode
+    def __init__(self, c: Context) -> None:
+        pass
 
     def validate_tag(self, tag: str):
         if tag not in self.tags:
