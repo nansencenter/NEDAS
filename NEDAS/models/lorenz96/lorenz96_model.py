@@ -39,6 +39,19 @@ class Lorenz96Model(Model[Grid1D]):
         }
         self.z = {0: np.zeros(self.nx)}
 
+        self.io_methods = {
+            'offline': {
+                'read_var': self._read_var_from_file,
+                'write_var': self._write_var_to_file,
+            },
+            'online': {
+                'read_var': self._read_var_from_memory,
+                'write_var': self._write_var_to_memory,
+            }
+        }
+        if self.io_mode not in self.io_methods.keys():
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
+
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
@@ -59,12 +72,7 @@ class Lorenz96Model(Model[Grid1D]):
         pass
 
     def read_var(self, **kwargs):
-        if self.io_mode == 'offline':
-            return self._read_var_from_file(**kwargs)
-        elif self.io_mode == 'online':
-            return self._read_var_from_memory(**kwargs)
-        else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+        return self.io_methods[self.io_mode]['read_var'](**kwargs)
 
     def _read_var_from_memory(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -87,12 +95,7 @@ class Lorenz96Model(Model[Grid1D]):
         return var
 
     def write_var(self, var, **kwargs):
-        if self.io_mode == 'offline':
-            self._write_var_to_file(var, **kwargs)
-        elif self.io_mode == 'online':
-            self._write_var_to_memory(var, **kwargs)
-        else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
+        self.io_methods[self.io_mode]['write_var'](var, **kwargs)
 
     def _write_var_to_memory(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -122,7 +125,7 @@ class Lorenz96Model(Model[Grid1D]):
         state = np.random.normal(0, 1, self.nx)
         return state
 
-    def preprocess(self, **kwargs):
+    def preprocess(self, *args, **kwargs):
         if self.io_mode == 'offline':
             kwargs = super().parse_kwargs(kwargs)
             rt = self.get_runtime(kwargs)
@@ -132,10 +135,10 @@ class Lorenz96Model(Model[Grid1D]):
             file2 = self.filename(**kwargs)
             rt.copy_file(file1, file2)
 
-    def postprocess(self, **kwargs):
+    def postprocess(self, *args, **kwargs):
         pass
 
-    def run(self, **kwargs):
+    def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
@@ -147,6 +150,10 @@ class Lorenz96Model(Model[Grid1D]):
         self.run_status = 'complete'
 
     def generate_truth(self, *args, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
+        if self.io_mode == 'offline':
+            rt = self.get_runtime(kwargs)
+            rt.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = kwargs['time_start']
         kwargs['member'] = None
@@ -156,12 +163,11 @@ class Lorenz96Model(Model[Grid1D]):
             kwargs['time'] += kwargs['forecast_period'] * dt1h
 
     def generate_init_ensemble(self, *args, **kwargs):
-        time = kwargs['time']
-        member = kwargs['member']
-
+        kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            path = ''
+            rt = self.get_runtime(kwargs)
+            rt.make_dir(self.ens_init_dir)
 
         state = self.generate_initial_condition()
-        
+        kwargs['time'] = kwargs['time_start']
         self.write_var(state, name='state', **kwargs)

@@ -1,9 +1,11 @@
 import os
 import numpy as np
+from NEDAS.core.runtime import Runtime
 from NEDAS.utils.conversion import dt1h
 from NEDAS.grid import Grid
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
+from NEDAS.runtimes.offline import OfflineRuntime
 from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
@@ -42,6 +44,11 @@ class QGFortranModel(Model):
             'vorticity': VarDesc(name='zeta', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
+
+    def get_runtime(self, kwargs) -> OfflineRuntime:
+        rt = super().get_runtime(kwargs)
+        assert isinstance(rt, OfflineRuntime)
+        return rt
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -223,92 +230,59 @@ class QGFortranModel(Model):
         shell_cmd += "mv output.bin "+output_file
         rt.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
-    def generate_truth(self, **kwargs) -> None:
-        kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
-        time_start = kwargs['time_start']
-        time_end = kwargs['time_end']
-        debug = kwargs['debug']
-        forecast_period = kwargs['forecast_period']
-
+    def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
+        kwargs = super().parse_kwargs(kwargs)
+        kwargs['member'] = None
+        rt = self.get_runtime(kwargs)
         rt.make_dir(self.truth_dir)
+
         print(f"Creating truth run for qg model in {self.truth_dir}")
-
         run_dir = os.path.join(self.truth_dir, 'run')
-        init_file = f"output_{time_start:%Y%m%d_%H}.bin"
+        init_file = f"output_{kwargs['time_start']:%Y%m%d_%H}.bin"
         print(f"Running the model for spinup period to get initial condition: {init_file}")
-        opt = {
-            'path': run_dir,
-            'member': None,
-            'time': time_start - self.spinup_hours * dt1h,
-            'forecast_period': self.spinup_hours,
-            'time_start': time_start,
-            'time_end': time_end,
-            'debug': debug,
-            }
-        self.run(**opt)
+        kwargs['time'] = kwargs['time_start'] - self.spinup_hours * dt1h,
+        self.run(**{**kwargs, 'path':run_dir, 'forecast_period':self.spinup_hours})
 
-        time = time_start
-        while time < time_end:
-            opt['time'] = time
-            opt['forecast_period'] = forecast_period
-
-            file = f"output_{time:%Y%m%d_%H}.bin"
-            next_time = time + forecast_period * dt1h
+        kwargs['time'] = kwargs['time_start']
+        while kwargs['time'] < kwargs['time_end']:
+            current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
+            next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
             next_file = f"output_{next_time:%Y%m%d_%H}.bin"
-            print(f"Running the model from condition {file} to reach {next_file}")
-            self.run(**opt)
-
-            time = next_time
+            print(f"Running the model from condition {current_file} to reach {next_file}")
+            self.run(**{**kwargs, 'path':run_dir})
+            kwargs['time'] = next_time
         print("done.")
 
-        rt.run_command(f"mv -v {run_dir}/*/output*.bin {self.truth_dir}/.")
+        rt.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
         print(f"removing temporary run directory: {run_dir}")
-        rt.run_command(f"rm -rf {run_dir}")
+        rt.remove_dir(run_dir)
 
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         kwargs = super().parse_kwargs(kwargs)
         rt = self.get_runtime(kwargs)
-        member = kwargs['member']
-        time = kwargs['time']
-        time_start = kwargs['time_start']
-        time_end = kwargs['time_end']
-        debug = kwargs['debug']
-        forecast_period = kwargs['forecast_period']
 
         print(f"Creating initial condition for qg model:")
-        init_time = time
-        time -= self.spinup_hours * dt1h
-        next_time = time + self.spinup_hours * dt1h
+        init_time = kwargs['time'] - self.spinup_hours * dt1h
+        next_time = kwargs['time']
         print(f"initial condition type: {self.psi_init_type}")
         print(f"spinup period: {self.spinup_hours} hours")
 
-        print(f"Running ensemble forecast from {time} to {next_time}")
-        opt = {
-            'path': kwargs['path'],
-            'member': member,
-            'time': time,
-            'forecast_period': self.spinup_hours,
-            'time_start': time_start,
-            'time_end': time_end,
-            'debug': debug,
-        }
-        self.run(**opt)
+        print(f"Spinning up ensemble from {init_time} to {next_time}")
+        self.run(**{**kwargs, 'time':init_time, 'forecast_period':self.spinup_hours})
 
-        # print("Moving output files")
-        # fcst_dir = c.forecast_dir(c.time, 'qg')
-        # cycle_dir = c.cycle_dir(c.time)
-        # ens_init_dir = model.ens_init_dir
-        # basename = f"output_{init_time:%Y%m%d_%H}.bin"
-        # for m in range(c.nens):
-        #     mstr = f"{m+1:04d}"
+        print("Moving output files")
+        fcst_dir = rt.forecast_dir(kwargs['time'], 'qg.fortran')
+        cycle_dir = rt.cycle_dir(kwargs['time'])
+        assert self.ens_init_dir is not None
+        basename = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
+        mstr = f"{kwargs['member']+1:04d}"
 
-        #     src_file = os.path.join(fcst_dir, mstr, basename)
-        #     init_file = os.path.join(ens_init_dir, mstr, basename)
+        src_file = os.path.join(fcst_dir, mstr, basename)
+        init_file = os.path.join(self.ens_init_dir, mstr, basename)
 
-        #     os.makedirs(os.path.dirname(init_file), exist_ok=True)
-        #     subprocess.run(f"mv -v {src_file} {init_file}", shell=True, check=True)
+        rt.make_dir(os.path.dirname(init_file))
+        rt.move_file(src_file, init_file)
 
-        # print(f"removing temporary run directory: {cycle_dir}")
-        # os.system(f"rm -rf {cycle_dir}")
+        print(f"removing temporary run directory: {cycle_dir}")
+        rt.remove_dir(cycle_dir)

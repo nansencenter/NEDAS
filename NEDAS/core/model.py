@@ -122,7 +122,7 @@ class Model(Generic[GridT], ABC):
         ...
 
     @abstractmethod
-    def preprocess(self, **kwargs) -> None:
+    def preprocess(self, *args, **kwargs) -> None:
         """
         Preprocess the model data.
 
@@ -132,7 +132,7 @@ class Model(Generic[GridT], ABC):
         ...
 
     @abstractmethod
-    def postprocess(self, **kwargs) -> None:
+    def postprocess(self, *args, **kwargs) -> None:
         """
         Postprocess the model data.
 
@@ -142,7 +142,7 @@ class Model(Generic[GridT], ABC):
         ...
 
     @abstractmethod
-    def run(self, **kwargs) -> None:
+    def run(self, *args, **kwargs) -> None:
         """
         Run the model (one member at a time).
 
@@ -151,14 +151,14 @@ class Model(Generic[GridT], ABC):
         """
         ...
 
-    def run_batch(self, **kwargs) -> None:
+    def run_batch(self, *args, **kwargs) -> None:
         """
         Run the model for all ensemble members in batch mode.
 
         """
         raise NotImplementedError(f"'run_batch' is not implemented for {self.__class__.__name__}")
 
-    def generate_truth(self, **kwargs) -> None:
+    def generate_truth(self, *args, **kwargs) -> None:
         """
         Generate truth (nature run) model states.
 

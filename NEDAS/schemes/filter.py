@@ -67,6 +67,7 @@ class FilterAnalysisScheme(Scheme):
             c.print_1p(f"Generating truth for '{model_name}' model...\n")
             opts = self.get_task_opts(c)
             opts['model_src'] = model_name
+            opts['member'] = None
             by_rank(c.comm, 0)(c.runtime.call_io_method)(c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self, c: Context):

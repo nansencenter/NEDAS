@@ -9,12 +9,12 @@ def timer(c=None):
     Decorator to show the time spent on a function.
 
     Args:
-        c (Config, optional): config object
+        c (Context, optional): the runtime context
 
     Once decorated, only processor with ID :code:`c.pid_show` in :code:`c.comm` will run the timer in the function.
     """
     def decorator(func):
-        if c is not None and not getattr(c, 'timer', True):
+        if c is not None and not getattr(c.config, 'timer', True):
             # if the config states timer=False, just return original func
             return func
 
@@ -35,7 +35,7 @@ def timer(c=None):
 
     return decorator
 
-def progress_bar(task_id: int, ntask: int, width: int=50):
+def progress_bar(task_id: int, ntask: int, width: int=50) -> str:
     """
     Generate a progress bar based on task_id and ntask.
 
@@ -61,7 +61,7 @@ def progress_bar(task_id: int, ntask: int, width: int=50):
 
     return pstr
 
-def print_with_cache(msg):
+def print_with_cache(msg: str) -> None:
     ##previous message is cached so that new message is displayed only
     ##when it's different from the previous one (avoid redundant output)
     if not hasattr(print_with_cache, 'prev_msg'):
@@ -87,7 +87,7 @@ def watch_files(files, timeout=1000, check_dt=1):
         if elapsed_t > timeout:
             raise RuntimeError(f"watch_files: timed out waiting for files {file_list}")
 
-def watch_log(logfile, keyword, timeout=1000, check_dt=1):
+def watch_log(logfile: str, keyword: str, timeout: int=1000, check_dt: int=1) -> None:
     ##wait for keyword to appear in a logfile (indicating success in completion)
     ##check every check_dt seconds
     ##if logfile size grows (some active output is happening), reset the timer
@@ -104,7 +104,7 @@ def watch_log(logfile, keyword, timeout=1000, check_dt=1):
         if elapsed_t > timeout:
             raise RuntimeError(f"watch_log: {logfile} remain stagnant for {timeout} seconds, while waiting for keyword '{keyword}'")
 
-def find_keyword_in_file(file, keyword):
+def find_keyword_in_file(file: str, keyword: str) -> bool:
     p = subprocess.run(f"grep '{keyword}' {file}", shell=True, capture_output=True, text=True)
     if p.stderr:
         raise RuntimeError(p.stderr)
@@ -113,7 +113,7 @@ def find_keyword_in_file(file, keyword):
             return True
     return False
 
-def count_lines_in_file(file):
+def count_lines_in_file(file: str) -> int:
     p = subprocess.run(f"wc -l {file}", shell=True, capture_output=True, text=True)
     if p.stderr:
         raise RuntimeError(p.stderr)
