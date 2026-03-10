@@ -38,7 +38,7 @@ class Vort2DModel(Model[RegularGrid]):
         }
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         if kwargs['member'] is not None:
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
@@ -56,15 +56,15 @@ class Vort2DModel(Model[RegularGrid]):
         pass
 
     def read_var(self, **kwargs):
-        if self.runtime.io_mode == 'offline':
+        if self.io_mode == 'offline':
             return self._read_var_from_file(**kwargs)
-        elif self.runtime.io_mode == 'online':
+        elif self.io_mode == 'online':
             return self._read_var_from_memory(**kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
 
     def _read_var_from_memory(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
@@ -76,7 +76,7 @@ class Vort2DModel(Model[RegularGrid]):
         return self.memory[name][key]
 
     def _read_var_from_file(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
@@ -90,15 +90,15 @@ class Vort2DModel(Model[RegularGrid]):
         return var
 
     def write_var(self, var, **kwargs):
-        if self.runtime.io_mode == 'offline':
+        if self.io_mode == 'offline':
             self._write_var_to_file(var, **kwargs)
-        elif self.runtime.io_mode == 'online':
+        elif self.io_mode == 'online':
             self._write_var_to_memory(var, **kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
 
     def _write_var_to_memory(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
@@ -108,7 +108,7 @@ class Vort2DModel(Model[RegularGrid]):
         self.memory[name][member, time] = var
 
     def _write_var_to_file(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
@@ -127,18 +127,21 @@ class Vort2DModel(Model[RegularGrid]):
         return state
 
     def preprocess(self, **kwargs):
-        if self.runtime.io_mode == 'offline':
-            kwargs = super().parse_kwargs(**kwargs)
-            self.runtime.make_dir(kwargs['path'])
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
+
+        if self.io_mode == 'offline':
+            kwargs = super().parse_kwargs(kwargs)
+            rt.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            self.runtime.run_command(f"cp -fL {file1} {file2}")
+            rt.run_command(f"cp -fL {file1} {file2}")
 
     def postprocess(self, *args, **kwargs):
         pass
 
     def run(self, *args, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
         state = self.read_var(**kwargs)
@@ -151,7 +154,9 @@ class Vort2DModel(Model[RegularGrid]):
 
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
-        self.runtime.make_dir(self.truth_dir)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
+        rt.make_dir(self.truth_dir)
 
         t = kwargs['time_start']
         while t < kwargs['time_end']:
@@ -177,7 +182,9 @@ class Vort2DModel(Model[RegularGrid]):
     
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
-        self.runtime.make_dir(self.ens_init_dir)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
+        rt.make_dir(self.ens_init_dir)
 
         opts = {
             'path': self.ens_init_dir,

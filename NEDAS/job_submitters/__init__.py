@@ -1,5 +1,4 @@
 import importlib
-from typing import Optional
 from NEDAS.job_submitters.base import JobSubmitter
 
 registry_by_host = {
@@ -11,8 +10,8 @@ registry_by_scheduler = {
     'oar': 'OARJobSubmitter',
 }
 
-def get_job_submitter(host: Optional[str]=None,
-                      scheduler:Optional[str]=None,
+def get_job_submitter(host: str|None=None,
+                      scheduler: str|None=None,
                       **kwargs) -> JobSubmitter:
     """
     Factory function to get the JobSubmitter instance.

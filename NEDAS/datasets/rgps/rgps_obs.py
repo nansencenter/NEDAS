@@ -42,15 +42,15 @@ class RgpsObs(Dataset):
         #    'seaice_deform_vort': self.get_seaice_deform_vort,
         #}
 
-    def parse_kwargs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def parse_kwargs(self, kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         assert kwargs['time'] is not None, 'rgps.read_obs: time is not defined'
         assert kwargs['obs_window_max'] is not None, 'rgps.read_obs: obs_window_max is not defined'
         assert kwargs['obs_window_min'] is not None, 'rgps.read_obs: obs_window_min is not defined'
         return kwargs
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         t = kwargs['time']
         if t.tzinfo is None:
             t = t.replace(tzinfo=timezone.utc)
@@ -79,7 +79,7 @@ class RgpsObs(Dataset):
 
     def read_obs(self, **kwargs):
         """read obs from rgps dataset"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         obs_name = kwargs['name']
         d0_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
         d1_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
@@ -198,7 +198,7 @@ class RgpsObs(Dataset):
         return obs_seq_arr
 
     def get_model_files(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         ##start and end time of the trajectories
         t0 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
@@ -283,7 +283,7 @@ class RgpsObs(Dataset):
         return pairs
 
     def _get_seaice_property(self, obs_name, compute_func, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         pairs = self.get_traj_pairs(**kwargs)
         xo, yo, tri, r, i = kwargs['x'], kwargs['y'], kwargs['triangles'], kwargs['record'], kwargs['index']
         nobs = xo.size

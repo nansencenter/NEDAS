@@ -23,6 +23,8 @@ class QGFortranModel(Model):
 
     def __init__(self, config_file=None, parse_args=False, **kwargs):
         super().__init__(config_file, parse_args, **kwargs)
+        if 'io_mode' in kwargs:
+            assert kwargs['io_mode'] == 'offline'
 
         self.dx = kwargs['dx'] if 'dx' in kwargs else 1.0
         n = 2*(self.kmax+1)
@@ -41,10 +43,8 @@ class QGFortranModel(Model):
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
 
-        # assert self.runtime.io_mode == 'offline', 'qg.fortran model only support offline io mode'
-
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         if kwargs['member'] is not None:
             mstr = '{:04d}'.format(kwargs['member']+1)
         else:
@@ -62,7 +62,7 @@ class QGFortranModel(Model):
         pass
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
         k = kwargs['k']
@@ -113,7 +113,7 @@ class QGFortranModel(Model):
             return var1
 
     def write_var(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
         k = kwargs['k']
@@ -140,12 +140,13 @@ class QGFortranModel(Model):
             write_data_bin(fname, psik, self.kmax, self.nz, int(k))
 
     def z_coords(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         z = np.full(self.grid.x.shape, kwargs['k'])
         return z
 
     def preprocess(self, *args, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         restart_dir = kwargs['restart_dir']
         restart_file = self.filename(**{**kwargs, 'path':restart_dir})
 
@@ -154,14 +155,15 @@ class QGFortranModel(Model):
         input_dir = os.path.dirname(input_file)
 
         ##just cp the prepared files to the work_dir location
-        self.runtime.make_dir(input_dir)
-        self.runtime.copy_file(restart_file, input_file)
+        rt.make_dir(input_dir)
+        rt.copy_file(restart_file, input_file)
 
     def postprocess(self, *args, **kwargs):
         pass
 
     def run(self, *args, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         task_id = kwargs['worker_id']
 
         task_nproc = self.nproc_per_run
@@ -170,7 +172,7 @@ class QGFortranModel(Model):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        self.runtime.make_dir(run_dir)
+        rt.make_dir(run_dir)
 
         time_start = kwargs['time_start']
         time = kwargs['time']
@@ -203,7 +205,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            self.runtime.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+            rt.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
@@ -219,16 +221,18 @@ class QGFortranModel(Model):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        self.runtime.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+        rt.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
     def generate_truth(self, **kwargs) -> None:
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         time_start = kwargs['time_start']
         time_end = kwargs['time_end']
         debug = kwargs['debug']
         forecast_period = kwargs['forecast_period']
 
         assert self.truth_dir is not None
-        self.runtime.make_dir(self.truth_dir)
+        rt.make_dir(self.truth_dir)
         print(f"Creating truth run for qg model in {self.truth_dir}")
 
         run_dir = os.path.join(self.truth_dir, 'run')
@@ -259,11 +263,13 @@ class QGFortranModel(Model):
             time = next_time
         print("done.")
 
-        self.runtime.run_command(f"mv -v {run_dir}/*/output*.bin {self.truth_dir}/.")
+        rt.run_command(f"mv -v {run_dir}/*/output*.bin {self.truth_dir}/.")
         print(f"removing temporary run directory: {run_dir}")
-        self.runtime.run_command(f"rm -rf {run_dir}")
+        rt.run_command(f"rm -rf {run_dir}")
 
     def generate_init_ensemble(self, *args, **kwargs) -> None:
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         member = kwargs['member']
         time = kwargs['time']
         time_start = kwargs['time_start']

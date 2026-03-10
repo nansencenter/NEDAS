@@ -15,7 +15,7 @@ class SyntheticObs(Dataset):
             self.grid = model.grid
 
     def random_network(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:
             nobs = 1000

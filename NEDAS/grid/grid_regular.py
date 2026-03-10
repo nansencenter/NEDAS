@@ -1,4 +1,3 @@
-from typing import Optional
 import copy
 import numpy as np
 import matplotlib
@@ -21,8 +20,8 @@ class RegularGrid(Grid2DBase):
     """
     nx: int
     ny: int
-    pole_dim: Optional[str]
-    pole_index: Optional[list[int]]
+    pole_dim: str|None
+    pole_index: list[int]|None
 
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian',
                  pole_dim=None, pole_index=None, neighbors=None, dst_grid=None,):

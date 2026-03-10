@@ -26,7 +26,7 @@ class ArgoObs(Dataset):
         self.obs_operator = {}
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         path = kwargs['path']
         time = kwargs['time']
         obs_window_min = kwargs['obs_window_min']
@@ -66,7 +66,7 @@ class ArgoObs(Dataset):
         -name, time, etc.
         return: obs_seq dict with lists of obs,x,y,z,time
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         
         ##target grid for obs_seq

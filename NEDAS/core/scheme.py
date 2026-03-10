@@ -5,7 +5,6 @@ import importlib.util
 import subprocess
 
 from abc import ABC, abstractmethod
-from NEDAS import config
 from .context import Context
 from NEDAS.runtimes.offline import OfflineRuntime
 
@@ -17,9 +16,9 @@ class Scheme(ABC):
     """
     c: Context
 
-    def __init__(self, config: config.Config) -> None:
-        # parse configuration
-        self.c = Context(config)
+    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs) -> None:
+        # parse configuration and genrate context
+        self.c = Context(config_file=config_file, parse_args=parse_args, **kwargs)
 
     @abstractmethod
     def __call__(self) -> None:

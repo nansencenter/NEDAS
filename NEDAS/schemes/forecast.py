@@ -187,23 +187,10 @@ class ForecastScheme(Scheme):
 
 
 def main():
-    # get config from runtime args, including the step to run (from --step) if specified
-    from NEDAS.config import Config
-    config = Config(parse_args=True)
-
     # initialize scheme
-    scheme = ForecastScheme(config)
+    scheme = ForecastScheme(parse_args=True)
 
-    # decide how to run based on runtime 
-    if config.step:
-        stepfunc = getattr(scheme, config.step)
-        timer(scheme.c)(stepfunc)(scheme.c)
-
-    else:
-        if config.io_mode == 'offline':
-            raise RuntimeError("no step specified for offline scheme")
-        else:
-            scheme()
+    scheme()
 
     scheme.c.comm.finalize()
 

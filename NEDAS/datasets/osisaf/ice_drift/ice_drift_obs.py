@@ -31,7 +31,7 @@ class OsisafSeaIceDriftObs(Dataset):
         self.obs_operator = {'seaice_drift': self.get_seaice_drift,}
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         path = kwargs['path']
         time = kwargs['time']
         name = kwargs['name']
@@ -60,7 +60,7 @@ class OsisafSeaIceDriftObs(Dataset):
         return file_list
 
     def read_obs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         mask = kwargs['mask']
 
@@ -140,7 +140,7 @@ class OsisafSeaIceDriftObs(Dataset):
         return obs_seq_arr
 
     def get_seaice_drift(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         obs_x = kwargs['x']
         obs_y = kwargs['y']

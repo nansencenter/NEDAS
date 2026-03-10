@@ -13,7 +13,7 @@ class QGFortranModelEmulator(QGFortranModel):
     model_params: dict
 
     def run_batch(self, nens=1, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
         ##load model weights if not yet

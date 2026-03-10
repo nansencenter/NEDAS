@@ -1,6 +1,5 @@
 import unittest
 import numpy as np
-from NEDAS.config import Config
 from NEDAS.core.state import State
 from NEDAS.core.obs_info import ObsInfo
 from NEDAS.core.obs import Obs
@@ -11,8 +10,7 @@ class TestObsClassInit(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        config = Config()
-        self.c = Context(config)
+        self.c = Context()
         self.c.state = State(self.c)
         self.c.obs = Obs(self.c)
 
@@ -38,8 +36,7 @@ class TestVerticalInterp(unittest.TestCase):
     """Test vertical_interp method for Obs class"""
 
     def setUp(self):
-        config = Config()
-        self.c = Context(config)
+        self.c = Context()
         self.c.state = State(self.c)
         self.c.obs = Obs(self.c)
 

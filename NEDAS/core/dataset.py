@@ -1,7 +1,7 @@
 import os
 import inspect
 import numpy as np
-from typing import Optional, Callable
+from typing import Callable, Any
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
@@ -14,7 +14,7 @@ class Dataset(ABC):
     variables: dict[VarName, VarDesc] = {}
     obs_operator: dict[VarName, Callable] = {}
 
-    def  __init__(self, config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
+    def  __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
 
         ##parse config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -32,7 +32,7 @@ class Dataset(ABC):
 
         self.variables = {}
 
-    def parse_kwargs(self, **kwargs):
+    def parse_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """
         Parse the input kwargs to pinpoint a specific file/variable...
         """

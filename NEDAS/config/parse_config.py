@@ -4,7 +4,6 @@ import os
 import re
 import argparse
 import yaml
-from typing import Optional
 
 def convert_notation(data):
     """
@@ -53,7 +52,7 @@ def str2bool(data:str) -> int:
     else:
         raise ValueError(f"Invalid input value for str2bool: {data}")
 
-def parse_config(code_dir: str='.', config_file: Optional[str]=None, parse_args: Optional[bool]=False, **kwargs):
+def parse_config(code_dir: str='.', config_file: str|None=None, parse_args: bool=False, **kwargs):
     """
     Load configuration from YAML files and runtime arguments.
 

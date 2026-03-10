@@ -1,8 +1,6 @@
-from typing import Optional
 import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import t2h, ensure_list
-from NEDAS.utils.progress import progress_bar
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
@@ -401,7 +399,7 @@ class Obs:
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
                 c.runtime.save_debug_data(c, file, {f'obs_{tag}':seq})
 
-    def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, Optional[int], ProcID, int]]:
+    def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
         ##form the global list of obs (in serial mode the main loop is over this list)
         n_obs_rec = len(self.info.records)
 

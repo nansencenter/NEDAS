@@ -51,15 +51,15 @@ class AMSR2Obs(Dataset):
         for ch in self.channels:
             self.obs_operator[ch] = self._get_obs_operator(ch)
 
-    def parse_kwargs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def parse_kwargs(self, kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         assert kwargs['time'] is not None, 'AMSR2Obs.read_obs: time is not defined'
         assert kwargs['obs_window_max'] is not None, 'AMSR2Obs.read_obs: obs_window_max is not defined'
         assert kwargs['obs_window_min'] is not None, 'AMSR2Obs.read_obs: obs_window_min is not defined'
         return kwargs
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
@@ -89,7 +89,7 @@ class AMSR2Obs(Dataset):
 
     def read_obs(self, **kwargs):
         """read obs from AMSR2 dataset"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']
         obs_name = kwargs['name']
         native_name = self.variables[obs_name].name
@@ -177,7 +177,7 @@ class AMSR2Obs(Dataset):
                 self.ow_bias[ch] = df[df['Month'] == int(date[4:6])][f'Mean_Value_{ch[2::]}'].values[0]
 
     def _simulated_tb(self, channel, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         model = kwargs['model']
         grid = kwargs['grid']
         model.grid.set_destination_grid(grid)

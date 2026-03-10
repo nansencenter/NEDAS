@@ -40,7 +40,7 @@ class Lorenz96Model(Model[Grid1D]):
         self.z = {0: np.zeros(self.nx)}
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['member'] is not None:
             mstr = '_mem{:04d}'.format(kwargs['member']+1)
@@ -59,15 +59,15 @@ class Lorenz96Model(Model[Grid1D]):
         pass
 
     def read_var(self, **kwargs):
-        if self.runtime.io_mode == 'offline':
+        if self.io_mode == 'offline':
             return self._read_var_from_file(**kwargs)
-        elif self.runtime.io_mode == 'online':
+        elif self.io_mode == 'online':
             return self._read_var_from_memory(**kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
 
     def _read_var_from_memory(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
@@ -78,7 +78,7 @@ class Lorenz96Model(Model[Grid1D]):
         return self.memory[tag][name][key]
 
     def _read_var_from_file(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         var_name = self.variables[name].name
@@ -87,15 +87,15 @@ class Lorenz96Model(Model[Grid1D]):
         return var
 
     def write_var(self, var, **kwargs):
-        if self.runtime.io_mode == 'offline':
+        if self.io_mode == 'offline':
             self._write_var_to_file(var, **kwargs)
-        elif self.runtime.io_mode == 'online':
+        elif self.io_mode == 'online':
             self._write_var_to_memory(var, **kwargs)
         else:
-            raise ValueError(f"Unknown io_mode {self.runtime.io_mode}")
+            raise ValueError(f"Unknown io_mode {self.io_mode}")
 
     def _write_var_to_memory(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
@@ -108,7 +108,7 @@ class Lorenz96Model(Model[Grid1D]):
         self.memory[tag][name][member, time] = var
 
     def _write_var_to_file(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         var_name = self.variables[name].name
@@ -123,18 +123,20 @@ class Lorenz96Model(Model[Grid1D]):
         return state
 
     def preprocess(self, **kwargs):
-        if self.runtime.io_mode == 'offline':
-            kwargs = super().parse_kwargs(**kwargs)
-            self.runtime.make_dir(kwargs['path'])
+        if self.io_mode == 'offline':
+            kwargs = super().parse_kwargs(kwargs)
+            rt = self.get_runtime(kwargs)
+
+            rt.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            self.runtime.copy_file(file1, file2)
+            rt.copy_file(file1, file2)
 
     def postprocess(self, **kwargs):
         pass
 
     def run(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
         state = self.read_var(**kwargs)
@@ -157,7 +159,7 @@ class Lorenz96Model(Model[Grid1D]):
         time = kwargs['time']
         member = kwargs['member']
 
-        if self.runtime.io_mode == 'offline':
+        if self.io_mode == 'offline':
             path = ''
 
         state = self.generate_initial_condition()

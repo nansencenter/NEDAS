@@ -1,13 +1,13 @@
 import os
 import inspect
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Any
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
-from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
 from .runtime import Runtime
+from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -15,7 +15,7 @@ class Model(Generic[GridT], ABC):
     """
     Class for configuring and running a model
     """
-    runtime: Runtime
+    io_mode: IOMode
     variables: dict[VarName, VarDesc]
     grid: GridT
     z: dict[LevelID, np.ndarray]
@@ -29,7 +29,7 @@ class Model(Generic[GridT], ABC):
     run_process = None
     run_status: str = 'pending'
 
-    def __init__(self, config_file: str|None=None, parse_args: bool|None=False, **kwargs):
+    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
         ##parse config file and obtain a list of attributes
         ##get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -37,9 +37,7 @@ class Model(Generic[GridT], ABC):
         for key, value in config_dict.items():
             setattr(self, key, value)
 
-        ##TODO: self.runtime is needed
-
-    def parse_kwargs(self, **kwargs) -> dict:
+    def parse_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         ##args that pinpoints a certain model state variable
         if 'path' not in kwargs:
             kwargs['path'] = '.'  ##default path is current dir
@@ -66,11 +64,15 @@ class Model(Generic[GridT], ABC):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']].units
 
-        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'comm', 'debug']:
+        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'runtime', 'comm', 'debug']:
             if key not in kwargs:
                 kwargs[key] = None
-
         return kwargs
+
+    def get_runtime(self, kwargs: dict[str, Any]) -> Runtime:
+        runtime = kwargs['runtime']
+        assert isinstance(runtime, Runtime)
+        return runtime
 
     @abstractmethod
     def read_grid(self, **kwargs) -> None:

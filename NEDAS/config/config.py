@@ -1,6 +1,6 @@
 import os
 import inspect
-from typing import Optional, Literal, Any
+from typing import Literal, Any
 import yaml
 import dateutil.parser
 from datetime import datetime, timezone
@@ -18,10 +18,10 @@ class Config:
         **kwargs: Additional key-value pairs to be passed to parse_config. Can be used to override values in the config file.
     """
     work_dir: str
-    python_env: Optional[str]
+    python_env: str|None
     io_mode: Literal['online', 'offline']
     job_submit: dict
-    directories: Optional[dict[str, str]]
+    directories: dict[str, str]|None
     nproc: int
     nproc_mem: int
     nproc_rec: int
@@ -38,7 +38,7 @@ class Config:
     run_diagnose: bool
     debug: bool
     timer: bool
-    step: Optional[str]
+    step: str|None
     time: datetime
     time_start: datetime
     time_end: datetime
@@ -50,14 +50,14 @@ class Config:
     state_time_steps: list[float]
     state_time_scale: float
     grid_def: dict
-    state_def: Optional[dict]
+    state_def: dict|None
     model_def: dict
-    obs_def: Optional[dict]
+    obs_def: dict|None
     dataset_def: dict
     shuffle_obs: bool
     z_coords_from: Literal['mean', 'member']
     interp_method: str
-    perturb: Optional[dict]
+    perturb: dict|None
     scheme: str
     niter: int
     iter: int
@@ -71,10 +71,10 @@ class Config:
     inflation_def: dict
     localization_def: dict
     transform_def: dict
-    alignment: Optional[dict]
-    diag: Optional[dict]
+    alignment: dict|None
+    diag: dict|None
 
-    def __init__(self, config_file: Optional[str]=None, parse_args: bool=False, **kwargs):
+    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
         # parse the yaml config file to obtain the values
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)

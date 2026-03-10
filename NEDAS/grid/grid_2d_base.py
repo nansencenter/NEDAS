@@ -1,7 +1,6 @@
 import os
 import inspect
 from functools import cached_property
-from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 import numpy as np
 import shapefile
@@ -46,7 +45,7 @@ class Grid2DBase(ABC):
     Ly: float
     mask: np.ndarray
     regular: bool
-    cyclic_dim: Optional[str]
+    cyclic_dim: str|None
 
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian', dst_grid=None):
         assert x.shape == y.shape, "x, y shape does not match"
@@ -216,7 +215,7 @@ class Grid2DBase(ABC):
         return x_, y_
 
     @abstractmethod
-    def find_index(self, x_, y_) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray, np.ndarray, np.ndarray]:
+    def find_index(self, x_, y_) -> tuple[np.ndarray, np.ndarray|None, np.ndarray, np.ndarray, np.ndarray]:
         """
         Find indices of `self.x`, `self.y` corresponding to the given `x_`, `y_`.
 

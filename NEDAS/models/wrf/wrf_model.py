@@ -46,7 +46,7 @@ class WRFModel(Model[RegularGrid]):
         self.read_grid()
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         tstr = kwargs['time'].strftime('%Y-%m-%d_%H:%M:%S')
         return os.path.join(kwargs['path'], 'wrfout_'+tstr+'.nc')
 
@@ -75,26 +75,27 @@ class WRFModel(Model[RegularGrid]):
         self.grid = RegularGrid(proj, x, y)
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         raise NotImplementedError
 
     def write_var(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         pass
 
     def z_coords(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         raise NotImplementedError
 
     def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         pass
 
     def postprocess(self, task_id=0, **kwargs):
         pass
 
     def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         fname = self.filename(**kwargs)
@@ -112,7 +113,7 @@ class WRFModel(Model[RegularGrid]):
         shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
-        self.runtime.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
+        rt.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
                 nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                 walltime=self.walltime, **kwargs)
 

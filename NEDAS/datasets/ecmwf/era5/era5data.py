@@ -33,7 +33,7 @@ class ERA5Data(Dataset):
 
     ###format filename
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         assert kwargs['time'] is not None, 'please specify time'
         assert kwargs['name'] is not None, 'please specify variable name'
         year = '{:04d}'.format(kwargs['time'].year)
@@ -52,7 +52,7 @@ class ERA5Data(Dataset):
         return files
 
     def read_grid(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)[0]
         with netCDF4.Dataset(fname) as f:
             lon = f['longitude'][:].data
@@ -67,7 +67,7 @@ class ERA5Data(Dataset):
         return ind
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         assert name is not None, 'please specify which variable (name=?) to get'
         time = kwargs['time']

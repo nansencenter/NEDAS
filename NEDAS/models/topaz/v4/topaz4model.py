@@ -60,7 +60,7 @@ class Topaz4Model(Model[RegularGrid]):
         self.grid.mask = np.asarray(depth.mask, dtype=bool)
         
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['member'] is not None:
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
@@ -76,7 +76,7 @@ class Topaz4Model(Model[RegularGrid]):
         pass
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -94,7 +94,7 @@ class Topaz4Model(Model[RegularGrid]):
         return var
 
     def write_var(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -148,7 +148,7 @@ class Topaz4Model(Model[RegularGrid]):
             return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         init_file = self.filename(**{**kwargs, 'path':self.ens_init_dir})
         input_file = self.filename(**kwargs)
@@ -160,7 +160,8 @@ class Topaz4Model(Model[RegularGrid]):
         pass
 
     def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -232,7 +233,7 @@ class Topaz4Model(Model[RegularGrid]):
                     break
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
-            self.runtime.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
+            rt.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
                     nproc=self.nproc, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

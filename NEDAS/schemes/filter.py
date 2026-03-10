@@ -242,20 +242,17 @@ class FilterAnalysisScheme(Scheme):
         c.print_1p(' done.\n')
 
 def main():
-    # get config from runtime args, including the step to run (from --step) if specified
-    from NEDAS.config import Config
-    config = Config(parse_args=True)
-
     # initialize scheme
-    scheme = FilterAnalysisScheme(config)
+    scheme = FilterAnalysisScheme(parse_args=True)
 
     # decide how to run based on runtime 
-    if config.step:
-        stepfunc = getattr(scheme, config.step)
+    step = scheme.c.config.step
+    if step:
+        stepfunc = getattr(scheme, step)
         timer(scheme.c)(stepfunc)(scheme.c)
 
     else:
-        if config.io_mode == 'offline':
+        if scheme.c.config.io_mode == 'offline':
             raise RuntimeError("no step specified for offline scheme")
         else:
             scheme()

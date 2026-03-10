@@ -40,7 +40,7 @@ class EcmwfForecastData(Dataset):
 
     ###format filename
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         t = self.time_start
         file = os.path.join(kwargs['path'], f"{t:%Y-%m}", f"fc_{t:%Y-%m-%d}.grb")
         assert os.path.exists(file), f"file {file} does not exist"
@@ -60,7 +60,7 @@ class EcmwfForecastData(Dataset):
         self.files[fname].close()
 
     def read_grid(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         self.open_file(fname)
         lat, lon = self.files[fname].message(1).latlons()
@@ -90,7 +90,7 @@ class EcmwfForecastData(Dataset):
         return var
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         assert name is not None, 'please specify which variable (name=?) to get'
         time = kwargs['time']

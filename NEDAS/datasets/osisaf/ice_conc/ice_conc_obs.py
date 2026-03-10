@@ -30,7 +30,7 @@ class OsisafSeaIceConcObs(Dataset):
         self.grid = Grid(proj, x, y)
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         path = kwargs['path']
         time = kwargs['time']
         name = kwargs['name']
@@ -60,7 +60,7 @@ class OsisafSeaIceConcObs(Dataset):
         return file_list
 
     def random_network(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:
             nobs = 1000
@@ -93,7 +93,7 @@ class OsisafSeaIceConcObs(Dataset):
         return obs_seq
 
     def read_obs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         mask = kwargs['mask']
 

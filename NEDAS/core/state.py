@@ -1,9 +1,8 @@
-from typing import Optional
 import numpy as np
 from NEDAS.utils.conversion import t2h, h2t, dt1h
 from NEDAS.utils.parallel import distribute_tasks, bcast_by_root
 from .context import Context
-from .types import ProcIDMem, ProcIDRec, MemID, FieldRecordID, PartitionID, FieldRecord, FieldEns, StateEns
+from .types import ProcIDMem, ProcIDRec, FieldRecordID, PartitionID, FieldRecord, FieldEns, StateEns
 from .state_info import StateInfo
 
 class State:
@@ -145,7 +144,7 @@ class State:
         pass
         # TODO: implement scalars here for simultaneous state parameter estimation (SSPE)
 
-    def output_state(self, c: Context, tag: str, mem_id_out: Optional[int]=None, rec_id_out: Optional[int]=None) -> None:
+    def output_state(self, c: Context, tag: str, mem_id_out: int|None=None, rec_id_out: int|None=None) -> None:
         """
         Parallel output the fields to the binary state_file
 

@@ -79,7 +79,7 @@ class NextsimModel(Model):
         """
         Get the filename with specified variable name, time, member, etc. 
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
         else:
@@ -117,7 +117,7 @@ class NextsimModel(Model):
         """
         Update self.grid object based on input kwargs
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         if kwargs['name'] in {**self.native_variables, **self.diag_variables}:
             if 'meshfile' in kwargs:
                 meshfile = kwargs['meshfile']
@@ -147,7 +147,7 @@ class NextsimModel(Model):
         Note: now we assume that number of mesh elements and their indices doesn't change!
         only updating the mesh node position x,y
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         meshfile = self.filename(**kwargs).replace('field', 'mesh')
 
         assert isinstance(self.grid, IrregularGrid)
@@ -224,7 +224,7 @@ class NextsimModel(Model):
 
     def read_var(self, **kwargs):
         """read variable from a model restart file"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -260,7 +260,7 @@ class NextsimModel(Model):
 
     def write_var(self, var, **kwargs):
         """write variable back to a model restart file"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -347,17 +347,18 @@ class NextsimModel(Model):
         raise NotImplementedError('cannot get diagnostic variable {name}')
 
     def read_param(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         return getattr(self, kwargs['name'])
 
     def write_param(self, param, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         setattr(self, kwargs['name'], param)
 
     def preprocess(self, task_id=0, **kwargs):
         """Preprocess the dir, collect input files for model run"""
         ##put sequence of operation here to generate the initial condition files for nextsim
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
@@ -367,7 +368,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        self.runtime.make_dir(run_dir)
+        rt.make_dir(run_dir)
 
         ##prepare restart files
         restart_file = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
@@ -379,7 +380,7 @@ class NextsimModel(Model):
         mesh_dat = mesh_bin.replace('.bin', '.dat')
         for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
             shell_cmd += f"cp -fL {file} .; "
-        self.runtime.run_command(shell_cmd)
+        rt.run_command(shell_cmd)
 
         ##prepare other input data (bathymetry, forcing, etc.) for the model run
         shell_cmd = f"cd {run_dir}; "
@@ -394,12 +395,12 @@ class NextsimModel(Model):
         while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
             t += 24 * dt1h  ##forcing files are stored daily
-        self.runtime.run_command(shell_cmd)
+        rt.run_command(shell_cmd)
 
     def postprocess(self, task_id=0, **kwargs):
         ##place holder for now
         ##for any post processing needed after assimilation, to fix any model state that is not consistent
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']
         if kwargs['member'] is not None:
             mstr = '{:03d}'.format(kwargs['member']+1)
@@ -425,7 +426,8 @@ class NextsimModel(Model):
         self.write_var(rr, **{**kwargs, 'name':'seaice_ridge_ratio', 'units':1})
 
     def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -439,7 +441,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        self.runtime.make_dir(run_dir)
+        rt.make_dir(run_dir)
 
         ##check input files
         field_bin = input_file
@@ -453,7 +455,7 @@ class NextsimModel(Model):
         ##build command to run the model
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
-        self.runtime.run_command("touch "+log_file)
+        rt.run_command("touch "+log_file)
 
         shell_cmd = f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
@@ -472,11 +474,11 @@ class NextsimModel(Model):
             ##this creates nextsim.cfg.in in run_dir/config
             ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
-            self.runtime.make_dir(config_dir)
+            rt.make_dir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
        ##run the model and wait for results
-            self.runtime.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
+            rt.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
                     nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

@@ -22,7 +22,7 @@ class Vort2DObs(SyntheticObs):
         }
 
     def random_network(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         model = kwargs['model']
         assert isinstance(model, Vort2DModel), 'random_network: ERROR: model must be an instance of Vort2DModel'
@@ -148,7 +148,7 @@ class Vort2DObs(SyntheticObs):
         return Rsize
 
     def get_velocity(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         model = kwargs['model']
         assert isinstance(model, Vort2DModel), 'get_velocity: ERROR: model must be an instance of Vort2DModel'
         grid = kwargs['grid']

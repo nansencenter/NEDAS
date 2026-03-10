@@ -1,11 +1,11 @@
-from typing import Optional, Literal, Mapping
+from typing import Literal, Mapping
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
 
 AccessMode = Literal['r', 'w', 'a', 'r+']
 
-def nc_open(filename: str, mode: AccessMode, comm: Optional[Comm]=None) -> Dataset:
+def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
     """
     Open a netCDF file.
 
@@ -32,7 +32,7 @@ def nc_open(filename: str, mode: AccessMode, comm: Optional[Comm]=None) -> Datas
                 comm.release_file_lock(filename)
                 raise
 
-def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
+def nc_close(filename: str, f: Dataset, comm: Comm|None=None) -> None:
     """
     Close the netCDF file handle.
 
@@ -47,13 +47,13 @@ def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
         comm.release_file_lock(filename)
 
 def nc_write_var(filename: str,
-                 dim: Mapping[str,Optional[int]],
+                 dim: Mapping[str,int|None],
                  varname: str,
                  dat: np.ndarray,
-                 dtype: Optional[str]=None,
-                 recno: Optional[dict[str,int]]=None,
-                 attr: Optional[dict]=None,
-                 comm: Optional[Comm]=None) -> None:
+                 dtype: str|None=None,
+                 recno: dict[str,int]|None=None,
+                 attr: dict[str,str]|None=None,
+                 comm: Comm|None=None) -> None:
     """
     Write a variable to a netCDF file.
 
@@ -125,7 +125,7 @@ def nc_write_var(filename: str,
 
     nc_close(filename, f, comm)
 
-def nc_read_var(filename: str, varname: str, comm: Optional[Comm]=None) -> np.ndarray:
+def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray:
     """
     Read a variable from a netCDF file.
 

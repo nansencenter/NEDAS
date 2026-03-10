@@ -74,7 +74,7 @@ class NextsimDGModel(Model[RegularGrid]):
         self.grid.mask = self.read_mask()
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         member = kwargs['member']
         if member is None:
@@ -120,7 +120,7 @@ class NextsimDGModel(Model[RegularGrid]):
         return np.full(self.grid.x.shape, False)
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -175,7 +175,7 @@ class NextsimDGModel(Model[RegularGrid]):
         return var
 
     def write_var(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
         rec = self.variables[name].asdict()
@@ -272,7 +272,8 @@ class NextsimDGModel(Model[RegularGrid]):
                 This section is not necessary if the model does not use perturbation
                 for the initial conditions or forcings.
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
 
         # get the current ensemble member id
         ens_mem_id:int = kwargs['member'] + 1
@@ -281,7 +282,7 @@ class NextsimDGModel(Model[RegularGrid]):
 
         # directory where files are being collected to, and where the model will be run
         run_dir = os.path.join(kwargs['path'], ens_mem_dir)
-        self.runtime.make_dir(run_dir)
+        rt.make_dir(run_dir)
 
         # get all required filenames for the initial ensemble
         # 1. get current and next time
@@ -311,7 +312,7 @@ class NextsimDGModel(Model[RegularGrid]):
                   flush=True)
             # we we do not perturb the restart file
             # simply link the restart files
-            # TODO: use runtime file manipulation
+            # TODO: use rt file manipulation
             os.system(f'ln -fs {fname_restart} {run_dir}')
             # we we do not perturb the forcing file
             # simply link the forcing files
@@ -363,7 +364,7 @@ class NextsimDGModel(Model[RegularGrid]):
         """Postprocessing method for nextsim.dg
         Parameters: same as preprocess
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         # get the current ensemble member id
         ens_mem_id:int = kwargs['member'] + 1
@@ -392,7 +393,8 @@ class NextsimDGModel(Model[RegularGrid]):
 
     def run(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
 
         nproc = self.nproc_per_run
         offset = task_id*self.nproc_per_run
@@ -406,7 +408,7 @@ class NextsimDGModel(Model[RegularGrid]):
             run_dir:str = os.path.join(kwargs['path'], f"ens_{member+1:02}")
         else:
             run_dir = kwargs['path']
-        self.runtime.make_dir(run_dir)
+        rt.make_dir(run_dir)
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
         ##build shell commands for running the model
@@ -416,7 +418,7 @@ class NextsimDGModel(Model[RegularGrid]):
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += "JOB_EXECUTE $NDG_BLD_DIR/nextsim --config-file nextsim.cfg > time.step"
 
-        self.runtime.run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
+        rt.run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
         ##check if the restart file at next_time is produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
@@ -426,7 +428,8 @@ class NextsimDGModel(Model[RegularGrid]):
 
     def run_batch(self, task_id=0, **kwargs):
         """Run nextsim.dg model ensemble forecast, use job array to spawn the member runs"""
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
+        rt = self.get_runtime(kwargs)
         assert self.use_job_array, \
             "use_job_array shall be True if running ensemble in batch mode."
 
@@ -438,7 +441,7 @@ class NextsimDGModel(Model[RegularGrid]):
         nens:int = kwargs['nens']
         for member in range(nens):
             ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
-            self.runtime.make_dir(ens_dir)
+            rt.make_dir(ens_dir)
 
             kwargs['member'] = member
             ##this creates run_dir/ens_??/nextsim.cfg
@@ -461,7 +464,7 @@ class NextsimDGModel(Model[RegularGrid]):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        self.runtime.run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
+        rt.run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
 
         ##check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)

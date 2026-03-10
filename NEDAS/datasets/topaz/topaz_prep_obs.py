@@ -29,7 +29,7 @@ class TopazPrepObs(Dataset):
         }
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         time = kwargs['time']
         path = kwargs['path']
@@ -56,7 +56,7 @@ class TopazPrepObs(Dataset):
         raise NotImplementedError('random_network: ERROR: random_network not implemented for topaz dataset')
 
     def read_obs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         time = kwargs['time']
         grid = kwargs['grid']
@@ -136,7 +136,7 @@ class TopazPrepObs(Dataset):
         return obs_seq_arr
 
     def get_seaice_drift(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']  ##output grid
         path = kwargs['path']
         member = kwargs['member']

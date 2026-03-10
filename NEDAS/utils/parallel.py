@@ -1,6 +1,6 @@
 import os
 from functools import wraps
-from typing import TypeVar, Callable, ParamSpec, Optional, Sequence, Union
+from typing import TypeVar, Callable, ParamSpec, Sequence
 import time
 from concurrent.futures import ProcessPoolExecutor
 import threading
@@ -190,13 +190,13 @@ class DummyComm:
 T = TypeVar("T")    # represents the return type of a func
 P = ParamSpec("P")  # represents the parameter list of a func
 
-def by_rank(comm: Comm, rank: int) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
+def by_rank(comm: Comm, rank: int) -> Callable[[Callable[P, T]], Callable[P, T|None]]:
     """
     Decorator for func() to be run only by rank 0 in comm
     """
-    def decorator(func: Callable[P, T]) -> Callable[P, Optional[T]]:
+    def decorator(func: Callable[P, T]) -> Callable[P, T|None]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T|None:
             if comm.Get_rank() == rank:
                 result = func(*args, **kwargs)
             else:
@@ -222,9 +222,7 @@ def bcast_by_root(comm: Comm) -> Callable[[Callable[P, T]], Callable[P, T]]:
         return wrapper
     return decorator
 
-TaskSequence = Union[np.ndarray, Sequence]
-
-def distribute_tasks(comm: Comm, tasks: TaskSequence, load: Optional[TaskSequence]=None) -> dict[int, list]:
+def distribute_tasks(comm: Comm, tasks: np.ndarray|Sequence, load: np.ndarray|Sequence|None=None) -> dict[int, list]:
     """
     Divide a list of task indices and assign a subset to each rank in comm
 

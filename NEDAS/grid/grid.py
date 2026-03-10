@@ -189,7 +189,7 @@ class Grid:
     @classmethod
     def random_grid(cls, proj: Any,
                     xstart: float, xend: float, ystart: float, yend: float,
-                    npoints: int, min_dist: Optional[float]=None, **kwargs) -> IrregularGrid:
+                    npoints: int, min_dist: float|None=None, **kwargs) -> IrregularGrid:
         """
         Create a grid with randomly positioned points within specified boundaries.
 

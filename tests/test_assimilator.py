@@ -1,13 +1,11 @@
 import unittest
 import importlib
-from NEDAS.config import Config
 from NEDAS.core import Context
 from NEDAS.assim_tools.assimilators import registry, get_assimilator
 
 class TestAnalysisScheme(unittest.TestCase):
     def setUp(self):
-        config = Config()
-        self.c = Context(config)
+        self.c = Context()
 
     def test_assimilator_init(self):
         for assimilator_name in registry.keys():

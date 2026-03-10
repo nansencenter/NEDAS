@@ -34,8 +34,8 @@ class Context:
     state: State
     obs: Obs
 
-    def __init__(self, config: config.Config):
-        self.config = config        
+    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
+        self.config = config.Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -199,7 +199,7 @@ class Context:
             ModelClass = models.get_model_class(model_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}
-            # kwargs['runtime'] = self.runtime
+            kwargs['io_mode'] = self.config.io_mode
             model = ModelClass(**kwargs)
 
             self.models[model_name] = model

@@ -1,4 +1,3 @@
-from typing import Optional
 import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
@@ -6,7 +5,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 class TopazDEnKFAssimilator(BatchAssimilator):
     rfactor: float
     kfactor: float
-    nlobs_max: Optional[int]
+    nlobs_max: int|None
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  ##variable id for each field (nfld)
