@@ -135,7 +135,7 @@ class OfflineRuntime(Runtime):
 
         c.comm.Barrier()
 
-    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
+    def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
         # form the path in kwargs 
         # additional info from input args to form the path prefix
@@ -161,6 +161,7 @@ class OfflineRuntime(Runtime):
             os.makedirs(path, exist_ok=True)  # use shell_utils makedir
 
         kwargs['path'] = path
+        kwargs['runtime'] = self
         return method(*args, **kwargs)
 
     def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:

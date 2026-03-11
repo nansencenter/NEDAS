@@ -71,9 +71,9 @@ class Runtime(ABC):
         ...
 
     @abstractmethod
-    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs) -> Any:
+    def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs) -> Any:
         """
-        Call a method to perform some io tasks.
+        Call a method to perform some tasks.
 
         Args:
             c (Context): the runtime context
@@ -137,14 +137,21 @@ class Runtime(ABC):
             print(f"copied {file1} to {file2}", flush=True)
 
     def move_file(self, file1: str, file2: str) -> None:
-        shutil.move(file1, file2)
+        if os.path.exists(file2):
+            os.replace(file1, file2)
+        else:
+            shutil.move(file1, file2)
         if self.debug:
             print(f"moved {file1} to {file2}", flush=True)
 
     def move_files_to_dir(self, files: str, dirname: str) -> None:
         # Find all matching files and move them
         for file_path in glob.glob(files):
-            shutil.move(file_path, dirname)
+            dest_path = os.path.join(dirname, os.path.basename(file_path))
+            if os.path.exists(dest_path):
+                os.replace(file_path, dest_path)
+            else:
+                shutil.move(file_path, dirname)
             if self.debug:
                 print(f"renamed '{file_path}' -> '{os.path.join(dirname, os.path.basename(file_path))}'", flush=True)
 

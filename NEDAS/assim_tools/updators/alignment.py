@@ -27,17 +27,17 @@ class AlignmentUpdator(Updator):
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 displace = optical_flow(c.grid, fld_prior, fld_post, **c.config.alignment)
                 self.displace[mem_id, rec['k']] = displace
-                #np.save(os.path.join(c.runtime.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
+                #np.save(os.path.join(c.rt.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"), displace)
 
                 ##the model class offer a method to update grid (a lagrangian approach)
                 ##so displace increment will be applied directly to the grid elements
                 if hasattr(model, 'displace'):
                     ##convert the displacement from analysis grid to model grid
-                    c.runtime.call_io_method(c, 'prior', model.read_grid, member=mem_id, **rec)
+                    c.rt.call_method(c, 'prior', model.read_grid, member=mem_id, **rec)
                     c.grid.set_destination_grid(model.grid)
                     displace_m = c.grid.convert(displace, is_vector=True, method='linear')
                     ##apply the displacement
-                    c.runtime.call_io_method(c, 'prior', getattr(model, 'displace'), displace_m[0,...], displace_m[1,...], member=mem_id, **rec)
+                    c.rt.call_method(c, 'prior', getattr(model, 'displace'), displace_m[0,...], displace_m[1,...], member=mem_id, **rec)
 
         c.comm.Barrier()
 
@@ -53,7 +53,7 @@ class AlignmentUpdator(Updator):
         fld_post = c.state.fields_post[mem_id, rec_id]
 
         ##get model state variable prior
-        var_prior = c.runtime.call_io_method(c, 'prior', model.read_var, member=mem_id, **rec)
+        var_prior = c.rt.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
         c.grid.set_destination_grid(model.grid)
 
         if rec['is_vector']:
@@ -99,7 +99,7 @@ class AlignmentUpdator(Updator):
         var_post[ind] = var_prior[ind]
         #if np.isnan(var_post).any():
         #    raise ValueError('nan detected in var_post')
-        c.runtime.call_io_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
+        c.rt.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
 
 def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1, **kwargs):
     ni = int(2**np.ceil(np.log(np.max(fld1.shape))/np.log(2)))

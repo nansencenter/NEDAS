@@ -41,7 +41,7 @@ class OnlineRuntime(Runtime):
         #model.write_var(fld, tag=tag, member=mem_id, **rec.asdict())
         # write to state.fields_xxx
 
-    def call_io_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
+    def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
 
         # just append tag to the kwargs, online model classes will read this tag

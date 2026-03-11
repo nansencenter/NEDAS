@@ -35,7 +35,7 @@ def run(c, **kwargs) -> None:
         plot_dir = kwargs['plot_dir']
     else:
         plot_dir = os.path.join(c.work_dir, 'plots', 'analysis_increments')
-    c.runtime.make_dir(plot_dir)
+    c.rt.make_dir(plot_dir)
 
     figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
     landcolor = kwargs.get('land_color', 'gray')

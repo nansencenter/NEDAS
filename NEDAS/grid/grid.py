@@ -123,7 +123,6 @@ To show the map overlay, you can use `grid.plot_land(ax, color, linecolor, linew
 
 """
 
-from typing import Optional, Any
 import numpy as np
 from NEDAS.grid.grid_regular import RegularGrid
 from NEDAS.grid.grid_irregular import IrregularGrid
@@ -158,14 +157,14 @@ class Grid:
                                  triangles, dst_grid)
 
     @classmethod
-    def regular_grid(cls, proj: Any,
+    def regular_grid(cls, proj,
                      xstart: float, xend: float, ystart: float, yend: float,
                      dx: float, centered: bool=False, **kwargs) -> RegularGrid:
         """
         Create a regular grid within specified boundaries.
 
         Parameters:
-            proj (Any): Projection from lon,lat to x,y.
+            proj (Callable): Projection from lon,lat to x,y.
             xstart (float): Lower bound for X coordinates.
             xend (float): Upper bound for X coordinates.
             ystart (float): Lower bound for Y coordinates.
@@ -187,7 +186,7 @@ class Grid:
         return RegularGrid(proj, x, y, **kwargs)
 
     @classmethod
-    def random_grid(cls, proj: Any,
+    def random_grid(cls, proj,
                     xstart: float, xend: float, ystart: float, yend: float,
                     npoints: int, min_dist: float|None=None, **kwargs) -> IrregularGrid:
         """

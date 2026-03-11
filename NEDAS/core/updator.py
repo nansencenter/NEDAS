@@ -75,7 +75,7 @@ class Updator(ABC):
             rec_id = rec_list[c.pid_rec][r]
             rec = c.state.info.fields[rec_id].asdict()
             model = c.models[rec['model_src']]
-            file = c.runtime.call_io_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
+            file = c.rt.call_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
         else:
             mem_id = 0
             rec_id = 0

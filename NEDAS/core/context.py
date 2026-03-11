@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from pyproj import Proj
 from NEDAS.utils import parallel, progress
 from NEDAS import grid, config, models, datasets, assim_tools, runtimes
+from .types import ProcIDMem, MemID
 if TYPE_CHECKING:
     from . import Model, Dataset, Runtime, State, Obs, Transform, Inflation, Assimilator, Updator
-    from .types import ProcIDMem, MemID
 
 class Context:
     """
@@ -30,9 +30,10 @@ class Context:
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
-    runtime: Runtime
+    rt: Runtime
     state: State
     obs: Obs
+    use_synthetic_obs: bool = False
 
     def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
         self.config = config.Config(config_file=config_file, parse_args=parse_args, **kwargs)
@@ -52,7 +53,7 @@ class Context:
         self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
 
         # initialize io backend
-        self.runtime = runtimes.get_runtime(self)
+        self.rt = runtimes.get_runtime(self)
 
         # setup the analysis grid object
         self.set_grid()
@@ -211,6 +212,8 @@ class Context:
         """
         self.datasets = {}
         for dataset_name, kwargs in self.config.dataset_def.items():
+            if dataset_name == 'synthetic':
+                self.use_synthetic_obs = True
             DatasetClass = datasets.get_dataset_class(dataset_name)
             if not isinstance(kwargs, dict):
                 kwargs = {}

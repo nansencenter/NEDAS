@@ -391,7 +391,13 @@ class NextsimDGModel(Model[RegularGrid]):
         nc_write_var(restartfile, dims, 'data/cice', cice, comm=kwargs['comm'])
         nc_write_var(restartfile, dims, 'data/hice', hice, comm=kwargs['comm'])
 
-    def run(self, task_id=0, **kwargs):
+    def run(self, *args, **kwargs):
+        if self.ens_run_type == 'batch':
+            return self.run_batch(*args, **kwargs)
+        else:
+            return self.run_single(*args, **kwargs)
+
+    def run_single(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""
         kwargs = super().parse_kwargs(kwargs)
         rt = self.get_runtime(kwargs)
@@ -473,3 +479,9 @@ class NextsimDGModel(Model[RegularGrid]):
             fname_out = os.path.join(ens_dir, os.path.basename(fname_restart))
             if not os.path.exists(fname_out):
                 raise RuntimeError(f"nextsim.dg.run_batch: failed to produce {fname_out}, check {ens_dir}")
+
+    def generate_truth(self, *args, **kwargs) -> None:
+        return super().generate_truth(*args, **kwargs)
+    
+    def generate_init_ensemble(self, *args, **kwargs) -> None:
+        return super().generate_init_ensemble(*args, **kwargs)

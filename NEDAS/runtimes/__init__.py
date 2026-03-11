@@ -1,9 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-import importlib
-from NEDAS.core.runtime import Runtime
 if TYPE_CHECKING:
-    from NEDAS.core.context import Context
+    from NEDAS.core import Context, Runtime
+import importlib
 
 registry = {
     'offline': 'OfflineRuntime',
