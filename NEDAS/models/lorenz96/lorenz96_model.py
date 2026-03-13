@@ -4,7 +4,7 @@ from NEDAS.grid import Grid1D
 from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
-from NEDAS.core.types import VarDesc
+from NEDAS.core.types import VarDesc, IOMode
 
 def M_nl(x, F, T, dt):
     """
@@ -22,6 +22,7 @@ def M_nl(x, F, T, dt):
     return x
 
 class Lorenz96Model(Model[Grid1D]):
+    io_mode: IOMode = 'online'  # both online and offline supported, default to online
     nx: int
     F: float
     dt: float
@@ -128,12 +129,12 @@ class Lorenz96Model(Model[Grid1D]):
     def preprocess(self, *args, **kwargs):
         if self.io_mode == 'offline':
             kwargs = super().parse_kwargs(kwargs)
-            rt = self.get_runtime(kwargs)
+            c = self.get_context(kwargs)
 
-            rt.make_dir(kwargs['path'])
+            c.io.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            rt.copy_file(file1, file2)
+            c.io.copy_file(file1, file2)
 
     def postprocess(self, *args, **kwargs):
         pass
@@ -152,8 +153,8 @@ class Lorenz96Model(Model[Grid1D]):
     def generate_truth(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            rt = self.get_runtime(kwargs)
-            rt.make_dir(self.truth_dir)
+            c = self.get_context(kwargs)
+            c.io.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = kwargs['time_start']
         kwargs['member'] = None
@@ -165,8 +166,8 @@ class Lorenz96Model(Model[Grid1D]):
     def generate_init_ensemble(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            rt = self.get_runtime(kwargs)
-            rt.make_dir(self.ens_init_dir)
+            c = self.get_context(kwargs)
+            c.io.make_dir(self.ens_init_dir)
 
         state = self.generate_initial_condition()
         kwargs['time'] = kwargs['time_start']

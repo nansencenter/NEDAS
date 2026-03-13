@@ -229,6 +229,8 @@ def ensure_list(v) -> list:
     """
     If the input :code:`v` is a list, return itself; if not, return :code:`[v]`.
     """
+    if v is None:
+        return []
     if isinstance(v, list):
         return v
     return [v]

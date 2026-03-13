@@ -1,13 +1,16 @@
 from __future__ import annotations
 from typing import get_args, Callable, TYPE_CHECKING
+import copy
 import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
 from NEDAS.utils import parallel, progress
-from NEDAS import grid, config, models, datasets, assim_tools, runtimes
+from NEDAS.config import Config
+from NEDAS import grid, models, datasets, assim_tools, io_backends, job_submitters
+from .file_system import FileSystem
 from .types import ProcIDMem, MemID
 if TYPE_CHECKING:
-    from . import Model, Dataset, Runtime, State, Obs, Transform, Inflation, Assimilator, Updator
+    from . import Model, Dataset, IOBackend, JobSubmitter, State, Obs, Transform, Inflation, Assimilator, Updator
 
 class Context:
     """
@@ -30,30 +33,35 @@ class Context:
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
-    rt: Runtime
+    io: IOBackend
+    jsub: JobSubmitter
     state: State
     obs: Obs
     use_synthetic_obs: bool = False
 
-    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
-        self.config = config.Config(config_file=config_file, parse_args=parse_args, **kwargs)
+    def __init__(self, config: Config|None=None,
+                 config_file: str|None=None, parse_args: bool=False, **kwargs) -> None:
+        if isinstance(config, Config):
+            self.config = config
+        else:
+            self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
         self.time = self.config.time
-
         # initialize the current iteration
         self.iter = self.config.iter
-
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
 
-        # setup the parallel (serial or MPI program) communicator and runtime executor
+        # setup the parallel (serial or MPI program) communicator
         self.set_comm()
         self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
 
-        # initialize io backend
-        self.rt = runtimes.get_runtime(self)
+        # initialize a few helper class instances
+        self.fs = FileSystem(self.config.work_dir, self.config.directories, self.config.niter)
+        self.io = io_backends.get_io_backend(self.config.io_mode)
+        self.jsub = job_submitters.get_job_submitter(**(self.config.job_submit or {}))
 
         # setup the analysis grid object
         self.set_grid()
@@ -112,7 +120,7 @@ class Context:
         """
         return self.time + self.config.cycle_period * timedelta(hours=1)
 
-    def set_comm(self):
+    def set_comm(self) -> None:
         """
         Initialize the MPI communicator, split the communicator if necessary.
 
@@ -126,23 +134,25 @@ class Context:
         self.comm = parallel.Comm()
         comm_size = self.comm.Get_size()
 
+        self.pid = self.comm.Get_rank()  ##current processor id
+
+        # stop early if mpi environment is not ready (program is not called from mpirun)
+        if not self.comm.mpi_ready:
+            self.pid_mem, self.pid_rec = 0, 0
+            self.comm_mem, self.comm_rec = self.comm, self.comm
+            return
+
+        # validate mpi environment
         if comm_size != self.config.nproc:
             raise RuntimeError(f"Config nproc={self.config.nproc} does not match with MPI COMM size={comm_size}.")
 
-        self.pid = self.comm.Get_rank()  ##current processor id
-
+        ##split comm so that nproc_mem * nproc_rec == nproc
         self.pid_mem = self.pid % self.config.nproc_mem
         self.pid_rec = self.pid // self.config.nproc_mem
+        self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
+        self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
 
-        ##split comm if in mpi program
-        if comm_size > 1:
-            self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
-            self.comm_rec = self.comm.Split(self.pid_mem, self.pid_rec)
-        else:
-            self.comm_mem = self.comm
-            self.comm_rec = self.comm
-
-    def set_grid(self):
+    def set_grid(self) -> None:
         """
         Initialize the analysis grid based on the configuration.
 
@@ -189,7 +199,7 @@ class Context:
         # make a copy of the original analysis grid
         self.grid_orig = self.grid
 
-    def set_models(self):
+    def set_models(self) -> None:
         """
         Initialize model instances based on :code:`model_def[model_name]` settings.
         Store the model instances in :code:`models[model_name]`.
@@ -205,7 +215,7 @@ class Context:
 
             self.models[model_name] = model
 
-    def set_datasets(self):
+    def set_datasets(self) -> None:
         """
         Initialize dataset instances based on :code:`dataset_def[dataset_name]` settings.
         Store the dataset instances in :code:`datasets[dataset_name]`.
@@ -230,6 +240,22 @@ class Context:
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(parallel.print_with_cache)
 
+    def dump_config(self, config_file: str) -> None:
+        """
+        Dumps a snapshot of the current state to a yaml config file.
+        The original config object remains unchanged in memory.
+        """
+        # make a copy of the config object for dumping
+        tmp_config = copy.copy(self.config)
+
+        # inject runtime state to the temporary config
+        for rt_state in ['time', 'iter', 'pid_show']:
+            val = getattr(self, rt_state)
+            setattr(tmp_config, rt_state, val)
+
+        # save the config to yaml file
+        tmp_config.dump_yaml(config_file)
+
     def show_progress(self, debug_message: str, task: int, total_ntask: int) -> None:
         """
         Show progress
@@ -242,7 +268,7 @@ class Context:
         else:
             self.print_1p(progress.progress_bar(task, total_ntask))
 
-    def show_summary(self):
+    def show_summary(self) -> None:
         conf_summary = self.config.summary()
         summary_text = f"""Configuration:\n{conf_summary}
 current time: {self.time}

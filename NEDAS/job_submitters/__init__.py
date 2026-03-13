@@ -1,8 +1,8 @@
 import importlib
-from NEDAS.job_submitters.base import JobSubmitter
+from NEDAS.core.job_submitter import JobSubmitter
 
 registry_by_host = {
-    'macos': 'MacOSJobSubmitter',
+    'local': 'LocalJobSubmitter',
     'betzy': 'BetzyJobSubmitter',
 }
 registry_by_scheduler = {

@@ -6,7 +6,6 @@ from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils import random_perturb, spatial_operation, parallel
 from NEDAS.grid import GridType, Grid, RegularGrid
 from .context import Context
-from NEDAS.runtimes.offline import OfflineRuntime
 
 class PerturbField:
     """
@@ -289,34 +288,34 @@ class Perturbation:
 
     def prepare_perturb_dir(self, c):
         """ Prepare and clear the directory where perturbation data will be stored (offline mode) """
-        assert isinstance(c.rt, OfflineRuntime)
+        assert c.config.io_mode == 'offline'
         # clean up perturb files in current cycle dir
         for rec in c.config.perturb:
             path = c.io.forecast_dir(c.time, rec['model_src'])
             perturb_dir = os.path.join(path, 'perturb')
             if c.pid==0:
-                c.rt.run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
+                c.io.run_command(f"rm -rf {perturb_dir}; mkdir -p {perturb_dir}")
         c.comm.Barrier()
 
     def save_perturb_data(self, c: Context, **rec):
         """ Save a copy of perturbation data, for use by the next analysis cycle """
         path = None
-        if isinstance(c.rt, OfflineRuntime):
-            path = os.path.join(c.rt.forecast_dir(c.time, rec['model_src']), 'perturb')
+        if c.config.io_mode == 'offline':
+            path = os.path.join(c.fs.forecast_dir(c.time, rec['model_src']), 'perturb')
 
         for vname in ensure_list(rec['variable']):
             data = self.perturb[vname]
             assert data is not None
-            c.rt.save_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", data, path)
+            c.io.save_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", data, path)
 
     def load_perturb_data(self, c: Context, **rec):
         """ Load the perturbation data """
         path = None
-        if isinstance(c.rt, OfflineRuntime):
-            path = os.path.join(c.rt.forecast_dir(c.time, rec['model_src']), 'perturb')
+        if c.config.io_mode == 'offline':
+            path = os.path.join(c.fs.forecast_dir(c.time, rec['model_src']), 'perturb')
 
         for vname in ensure_list(rec['variable']):
-            data = c.rt.load_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", path)
+            data = c.io.load_ndarray(c, f"{vname}_mem{rec['member']+1:03d}", path)
             self.perturb[vname] = data
 
     def collect_fields(self, c: Context, t: datetime, k: int, **rec) -> dict[str, np.ndarray]:
@@ -327,7 +326,7 @@ class Perturbation:
 
         # set up grids
         vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
-        c.rt.call_method(c, 'prior', model.read_grid, name=vname, time=t, member=member, k=k)
+        c.io.call_method(c, 'prior', model.read_grid, name=vname, time=t, member=member, k=k)
         model.grid.set_destination_grid(c.grid)
         c.grid.set_destination_grid(model.grid)
 
@@ -335,7 +334,7 @@ class Perturbation:
         fields = {}
         for vname in variable_list:
             ##read variable from model state
-            fld = c.rt.call_method(c, 'prior', model.read_var, name=vname, time=t, member=member, k=k)
+            fld = c.io.call_method(c, 'prior', model.read_var, name=vname, time=t, member=member, k=k)
             ##convert to analysis grid
             fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
         return fields
@@ -348,10 +347,10 @@ class Perturbation:
         if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
             ##use model internal method to apply displacement perturbations directly
             displace_method = getattr(model, 'displace')
-            c.rt.call_method(c, 'prior', displace_method, self.perturb, time=t, member=member, k=k)
+            c.io.call_method(c, 'prior', displace_method, self.perturb, time=t, member=member, k=k)
         else:
             ##convert from analysis grid to model grid, and
             ##write the perturbed variables back to model state files
             for vname in variable_list:
                 fld = c.grid.convert(fields[vname], is_vector=model.variables[vname].is_vector)
-                c.rt.call_method(c, 'prior', model.write_var, fld, name=vname, time=t, member=member, k=k)
+                c.io.call_method(c, 'prior', model.write_var, fld, name=vname, time=t, member=member, k=k)

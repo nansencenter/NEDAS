@@ -8,19 +8,6 @@ import traceback
 import numpy as np
 from NEDAS.utils.progress import print_with_cache, progress_bar
 
-def check_parallel_io() -> bool:
-    """
-    Check if netCDF4 is built with parallel I/O support.
-
-    Returns:
-        bool: True if netCDF4 module support parallel I/O mode.
-    """
-    try:
-        from netCDF4 import Dataset
-        with Dataset('dummy.nc', mode='w', parallel=True):
-            return True
-    except Exception:
-        return False
 
 class Comm:
     """
@@ -42,7 +29,7 @@ class Comm:
 
     """
     parallel_io: bool
-    mpi: bool = False
+    mpi_ready: bool = False
 
     def __init__(self):
         ##detect if mpi environment exists
@@ -54,7 +41,7 @@ class Comm:
                 from mpi4py import MPI   #type: ignore
                 self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
-                self.mpi = True
+                self.mpi_ready = True
 
             except ImportError:
                 print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
@@ -66,7 +53,7 @@ class Comm:
             self._MPI = None
             self._comm = DummyComm()
 
-        self.parallel_io = check_parallel_io()
+        self.parallel_io = self.check_parallel_io()
 
         ##file lock to ensure only one processor access a file at a time
         self._locks = {}
@@ -93,6 +80,20 @@ class Comm:
                 lock_mem = None
             lock_win = self._MPI.Win.Create(lock_mem, comm=self._comm)
             self._locks[filename] = lock_win
+
+    def check_parallel_io(self) -> bool:
+        """
+        Check if netCDF4 is built with parallel I/O support.
+
+        Returns:
+            bool: True if netCDF4 module support parallel I/O mode.
+        """
+        try:
+            from netCDF4 import Dataset
+            with Dataset('dummy.nc', mode='w', parallel=True):
+                return True
+        except Exception:
+            return False
 
     def cleanup_file_locks(self):
         try:

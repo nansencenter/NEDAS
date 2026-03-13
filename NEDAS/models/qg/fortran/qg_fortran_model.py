@@ -1,11 +1,9 @@
 import os
 import numpy as np
-from NEDAS.core.runtime import Runtime
 from NEDAS.utils.conversion import dt1h
 from NEDAS.grid import Grid
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
-from NEDAS.runtimes.offline import OfflineRuntime
 from .namelist import namelist
 from .util import read_data_bin, write_data_bin, grid2spec, spec2grid
 from .util import psi2zeta, psi2u, psi2v, psi2temp, uv2zeta, zeta2psi, temp2psi
@@ -44,11 +42,6 @@ class QGFortranModel(Model):
             'vorticity': VarDesc(name='zeta', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
-
-    def get_runtime(self, kwargs) -> OfflineRuntime:
-        rt = super().get_runtime(kwargs)
-        assert isinstance(rt, OfflineRuntime)
-        return rt
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -170,7 +163,7 @@ class QGFortranModel(Model):
 
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
+        c = self.get_context(kwargs)
         task_id = kwargs.get('worker_id', 0)
 
         task_nproc = self.nproc_per_run
@@ -179,7 +172,7 @@ class QGFortranModel(Model):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        rt.make_dir(run_dir)
+        c.io.make_dir(run_dir)
 
         time_start = kwargs['time_start']
         time = kwargs['time']
@@ -212,7 +205,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            rt.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+            c.jsub.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
@@ -228,7 +221,7 @@ class QGFortranModel(Model):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        rt.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+        c.jsub.submit_job_and_monitor(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
@@ -273,7 +266,7 @@ class QGFortranModel(Model):
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
+        c = self.get_context(kwargs)
         basename = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
         mstr = f"{kwargs['member']+1:04d}"
         init_file = os.path.join(self.ens_init_dir, mstr, basename)
@@ -295,5 +288,5 @@ class QGFortranModel(Model):
 
         print("Moving output files")
         src_file = os.path.join(run_dir, mstr, basename)
-        rt.make_dir(os.path.dirname(init_file))
-        rt.move_file(src_file, init_file)
+        c.io.make_dir(os.path.dirname(init_file))
+        c.io.move_file(src_file, init_file)

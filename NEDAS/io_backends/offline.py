@@ -2,66 +2,15 @@ import os
 import struct
 from typing import Callable
 import numpy as np
-from datetime import datetime
 from NEDAS.utils.conversion import type_dic, type_size
-from NEDAS.core import Context, Runtime
+from NEDAS.core.io_backend import IOBackend
+from NEDAS.core.context import Context
 
-class OfflineRuntime(Runtime):
+class OfflineIO(IOBackend):
     """
-    Offline runtime backend using restart files to hold model state (a pause-restart strategy)
+    Offline IO backend using restart files to hold model state (a pause-restart strategy)
     """
     io_mode = 'offline'
-    directories: dict
-    niter: int
-
-    def __init__(self, c: Context) -> None:
-        super().__init__(c)
-        if c.config.directories is None:
-            raise ValueError
-        self.directories = c.config.directories
-        self.niter = c.config.niter
-
-    def cycle_dir(self, time: datetime) -> str:
-        """
-        Directory path for an analysis cycle.
-
-        Args:
-            time (datetime): Time of the analysis cycle.
-
-        Returns:
-            str: Directory path for the analysis cycle.
-        """
-        return self.directories['cycle_dir'].format(time=time)
-
-    def forecast_dir(self, time: datetime, model_name: str):
-        """
-        Directory path for a model forecast step.
-
-        Args:
-            time (datetime): Time of the analysis cycle.
-            model_name (str): Name of the model.
-
-        Returns:
-            str: Directory path for the model forecast.
-        """
-        return self.directories['forecast_dir'].format(time=time, model_name=model_name)
-
-    def analysis_dir(self, time: datetime, iter: int=0):
-        """
-        Directory path for an analysis step.
-
-        Args:
-            time (datetime): Time of the analysis cycle.
-            iter (int): If niter > 1, an outer iteration loop exists, step is the index in the loop.
-
-        Returns:
-            str: Directory path for the analysis step.
-        """
-        if self.niter == 1:
-            iter_dir= ''
-        else:
-            iter_dir = f"iter{iter}"
-        return self.directories['analysis_dir'].format(time=time, step=iter_dir)
 
     def binfile_name(self, c: Context, tag: str) -> str:
         """
@@ -74,7 +23,7 @@ class OfflineRuntime(Runtime):
         Returns:
             str: file name
         """
-        analysis_dir = self.analysis_dir(c.time, c.iter)
+        analysis_dir = c.fs.analysis_dir(c.time, c.iter)
         return os.path.join(analysis_dir, f'fields_{tag}.bin')
 
     def prepare_collective_io(self, c: Context, tag: str):
@@ -143,13 +92,13 @@ class OfflineRuntime(Runtime):
         model = c.models[model_name]
         time = kwargs['time']
         if tag == 'prior':
-            path = self.forecast_dir(time, model_name)
+            path = c.fs.forecast_dir(time, model_name)
 
         elif tag == 'post':
             prev_time = time - c.config.cycle_period
             if prev_time < c.config.time_start:
                 prev_time = c.config.time_start
-            path = self.forecast_dir(prev_time, model_name)
+            path = c.fs.forecast_dir(prev_time, model_name)
 
         elif tag == 'truth':
             path = model.truth_dir

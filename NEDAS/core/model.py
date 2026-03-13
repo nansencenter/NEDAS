@@ -1,13 +1,15 @@
+from __future__ import annotations
 import os
 import inspect
-from typing import Generic, TypeVar, Any
+from typing import Generic, TypeVar, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
-from .runtime import Runtime
 from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
+if TYPE_CHECKING:
+    from .context import Context
 
 GridT = TypeVar("GridT", bound=GridType)
 
@@ -64,15 +66,17 @@ class Model(Generic[GridT], ABC):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']].units
 
-        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'runtime', 'comm', 'debug']:
+        # if context is sent in through kwargs, don't need the following anymore
+        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'comm', 'debug']:
             if key not in kwargs:
                 kwargs[key] = None
         return kwargs
 
-    def get_runtime(self, kwargs: dict[str, Any]) -> Runtime:
-        runtime = kwargs['runtime']
-        assert isinstance(runtime, Runtime)
-        return runtime
+    def get_context(self, kwargs: dict[str, Any]) -> Context:
+        # if not available? get a default context
+        c = kwargs['context']
+        assert isinstance(c, Context)
+        return c
 
     @abstractmethod
     def read_grid(self, **kwargs) -> None:

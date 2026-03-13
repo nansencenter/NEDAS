@@ -14,55 +14,52 @@ class FilterAnalysisScheme(Scheme):
     as new initial conditions, the ensemble forecast is run again to reach the next analysis cycle, until
     the end of the period of interest. The length of forecasts between cycles is called the `cycling period`.
     """
+    steps = {
+        'generate_truth': {'ensemble':False, 'mpi':False},
+        'generate_init_ensemble': {'ensemble':True, 'mpi':False},
+        'preprocess': {}
+    }
 
-    def __call__(self) -> None:
+    def run_all(self) -> None:
+        c = self.get_context()
+        self.c.print_1p("Initializing...\n")
+        self.c.show_summary()
 
-        # step = self.config.step
-        # if step:
-        #     # only for offline mode
-        #     # if --step=STEP is specified at runtime, just run STEP and quit
-        #     self.run_step(step, mpi=False)
-        #     return
+        self.run_step('generate_truth')
 
-        c = self.c
-        c.print_1p("Initializing...\n")
-        c.show_summary()
-
-        self.run_step('generate_truth', mpi=False)
-
-        self.run_step('generate_init_ensemble', mpi=False)
+        self.run_step('generate_init_ensemble')
 
         print("\nCycling start.\n")
-        while c.time < c.config.time_end:
-            c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {c.time} => {c.next_time}\n")
+        while self.c.time < self.config.time_end:
+            self.c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {self.c.time} => {self.c.next_time}\n")
 
-            if self.check_cycle_complete(c, c.time):
+            if self.check_cycle_complete(self.c):
                 continue
 
-            if c.config.run_preproc:
-                self.preprocess(c)
-                if c.config.perturb:
-                    self.perturb(c)
+            if self.config.run_preproc:
+                self.run_step('preprocess')
+                if self.config.perturb:
+                    self.run_step('perturb')
 
             ##assimilation step
-            if c.config.run_analysis and c.time >= c.config.time_analysis_start and c.time <= c.config.time_analysis_end:
-                self.filter(c)
-                if c.config.run_postproc:
-                    self.postprocess(c)
+            if self.config.run_analysis and self.c.time >= self.config.time_analysis_start and self.c.time <= self.config.time_analysis_end:
+                self.run_step('filter')
+                if self.config.run_postproc:
+                    self.run_step('postprocess')
 
             ##advance model state to next analysis cycle
-            if c.config.run_forecast:
-                self.ensemble_forecast(c)
+            if self.config.run_forecast:
+                self.run_step('ensemble_forecast')
 
             ##compute diagnostics
-            if c.config.run_diagnose:
-                if c.config.diag:
-                    self.diagnose(c)
+            if self.config.run_diagnose:
+                if self.config.diag:
+                    self.run_step('diagnose')
 
             ##advance to next cycle
-            c.time = c.next_time
+            self.c.time = self.c.next_time
 
-        c.print_1p("Cycling complete.\n")
+        self.c.print_1p("Cycling complete.\n")
 
     def generate_truth(self, c: Context) -> None:
         # skip if not using synthetic obs (no need for the truth)
@@ -73,7 +70,7 @@ class FilterAnalysisScheme(Scheme):
             opts = self.get_task_opts(c)
             opts['model_src'] = model_name
             opts['member'] = None
-            c.rt.call_method(c, 'truth', model.generate_truth, **opts)
+            c.io.call_method(c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self, c: Context):
         for model_name, model in c.models.items():
@@ -82,18 +79,11 @@ class FilterAnalysisScheme(Scheme):
             for mem_id in c.mem_list[c.pid_mem]:
                 opts['model_src'] = model_name
                 opts['member'] = mem_id
-                c.rt.call_method(c, 'prior', model.generate_init_ensemble, **opts)
+                c.io.call_method(c, 'prior', model.generate_init_ensemble, **opts)
 
-    def check_cycle_complete(self, c: Context, time: datetime) -> bool:
+    def check_cycle_complete(self, c: Context) -> bool:
         """
         Method checks on a given cycle to see if it's complete or not
-
-        Args:
-            c (Context): the runtime context
-            time (datetime): datetime object for time of the cycle
-
-        Returns:
-            bool: True of this cycle has completed.
         """
         return False
 
@@ -123,11 +113,11 @@ class FilterAnalysisScheme(Scheme):
                 for mem_id in c.mem_list[c.pid_mem]:
                     opts['member'] = mem_id
                     opts['model_src'] = model_name
-                    c.rt.call_method(c, 'prior', model.run, **opts)
+                    c.io.call_method(c, 'prior', model.run, **opts)
 
             elif model.ens_run_type == 'batch':
                 opts['nens'] = c.config.nens
-                c.rt.call_method(c, 'prior', model.run_batch, **opts)
+                c.io.call_method(c, 'prior', model.run_batch, **opts)
 
             elif model.ens_run_type == 'scheduler':
                 walltime = getattr(model, 'walltime', None)
@@ -210,16 +200,10 @@ def main():
 
     step = scheme.config.step
     if step:
-        stepfunc = getattr(scheme, step)
-        timer(scheme.c)(stepfunc)(scheme.c)
+        scheme.run_step(step)
+        return
 
-    else:
-        if scheme.c.config.io_mode == 'offline':
-            raise RuntimeError("no step specified for offline scheme")
-        else:
-            scheme()
-
-    scheme.c.comm.finalize()
+    scheme()
 
 if __name__ == '__main__':
     main()

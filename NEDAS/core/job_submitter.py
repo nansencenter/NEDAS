@@ -2,6 +2,11 @@ import sys
 import subprocess
 
 class JobSubmitter:
+    """
+    Run a command (shell script) on a given computer.
+    For a local computer this may just be as easy as a subprocess call to execute the command.
+    On large-scale HPC, this may involve submitting the job script to a scheduler and wait for its completion.
+    """
     def __init__(self, **kwargs):
         """
         Input kwargs:

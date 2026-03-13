@@ -43,7 +43,7 @@ class AlignmentUpdator(Updator):
         fld_post = c.state.fields_post[mem_id, rec_id]
 
         ##get model state variable prior
-        var_prior = c.rt.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
+        var_prior = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
         c.grid.set_destination_grid(model.grid)
 
         if rec['is_vector']:
@@ -95,7 +95,7 @@ class AlignmentUpdator(Updator):
         var_post[ind] = var_prior[ind]
         #if np.isnan(var_post).any():
         #    raise ValueError('nan detected in var_post')
-        c.rt.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
+        c.io.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
 
 def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1, **kwargs):
     ni = int(2**np.ceil(np.log(np.max(fld1.shape))/np.log(2)))

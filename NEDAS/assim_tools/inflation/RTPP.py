@@ -46,8 +46,8 @@ class RTPPInflation(Inflation):
 
         for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
             ##read the mean field with rec_id
-            fld_prior_mean = c.rt.read_field(c, 'prior_mean', rec_id, mem_id=0)
-            fld_post_mean = c.rt.read_field(c, 'post_mean', rec_id, mem_id=0)
+            fld_prior_mean = c.io.read_field(c, 'prior_mean', rec_id, mem_id=0)
+            fld_post_mean = c.io.read_field(c, 'post_mean', rec_id, mem_id=0)
 
             for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
                 c.show_progress(f"PID {c.pid:4}: relax_to_prior_perturb mem{mem_id+1:03}", m*nr+r, nm*nr)

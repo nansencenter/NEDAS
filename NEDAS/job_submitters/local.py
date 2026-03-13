@@ -1,6 +1,6 @@
-from NEDAS.job_submitters.base import JobSubmitter
+from NEDAS.core import JobSubmitter
 
-class MacOSJobSubmitter(JobSubmitter):
+class LocalJobSubmitter(JobSubmitter):
 
     @property
     def execute_command(self):

@@ -20,7 +20,7 @@ class Config:
     work_dir: str
     python_env: str|None
     io_mode: Literal['online', 'offline']
-    job_submit: dict
+    job_submit: dict|None
     directories: dict[str, str]|None
     nproc: int
     nproc_mem: int
@@ -29,7 +29,7 @@ class Config:
     pid: int
     pid_mem: int
     pid_rec: int
-    pid_show: int
+    pid_show: int  # avail in context
     nens: int
     run_preproc: bool
     run_forecast: bool
@@ -39,7 +39,7 @@ class Config:
     debug: bool
     timer: bool
     step: str|None
-    time: datetime
+    time: datetime  # avail in context
     time_start: datetime
     time_end: datetime
     time_analysis_start: datetime
@@ -60,7 +60,7 @@ class Config:
     perturb: dict|None
     scheme: str
     niter: int
-    iter: int
+    iter: int  # avail in context
     resolution_level: list[int]
     character_length: list[float]
     localize_scale_fac: list[float]

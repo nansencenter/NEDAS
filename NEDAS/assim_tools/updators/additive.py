@@ -34,7 +34,7 @@ class AdditiveUpdator(Updator):
         model = c.models[rec['model_src']]
 
         ##convert the posterior variable back to native model grid
-        var_prior = c.rt.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
+        var_prior = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
 
         c.grid.set_destination_grid(model.grid)
         incr = c.grid.convert(self.increment[mem_id, rec_id], is_vector=rec['is_vector'], method='linear')
@@ -59,4 +59,4 @@ class AdditiveUpdator(Updator):
         #     raise ValueError('nan detected in var_post')
 
         ##write the posterior variable to restart file
-        c.rt.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
+        c.io.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)

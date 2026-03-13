@@ -109,7 +109,7 @@ class State:
 
                 model_name = rec.model_src
                 model = c.models[model_name]
-                model_fld = c.rt.call_method(c, 'prior', model.read_var, member=mem_id, **rec.asdict())
+                model_fld = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec.asdict())
                 model.grid.set_destination_grid(c.grid)
                 fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
                 if rec.is_vector:
@@ -125,7 +125,7 @@ class State:
 
                 ##read z_coords for the field
                 ##only need to generate the uniq z coords, store in bank
-                model_z = c.rt.call_method(c, 'prior', model.z_coords, member=mem_id, **rec.asdict())
+                model_z = c.io.call_method(c, 'prior', model.z_coords, member=mem_id, **rec.asdict())
                 z = model.grid.convert(model_z, is_vector=False, method='linear', coarse_grain=True)
                 if rec.is_vector:
                     self.fields_z[mem_id, rec_id] = np.array([z, z])
@@ -137,7 +137,7 @@ class State:
 
         ##additonal output of debugging
         if c.config.debug:
-            c.rt.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
+            c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
             ##TODO: data is (mem, rec) -> ndarray, but savez needs str keys
 
     def collect_scalar_variables(self, c):
@@ -156,7 +156,7 @@ class State:
         """
         c.print_1p('>>> saving data to fields_'+tag+'\n')
 
-        c.rt.prepare_collective_io(c, tag)
+        c.io.prepare_collective_io(c, tag)
 
         nm = len(c.mem_list[c.pid_mem])
         nr = len(self.rec_list[c.pid_rec])
@@ -174,7 +174,7 @@ class State:
                 fields = getattr(self, f"fields_{tag}")
                 fld = fields[mem_id, rec_id]
 
-                c.rt.write_field(fld, c, tag, rec_id, mem_id)
+                c.io.write_field(fld, c, tag, rec_id, mem_id)
 
         c.print_1p(' done.\n')
 
@@ -191,7 +191,7 @@ class State:
         c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'\n')
 
         fields = getattr(self, f"fields_{tag}")
-        c.rt.prepare_collective_io(c, tag)
+        c.io.prepare_collective_io(c, tag)
 
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
             rec = self.info.fields[rec_id]
@@ -212,7 +212,7 @@ class State:
 
             if c.pid_mem == 0:
                 mean_fld = sum_fld / c.config.nens
-                c.rt.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
+                c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.print_1p(' done.\n')
 
@@ -300,7 +300,7 @@ class State:
                 ##   coreography here to prevent deadlock
 
                 ## 1) receive fld_chk from src_pid, for src_pid<pid first
-                for src_pid in np.arange(0, c.pid_mem):
+                for src_pid in range(0, c.pid_mem):
                     if m < len(c.mem_list[src_pid]):
                         src_mem_id = c.mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
@@ -321,7 +321,7 @@ class State:
                             c.comm_mem.send(fld_chk, dest=dst_pid, tag=m)
 
                 ## 3) finish receiving fld_chk from src_pid, for src_pid>pid now
-                for src_pid in np.arange(c.pid_mem+1, c.config.nproc_mem):
+                for src_pid in range(c.pid_mem+1, c.config.nproc_mem):
                     if m < len(c.mem_list[src_pid]):
                         src_mem_id = c.mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
@@ -371,7 +371,7 @@ class State:
                 ## we take the exact steps, but swap send and recv operations here
                 ##
                 ## 1) send my fld_chk to dst_pid, for dst_pid<pid first
-                for dst_pid in np.arange(0, c.pid_mem):
+                for dst_pid in range(0, c.pid_mem):
                     if m < len(c.mem_list[dst_pid]):
                         dst_mem_id = c.mem_list[dst_pid][m]
                         c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
@@ -395,7 +395,7 @@ class State:
                         self.unpack_field_chunk(c, fld, fld_chk, src_pid)
 
                 ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
-                for dst_pid in np.arange(c.pid_mem+1, c.config.nproc_mem):
+                for dst_pid in range(c.pid_mem+1, c.config.nproc_mem):
                     if m < len(c.mem_list[dst_pid]):
                         dst_mem_id = c.mem_list[dst_pid][m]
                         c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)

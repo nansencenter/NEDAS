@@ -7,7 +7,6 @@ import subprocess
 from typing import Callable
 from abc import ABC, abstractmethod
 from NEDAS.utils.parallel import Scheduler
-from NEDAS.runtimes.offline import OfflineRuntime
 from NEDAS.config import Config
 from NEDAS.core.context import Context
 
@@ -18,38 +17,54 @@ class Scheme(ABC):
     The Scheme coordinates all runtime generation and manipulation of objects.
     """
     config: Config
-    c: Context
+    shared_context: Context|None
+    context: Context
+    steps: dict[str, dict[str, bool|str]]
+    online_mode: bool
 
     def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs) -> None:
         # parse configuration
-        ###don't init context yet: the program can be serial python call, yet the nproc >1 need to spawn a mpi call in run_step
-        self.c = Context(config_file=config_file, parse_args=parse_args, **kwargs)
-        self.config = self.c.config
+        self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
+        self.online_mode = (self.config.io_mode == 'online')
 
-    @abstractmethod
+    def get_context(self):
+        ...
+
     def __call__(self) -> None:
         """
-        A runtime scheme must have a __call__ method.
+        Manages the runtime execution of the scheme.
+        """
+        if self.online_mode:
+            if self.c.comm.Get_size() != self.c.config.nproc:
+                print("need to elevate self to a mpi env")
+                return
+
+        self.run_all()
+        
+
+    @abstractmethod
+    def run_all(self):
+        """
+        A schemem must implement a run_all method to describe the workflow.
         """
         ...
 
-    def run_step(self, step: str, mpi: bool) -> None:
+
+    def run_step(self, step: str) -> None:
         """
         Helper function to run a step in the from an external call.
-
-        Args:
-            step (str): Step to run.
-            mpi (bool): Whether to run the step within mpi environment.
         """
-        c = self.c
+        if step not in self.steps:
+            raise ValueError(f"Unknown step '{step}' for {self.__class__.__name__}")
 
-        assert isinstance(c.rt, OfflineRuntime)
+        c = self.c
+        mpi = self.steps[step]['mpi']
+
+        assert c.io_mode == 'offline'
         script_file = os.path.abspath(inspect.getfile(self.__class__))
 
         # create a temporary config yaml file to hold c, and pass into program through runtime arg
-        with tempfile.NamedTemporaryFile(dir=c.config.work_dir,
-                                         prefix='config-',
-                                         suffix='.yml') as tmp_config_file:
+        with tempfile.NamedTemporaryFile(dir=c.config.work_dir, prefix='config-', suffix='.yml') as tmp_config_file:
             c.config.dump_yaml(tmp_config_file.name)
 
             print(f"\n\033[1;33mRUNNING\033[0m {step} step")
@@ -73,12 +88,12 @@ class Scheme(ABC):
             if mpi:
                 job_opts = {
                     'job_name': step,
-                    'run_dir': c.rt.cycle_dir(c.time),
+                    'run_dir': c.io.cycle_dir(c.time),
                     'nproc': c.config.nproc,
                     'debug': c.config.debug,
                     **(c.config.job_submit or {}),
                     }
-                self.c.rt.run_job(commands, **job_opts)
+                self.c.io.run_job(commands, **job_opts)
             else:
                 p = subprocess.Popen(commands, shell=True, text=True)
                 p.wait()

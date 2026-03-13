@@ -96,7 +96,7 @@ class Obs:
             rec = c.state.info.fields[rec_id]
 
             # read the z field with (mem_id=0, rec_id) from state.fields_z and add to z dict
-            z_fld = c.rt.read_field(c, ztag, rec_id, mem_id=0)
+            z_fld = c.io.read_field(c, ztag, rec_id, mem_id=0)
             z[k] = z_fld[0, ...] if rec.is_vector else z_fld
         return z
 
@@ -159,7 +159,7 @@ class Obs:
             operator = dataset.obs_operator[kwargs['name']]
 
             # get the obs seq from operator
-            seq = c.rt.call_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
+            seq = c.io.call_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
@@ -177,13 +177,13 @@ class Obs:
             if len(rec_id_found) == 0:
                 raise RuntimeError("field '{obs_name}' is defined in state_def but not found in state.info.fields")
             rec_id = rec_id_found[0]
-            fld = c.rt.read_field(c, tag, rec_id, kwargs['member'])
-            zfld = c.rt.read_field(c, 'z', rec_id, kwargs['member'])
+            fld = c.io.read_field(c, tag, rec_id, kwargs['member'])
+            zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
 
         else:
             # otherwise, we get the field from by calling model.read_var
-            model_fld = c.rt.call_method(c, tag, model.read_var, **kwargs)
-            model_z = c.rt.call_method(c, 'z', model.z_coords, **kwargs)
+            model_fld = c.io.call_method(c, tag, model.read_var, **kwargs)
+            model_z = c.io.call_method(c, 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)
             fld = model.grid.convert(model_fld, is_vector=kwargs['is_vector'], method=c.config.interp_method)
@@ -344,7 +344,7 @@ class Obs:
         # output obs sequence for debugging
         if c.config.debug and c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
-                c.rt.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
+                c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
 
         return obs_seq
 
@@ -397,7 +397,7 @@ class Obs:
             for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
-                c.rt.save_debug_data(c, file, {f'obs_{tag}':seq})
+                c.io.save_debug_data(c, file, {f'obs_{tag}':seq})
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
         ##form the global list of obs (in serial mode the main loop is over this list)
@@ -467,7 +467,7 @@ class Obs:
 
                 ##the collective send/recv follows the same idea under state.transpose_field_to_state
                 ##1) receive lobs_seq from src_pid, for src_pid<pid first
-                for src_pid in np.arange(0, c.pid_mem):
+                for src_pid in range(0, c.pid_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         if src_mem_id == 0:
@@ -498,7 +498,7 @@ class Obs:
                                 c.comm_mem.send(lobs_seq, dest=dst_pid, tag=m)
 
                 ##3) finish receiving lobs_seq from src_pid, for src_pid>pid now
-                for src_pid in np.arange(c.pid_mem+1, nproc_mem):
+                for src_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         if src_mem_id == 0:
@@ -564,7 +564,7 @@ class Obs:
 
                 ##the collective send/recv follows the same idea under state.transpose_field_to_state
                 ##1) receive lobs_seq from src_pid, for src_pid<pid first
-                for src_pid in np.arange(0, c.pid_mem):
+                for src_pid in range(0, c.pid_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         tmp_obs[src_mem_id, obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
@@ -590,7 +590,7 @@ class Obs:
                             c.comm_mem.send(lobs_seq, dest=dst_pid, tag=m)
 
                 ##3) finish receiving lobs_seq from src_pid, for src_pid>pid now
-                for src_pid in np.arange(c.pid_mem+1, nproc_mem):
+                for src_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         tmp_obs[src_mem_id, obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
@@ -653,7 +653,7 @@ class Obs:
                 ## we take the exact steps, but swap send and recv operations here
                 ##
                 ## 1) send my lobs to dst_pid, for dst_pid<pid first
-                for dst_pid in np.arange(0, c.pid_mem):
+                for dst_pid in range(0, c.pid_mem):
                     if m < len(mem_list[dst_pid]):
                         dst_mem_id = mem_list[dst_pid][m]
                         c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
@@ -680,7 +680,7 @@ class Obs:
                         obs_seq[mem_id, obs_rec_id] = seq
 
                 ## 3) finish sending lobs_seq to dst_pid, for dst_pid>pid now
-                for dst_pid in np.arange(c.pid_mem+1, nproc_mem):
+                for dst_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[dst_pid]):
                         dst_mem_id = mem_list[dst_pid][m]
                         c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)

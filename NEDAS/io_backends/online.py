@@ -1,10 +1,11 @@
 from typing import Callable, Any
 import numpy as np
-from NEDAS.core import Context, Runtime
+from NEDAS.core.io_backend import IOBackend
+from NEDAS.core.context import Context
 
-class OnlineRuntime(Runtime):
+class OnlineIO(IOBackend):
     """
-    Online runtime backend. Keep data in the memory and avoid file I/O completely.
+    Online IO backend. Keep data in the memory and avoid file IO completely.
 
     Only works for single processor now, but this is convenient for long experiments and simple models
     """

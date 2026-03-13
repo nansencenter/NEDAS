@@ -7,17 +7,19 @@ import glob
 import errno
 import subprocess
 import numpy as np
-from NEDAS.job_submitters import get_job_submitter
+# from NEDAS.job_submitters import get_job_submitter
 from .types import IOMode
 if TYPE_CHECKING:
     from .context import Context
 
-class Runtime(ABC):
+class IOBackend(ABC):
     """
     Base class for handling runtime input/output for state and observation variables
     and OS-level operation such as file manipulation and running commands
 
     Attributes:
+        io_mode (IOMode): 'offline' for file I/O and 'online' for persistent memory I/O
+        debug (bool): If in debug mode or not
         tags (list[str]): List of names for copies of state/obs data
 
     """
@@ -200,33 +202,33 @@ class Runtime(ABC):
         if self.debug:
             print(f"saved debug data '{file}'", flush=True)
 
-    def run_command(self, shell_cmd:str) -> None:
-        """
-        Run a shell command in a subprocess and check for errors.
+    # def run_command(self, shell_cmd:str) -> None:
+    #     """
+    #     Run a shell command in a subprocess and check for errors.
 
-        Args:
-            shell_cmd (str): Shell command to be executed.
+    #     Args:
+    #         shell_cmd (str): Shell command to be executed.
 
-        Raises:
-            RuntimeError: If the command returns a non-zero exit status.
-        """
-        if self.debug:
-            print(shell_cmd, flush=True)
-        p = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    #     Raises:
+    #         RuntimeError: If the command returns a non-zero exit status.
+    #     """
+    #     if self.debug:
+    #         print(shell_cmd, flush=True)
+    #     p = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        if p.returncode != 0:
-            raise RuntimeError(f"{p.stderr}")
+    #     if p.returncode != 0:
+    #         raise RuntimeError(f"{p.stderr}")
 
-    def run_job(self, commands:str, **kwargs):
-        """
-        Run a shell command by submitting it to a job scheduler using JobSubmitter class.
+    # def run_job(self, commands:str, **kwargs):
+    #     """
+    #     Run a shell command by submitting it to a job scheduler using JobSubmitter class.
 
-        Args:
-            commands (str): Shell command to be executed.
-            **kwargs: Key-value pairs to passed to the job submitter run method.
-        """
-        ##get the right job submitter
-        job_submitter = get_job_submitter(**kwargs)
+    #     Args:
+    #         commands (str): Shell command to be executed.
+    #         **kwargs: Key-value pairs to passed to the job submitter run method.
+    #     """
+    #     ##get the right job submitter
+    #     job_submitter = get_job_submitter(**kwargs)
 
-        ##run job using the submitter
-        job_submitter.run(commands)
+    #     ##run job using the submitter
+    #     job_submitter.run(commands)

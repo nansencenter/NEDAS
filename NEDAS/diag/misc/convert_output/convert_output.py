@@ -92,7 +92,7 @@ def run(c, **kwargs):
         # read the variable from the model restart file
         rec = model.variables[vname]
         file = kwargs['file'].format(time=time_start, member=member+1)
-        c.rt.makedir(os.path.dirname(file))
+        c.io.makedir(os.path.dirname(file))
 
         lon_name: str = kwargs.get('lon_name', 'lon')
         lat_name: str = kwargs.get('lat_name', 'lat')

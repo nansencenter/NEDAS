@@ -58,7 +58,7 @@ def run(c, **kwargs) -> None:
         plot_dir = kwargs['plot_dir']
     else:
         plot_dir = os.path.join(c.work_dir, 'plots', 'observations')
-    c.rt.make_dir(plot_dir)
+    c.io.make_dir(plot_dir)
 
     c.state = State(c)
     c.obs = Obs(c)
