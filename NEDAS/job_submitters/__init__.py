@@ -3,14 +3,16 @@ from NEDAS.core.job_submitter import JobSubmitter
 
 registry_by_host = {
     'local': 'LocalJobSubmitter',
+    'macos': 'MacOSJobSubmitter',
     'betzy': 'BetzyJobSubmitter',
+    'gricad': 'GricadJobSubmitter'
 }
 registry_by_scheduler = {
     'slurm': 'SLURMJobSubmitter',
     'oar': 'OARJobSubmitter',
 }
 
-def get_job_submitter(host: str|None=None,
+def get_job_submitter(host: str='local',
                       scheduler: str|None=None,
                       **kwargs) -> JobSubmitter:
     """
@@ -21,7 +23,8 @@ def get_job_submitter(host: str|None=None,
     If not, will use the base JobSubmitter class instance.
 
     Args:
-        host (str, optional): Host machine name.
+        host (str, optional): Host machine name to use the machine-specific job submitter.
+        scheduler (str, optional): Scheduler type (slurm or oar).
 
     Returns:
         JobSubmitter: An instance of the corresponding JobSubmitter subclass.
@@ -40,6 +43,6 @@ def get_job_submitter(host: str|None=None,
             JobSubmitterClass = getattr(module, registry_by_scheduler[scheduler_name])
             return JobSubmitterClass(**kwargs)
 
-    return JobSubmitter(**kwargs)
+    raise ValueError(f"Cannot initialize a JobSubmitter for host={host}, scheduler={scheduler}")
 
 __all__ = ['JobSubmitter', 'registry_by_host', 'registry_by_scheduler', 'get_job_submitter']

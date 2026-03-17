@@ -9,7 +9,7 @@ class TestModelInterface(unittest.TestCase):
     def test_model_class_init(self):
         for model_name in registry.keys():
             ModelClass = get_model_class(model_name)
-            model = ModelClass(runtime=self.c.rt)
+            model = ModelClass(context=self.c)
             self.assertIsInstance(model, Model)
 
 if __name__ == '__main__':

@@ -4,9 +4,9 @@ import subprocess
 import tempfile
 from time import sleep
 from NEDAS.utils.conversion import seconds_to_timestr
-from NEDAS.core import JobSubmitter
+from .hpc import HPCJobSubmitter
 
-class OARJobSubmitter(JobSubmitter):
+class OARJobSubmitter(HPCJobSubmitter):
     """JobSubmitter Class customized for OAR schedulers"""
 
     def __init__(self, **kwargs):
@@ -16,18 +16,6 @@ class OARJobSubmitter(JobSubmitter):
         if not self.run_separate_jobs:
             with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
-
-        ##host specific settings
-        if self.host == 'gricad':
-            p = subprocess.run("hostname", capture_output=True, text=True)
-            if p.stdout.replace('\n', '').replace(' ', '') in ['dahu-oar3', 'f-dahu']:
-                self.job_submit_node = None  ##don't need ssh for oarsub on compute nodes
-            else:
-                ##job submit node based on queue type
-                if self.queue == 'devel':
-                    self.job_submit_node = 'dahu-oar3'
-                else:
-                    self.job_submit_node = 'f-dahu'
 
     @property
     def nproc_avail(self):
@@ -70,6 +58,10 @@ class OARJobSubmitter(JobSubmitter):
     @property
     def job_array_index_name(self):
         return '$OAR_ARRAY_INDEX'
+
+    def validate_job_allocation(self) -> bool:
+        # TODO
+        return False
 
     def run_job_as_step(self, commands):
         super().run_job_as_step(commands)

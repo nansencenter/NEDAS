@@ -8,7 +8,7 @@ from NEDAS.utils import parallel, progress
 from NEDAS.config import Config
 from NEDAS import grid, models, datasets, assim_tools, io_backends, job_submitters
 from .file_system import FileSystem
-from .types import ProcIDMem, MemID
+from .types import ProcIDMem, MemID, ParallelMode
 if TYPE_CHECKING:
     from . import Model, Dataset, IOBackend, JobSubmitter, State, Obs, Transform, Inflation, Assimilator, Updator
 
@@ -33,6 +33,7 @@ class Context:
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
+    fs: FileSystem
     io: IOBackend
     jsub: JobSubmitter
     state: State
@@ -275,3 +276,22 @@ current time: {self.time}
 ...
 """
         self.print_1p(summary_text)
+
+    def run_job(self, commands: str, parallel_mode: ParallelMode='serial', nproc: int=1, offset: int=0) -> None:
+        """
+        The user-facing method for running command on a computer.
+        It re-configures the existing job submitter with runtime arguments and execute the command.
+
+        Args:
+            commands (str): Shell commands to be dispatched by job submitter
+            parallel_mode (ParallelMode, optional): parallel mode ('serial', 'mpi', 'openmp'), default is 'serial'
+            nproc (int, optional): number of processors (default is 1)
+            offset (int, optional): offset in full list of processors (default is 0)
+        """
+        # update the state of the job submitter for this specific task
+        self.jsub.parallel_mode = parallel_mode
+        self.jsub.nproc = nproc
+        self.jsub.offset = offset
+
+        # dispatch the command
+        self.jsub.run(commands)

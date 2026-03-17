@@ -1,3 +1,4 @@
+import os
 import unittest
 from datetime import datetime
 from NEDAS.core import Context
@@ -6,13 +7,18 @@ from NEDAS.io_backends.online import OnlineIO
 
 class TestOfflineIO(unittest.TestCase):
 
-    def test_filenames(self):
-        dir_def = {'analysis_dir': './{time:%Y%m%d}'}
+    def setUp(self):
         time = datetime(2023, 1, 1)
-        c = Context(work_dir='./', time=time, directories=dir_def, io_mode='offline')
-        assert isinstance(c.io, OfflineIO)
-        self.assertIsInstance(c.io, OfflineIO)
-        self.assertEqual(c.io.binfile_name(c, 'prior'), './20230101/fields_prior.bin')
+        self.c = Context(work_dir='.', time=time, io_mode='offline')
+
+    def test_io_instance(self):
+        self.assertIsInstance(self.c.io, OfflineIO)
+
+    def test_binfile_name(self):
+        cwd = os.getcwd()
+        assert isinstance(self.c.io, OfflineIO)
+        binfile = os.path.join(cwd, 'cycle', '202301010000', 'analysis', 'fields_prior.bin')
+        self.assertEqual(self.c.io.binfile_name(self.c, 'prior'), binfile)
 
 class TestOnlineIO(unittest.TestCase):
     pass

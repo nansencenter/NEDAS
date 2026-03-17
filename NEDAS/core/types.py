@@ -131,3 +131,4 @@ LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.nda
 
 IOMode = Literal['online', 'offline']
 EnsRunType = Literal['mpi', 'scheduler', 'batch']
+ParallelMode = Literal['serial', 'mpi', 'openmp']

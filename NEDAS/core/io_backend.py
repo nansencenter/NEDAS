@@ -2,12 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Callable, TYPE_CHECKING
 import os
-import shutil
-import glob
-import errno
-import subprocess
 import numpy as np
-# from NEDAS.job_submitters import get_job_submitter
 from .types import IOMode
 if TYPE_CHECKING:
     from .context import Context
@@ -19,16 +14,11 @@ class IOBackend(ABC):
 
     Attributes:
         io_mode (IOMode): 'offline' for file I/O and 'online' for persistent memory I/O
-        debug (bool): If in debug mode or not
         tags (list[str]): List of names for copies of state/obs data
 
     """
     io_mode: IOMode = 'offline'
-    debug: bool = False
     tags: list[str] = ['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
-
-    def __init__(self, c: Context) -> None:
-        self.debug = c.config.debug
 
     def validate_tag(self, tag: str):
         if tag not in self.tags:
@@ -116,68 +106,6 @@ class IOBackend(ABC):
         """
         ...
 
-    def make_dir(self, dirname:str|None) -> None:
-        """
-        Create a directory if it does not exist.
-
-        FileExistsError can happen if multiple processors are trying to make the same directory.
-        This function will ignore this error and continue.
-
-        Args:
-            dirname (str|None): Directory name to be created.
-        """
-        if dirname is None:
-            return
-        try:
-            os.makedirs(dirname, exist_ok=True)
-        except FileExistsError:
-            pass
-
-    def copy_file(self, file1: str, file2: str) -> None:
-        shutil.copy2(file1, file2, follow_symlinks=True)
-        if self.debug:
-            print(f"copied {file1} to {file2}", flush=True)
-
-    def move_file(self, file1: str, file2: str) -> None:
-        if os.path.exists(file2):
-            os.replace(file1, file2)
-        else:
-            shutil.move(file1, file2)
-        if self.debug:
-            print(f"moved {file1} to {file2}", flush=True)
-
-    def move_files_to_dir(self, files: str, dirname: str) -> None:
-        # Find all matching files and move them
-        for file_path in glob.glob(files):
-            dest_path = os.path.join(dirname, os.path.basename(file_path))
-            if os.path.exists(dest_path):
-                os.replace(file_path, dest_path)
-            else:
-                shutil.move(file_path, dirname)
-            if self.debug:
-                print(f"renamed '{file_path}' -> '{os.path.join(dirname, os.path.basename(file_path))}'", flush=True)
-
-    def remove_files(self, files: str) -> None:
-        for file_path in glob.glob(files):
-            try:
-                os.remove(file_path)
-            except OSError as e:
-                # ignore if the file was already delected by other process
-                if e.errno != errno.ENOENT:
-                    raise
-            if self.debug:
-                print(f"removed {file_path}", flush=True)
-
-    def remove_dir(self, dirname: str) -> None:
-        try:
-            shutil.rmtree(dirname)
-        except OSError as e:
-            # ignore if the directory is already delected
-            if e.errno != errno.ENOENT:
-                raise
-        if self.debug:
-            print(f"removed {dirname}", flush=True)
-
     def save_debug_data(self, c: Context, name: str, data: dict, path: str | None=None) -> None:
         """
         Save debug data in npz format
@@ -194,41 +122,9 @@ class IOBackend(ABC):
         file = os.path.join(path, f"{name}.npz")
 
         # make sure directory exists
-        self.make_dir(os.path.dirname(file))
+        c.fs.make_dir(os.path.dirname(file))
 
         # save the data to file
         np.savez(file, **data)
 
-        if self.debug:
-            print(f"saved debug data '{file}'", flush=True)
-
-    # def run_command(self, shell_cmd:str) -> None:
-    #     """
-    #     Run a shell command in a subprocess and check for errors.
-
-    #     Args:
-    #         shell_cmd (str): Shell command to be executed.
-
-    #     Raises:
-    #         RuntimeError: If the command returns a non-zero exit status.
-    #     """
-    #     if self.debug:
-    #         print(shell_cmd, flush=True)
-    #     p = subprocess.run(shell_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    #     if p.returncode != 0:
-    #         raise RuntimeError(f"{p.stderr}")
-
-    # def run_job(self, commands:str, **kwargs):
-    #     """
-    #     Run a shell command by submitting it to a job scheduler using JobSubmitter class.
-
-    #     Args:
-    #         commands (str): Shell command to be executed.
-    #         **kwargs: Key-value pairs to passed to the job submitter run method.
-    #     """
-    #     ##get the right job submitter
-    #     job_submitter = get_job_submitter(**kwargs)
-
-    #     ##run job using the submitter
-    #     job_submitter.run(commands)
+        print(f"saved debug data '{file}'", flush=True)

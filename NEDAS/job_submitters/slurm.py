@@ -4,14 +4,15 @@ import tempfile
 from time import sleep
 from NEDAS.utils.conversion import seconds_to_timestr
 from NEDAS.utils.progress import find_keyword_in_file, count_lines_in_file
-from NEDAS.core import JobSubmitter
+from .hpc import HPCJobSubmitter
 
-class SLURMJobSubmitter(JobSubmitter):
+class SLURMJobSubmitter(HPCJobSubmitter):
     """JobSubmitter Class customized for SLURM schedulers"""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##additional slurm options
+        # additional slurm options
         self.mem_per_cpu = kwargs.get('mem_per_cpu')
 
         self.log_file = kwargs.get('log_file', None)
@@ -44,6 +45,11 @@ class SLURMJobSubmitter(JobSubmitter):
     @property
     def job_array_index_name(self):
         return '$SLURM_ARRAY_TASK_ID'
+
+    def validate_job_allocation(self) -> bool:
+        if 'SLURM_JOB_ID' in os.environ:
+            return True
+        return False
 
     def submit_job_and_monitor(self, commands):
         with tempfile.NamedTemporaryFile(mode='w+', delete=False,
