@@ -3,7 +3,7 @@ from NEDAS.job_submitters.oar import OARJobSubmitter
 
 class GricadJobSubmitter(OARJobSubmitter):
     """
-    Gricad
+    Job submitter configured specifically for Gricad machines
     """
 
     def __init__(self, **kwargs):
@@ -20,3 +20,19 @@ class GricadJobSubmitter(OARJobSubmitter):
             else:
                 self.job_submit_node = 'f-dahu'
 
+    def job_submit_cmd(self):
+        if self.job_submit_node:
+            return ['ssh', self.job_submit_node, f"oarsub -S {self.job_script}"]
+        else:
+            return ["oarsub", "-S", f"{self.job_script}"]
+
+    def check_job_status(self):
+        assert self.job_submit_node is not None
+
+        if self.use_job_array:
+            cmd = f'oarstat -f --array {self.job_id} | grep "state = "'
+        else:
+            cmd = f'oarstat -f --job {self.job_id} | grep "state = "'
+
+        p = subprocess.run(['ssh', self.job_submit_node, cmd], capture_output=True, text=True)
+        return p

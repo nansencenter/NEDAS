@@ -36,7 +36,7 @@ class HPCJobSubmitter(JobSubmitter):
         self.use_job_array = use_job_array
         self.array_size = array_size
 
-        self.run_separate_jobs = False if self.validate_job_allocation() else True
+        self.run_separate_jobs = False if self.in_job_allocation() else True
 
     @property
     def ppn(self) -> int:
@@ -102,7 +102,7 @@ class HPCJobSubmitter(JobSubmitter):
         return commands
 
     @abstractmethod
-    def validate_job_allocation(self) -> bool:
+    def in_job_allocation(self) -> bool:
         """
         Determines if a job allocation is already availalbe on the HPC
         If so, the job can be run as a sub step directly, otherwise will need to submit it to the queue.

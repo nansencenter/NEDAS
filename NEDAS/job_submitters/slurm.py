@@ -20,15 +20,21 @@ class SLURMJobSubmitter(HPCJobSubmitter):
 
     @property
     def nproc_avail(self):
-        return int(os.environ['SLURM_NTASKS'])
+        if self.in_job_allocation():
+            return int(os.environ['SLURM_NTASKS'])
+        return self.nproc
 
     @property
     def nnode_avail(self):
-        return int(os.environ['SLURM_NNODES'])
+        if self.in_job_allocation():
+            return int(os.environ['SLURM_NNODES'])
+        return self.nnode
 
     @property
     def ppn_avail(self):
-        return int(os.environ['SLURM_TASKS_PER_NODE'].split('(')[0])
+        if self.in_job_allocation():
+            return int(os.environ['SLURM_TASKS_PER_NODE'].split('(')[0])
+        return self.ppn
 
     @property
     def execute_command(self):
@@ -46,7 +52,7 @@ class SLURMJobSubmitter(HPCJobSubmitter):
     def job_array_index_name(self):
         return '$SLURM_ARRAY_TASK_ID'
 
-    def validate_job_allocation(self) -> bool:
+    def in_job_allocation(self) -> bool:
         if 'SLURM_JOB_ID' in os.environ:
             return True
         return False
