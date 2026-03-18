@@ -8,7 +8,7 @@ Installation
 Dependencies
 ------------
 
-NEDAS requires Python >=3.8, the following packages are mandatory:
+NEDAS core requires Python >=3.10, the following packages are mandatory:
 
 - `numpy <https://numpy.org>`_
 - `scipy <https://scipy.org>`_
@@ -22,6 +22,7 @@ NEDAS requires Python >=3.8, the following packages are mandatory:
 
 The dynamical model, unless directly implemented in Python, needs to be installed separately.
 Check its own documentation for details on installation.
+Note that for individual model and dataset module implementation, a higher Python version and additional libraries may be required.
 
 Optional Features
 -----------------

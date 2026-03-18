@@ -41,6 +41,12 @@ class JobSubmitter(ABC):
 
     @nproc.setter
     def nproc(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError(f"invalid nproc specified: {value}")
+        if self.parallel_mode == 'serial' and value > 1:
+            raise ValueError(f"cannot set nproc = {value} in serial mode")
+        if (value+self.offset) > self.nproc_avail:
+            raise ValueError(f"requested nproc+offset {value}+{self.offset} exceeds total available nproc {self.nproc_avail}")
         self._nproc = value
 
     @property
@@ -48,13 +54,25 @@ class JobSubmitter(ABC):
         """
         Number of processors to skip from the beginning for the job
         This allows different jobs to spawm the total available nproc in the allocation
-        Discarded if run_separate_jobs
         """
         return self._offset
 
     @offset.setter
     def offset(self, value):
+        if not isinstance(value, int) or value < 0:
+            raise ValueError(f"invalid offset specified: {value}")
+        if (self.nproc+value) > self.nproc_avail:
+            raise ValueError(f"requested nproc+offset {self.nproc}+{value} exceeds total available nproc {self.nproc_avail}")
         self._offset = value
+
+    @property
+    @abstractmethod
+    def nproc_avail(self) -> int:
+        """
+        Number of available processors on a host machine
+        This should be redefined in subclasses to machine specific behavior
+        """
+        ...
 
     @property
     @abstractmethod

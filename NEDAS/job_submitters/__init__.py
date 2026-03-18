@@ -12,7 +12,7 @@ registry_by_scheduler = {
     'oar': 'OARJobSubmitter',
 }
 
-def get_job_submitter(host: str='local',
+def get_job_submitter(host: str|None=None,
                       scheduler: str|None=None,
                       **kwargs) -> JobSubmitter:
     """
@@ -43,6 +43,11 @@ def get_job_submitter(host: str='local',
             JobSubmitterClass = getattr(module, registry_by_scheduler[scheduler_name])
             return JobSubmitterClass(**kwargs)
 
-    raise ValueError(f"Cannot initialize a JobSubmitter for host={host}, scheduler={scheduler}")
+    # if nothing is specified, return a generic LocalJobSubmitter
+    if host is None and scheduler is None:
+        return get_job_submitter(host='local', **kwargs)
+
+    # if specified host/scheduler is not yet implemented
+    raise NotImplementedError(f"Cannot initialize a JobSubmitter for host={host}, scheduler={scheduler}")
 
 __all__ = ['JobSubmitter', 'registry_by_host', 'registry_by_scheduler', 'get_job_submitter']

@@ -10,7 +10,6 @@ io_mode: offline
 #  queue:
 #  scheduler: slurm
 #  ppn: 16
-#  run_separate_jobs: False
 
 nproc: 4
 nproc_mem: 4

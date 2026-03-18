@@ -36,8 +36,6 @@ class HPCJobSubmitter(JobSubmitter):
         self.use_job_array = use_job_array
         self.array_size = array_size
 
-        self.run_separate_jobs = False if self.in_job_allocation() else True
-
     @property
     def ppn(self) -> int:
         """
@@ -47,6 +45,12 @@ class HPCJobSubmitter(JobSubmitter):
 
     @ppn.setter
     def ppn(self, value):
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError(f"invalid ppn specified: {value}")
+        if self.parallel_mode == 'serial' and value > 1:
+            raise ValueError(f"cannot set ppn = {value} in serial mode")
+        if value > self.ppn_avail:
+            raise ValueError(f"requested ppn {value} exceeds available ppn={self.ppn_avail}")
         self._ppn = value
 
     @property
@@ -62,15 +66,6 @@ class HPCJobSubmitter(JobSubmitter):
         Number of compute nodes to skip from the beginning
         """
         return self._offset // self._ppn
-
-    @property
-    @abstractmethod
-    def nproc_avail(self) -> int:
-        """
-        Number of available processors on a host machine
-        This should be redefined in subclasses to machine specific behavior
-        """
-        ...
 
     @property
     @abstractmethod
@@ -101,6 +96,7 @@ class HPCJobSubmitter(JobSubmitter):
         commands = commands.replace('JOB_ARRAY_INDEX', self.job_array_index_name)
         return commands
 
+    @property
     @abstractmethod
     def in_job_allocation(self) -> bool:
         """
@@ -117,10 +113,10 @@ class HPCJobSubmitter(JobSubmitter):
         assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
 
     def run(self, commands):
-        if self.run_separate_jobs:
-            self.submit_job_and_monitor(commands)
-        else:
+        if self.in_job_allocation:
             self.run_job_as_step(commands)
+        else:
+            self.submit_job_and_monitor(commands)
 
     def run_job_as_step(self, commands) -> None:
         """
@@ -143,4 +139,7 @@ class HPCJobSubmitter(JobSubmitter):
 
     @abstractmethod
     def submit_job_and_monitor(self, commands):
+        """
+        Submit 'commands' as a job script to the scheduler on HPC and monitor for its completion.
+        """
         ...

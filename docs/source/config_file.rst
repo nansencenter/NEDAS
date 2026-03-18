@@ -146,13 +146,6 @@ System paths and runtime environment
 
        per compute node
      - 128
-   * - ``run_separate_jobs``
-     - Whether the jobs will be submitted separately
-
-       to the scheduler, or just run as steps in a
-
-       shared job allocation.
-     - False
 
 Analysis scheme design parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

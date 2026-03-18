@@ -1,13 +1,27 @@
 import subprocess
 import sys
+import os
 from NEDAS.core.job_submitter import JobSubmitter
 
 class LocalJobSubmitter(JobSubmitter):
     """
-    The LocalJobSubmitter class assumes a generic GNU/Linux environment.
+    The LocalJobSubmitter class assumes a generic GNU/Linux environment on a single PC.
     For 'serial' parallel mode: the command is directly executed in a subprocess.
     For 'mpi' or 'openmp' parallel modes: the command will be parsed accordingly to be run in an mpi environment.
     """
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # check for available processors on the node
+        self._cpu_count = os.cpu_count()
+        assert self._cpu_count is not None, "cannot query available nproc: os.cpu_count returns None"
+
+    @property
+    def nproc_avail(self):
+        if self._cpu_count:
+            return self._cpu_count
+        return 1
 
     @property
     def execute_command(self) -> str:

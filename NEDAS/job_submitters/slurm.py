@@ -20,38 +20,41 @@ class SLURMJobSubmitter(HPCJobSubmitter):
 
     @property
     def nproc_avail(self):
-        if self.in_job_allocation():
+        if self.in_job_allocation:
             return int(os.environ['SLURM_NTASKS'])
         return self.nproc
 
     @property
     def nnode_avail(self):
-        if self.in_job_allocation():
+        if self.in_job_allocation:
             return int(os.environ['SLURM_NNODES'])
         return self.nnode
 
     @property
     def ppn_avail(self):
-        if self.in_job_allocation():
+        if self.in_job_allocation:
             return int(os.environ['SLURM_TASKS_PER_NODE'].split('(')[0])
         return self.ppn
 
     @property
     def execute_command(self):
-        if self.run_separate_jobs:
-            return f"srun -n {self.nproc} --unbuffered"
-        else:
+        if self.parallel_mode == 'serial':
+            return ""
+        if self.in_job_allocation:
             if self.parallel_mode == 'mpi':
                 return f"srun -n {self.nproc} -N {self.nnode} -r {self.offset_node} --exact --unbuffered"
             elif self.parallel_mode == 'openmp':
                 return f"export OMP_NUM_THREADS={self.nproc}; srun -N 1 -r {self.offset_node} -n 1 --cpus-per-task={self.nproc} --unbuffered"
             else:
                 raise ValueError(f"unknown parallel_mode '{self.parallel_mode}'")
+        else:
+            return f"srun -n {self.nproc} --unbuffered"
 
     @property
     def job_array_index_name(self):
         return '$SLURM_ARRAY_TASK_ID'
 
+    @property
     def in_job_allocation(self) -> bool:
         if 'SLURM_JOB_ID' in os.environ:
             return True

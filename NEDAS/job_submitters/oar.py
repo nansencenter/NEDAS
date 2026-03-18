@@ -12,8 +12,8 @@ class OARJobSubmitter(HPCJobSubmitter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##temporary node file
-        if not self.run_separate_jobs:
+        ##set up temporary node file
+        if self.in_job_allocation:
             with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
 
@@ -48,19 +48,21 @@ class OARJobSubmitter(HPCJobSubmitter):
 
     @property
     def execute_command(self):
-        if self.run_separate_jobs:
-            node_file = '$OAR_NODE_FILE'
-        else:
+        if self.in_job_allocation:
             self.update_node_file()
             node_file = self.node_file
+        else:
+            node_file = '$OAR_NODE_FILE'
         return f"mpirun -np {self.nproc} --machinefile {node_file}"
 
     @property
     def job_array_index_name(self):
         return '$OAR_ARRAY_INDEX'
 
+    @property
     def in_job_allocation(self) -> bool:
-        # TODO
+        # TODO: implement this to check if a job allocation is already in use
+        # for now, assume it's not
         return False
 
     def run_job_as_step(self, commands):

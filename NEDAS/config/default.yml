@@ -13,10 +13,11 @@ io_mode: offline      # I/O mode: 'online' uses data stored in memory,
                       #          'offline' uses files stored on disks.
 
 job_submit:
-  host: local         # host machine type
-  project:            # project for resource allocation
-  queue:              # job queue name
-  scheduler:          # which scheduler is used on the machine
+  host: local           # host machine type, see job_submitters.registry_by_host
+  scheduler:            # which scheduler is used on the machine, see job_submitters.registry_by_scheduler
+  project:              # project for resource allocation (on HPC)
+  queue:                # job queue name (on HPC)
+  parallel_mode: serial # parallelization strategy 'mpi', 'openmp', or 'serial'
 
 # number of processors to use for assimilation
 nproc: 1

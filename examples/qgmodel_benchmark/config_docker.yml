@@ -3,7 +3,6 @@ work_dir: /work
 job_submit:
   host: docker
   ppn: 16
-  run_separate_jobs: False
 
 nproc: 5
 

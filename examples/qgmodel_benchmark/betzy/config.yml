@@ -1,9 +1,10 @@
 work_dir: /cluster/work/users/yingyue/qg
 
-python_env: /cluster/home/yingyue/python.src
+python_env: /cluster/home/yingyue/py/bin/activate
 
 job_submit:
-  ppn: 16
+  host: betzy
+  ppn: 128
 
 nproc: 5
 
@@ -25,18 +26,33 @@ state_time_steps: [0]
 state_time_scale: 0
 
 grid_def:
-  type: 'qg'
+  type: 'qg.fortran'
 
 state_def:
 - name: 'streamfunc'
-  model_src: 'qg'
+  model_src: 'qg.fortran'
   var_type: 'field'
   err_type: 'normal'
 
+model_def:
+  qg.fortran:
+    config_file: '{nedas_root}/models/qg/fortran/default.yml'
+    model_env: '{nedas_root}/models/qg/fortran/env/setup_betzy.src'
+    model_code_dir: '{nedas_root}/models/qg/fortran'
+    nproc_per_run: 1
+    nproc_per_util: 1
+    walltime: 1000
+    restart_dt: 24
+    forcing_dt: 24
+    ens_run_type: scheduler
+    use_job_array: False
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+
 obs_def:
 - name: 'streamfunc'
-  dataset_src: 'qg'
-  model_src: 'qg'
+  dataset_src: 'synthetic'
+  model_src: 'qg.fortran'
   nobs: 3000
   err:
     type: 'normal'
@@ -44,63 +60,63 @@ obs_def:
   hroi: 100
   vroi: 5
   troi: 24
-  impact_on_state:
-    streamfunc: 1.0
-
-use_synthetic_obs: True
 
 dataset_def:
-  qg:
+  synthetic:
+    model_src: qg.fortran
+    config_file:
     obs_window_min: -6
     obs_window_max: 0
 
-model_def:
-  qg:
-    config_file: '/cluster/home/yingyue/code/NEDAS/models/qg/default.yml'
-    model_code_dir: '/cluster/home/yingyue/code/NEDAS/models/qg'
-    model_env: '/cluster/home/yingyue/code/NEDAS/models/qg/env/setup_betzy.src'
-    ens_run_type: scheduler
-    ens_init_dir: '/cluster/work/users/yingyue/qg_ens_runs'
-    truth_dir: '/cluster/work/users/yingyue/qg/truth'
-
 perturb:
 
-assim_mode: 'batch'
-filter_type: 'ETKF'
-rfactor: 1
-kfactor: 1
-nlobs_max:
+# more details in assimilation algorithm
+scheme: filter  # type of analysis to perform: filter/smoother/etc.
 
-##multiscale approach
 niter: 1
-step: 0
-decompose_obs: False
-character_length: [150, 50, 10]
-localize_scale_fac: [1, 1, 1]
-obs_err_scale_fac: [1, 1, 1]
+iter:
+resolution_level: [0]       # resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
+character_length: [16]      # characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]     # scale factor for localization distances
+obs_err_scale_fac: [1]      # scale factor for observation error variances
 
-run_alignment: False
-alignment:
-  option: 'optical_flow'
-  variable: 'streamfunc'
-  nlevel: 5
-  smoothness_weight: 1
+assimilator_def:
+  type: ETKF      # assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+  config_file:    # configuration for the specific assimilator
 
-inflation:
-  type: 'post,RTPP'
-  adaptive: True
-  coef: 1.0
+updator_def:
+  type: additive
+  config_file:
 
-localization:
-  horizontal: 'GC'
-  vertical: 'GC'
-  temporal: 'exp'
+covariance_def:
+  type: ensemble
+  config_file:
 
+# covariance inflation technique in assimilation
+inflation_def:
+  type: post,rtpp      # type of inflation (posterior/prior, multiplicative/RTPP...)
+  adaptive: True            # if true, run an adaptive version of the inflation scheme
+  coef: 1.0                 # static inflation coefficient
+
+# covariance localization technique in assimilation
+localization_def:       # localization is configured separately for horizontal, vertical and temporal relations
+  horizontal:
+    type: gaspari_cohn  # type of localization kernel (gaspari_cohn, step, exp, nice...)
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass        # e.g. used in multiscale approach
+  decompose_obs: False        # if true, decompose observations as well
+
+# diagnostic methods configuration
 diag:
 - method: 'misc.convert_output'
   is_ensemble: False
-  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-  model_src: 'qg'
+  config_file: '{nedas_root}/diag/misc/convert_output/default.yml'
+  model_src: 'qg.fortran'
   variables: ['streamfunc', 'temperature', 'vorticity']
   grid_def:
-  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+  file: '{work_dir}/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
