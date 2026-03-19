@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import os
 import sys
 import subprocess
 from NEDAS.core import JobSubmitter
@@ -10,7 +11,7 @@ class HPCJobSubmitter(JobSubmitter):
     Args:
         project (str, optional): Project account name for billing/allocation. Defaults to None.
         queue (str, optional): The submission queue name. Defaults to None.
-        ppn (int, optional): Processors per node. Defaults to 1.
+        ppn (int, optional): Processors per node. Defaults to self.nproc.
         walltime (int, optional): Maximum execution time in seconds. Defaults to 3600.
         check_dt (int, optional): Time interval (sec) between status checks. Defaults to 20.
         use_job_array (bool, optional): Whether to utilize scheduler job arrays. Defaults to False.
@@ -19,7 +20,7 @@ class HPCJobSubmitter(JobSubmitter):
     def __init__(self,
                  project: str|None=None,
                  queue: str|None=None,
-                 ppn: int=1, 
+                 ppn: int|None=None,
                  walltime: int=3600,
                  check_dt: int=20,
                  use_job_array: bool=False,
@@ -27,12 +28,23 @@ class HPCJobSubmitter(JobSubmitter):
                  **kwargs):
         super().__init__(**kwargs)
 
-        # HPC specific settings
+        # processors per node
+        if ppn:
+            self._ppn = ppn
+        elif self.in_job_allocation:
+            self._ppn = self.ppn_avail
+        else:
+            cpu_count = os.cpu_count()
+            if cpu_count:
+                self._ppn = cpu_count
+            else:
+                raise RuntimeError("{self.__class__.__name__}: cannot determine ppn on host machine.")
+
+        # other HPC specific settings
         self.project = project
         self.queue = queue
-        self._ppn = ppn
         self.walltime = walltime
-        self.check_dt = check_dt 
+        self.check_dt = check_dt
         self.use_job_array = use_job_array
         self.array_size = array_size
 

@@ -22,21 +22,21 @@ class TestLocalJobSubmitter(unittest.TestCase):
         self.c = Context(job_submit=job_submit)
 
     def test_nproc_setter(self):
-        self.c.jsub.nproc = 10
-        self.assertEqual(self.c.jsub.nproc, 10)
+        self.c.jsub.nproc = 2
+        self.assertEqual(self.c.jsub.nproc, 2)
 
     def test_nproc_invalid_value(self):
         with self.assertRaises(ValueError):
             self.c.jsub.nproc = 0
         with self.assertRaises(ValueError):
-            self.c.jsub.nproc = -10
+            self.c.jsub.nproc = -2
         with self.assertRaises(ValueError):
             self.c.jsub.nproc = '1'
 
     def test_nproc_serial_mode_constraint(self):
         self.c.jsub.parallel_mode = 'serial'
         with self.assertRaises(ValueError):
-            self.c.jsub.nproc = 10
+            self.c.jsub.nproc = 2
 
     def test_nproc_edge_cases(self):
         with self.assertRaises(ValueError):
@@ -47,12 +47,12 @@ class TestLocalJobSubmitter(unittest.TestCase):
             self.c.jsub.nproc = 1
 
     def test_offset_setter(self):
-        self.c.jsub.offset = 10
-        self.assertEqual(self.c.jsub.offset, 10)
+        self.c.jsub.offset = 2
+        self.assertEqual(self.c.jsub.offset, 2)
 
     def test_offset_invalid_value(self):
         with self.assertRaises(ValueError):
-            self.c.jsub.offset = -10
+            self.c.jsub.offset = -2
         with self.assertRaises(ValueError):
             self.c.jsub.offset = '1'
    
@@ -71,10 +71,10 @@ class TestLocalJobSubmitter(unittest.TestCase):
         self.c.jsub.parallel_mode = 'serial'
         self.assertEqual(self.c.jsub.parse_commands(commands), ' echo 1')
         self.c.jsub.parallel_mode = 'mpi'
-        self.c.jsub.nproc = 10
-        self.assertEqual(self.c.jsub.parse_commands(commands), 'mpirun -np 10 echo 1')
+        self.c.jsub.nproc = 2
+        self.assertEqual(self.c.jsub.parse_commands(commands), 'mpirun -np 2 echo 1')
         self.c.jsub.parallel_mode = 'openmp'
-        self.assertEqual(self.c.jsub.parse_commands(commands), 'export OMP_NUM_THREADS=10; echo 1')
+        self.assertEqual(self.c.jsub.parse_commands(commands), 'export OMP_NUM_THREADS=2; echo 1')
 
 if __name__ == '__main__':
     unittest.main()
