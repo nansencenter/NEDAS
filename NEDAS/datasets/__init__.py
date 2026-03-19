@@ -1,6 +1,8 @@
+from __future__ import annotations
 import importlib
-from typing import Type
-from NEDAS.core.dataset import Dataset
+from typing import Type, TYPE_CHECKING
+if TYPE_CHECKING:
+    from NEDAS.core.dataset import Dataset
 
 registry = {
     'ecmwf.era5': 'ERA5Data',

@@ -1,15 +1,13 @@
-from __future__ import annotations
 import os
 import inspect
-from typing import Generic, TypeVar, Any, TYPE_CHECKING
+from typing import Generic, TypeVar, Any
 from abc import ABC, abstractmethod
 import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
 from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
-if TYPE_CHECKING:
-    from .context import Context
+from .context import Context
 
 GridT = TypeVar("GridT", bound=GridType)
 

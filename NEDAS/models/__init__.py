@@ -1,6 +1,8 @@
+from __future__ import annotations
 import importlib
-from typing import Type
-from NEDAS.core.model import Model
+from typing import Type, TYPE_CHECKING
+if TYPE_CHECKING:
+    from NEDAS.core.model import Model
 
 registry = {
     'lorenz96': 'Lorenz96Model',

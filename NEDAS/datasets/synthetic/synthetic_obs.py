@@ -1,5 +1,4 @@
 import numpy as np
-from NEDAS.models import get_model_class
 from NEDAS.core import Dataset
 
 class SyntheticObs(Dataset):
@@ -8,8 +7,7 @@ class SyntheticObs(Dataset):
         super().__init__(**kwargs)
 
         if 'model_src' in kwargs:
-            Model = get_model_class(kwargs['model_src'])
-            model = Model()
+            model = self.c.models[kwargs['model_src']]
             for vname, vrec in model.variables.items():
                 self.variables[vname] = model.variables[vname]
             self.grid = model.grid

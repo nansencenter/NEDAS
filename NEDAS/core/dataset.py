@@ -1,14 +1,12 @@
-from __future__ import annotations
 import os
 import inspect
 import numpy as np
-from typing import Callable, Any, TYPE_CHECKING
+from typing import Callable, Any
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
 from .types import VarName, VarDesc, LevelID
-if TYPE_CHECKING:
-    from .context import Context
+from .context import Context
 
 class Dataset(ABC):
     """
