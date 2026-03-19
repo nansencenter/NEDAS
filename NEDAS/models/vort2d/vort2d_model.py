@@ -155,8 +155,8 @@ class Vort2DModel(Model[RegularGrid]):
         kwargs = super().parse_kwargs(kwargs)
         self.c.fs.make_dir(self.truth_dir)
 
-        t = kwargs['time_start']
-        while t < kwargs['time_end']:
+        t = self.c.config.time_start
+        while t < self.c.config.time_end:
             opts = {
                 'path': self.truth_dir,
                 'name': 'velocity',
@@ -164,7 +164,7 @@ class Vort2DModel(Model[RegularGrid]):
                 'time': t,
                 }
 
-            if t == kwargs['time_start']:
+            if t == self.c.config.time_start:
                 state = self.generate_initial_condition()
                 print(f"generating initial condition {self.filename(**opts)}")
                 self.write_var(state, **opts)

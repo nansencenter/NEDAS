@@ -153,9 +153,9 @@ class Lorenz96Model(Model[Grid1D]):
         if self.io_mode == 'offline':
             self.c.fs.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
-        kwargs['time'] = kwargs['time_start']
+        kwargs['time'] = self.c.config.time_start
         kwargs['member'] = None
-        while kwargs['time'] <= kwargs['time_end']:
+        while kwargs['time'] <= self.c.config.time_end:
             self.write_var(state, name='state', **kwargs)
             state = M_nl(state, self.F, kwargs['forecast_period']/24, self.dt)
             kwargs['time'] += kwargs['forecast_period'] * dt1h
@@ -166,5 +166,5 @@ class Lorenz96Model(Model[Grid1D]):
             self.c.fs.make_dir(self.ens_init_dir)
 
         state = self.generate_initial_condition()
-        kwargs['time'] = kwargs['time_start']
+        kwargs['time'] = self.c.config.time_start
         self.write_var(state, name='state', **kwargs)

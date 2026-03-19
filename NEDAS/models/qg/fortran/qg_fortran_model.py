@@ -171,13 +171,12 @@ class QGFortranModel(Model):
         run_dir = os.path.dirname(input_file)
         self.c.fs.make_dir(run_dir)
 
-        time_start = kwargs['time_start']
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
         output_file = self.filename(**{**kwargs, 'time':next_time})
 
-        if time >= time_start:
+        if time >= self.c.config.time_start:
             #this is during cycling
             psi_init_type = 'read'
             prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
@@ -227,8 +226,8 @@ class QGFortranModel(Model):
         self.c.fs.make_dir(self.truth_dir)
         # check if truth files already exists in model.truth_dir
         complete = True
-        kwargs['time'] = kwargs['time_start']
-        while kwargs['time'] < kwargs['time_end']:
+        kwargs['time'] = self.c.config.time_start
+        while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             if not os.path.exists(os.path.join(self.truth_dir, current_file)):
                 complete = False
@@ -240,13 +239,13 @@ class QGFortranModel(Model):
 
         print(f"Creating truth run for qg model in {self.truth_dir}")
         run_dir = os.path.join(self.truth_dir, 'run')
-        init_file = f"output_{kwargs['time_start']:%Y%m%d_%H}.bin"
+        init_file = f"output_{self.c.config.time_start:%Y%m%d_%H}.bin"
         print(f"Running the model for spinup period to get initial condition: {init_file}")
-        kwargs['time'] = kwargs['time_start'] - self.spinup_hours * dt1h
+        kwargs['time'] = self.c.config.time_start - self.spinup_hours * dt1h
         self.run(**{**kwargs, 'path':run_dir, 'member':0, 'forecast_period':self.spinup_hours})
 
-        kwargs['time'] = kwargs['time_start']
-        while kwargs['time'] < kwargs['time_end']:
+        kwargs['time'] = self.c.config.time_start
+        while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
             next_file = f"output_{next_time:%Y%m%d_%H}.bin"

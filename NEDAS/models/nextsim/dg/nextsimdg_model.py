@@ -288,8 +288,7 @@ class NextsimDGModel(Model[RegularGrid]):
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
-        time_start = kwargs['time_start']
-        debug = kwargs['debug']
+        debug = self.c.config.debug
 
         # 2. get the restart and forcing filename
         file_options_restart = self.files['restart']
@@ -323,7 +322,7 @@ class NextsimDGModel(Model[RegularGrid]):
         np.random.seed(time.second+ens_mem_id)
         # here, if 'restart section is not under perturb section
         # we only link the restart file to each ensemble directory
-        if 'restart' not in self.perturb or kwargs['time'] != time_start:
+        if 'restart' not in self.perturb or kwargs['time'] != self.c.config.time_start:
             # we we do not perturb the restart file
             # simply copy over the restart files
             os.system(f'cp -L {fname_restart} {run_dir}')

@@ -180,7 +180,7 @@ class Context:
             if 'mask' in grid_def and grid_def['mask'] is not None:
                 model_name = grid_def['mask']
                 Model = models.get_model_class(model_name)
-                model = Model()
+                model = Model(context=self)
                 prepare_mask = getattr(model, 'prepare_mask', None)
                 if prepare_mask is not None:
                     self.grid.mask = prepare_mask(self.grid)
@@ -193,7 +193,7 @@ class Context:
                 raise KeyError(f"'{model_name}' not defined in config file model_def section")
             kwargs = model_def[model_name]
             Model = models.get_model_class(model_name)
-            model = Model(**kwargs)
+            model = Model(context=self, **kwargs)
             model_grid = getattr(model, 'grid')
             if not isinstance(model_grid, get_args(grid.GridType)):
                 raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
@@ -251,6 +251,9 @@ class Context:
 
         # save the config to yaml file
         tmp_config.dump_yaml(config_file)
+
+    def show_greeting(self) -> None:
+        self.print_1p(f"Welcome to NEDAS\n\n")
 
     def show_progress(self, debug_message: str,
                       task: int,

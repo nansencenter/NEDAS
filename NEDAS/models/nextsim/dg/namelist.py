@@ -8,7 +8,6 @@ def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwarg
     time = kwargs['time']
     forecast_period = kwargs['forecast_period']
     next_time = time + forecast_period * dt1h
-    time_start = kwargs['time_start']
 
     # read the config file
     model_config = configparser.ConfigParser()
