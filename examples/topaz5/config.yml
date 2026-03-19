@@ -6,7 +6,6 @@ job_submit:
   host: betzy
   project: nn2993k
   queue: normal
-  scheduler: slurm
   ppn: 128
 
 nproc: 512

@@ -30,14 +30,38 @@ class Model(Generic[GridT], ABC):
     walltime: int|None = None
     run_process = None
     run_status: str = 'pending'
+    restart_dir: str
+    forecast_period: int
+    _c: Context
 
-    def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
-        ##parse config file and obtain a list of attributes
-        ##get a list of values from default.yml and update with kwargs, save to config_dict
+    def __init__(self, context: Context|None=None,
+                 io_mode: IOMode|None=None,
+                 config_file: str|None=None,
+                 parse_args: bool=False,
+                 **kwargs) -> None:
+        # prepare context
+        if context is not None:
+            assert isinstance(context, Context)
+            self._c = context
+        else:
+            self._c = Context()  # use default context if not specified
+
+        # determine io_mode
+        if io_mode:
+            self.io_mode = io_mode
+        else:
+            self.io_mode = self._c.config.io_mode
+
+        # parse model config file and obtain a list of attributes
+        # get a list of values from default.yml and update with kwargs, save to config_dict
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
             setattr(self, key, value)
+
+    @property
+    def c(self) -> Context:
+        return self._c
 
     def parse_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         ##args that pinpoints a certain model state variable
@@ -66,17 +90,11 @@ class Model(Generic[GridT], ABC):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']].units
 
-        # if context is sent in through kwargs, don't need the following anymore
-        for key in ['restart_dir', 'forecast_period', 'time_start', 'time_end', 'comm', 'debug']:
+        # some other runtime args need to be initialized
+        for key in ['restart_dir', 'forecast_period']:
             if key not in kwargs:
                 kwargs[key] = None
         return kwargs
-
-    def get_context(self, kwargs: dict[str, Any]) -> Context:
-        # if not available? get a default context
-        c = kwargs['context']
-        assert isinstance(c, Context)
-        return c
 
     @abstractmethod
     def read_grid(self, **kwargs) -> None:

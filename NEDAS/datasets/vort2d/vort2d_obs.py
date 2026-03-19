@@ -4,8 +4,8 @@ from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.core.types import VarDesc
 
 class Vort2DObs(SyntheticObs):
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         restart_dt = 6
         self.variables = {

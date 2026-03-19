@@ -4,8 +4,8 @@ from NEDAS.core import Dataset
 
 class SyntheticObs(Dataset):
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         if 'model_src' in kwargs:
             Model = get_model_class(kwargs['model_src'])

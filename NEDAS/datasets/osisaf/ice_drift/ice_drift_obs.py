@@ -19,8 +19,8 @@ class OsisafSeaIceDriftObs(Dataset):
     dy: float
     obs_file_dt: int
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.variables = {'seaice_drift': VarDesc(name='null', dtype='float', is_vector=True, dt=24, levels=np.array([0]), z_units='m', units='km/day'), }
 
@@ -142,9 +142,9 @@ class OsisafSeaIceDriftObs(Dataset):
     def get_seaice_drift(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
-        obs_x = kwargs['x']
-        obs_y = kwargs['y']
-        obs_t = kwargs['t']
+        obs_x = np.array(kwargs['x'])
+        obs_y = np.array(kwargs['y'])
+        obs_t = np.array(kwargs['t'])
         model = kwargs['model']
         model.grid.set_destination_grid(grid)
         drift_units = self.variables['seaice_drift'].units

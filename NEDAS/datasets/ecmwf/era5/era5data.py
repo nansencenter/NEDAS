@@ -12,8 +12,8 @@ from NEDAS.core.types import VarDesc
 from NEDAS.datasets.ecmwf import atmos_utils
 
 class ERA5Data(Dataset):
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         ##variable dictionary for ERA5 naming convention
         level_sfc = np.array([0])

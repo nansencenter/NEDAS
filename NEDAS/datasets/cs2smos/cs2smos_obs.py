@@ -20,8 +20,8 @@ class Cs2SmosObs(Dataset):
     obs_days: int
     use_dataset_uncertainty: bool
     
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.variables = {
             'seaice_thick': VarDesc(name='analysis_sea_ice_thickness', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='m'), 

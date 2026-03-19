@@ -26,8 +26,8 @@ class WRFModel(Model[RegularGrid]):
     z_units: str
     restart_dt: float
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         ##derived default values
         self.ref_x = self.e_we[0] / 2
@@ -95,7 +95,6 @@ class WRFModel(Model[RegularGrid]):
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         fname = self.filename(**kwargs)
@@ -113,7 +112,7 @@ class WRFModel(Model[RegularGrid]):
         shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
-        rt.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
+        self.c.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
                 nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                 walltime=self.walltime, **kwargs)
 

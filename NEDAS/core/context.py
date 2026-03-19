@@ -20,8 +20,11 @@ class Context:
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
-    mem_list: dict[ProcIDMem, list[MemID]]
+    fs: FileSystem
+    io: IOBackend
+    jsub: JobSubmitter
     nens: int
+    mem_list: dict[ProcIDMem, list[MemID]]
     grid: grid.GridType
     grid_orig: grid.GridType
     time: datetime
@@ -33,15 +36,14 @@ class Context:
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
-    fs: FileSystem
-    io: IOBackend
-    jsub: JobSubmitter
     state: State
     obs: Obs
     use_synthetic_obs: bool = False
 
     def __init__(self, config: Config|None=None,
-                 config_file: str|None=None, parse_args: bool=False, **kwargs) -> None:
+                 config_file: str|None=None,
+                 parse_args: bool=False,
+                 **kwargs) -> None:
         if isinstance(config, Config):
             self.config = config
         else:
@@ -60,7 +62,7 @@ class Context:
         self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
 
         # initialize a few helper class instances
-        self.fs = FileSystem(self.config.work_dir, self.config.directories, self.config.niter)
+        self.fs = FileSystem(self.config)
         self.io = io_backends.get_io_backend(self.config.io_mode)
         self.jsub = job_submitters.get_job_submitter(**(self.config.job_submit or {}))
 
@@ -209,12 +211,7 @@ class Context:
         for model_name, kwargs in self.config.model_def.items():
             #instantiate the model class
             ModelClass = models.get_model_class(model_name)
-            if not isinstance(kwargs, dict):
-                kwargs = {}
-            kwargs['io_mode'] = self.config.io_mode
-            model = ModelClass(**kwargs)
-
-            self.models[model_name] = model
+            self.models[model_name] = ModelClass(context=self, **(kwargs or {}))
 
     def set_datasets(self) -> None:
         """
@@ -226,9 +223,7 @@ class Context:
             if dataset_name == 'synthetic':
                 self.use_synthetic_obs = True
             DatasetClass = datasets.get_dataset_class(dataset_name)
-            if not isinstance(kwargs, dict):
-                kwargs = {}
-            self.datasets[dataset_name] = DatasetClass(grid=self.grid, mask=self.grid.mask, **kwargs)
+            self.datasets[dataset_name] = DatasetClass(context=self, **(kwargs or {}))
 
     @property
     def print_1p(self):
@@ -257,7 +252,9 @@ class Context:
         # save the config to yaml file
         tmp_config.dump_yaml(config_file)
 
-    def show_progress(self, debug_message: str, task: int, total_ntask: int) -> None:
+    def show_progress(self, debug_message: str,
+                      task: int,
+                      total_ntask: int) -> None:
         """
         Show progress
 
@@ -277,7 +274,11 @@ current time: {self.time}
 """
         self.print_1p(summary_text)
 
-    def run_job(self, commands: str, parallel_mode: ParallelMode='serial', nproc: int=1, offset: int=0) -> None:
+    def run_job(self, commands: str,
+                parallel_mode: ParallelMode='serial',
+                nproc: int=1,
+                offset: int=0,
+                **kwargs) -> None:
         """
         The user-facing method for running command on a computer.
         It re-configures the existing job submitter with runtime arguments and execute the command.
@@ -287,11 +288,16 @@ current time: {self.time}
             parallel_mode (ParallelMode, optional): parallel mode ('serial', 'mpi', 'openmp'), default is 'serial'
             nproc (int, optional): number of processors (default is 1)
             offset (int, optional): offset in full list of processors (default is 0)
+            **kwargs: other keyword arguments to update the job submitter configuration
         """
         # update the state of the job submitter for this specific task
         self.jsub.parallel_mode = parallel_mode
         self.jsub.nproc = nproc
         self.jsub.offset = offset
+
+        for key, value in kwargs.items():
+            if value and hasattr(self.jsub, key):
+                setattr(self.jsub, key, value)
 
         # dispatch the command
         self.jsub.run(commands)

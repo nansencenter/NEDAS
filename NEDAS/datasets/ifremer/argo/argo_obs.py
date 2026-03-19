@@ -16,8 +16,8 @@ class ArgoObs(Dataset):
     NUM_OBS_PER_LAYER: int
     OBS_ERR_VAR: dict[str, float]
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.variables = {
             'ocean_temp': VarDesc(name='TEMP', dtype='float', is_vector=False, dt=24, levels=np.array([]), z_units='m', units='K'),

@@ -30,9 +30,9 @@ class NextsimModel(Model):
     nproc_per_run: int
     walltime: int|None
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
+    def __init__(self, **kwargs):
 
-        super().__init__(config_file, parse_args, **kwargs)
+        super().__init__(**kwargs)
 
         ##Note: we only work with restart files, normal nextsim binfile have some variables names that
         ##are different from restart files, e.g. Concentration instead of M_conc
@@ -358,7 +358,6 @@ class NextsimModel(Model):
         """Preprocess the dir, collect input files for model run"""
         ##put sequence of operation here to generate the initial condition files for nextsim
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
@@ -368,7 +367,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        rt.make_dir(run_dir)
+        self.c.fs.make_dir(run_dir)
 
         ##prepare restart files
         restart_file = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
@@ -380,7 +379,7 @@ class NextsimModel(Model):
         mesh_dat = mesh_bin.replace('.bin', '.dat')
         for file in [field_bin, field_dat, mesh_bin, mesh_dat]:
             shell_cmd += f"cp -fL {file} .; "
-        rt.run_command(shell_cmd)
+        self.c.run_job(shell_cmd)
 
         ##prepare other input data (bathymetry, forcing, etc.) for the model run
         shell_cmd = f"cd {run_dir}; "
@@ -395,7 +394,7 @@ class NextsimModel(Model):
         while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
             t += 24 * dt1h  ##forcing files are stored daily
-        rt.run_command(shell_cmd)
+        self.c.run_job(shell_cmd)
 
     def postprocess(self, task_id=0, **kwargs):
         ##place holder for now
@@ -427,7 +426,6 @@ class NextsimModel(Model):
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -441,7 +439,7 @@ class NextsimModel(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr)
-        rt.make_dir(run_dir)
+        self.c.fs.make_dir(run_dir)
 
         ##check input files
         field_bin = input_file
@@ -455,7 +453,7 @@ class NextsimModel(Model):
         ##build command to run the model
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
-        rt.run_command("touch "+log_file)
+        self.c.run_job("touch "+log_file)
 
         shell_cmd = f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
@@ -474,13 +472,13 @@ class NextsimModel(Model):
             ##this creates nextsim.cfg.in in run_dir/config
             ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
-            rt.make_dir(config_dir)
+            self.c.fs.make_dir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
        ##run the model and wait for results
-            rt.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
-                    nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
-                    walltime=self.walltime, **kwargs)
+            self.c.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
+                           nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
+                           walltime=self.walltime, **kwargs)
 
         ##checkout output files
         watch_files([output_file])

@@ -22,8 +22,8 @@ class Vort2DModel(Model[RegularGrid]):
     diss: float
     memory: dict = {}
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         ##define the model grid
         ii, jj = np.meshgrid(np.arange(self.nx), np.arange(self.ny))
@@ -128,14 +128,12 @@ class Vort2DModel(Model[RegularGrid]):
 
     def preprocess(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
-
         if self.io_mode == 'offline':
             kwargs = super().parse_kwargs(kwargs)
-            rt.make_dir(kwargs['path'])
+            self.c.fs.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            rt.run_command(f"cp -fL {file1} {file2}")
+            self.c.run_job(f"cp -fL {file1} {file2}")
 
     def postprocess(self, *args, **kwargs):
         pass
@@ -155,8 +153,7 @@ class Vort2DModel(Model[RegularGrid]):
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
-        rt.make_dir(self.truth_dir)
+        self.c.fs.make_dir(self.truth_dir)
 
         t = kwargs['time_start']
         while t < kwargs['time_end']:
@@ -183,8 +180,7 @@ class Vort2DModel(Model[RegularGrid]):
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
-        rt.make_dir(self.ens_init_dir)
+        self.c.fs.make_dir(self.ens_init_dir)
 
         opts = {
             'path': self.ens_init_dir,

@@ -29,8 +29,8 @@ class Lorenz96Model(Model[Grid1D]):
     restart_dt: float
     memory: dict = {}
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
         self.grid.mask = np.full(self.grid.x.shape, False)
@@ -129,12 +129,10 @@ class Lorenz96Model(Model[Grid1D]):
     def preprocess(self, *args, **kwargs):
         if self.io_mode == 'offline':
             kwargs = super().parse_kwargs(kwargs)
-            c = self.get_context(kwargs)
-
-            c.io.make_dir(kwargs['path'])
+            self.c.fs.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
-            c.io.copy_file(file1, file2)
+            self.c.fs.copy_file(file1, file2)
 
     def postprocess(self, *args, **kwargs):
         pass
@@ -153,8 +151,7 @@ class Lorenz96Model(Model[Grid1D]):
     def generate_truth(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            c = self.get_context(kwargs)
-            c.io.make_dir(self.truth_dir)
+            self.c.fs.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = kwargs['time_start']
         kwargs['member'] = None
@@ -166,8 +163,7 @@ class Lorenz96Model(Model[Grid1D]):
     def generate_init_ensemble(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            c = self.get_context(kwargs)
-            c.io.make_dir(self.ens_init_dir)
+            self.c.fs.make_dir(self.ens_init_dir)
 
         state = self.generate_initial_condition()
         kwargs['time'] = kwargs['time_start']

@@ -31,8 +31,8 @@ class Topaz4Model(Model[RegularGrid]):
     nproc_per_run: int
     walltime: int|None
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         levels = np.arange(1, 51, 1)
         levels_sfc = np.array([0])
@@ -161,7 +161,6 @@ class Topaz4Model(Model[RegularGrid]):
 
     def run(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -233,7 +232,7 @@ class Topaz4Model(Model[RegularGrid]):
                     break
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
-            rt.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
+            self.c.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
                     nproc=self.nproc, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

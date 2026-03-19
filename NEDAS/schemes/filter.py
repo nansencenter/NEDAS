@@ -21,7 +21,6 @@ class FilterAnalysisScheme(Scheme):
     }
 
     def run_all(self) -> None:
-        c = self.get_context()
         self.c.print_1p("Initializing...\n")
         self.c.show_summary()
 
@@ -33,7 +32,7 @@ class FilterAnalysisScheme(Scheme):
         while self.c.time < self.config.time_end:
             self.c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {self.c.time} => {self.c.next_time}\n")
 
-            if self.check_cycle_complete(self.c):
+            if self.check_cycle_complete():
                 continue
 
             if self.config.run_preproc:
@@ -42,7 +41,7 @@ class FilterAnalysisScheme(Scheme):
                     self.run_step('perturb')
 
             ##assimilation step
-            if self.config.run_analysis and self.c.time >= self.config.time_analysis_start and self.c.time <= self.config.time_analysis_end:
+            if self.config.run_analysis and c.time >= self.config.time_analysis_start and c.time <= self.config.time_analysis_end:
                 self.run_step('filter')
                 if self.config.run_postproc:
                     self.run_step('postprocess')
@@ -57,9 +56,9 @@ class FilterAnalysisScheme(Scheme):
                     self.run_step('diagnose')
 
             ##advance to next cycle
-            self.c.time = self.c.next_time
+            c.time = c.next_time
 
-        self.c.print_1p("Cycling complete.\n")
+        c.print_1p("Cycling complete.\n")
 
     def generate_truth(self, c: Context) -> None:
         # skip if not using synthetic obs (no need for the truth)
@@ -81,7 +80,7 @@ class FilterAnalysisScheme(Scheme):
                 opts['member'] = mem_id
                 c.io.call_method(c, 'prior', model.generate_init_ensemble, **opts)
 
-    def check_cycle_complete(self, c: Context) -> bool:
+    def check_cycle_complete(self) -> bool:
         """
         Method checks on a given cycle to see if it's complete or not
         """

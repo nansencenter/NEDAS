@@ -21,10 +21,9 @@ class QGFortranModel(Model):
     model_env: str
     spinup_hours: int
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
-        if 'io_mode' in kwargs:
-            assert kwargs['io_mode'] == 'offline'
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        assert self.io_mode == 'offline', f"{self.__class__.__name__} only support offline io mode"
 
         self.dx = kwargs['dx'] if 'dx' in kwargs else 1.0
         n = 2*(self.kmax+1)
@@ -146,7 +145,6 @@ class QGFortranModel(Model):
 
     def preprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        rt = self.get_runtime(kwargs)
         restart_dir = kwargs['restart_dir']
         restart_file = self.filename(**{**kwargs, 'path':restart_dir})
 
@@ -155,15 +153,14 @@ class QGFortranModel(Model):
         input_dir = os.path.dirname(input_file)
 
         ##just cp the prepared files to the work_dir location
-        rt.make_dir(input_dir)
-        rt.copy_file(restart_file, input_file)
+        self.c.fs.make_dir(input_dir)
+        self.c.fs.copy_file(restart_file, input_file)
 
     def postprocess(self, *args, **kwargs):
         pass
 
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        c = self.get_context(kwargs)
         task_id = kwargs.get('worker_id', 0)
 
         task_nproc = self.nproc_per_run
@@ -172,7 +169,7 @@ class QGFortranModel(Model):
 
         input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
-        c.io.make_dir(run_dir)
+        self.c.fs.make_dir(run_dir)
 
         time_start = kwargs['time_start']
         time = kwargs['time']
@@ -205,7 +202,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            c.jsub.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+            self.c.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
@@ -221,14 +218,13 @@ class QGFortranModel(Model):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        c.jsub.submit_job_and_monitor(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+        self.c.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
 
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
         kwargs = super().parse_kwargs(kwargs)
         kwargs['member'] = None
-        rt = self.get_runtime(kwargs)
-        rt.make_dir(self.truth_dir)
+        self.c.fs.make_dir(self.truth_dir)
         # check if truth files already exists in model.truth_dir
         complete = True
         kwargs['time'] = kwargs['time_start']
@@ -259,14 +255,13 @@ class QGFortranModel(Model):
             kwargs['time'] = next_time
         print("done.")
 
-        rt.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
+        self.c.fs.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
         print(f"removing temporary run directory: {run_dir}")
-        rt.remove_dir(run_dir)
+        self.c.fs.remove_dir(run_dir)
 
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)
-        c = self.get_context(kwargs)
         basename = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
         mstr = f"{kwargs['member']+1:04d}"
         init_file = os.path.join(self.ens_init_dir, mstr, basename)
@@ -279,7 +274,7 @@ class QGFortranModel(Model):
         print(f"Creating initial condition for qg modeli member {kwargs['member']+1}:")
         init_time = kwargs['time'] - self.spinup_hours * dt1h
         next_time = kwargs['time']
-        run_dir = rt.forecast_dir(init_time, 'qg.fortran')
+        run_dir = self.c.fs.forecast_dir(init_time, 'qg.fortran')
         print(f"initial condition type: {self.psi_init_type}")
         print(f"spinup period: {self.spinup_hours} hours")
 
@@ -288,5 +283,5 @@ class QGFortranModel(Model):
 
         print("Moving output files")
         src_file = os.path.join(run_dir, mstr, basename)
-        c.io.make_dir(os.path.dirname(init_file))
-        c.io.move_file(src_file, init_file)
+        self.c.fs.make_dir(os.path.dirname(init_file))
+        self.c.fs.move_file(src_file, init_file)

@@ -19,8 +19,8 @@ class RgpsObs(Dataset):
     DEFORM_MAX: float
     DEFORM_ERR_STD: float
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         ##variable dictionary for RGPS naming convention
         self.variables = {

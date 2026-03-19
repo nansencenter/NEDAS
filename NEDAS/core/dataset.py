@@ -1,11 +1,14 @@
+from __future__ import annotations
 import os
 import inspect
 import numpy as np
-from typing import Callable, Any
+from typing import Callable, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 from datetime import datetime
 from NEDAS.config import parse_config
 from .types import VarName, VarDesc, LevelID
+if TYPE_CHECKING:
+    from .context import Context
 
 class Dataset(ABC):
     """
@@ -13,10 +16,20 @@ class Dataset(ABC):
     """
     variables: dict[VarName, VarDesc] = {}
     obs_operator: dict[VarName, Callable] = {}
+    _c: Context
 
-    def  __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
+    def  __init__(self, context: Context|None=None,
+                  config_file: str|None=None,
+                  parse_args: bool=False,
+                  **kwargs) -> None:
+        # prepare context
+        if context is not None:
+            assert isinstance(context, Context)
+            self._c = context
+        else:
+            self._c = Context()  # use default context if not specified
 
-        ##parse config file and obtain a list of attributes
+        # parse dataset config file and obtain a list of attributes
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, config_file, parse_args, **kwargs)
         for key, value in config_dict.items():
@@ -30,7 +43,9 @@ class Dataset(ABC):
         if not hasattr(self, 'obs_window_max'):
             self.obs_window_max = 0
 
-        self.variables = {}
+    @property
+    def c(self) -> Context:
+        return self._c
 
     def parse_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """
@@ -53,11 +68,11 @@ class Dataset(ABC):
             kwargs['units'] = self.variables[kwargs['name']].units   ##TODO: potential key error here if variables is not defined.
 
         # other args, set default values if not specified
-        ##TODO: how to type hint these runtime kwargs?
         # model (Model): model class instance
         # grid (GridType): target analysis grid
         # mask (np.ndarray): target analysis grid mask (True if grid point is not part of the state)
         # z (dict[LevelID, np.ndarray]): z coordinates at each level k on analysis grid
+        #TODO: These should be available from the context
         for key in ['model', 'grid', 'mask', 'z']:
             if key not in kwargs:
                 kwargs[key] = None

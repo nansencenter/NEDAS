@@ -11,8 +11,8 @@ class TopazPrepObs(Dataset):
     """
     Observations already preprocessed by TOPAZ EnKF Prep_Routines, saved in unformatted binary format
     """
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.variables = {
             'ocean_temp': VarDesc(name='TEM', dtype='float', is_vector=False, dt=168, levels=np.array([0]), z_units='m', units='C'),
@@ -143,9 +143,9 @@ class TopazPrepObs(Dataset):
         model = kwargs['model']  ##model object
         model.grid.set_destination_grid(grid)
 
-        start_x = kwargs['x']
-        start_y = kwargs['y']
-        start_t = kwargs['t']
+        start_x = np.array(kwargs['x'])
+        start_y = np.array(kwargs['y'])
+        start_t = np.array(kwargs['t'])
         x = start_x.copy()
         y = start_y.copy()
         obs_seq = np.zeros((2,)+x.shape)

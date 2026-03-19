@@ -21,7 +21,7 @@ class Config:
     python_env: str|None
     io_mode: Literal['online', 'offline']
     job_submit: dict|None
-    directories: dict[str, str]|None
+    directories: dict[str, str]
     nproc: int
     nproc_mem: int
     nproc_rec: int

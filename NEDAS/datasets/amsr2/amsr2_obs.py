@@ -22,8 +22,8 @@ class AMSR2Obs(Dataset):
     coefficients_file: str
     ow_bias_file: str
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.channels = ['tb19v', 'tb19h', 'tb37v', 'tb37h']  ##need to be the same order as listed in self.coefficients_file
 
