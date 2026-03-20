@@ -1,8 +1,8 @@
 
 from typing import Any
-from datetime import datetime
+from NEDAS.utils.parallel import by_rank
 from NEDAS.utils.progress import timer
-from NEDAS.core import Scheme, Context, State, Obs, Perturbation, Diagnostics
+from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
 
 class FilterAnalysisScheme(Scheme):
     """
@@ -14,11 +14,6 @@ class FilterAnalysisScheme(Scheme):
     as new initial conditions, the ensemble forecast is run again to reach the next analysis cycle, until
     the end of the period of interest. The length of forecasts between cycles is called the `cycling period`.
     """
-    steps = {
-        'generate_truth': {'ensemble':False, 'mpi':False},
-        'generate_init_ensemble': {'ensemble':True, 'mpi':False},
-        'preprocess': {}
-    }
 
     def run_all(self) -> None:
         self.c.print_1p("Initializing...\n")
@@ -38,11 +33,11 @@ class FilterAnalysisScheme(Scheme):
             if self.config.run_preproc:
                 self.run_step('preprocess')
                 if self.config.perturb:
-                    self.run_step('perturb')
+                    self.run_step('perturb', mpi=True)
 
             ##assimilation step
-            if self.config.run_analysis and c.time >= self.config.time_analysis_start and c.time <= self.config.time_analysis_end:
-                self.run_step('filter')
+            if self.config.run_analysis and self.c.time >= self.config.time_analysis_start and self.c.time <= self.config.time_analysis_end:
+                self.run_step('filter', mpi=True)
                 if self.config.run_postproc:
                     self.run_step('postprocess')
 
@@ -53,32 +48,40 @@ class FilterAnalysisScheme(Scheme):
             ##compute diagnostics
             if self.config.run_diagnose:
                 if self.config.diag:
-                    self.run_step('diagnose')
+                    self.run_step('diagnose', mpi=True)
 
             ##advance to next cycle
-            c.time = c.next_time
+            self.c.time = self.c.next_time
 
-        c.print_1p("Cycling complete.\n")
+        self.c.print_1p("Cycling complete.\n")
 
-    def generate_truth(self, c: Context) -> None:
+    def generate_truth(self) -> None:
+        """
+        Generate the verifying truth
+        """
         # skip if not using synthetic obs (no need for the truth)
-        if not c.use_synthetic_obs:
+        if not self.c.use_synthetic_obs:
             return
-        for model_name, model in c.models.items():
-            c.print_1p(f"Generating truth for '{model_name}' model...\n")
-            opts = self.get_task_opts(c)
-            opts['model_src'] = model_name
-            opts['member'] = None
-            c.io.call_method(c, 'truth', model.generate_truth, **opts)
+        # skip if truth files already exists
 
-    def generate_init_ensemble(self, c: Context):
-        for model_name, model in c.models.items():
-            c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
-            opts = self.get_task_opts(c)
-            for mem_id in c.mem_list[c.pid_mem]:
-                opts['model_src'] = model_name
-                opts['member'] = mem_id
-                c.io.call_method(c, 'prior', model.generate_init_ensemble, **opts)
+        for model_name, model in self.c.models.items():
+            self.c.print_1p(f"Generating truth for '{model_name}' model...\n")
+
+            opts = self.get_task_opts(model_name, member=None)
+
+            self.c.io.call_method(self.c, 'truth', model.generate_truth, **opts)
+
+    def generate_init_ensemble(self) -> None:
+        """
+        Generate initial ensemble.
+        """
+        #
+        for model_name, model in self.c.models.items():
+            self.c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
+
+            opts = self.get_task_opts(model_name, nproc=self.config.nproc, nproc_per_task=model.nproc_per_run)
+
+            self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:
         """
@@ -86,84 +89,79 @@ class FilterAnalysisScheme(Scheme):
         """
         return False
 
-    def preprocess(self, c: Context) -> None:
+    def preprocess(self) -> None:
         """
-        Pre-processing step before the forecast.
+        Pre-processing step before the assimilation.
         """
+        for model_name, model in self.c.models.items():
+            self.c.print_1p(f"Running {model_name} preprocessing:\n")
 
+            opts = self.get_task_opts(model_name, nproc=self.config.nproc_util, nproc_per_task=model.nproc_per_util)
 
-    def postprocess(self, c: Context) -> None:
+            self.run_ensemble_tasks('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
+
+    def postprocess(self) -> None:
         """
         Post-processing step after the assimilation and before the next forecast.
         """
+        for model_name, model in self.c.models.items():
+            self.c.print_1p(f"Running {model_name} postprocessing:\n")
 
+            opts = self.get_task_opts(model_name, nproc=self.config.nproc_util, nproc_per_task=model.nproc_per_util)
 
-    def ensemble_forecast(self, c: Context) -> None:
+            self.run_ensemble_tasks('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
+
+    def ensemble_forecast(self) -> None:
         """
         Ensemble forecast step.
         """
-        for model_name, model in c.models.items():
-            #path = c.forecast_dir(c.time, model_name)
-            #makedir(path)
-            c.print_1p(f"Running {model_name} ensemble forecast:\n")
+        for model_name, model in self.c.models.items():
+            self.c.print_1p(f"Running {model_name} ensemble forecast:\n")
 
-            opts = self.get_task_opts(c)
-            if model.ens_run_type == 'mpi':
-                for mem_id in c.mem_list[c.pid_mem]:
-                    opts['member'] = mem_id
-                    opts['model_src'] = model_name
-                    c.io.call_method(c, 'prior', model.run, **opts)
+            opts = self.get_task_opts(model_name, nproc=self.config.nproc, nproc_per_task=model.nproc_per_run, walltime=model.walltime)
 
-            elif model.ens_run_type == 'batch':
-                opts['nens'] = c.config.nens
-                c.io.call_method(c, 'prior', model.run_batch, **opts)
+            self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
 
-            elif model.ens_run_type == 'scheduler':
-                walltime = getattr(model, 'walltime', None)
-                self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
-
-            else:
-                raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")
-
-    def filter(self, c: Context) -> None:
+    def filter(self) -> None:
         """
         Main method for performing the analysis step
         """
         # outer loop (iter = 0, ..., niter-1)
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
-        for c.iter in range(c.config.niter):
-            c.print_1p(f"Running analysis for outer iteration step {c.iter}:")
+        for self.c.iter in range(self.config.niter):
+            self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:")
 
-            c.update_assim_tools()
+            self.c.update_assim_tools()
+            self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
 
-            c.state = State(c)
-            timer(c)(c.state.prepare_state)(c)
+            self.c.state = State(self.c)
+            timer(self.c)(self.c.state.prepare_state)(self.c)
 
             # prepare the observations
-            c.obs = Obs(c)
-            timer(c)(c.obs.prepare_obs)(c)
-            timer(c)(c.obs.prepare_obs_from_state)(c, 'prior')
+            self.c.obs = Obs(self.c)
+            timer(self.c)(self.c.obs.prepare_obs)(self.c)
+            timer(self.c)(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
 
             # run assimilate algorithm
-            timer(c)(c.assimilator.assimilate)(c)
+            timer(self.c)(self.c.assimilator.assimilate)(self.c)
 
             # update the state to get posteriors
-            timer(c)(c.updator.update)(c)
+            timer(self.c)(self.c.updator.update)(self.c)
 
-    def perturb(self, c: Context):
+    def perturb(self) -> None:
         """
         Perturbation step.
 
         This step adds random perturbations to the model initial and/or boundary conditions,
         at the first or all the analysis cycles.
         """
-        c.print_1p(f"Perturbing state:")
+        self.c.print_1p(f"Perturbing state:")
 
-        pert = Perturbation(c)
-        timer(c)(pert)(c)
+        pert = Perturbation(self.c)
+        timer(self.c)(pert)(self.c)
 
-    def diagnose(self, c: Context):
+    def diagnose(self) -> None:
         """
         Diagnostics step.
 
@@ -172,26 +170,34 @@ class FilterAnalysisScheme(Scheme):
         The ``diag`` section in configuration file defines the methods and parameters of the diagnostics,
         corresponding to the ``diag.method`` module that implements the particular diagnostic method.
         """
-        c.print_1p(f"Running diagnostics:")
+        self.c.print_1p(f"Running diagnostics:")
 
-        diag = Diagnostics(c)
-        timer(c)(diag)(c)
+        diag = Diagnostics(self.c)
+        timer(self.c)(diag)(self.c)
 
-    def get_task_opts(self, c: Context, **other_opts) -> dict[str, Any]:
+    def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
         """
         Get common kwargs from configuration and return as task options dict
         """
         opts = {
-            'time': c.time,
-            'forecast_period': c.config.cycle_period,
-            'time_start': c.config.time_start,
-            'time_end': c.config.time_end,
-            'debug': c.config.debug,
-            **(c.config.job_submit or {}),
+            'model_src': model_name,
+            'time': self.c.time,
+            'forecast_period': self.config.cycle_period,
+            'restart_dir':self.get_restart_dir(model_name),
+            **(self.config.job_submit or {}),
             **other_opts,
-            }
+        }
         return opts
-
+    
+    def get_restart_dir(self, model_name) -> str:
+        model = self.c.models[model_name]
+        if self.c.time == self.config.time_start and model.ens_init_dir is not None:
+            restart_dir = model.ens_init_dir
+        else:
+            restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
+        if self.config.debug:
+            print(f"using restart files in {restart_dir}", flush=True)
+        return restart_dir
 
 def main():
     # initialize scheme

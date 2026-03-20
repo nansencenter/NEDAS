@@ -59,9 +59,12 @@ class Comm:
         self._locks = {}
 
     def __getattr__(self, attr):
-        if hasattr(self._comm, attr):
-            return getattr(self._comm, attr)
-        raise AttributeError
+        if attr == '_comm':
+            raise AttributeError("_comm not initialized")
+        comm = self.__dict__.get('_comm')
+        if comm is not None and hasattr(comm, attr):
+            return getattr(comm, attr)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
 
     def init_file_lock(self, filename):
         """
@@ -281,9 +284,9 @@ def distribute_tasks(comm: Comm, tasks: np.ndarray|Sequence, load: np.ndarray|Se
 
     return task_list
 
-class Scheduler:
+class OfflineScheduler:
     """
-    A scheduler class for queuing and running multiple jobs on available workers (group of processors).
+    An offline scheduler class for queuing and running multiple jobs on available workers (group of processors).
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """

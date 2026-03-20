@@ -2,13 +2,13 @@ import os
 import sys
 import tempfile
 import inspect
-import importlib.util
-import subprocess
 from typing import Callable
 from abc import ABC, abstractmethod
-from NEDAS.utils.parallel import Scheduler
+from NEDAS.job_submitters.hpc import HPCJobSubmitter
+from NEDAS.utils.parallel import OfflineScheduler, by_rank
 from NEDAS.config import Config
 from NEDAS.core.context import Context
+from NEDAS.core.types import EnsRunStrategy, IOTag
 
 class Scheme(ABC):
     """
@@ -18,7 +18,7 @@ class Scheme(ABC):
     """
     config: Config
     online_mode: bool
-    steps: dict[str, dict[str, bool|str]] = {}
+    mpi: bool
     _context: Context|None = None
 
     def __init__(self, config_file: str|None=None,
@@ -28,10 +28,11 @@ class Scheme(ABC):
         self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         self.online_mode = (self.config.io_mode == 'online')
+        self.mpi = (self.config.nproc > 1)
 
     @property
     def c(self):
-        """Lazy initialization of the runtime context. """
+        """ The runtime context, with lazy initialization """
         if self._context is None:
             self._context = Context(self.config)
         return self._context
@@ -40,18 +41,33 @@ class Scheme(ABC):
         """
         The entry point that handles the environment check and starts the engine.
         """
+        self.c.show_greeting()
+        self.c.print_1p(f"{self.__class__.__name__}: \n")
+
         # Environment check:
-        # If we are in online io mode, check if mpi env is ready if nproc>1
-        # if not, we will dispatch the whole scheme itself to a job submitter run.
-        if self.online_mode and self.config.nproc > 1:
-            # check if the mpi environment is ready
-            if self.c.comm.Get_size() != self.config.nproc:
-                self.c.print_1p("need to elevate self to a mpi env \n")
-                self.c.run_job
+        # 1. Online mode: (requires mpi environment if nproc>1)
+        if self.online_mode:
+            if not self.c.comm.mpi_ready:
+                # we are already inside the mpi environment, proceed
+                self.run_all()
+            else:
+                # if not, we will dispatch the whole scheme itself to a job submitter.
+                self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
+                # we return here because this parent process is done;
+                # the child subprocess spawned by the external call will handle the actual work
                 return
 
-        # if we are in offline io mode, each step in run_all will decide how to dispatch itself
-        self.run_all()
+        # 2. offline mode (manual dispatch per step)
+        else:
+            # check if we are accidentally inside an mpi environment already
+            comm_size = self.c.comm.Get_size()
+            if self.c.comm.mpi_ready and comm_size>1:
+                raise RuntimeError(f"Running in offline mode, but an mpi environment comm.size={comm_size} is detected."
+                                   "The main program should be run in serial.")
+
+            # in offline io mode, each step in run_all will decide how to dispatch itself
+            self.run_all()
 
     @abstractmethod
     def run_all(self):
@@ -60,78 +76,113 @@ class Scheme(ABC):
         """
         ...
 
-    def run_step(self, step: str) -> None:
+    def external_call(self, step:str|None=None, **kwargs):
         """
-        Helper function to run a step from an external call.
+        Run the scheme from an external call.
+        Saving the current context to a temporary config file, then run a subprocess to 
         """
-        if step not in self.steps:
-            raise ValueError(f"Unknown step '{step}' for {self.__class__.__name__}")
-
-        mpi = self.steps[step]['mpi']
-
-        assert self.c.config.io_mode == 'offline'
         script_file = os.path.abspath(inspect.getfile(self.__class__))
 
         # create a temporary config yaml file to hold c, and pass into program through runtime arg
-        with tempfile.NamedTemporaryFile(dir=self.c.config.work_dir, prefix='config-', suffix='.yml') as tmp_config_file:
+        with tempfile.NamedTemporaryFile(dir=self.config.work_dir,
+                                         prefix='config-',
+                                         suffix='.yml') as tmp_config_file:
             self.c.dump_config(tmp_config_file.name)
 
-            print(f"\n\033[1;33mRUNNING\033[0m {step} step")
-            if self.c.config.debug:
+            if self.config.debug:
                 print(f"config file: {tmp_config_file.name}")
 
-            ##build run commands for the ensemble forecast script
+            # build run commands for the ensemble forecast script
             commands = ""
-            if self.c.config.python_env:
-                commands = f". {self.c.config.python_env}; "
-            if mpi:
-                if importlib.util.find_spec("mpi4py") is not None:
-                    commands += f"JOB_EXECUTE {sys.executable} {script_file} -c {tmp_config_file.name}"
-                else:
-                    print("Warning: mpi4py is not found, will try to run with nproc=1.", flush=True)
-                    commands += f"{sys.executable} {script_file} -c {tmp_config_file.name} --nproc=1"
+            if self.config.python_env:
+                commands = f". {self.config.python_env}; "
+            commands += f"JOB_EXECUTE {sys.executable} {script_file} -c {tmp_config_file.name}"
+            if step:
+                commands += f" --step {step}"
+            if self.config.debug:
+                print(f"running commands: '{commands}'")
+
+            # build job options
+            job_opts = {
+                **(self.config.job_submit or {}),
+                'job_name': step,
+                'run_dir': self.c.fs.cycle_dir(self.c.time),
+                'nproc': self.config.nproc,
+                'debug': self.config.debug,
+                **kwargs,
+            }
+            # run job
+            self.c.run_job(commands, **job_opts)
+
+    def run_step(self, step: str, mpi: bool=False) -> None:
+        """
+        Manages how to run a specified step in the workflow.
+        """
+        if not hasattr(self, step):
+            raise NotImplementedError(f"Step '{step}' is not implemented for {self.__class__.__name__}")
+
+        self.c.print_1p(f"\n\033[1;33mRUNNING\033[0m {step} step\n")
+
+        # in offline mode, make an external call to run the step if mpi is required
+        if not self.online_mode and mpi:
+            self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
+            return
+
+        # otherwise, just call the step func
+        stepfunc = getattr(self, step)
+        stepfunc()
+
+    def run_ensemble_tasks(self, strategy: EnsRunStrategy,
+                           tag: IOTag,
+                           task_name: str,
+                           func: Callable,
+                           **opts) -> None:
+        if strategy == 'batch':
+            self._run_ensemble_tasks_batch(tag, task_name, func, **opts)
+
+        elif strategy == 'scheduler':
+            if self.online_mode:
+                self._run_ensemble_tasks_online(tag, task_name, func, **opts)
             else:
-                commands += f"{sys.executable} {script_file} -c {tmp_config_file.name}"
-            commands += f" --step {step}"
-
-            if mpi:
-                job_opts = {
-                    'job_name': step,
-                    'run_dir': self.c.fs.cycle_dir(self.c.time),
-                    'nproc': self.c.config.nproc,
-                    'debug': self.c.config.debug,
-                    **(self.c.config.job_submit or {}),
-                    }
-                self.c.run_job(commands, **job_opts)
-            else:
-                p = subprocess.Popen(commands, shell=True, text=True)
-                p.wait()
-                if p.returncode != 0:
-                    print(f"{self.__class__.__name__}: run_step '{step}' exited with error")
-                    sys.exit(1)
-
-    def run_ensemble_tasks_in_mpi(self):
-        ...
-
-    def run_ensemble_tasks_in_scheduler(self, task_name: str, func: Callable, *args, **kwargs) -> None:
-        walltime = kwargs.get('walltime', None)
-        nproc_per_run = kwargs['nproc_per_run']
-
-        ##get number of workers to initialize the scheduler
-        # if c.jsub.in_job_allocation
-        if self.c.config.job_submit and self.c.config.job_submit.get('run_separate_jobs', False):
-            ##all jobs will be submitted to external scheduler's queue
-            ##just assign a worker to each ensemble member
-            nworker = min(self.c.config.nens, self.c.config.nproc_util)
+                self._run_ensemble_tasks_offline_scheduler(tag, task_name, func, **opts)
         else:
-            ##Scheduler will use nworkers to spawn ensemble member runs to
-            ##the available nproc processors
-            nworker = self.c.config.nproc // nproc_per_run
-        scheduler = Scheduler(nworker, walltime, debug=self.c.config.debug)
+            raise ValueError(f"Unknown ensemble run strategy '{strategy}'")
 
-        for mem_id in range(self.c.config.nens):
-            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", func, *args, member=mem_id, **kwargs)
+    def _run_ensemble_tasks_batch(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+        # the func should handle the entire ensemble in one go
+        # make sure nens is defined in opts
+        print(f"running {task_name} in batch mode...")
+        opts['nens'] = self.config.nens
+        self.c.io.call_method(self.c, tag, func, **opts)
+        print("done.")
 
+    def _run_ensemble_tasks_online(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+        # scheduling internally within mpi environment
+        # using the mem_list (member lists distributed on pid ranks by comm)
+        nm = len(self.c.mem_list[self.c.pid_mem])
+        for m, mem_id in enumerate(self.c.mem_list[self.c.pid_mem]):
+            opts['member'] = mem_id
+            self.c.show_progress(f"PID {self.c.pid:4}: running {task_name} for mem{mem_id+1:03}", m, nm)
+            self.c.io.call_method(self.c, tag, func, **opts)
+        self.c.print_1p(' done.\n')
+
+    def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+        # setup an offline scheduler to distribute tasks
+        # get number of available workers to initialize the scheduler
+        nworker = opts['nproc'] // opts['nproc_per_task']
+
+        if isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
+            # the scheduling is then delegated to HPC's scheduler (each task submitted as a separate job)
+            # here, the offline scheduler should just submit all tasks at once
+            nworker = self.config.nens
+
+        # initialize the scheduler
+        scheduler = OfflineScheduler(nworker, opts.get('walltime'), debug=self.config.debug)
+
+        # submit jobs
+        for mem_id in range(self.config.nens):
+            opts['member'] = mem_id
+            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **opts)
         scheduler.start_queue() ##start the job queue
         scheduler.shutdown()
-        self.c.print_1p(' done.\n')
+        print(' done.')

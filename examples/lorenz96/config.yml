@@ -2,7 +2,7 @@ work_dir: work
 
 python_env:
 
-io_mode: online
+io_mode: offline
 
 nproc: 1
 
@@ -39,7 +39,8 @@ model_def:
   lorenz96:
     config_file:
     nproc_per_run: 1
-    ens_run_type: scheduler
+    ens_run_strategy: scheduler
+    ens_init_dir: '{work_dir}/init_ens'
     truth_dir: '{work_dir}/truth'
 
 # observation definition (a list of definitions, one for each variable)

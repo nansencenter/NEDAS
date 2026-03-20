@@ -130,5 +130,6 @@ LocalObsSeq = Annotated[dict[ObsRecordID, dict[PartitionID, dict[str, np.ndarray
 LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.ndarray]], 'local obs ensemble data']
 
 IOMode = Literal['online', 'offline']
-EnsRunType = Literal['mpi', 'scheduler', 'batch']
+IOTag = Literal['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
+EnsRunStrategy = Literal['scheduler', 'batch']
 ParallelMode = Literal['serial', 'mpi', 'openmp']

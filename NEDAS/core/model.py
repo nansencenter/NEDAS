@@ -6,7 +6,7 @@ import numpy as np
 from datetime import datetime
 from NEDAS.config import parse_config
 from NEDAS.grid import GridType
-from .types import IOMode, VarName, VarDesc, LevelID, EnsRunType
+from .types import IOMode, VarName, VarDesc, LevelID, EnsRunStrategy
 from .context import Context
 
 GridT = TypeVar("GridT", bound=GridType)
@@ -20,9 +20,9 @@ class Model(Generic[GridT], ABC):
     grid: GridT
     z: dict[LevelID, np.ndarray]
     mask: np.ndarray
-    ens_run_type: EnsRunType
     ens_init_dir: str|None
     truth_dir: str|None
+    ens_run_strategy: EnsRunStrategy
     nproc_per_run: int = 1
     nproc_per_util: int = 1
     walltime: int|None = None
@@ -164,23 +164,27 @@ class Model(Generic[GridT], ABC):
     @abstractmethod
     def run(self, *args, **kwargs) -> None:
         """
-        Run the model (one member at a time).
+        Run the model forward in time.
 
         Args:
-            **kwargs: Keyword arguments for running the model.
+            *args: Arguments
+            **kwargs: Keyword arguments
+        
+        Keyword Args:
+            time (datetime): current time when forecast starts
+            restart_dir (str): directory where restart files are located
+            forecast_period (int): forecast period in hours
+
+        If self.ens_run_strategy == 'batch', the method will run all ensemble members in one go,
+        expect additional kwargs['nens'] to be the ensemble size.
+        If self.ens_run_strategy == 'scheduler', the method runs a single member indexed by kwargs['member'],
+        and kwargs['worker_id'] is the pid assigned by the scheduler to run this method.
         """
         ...
 
-    def run_batch(self, *args, **kwargs) -> None:
-        """
-        Run the model for all ensemble members in batch mode.
-
-        """
-        raise NotImplementedError(f"'run_batch' is not implemented for {self.__class__.__name__}")
-
     def generate_truth(self, *args, **kwargs) -> None:
         """
-        Generate truth (nature run) model states.
+        Generate truth (nature run) model states. Use for running synthetic observation experiments.
 
         """
         raise NotImplementedError(f"'generate_truth' is not implemented for {self.__class__.__name__}")

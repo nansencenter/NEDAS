@@ -59,17 +59,17 @@ class ForecastScheme(Scheme):
             c.io.makedir(path)
             print(f"Running {model_name} ensemble forecast:", flush=True)
 
-            if model.ens_run_type == 'batch':
+            if smodelelf.ens_run_strategy == 'batch':
                 opts = self.get_task_opts(c, path=path, nens=c.nens)
                 model.run_batch(**opts)
 
-            elif model.ens_run_type == 'scheduler':
+            elif smodelelf.ens_run_strategy == 'scheduler':
                 opts = self.get_task_opts(c, path=path)
                 walltime = getattr(model, 'walltime', None)
                 self.run_ensemble_tasks_in_scheduler(c, f'forecast_{model_name}', model.run, opts, model.nproc_per_run, walltime)
 
             else:
-                raise ValueError(f"Unknown ensemble run type {model.ens_run_type} for {model_name}")
+                raise ValueError(f"Unknown ensemble run type {smodelelf.ens_run_strategy} for {model_name}")
 
     def preprocess(self, c):
         """

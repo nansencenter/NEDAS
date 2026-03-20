@@ -253,7 +253,13 @@ class Context:
         tmp_config.dump_yaml(config_file)
 
     def show_greeting(self) -> None:
-        self.print_1p(f"Welcome to NEDAS\n\n")
+        greeting_msg = """
+░░█▀█░█▀▀░█▀▄░█▀█░█▀▀░░
+░░█░█░█▀▀░█░█░█▀█░▀▀█░░
+░░▀░▀░▀▀▀░▀▀░░▀░▀░▀▀▀░░
+
+"""
+        self.print_1p(greeting_msg)
 
     def show_progress(self, debug_message: str,
                       task: int,

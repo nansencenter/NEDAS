@@ -1,9 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, get_args, TYPE_CHECKING
 import os
 import numpy as np
-from .types import IOMode
+from .types import IOMode, IOTag
 if TYPE_CHECKING:
     from .context import Context
 
@@ -18,7 +18,7 @@ class IOBackend(ABC):
 
     """
     io_mode: IOMode = 'offline'
-    tags: list[str] = ['prior', 'prior_mean', 'post', 'post_mean', 'truth', 'z', 'z_mean']
+    tags: list[str] = list(get_args(IOTag))
 
     def validate_tag(self, tag: str):
         if tag not in self.tags:
@@ -69,7 +69,7 @@ class IOBackend(ABC):
 
         Args:
             c (Context): the runtime context
-            tag (str): which copy of the model state to request io from: "prior", "posterior" or "truth"
+            tag (str): which copy of the model state to request io from: "prior", "post" or "truth"
             method (Callable): method name
             *args, **kwargs: will be passed to the method
 

@@ -12,7 +12,8 @@ class QGFortranModelEmulator(QGFortranModel):
     weightfile: str
     model_params: dict
 
-    def run_batch(self, nens=1, task_id=0, **kwargs):
+    def run(self, nens=1, task_id=0, **kwargs):
+        assert self.ens_run_strategy=='batch', f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'"
         kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
@@ -62,6 +63,3 @@ class QGFortranModelEmulator(QGFortranModel):
             for k in range(self.nz):
                 fld = state_out[m,...,k]
                 self.write_var(fld, name='streamfunc', k=k, **kwargs_out)
-
-    def run(self, task_id=0, **kwargs):
-        raise NotImplementedError("qg.emulator only runs in batch mode, call run_batch instead")

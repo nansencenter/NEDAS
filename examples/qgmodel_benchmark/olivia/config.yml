@@ -53,7 +53,7 @@ model_def:
     nproc_per_util: 1
     walltime: 1000
     restart_dt: 24
-    ens_run_type: scheduler
+    ens_run_strategy: scheduler
     use_job_array: False
     ens_init_dir: '{work_dir}/init_ens'
     truth_dir: '{work_dir}/truth'

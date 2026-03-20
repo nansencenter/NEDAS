@@ -83,7 +83,7 @@ model_def:
     walltime: 1000      # walltime in seconds
     restart_dt: 24      # restart file interval in hours
     forcing_dt: 24      # boundary forcing interval
-    ens_run_type: scheduler    # 'scheduler' or 'batch', see ensemble_forecast.py for details
+    ens_run_strategy: scheduler    # 'scheduler' or 'batch', see ensemble_forecast.py for details
     use_job_array: False       # if true, use job array in scheduler for ensemble runs
     ens_init_dir: '{work_dir}/init_ens'  # path to the initial ensemble restart files
     truth_dir: '{work_dir}/truth'        # path to the truth files (for synthetic obs)
@@ -149,9 +149,9 @@ covariance_def:
 
 # covariance inflation technique in assimilation
 inflation_def:
-  type: post,rtpp      # type of inflation (posterior/prior, multiplicative/RTPP...)
-  adaptive: True            # if true, run an adaptive version of the inflation scheme
-  coef: 1.0                 # static inflation coefficient
+  type: post,multiplicative  # type of inflation (post/prior, multiplicative/RTPP...)
+  adaptive: False            # if true, run an adaptive version of the inflation scheme
+  coef: 1.0                  # static inflation coefficient
 
 # covariance localization technique in assimilation
 localization_def:       # localization is configured separately for horizontal, vertical and temporal relations

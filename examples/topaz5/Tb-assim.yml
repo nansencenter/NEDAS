@@ -83,7 +83,7 @@ model_def:
     walltime: 3600
     restart_dt: 168
     forcing_dt: 6
-    ens_run_type: scheduler
+    ens_run_strategy: scheduler
     use_job_array: False
     stagnant_log_timeout: 100
     ens_init_dir: '/cluster/work/users/yingyue/TP5_2021/output/26090/FORECAST'

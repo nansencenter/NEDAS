@@ -150,21 +150,19 @@ class Lorenz96Model(Model[Grid1D]):
 
     def generate_truth(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        if self.io_mode == 'offline':
-            self.c.fs.make_dir(self.truth_dir)
+        self.c.fs.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = self.c.config.time_start
         kwargs['member'] = None
         while kwargs['time'] <= self.c.config.time_end:
-            self.write_var(state, name='state', **kwargs)
+            self.write_var(state, **kwargs)
             state = M_nl(state, self.F, kwargs['forecast_period']/24, self.dt)
             kwargs['time'] += kwargs['forecast_period'] * dt1h
 
     def generate_init_ensemble(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        if self.io_mode == 'offline':
-            self.c.fs.make_dir(self.ens_init_dir)
-
+        self.c.fs.make_dir(self.ens_init_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = self.c.config.time_start
-        self.write_var(state, name='state', **kwargs)
+        kwargs['path'] = self.ens_init_dir
+        self.write_var(state, **kwargs)

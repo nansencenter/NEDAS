@@ -390,10 +390,12 @@ class NextsimDGModel(Model[RegularGrid]):
         nc_write_var(restartfile, dims, 'data/hice', hice, comm=kwargs['comm'])
 
     def run(self, *args, **kwargs):
-        if self.ens_run_type == 'batch':
+        if self.ens_run_strategy == 'batch':
             return self.run_batch(*args, **kwargs)
-        else:
+        elif self.ens_run_strategy == 'scheduler':
             return self.run_single(*args, **kwargs)
+        else:
+            raise ValueError(f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'")
 
     def run_single(self, task_id=0, **kwargs):
         """Run nextsim.dg model forecast"""

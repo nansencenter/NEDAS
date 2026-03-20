@@ -399,8 +399,8 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
    * - ``forcing_dt``
      - Model boundary condition interval in hours.
      - 24
-   * - ``ens_run_type``
-     - Type of ensemble forecast to run.
+   * - ``ens_run_strategy``
+     - Strategy for running tasks involving an ensemble of tasks.
 
        'scheduler': run each member as a separate job
 

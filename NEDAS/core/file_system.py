@@ -17,6 +17,9 @@ class FileSystem:
             config = Config()  # default configuration
         self.config = config
 
+        # make sure work_dir exists
+        self.make_dir(config.work_dir)
+
     def cycle_dir(self, time: datetime) -> str:
         """
         Directory path for an analysis cycle.

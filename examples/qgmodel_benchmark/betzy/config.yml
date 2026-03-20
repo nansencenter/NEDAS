@@ -44,7 +44,7 @@ model_def:
     walltime: 1000
     restart_dt: 24
     forcing_dt: 24
-    ens_run_type: scheduler
+    ens_run_strategy: scheduler
     use_job_array: False
     ens_init_dir: '{work_dir}/init_ens'
     truth_dir: '{work_dir}/truth'
@@ -94,7 +94,7 @@ covariance_def:
 
 # covariance inflation technique in assimilation
 inflation_def:
-  type: post,rtpp      # type of inflation (posterior/prior, multiplicative/RTPP...)
+  type: post,RTPP      # type of inflation (post/prior, multiplicative/RTPP...)
   adaptive: True            # if true, run an adaptive version of the inflation scheme
   coef: 1.0                 # static inflation coefficient
 

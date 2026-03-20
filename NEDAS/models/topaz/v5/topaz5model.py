@@ -777,6 +777,8 @@ class Topaz5Model(Model[RegularGrid]):
         self.write_var(hice, **{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
 
     def run(self, task_id=0, **kwargs):
+        assert self.ens_run_strategy=='scheduler', f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'"
+
         kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
@@ -855,6 +857,3 @@ class Topaz5Model(Model[RegularGrid]):
             self.c.run_job(f"mv {file1} {file2}")
         else:
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
-
-    def run_batch(self, **kwargs):
-        raise NotImplementedError("topaz5model.run_batch: not implemented, use run() instead")
