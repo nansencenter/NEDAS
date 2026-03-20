@@ -121,12 +121,14 @@ class Scheme(ABC):
         if not hasattr(self, step):
             raise NotImplementedError(f"Step '{step}' is not implemented for {self.__class__.__name__}")
 
-        self.c.print_1p(f"\n\033[1;33mRUNNING\033[0m {step} step\n")
-
-        # in offline mode, make an external call to run the step if mpi is required
+        # in offline mode, run_step starts in serial
+        # if the step requires mpi for nproc>1, make an external call
         if not self.online_mode and mpi:
-            self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
-            return
+            if not self.c.comm.mpi_ready:
+                self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
+                return
+
+        self.c.print_1p(f"\n\033[1;33mRUNNING\033[0m {step} step\n")
 
         # otherwise, just call the step func
         stepfunc = getattr(self, step)

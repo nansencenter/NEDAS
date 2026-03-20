@@ -19,9 +19,9 @@ class FilterAnalysisScheme(Scheme):
         self.c.print_1p("Initializing...\n")
         self.c.show_summary()
 
-        self.run_step('generate_truth')
-
-        self.run_step('generate_init_ensemble')
+        if self.c.time == self.config.time_start:
+            self.run_step('generate_truth')
+            self.run_step('generate_init_ensemble')
 
         print("\nCycling start.\n")
         while self.c.time < self.config.time_end:
@@ -62,14 +62,14 @@ class FilterAnalysisScheme(Scheme):
         # skip if not using synthetic obs (no need for the truth)
         if not self.c.use_synthetic_obs:
             return
-        # skip if truth files already exists
 
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Generating truth for '{model_name}' model...\n")
+            self.c.print_1p(f"Generating truth for '{model_name}' model...")
 
             opts = self.get_task_opts(model_name, member=None)
 
             self.c.io.call_method(self.c, 'truth', model.generate_truth, **opts)
+        self.c.print_1p(' done.\n')
 
     def generate_init_ensemble(self) -> None:
         """
@@ -95,6 +95,7 @@ class FilterAnalysisScheme(Scheme):
         """
         for model_name, model in self.c.models.items():
             self.c.print_1p(f"Running {model_name} preprocessing:\n")
+            self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
 
             opts = self.get_task_opts(model_name, nproc=self.config.nproc_util, nproc_per_task=model.nproc_per_util)
 
@@ -130,7 +131,7 @@ class FilterAnalysisScheme(Scheme):
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         for self.c.iter in range(self.config.niter):
-            self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:")
+            self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:\n")
 
             self.c.update_assim_tools()
             self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))

@@ -191,7 +191,7 @@ class State:
         c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'\n')
 
         fields = getattr(self, f"fields_{tag}")
-        c.io.prepare_collective_io(c, tag)
+        c.io.prepare_collective_io(c, f"{tag}_mean")
 
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
             rec = self.info.fields[rec_id]

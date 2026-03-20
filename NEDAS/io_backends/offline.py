@@ -41,9 +41,10 @@ class OfflineIO(IOBackend):
         """
         self.validate_tag(tag)
         ##check if it is available in cache
-        if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem]:
-            fields = getattr(c.state, f"fields_{tag}")
-            return fields[mem_id, rec_id]
+        if hasattr(c.state, f"fields_{tag}"):
+            if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem]:
+                fields = getattr(c.state, f"fields_{tag}")
+                return fields[mem_id, rec_id]
 
         ##otherwise, read it from binfile
         rec = c.state.info.fields[rec_id]
@@ -91,7 +92,7 @@ class OfflineIO(IOBackend):
         model_name = kwargs['model_src']
         model = c.models[model_name]
         time = kwargs['time']
-        if tag == 'prior':
+        if tag in ['prior', 'z']:
             path = c.fs.forecast_dir(time, model_name)
 
         elif tag == 'post':
