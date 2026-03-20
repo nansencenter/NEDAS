@@ -176,6 +176,7 @@ class State:
 
                 c.io.write_field(fld, c, tag, rec_id, mem_id)
 
+        c.comm.Barrier()
         c.print_1p(' done.\n')
 
     def output_ens_mean(self, c: Context, tag: str) -> None:
@@ -188,7 +189,7 @@ class State:
             tag (str): which version of state this is: 'prior_mean', 'post_mean', or 'z'
             mean_file (str): path to the output binary file for the ensemble mean
         """
-        c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'\n')
+        c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'_mean\n')
 
         fields = getattr(self, f"fields_{tag}")
         c.io.prepare_collective_io(c, f"{tag}_mean")
@@ -214,6 +215,7 @@ class State:
                 mean_fld = sum_fld / c.config.nens
                 c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
+        c.comm.Barrier()
         c.print_1p(' done.\n')
 
     def output_ref_z(self, c: Context):

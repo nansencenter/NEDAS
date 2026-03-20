@@ -34,6 +34,14 @@ class Assimilator(ABC):
         # transpose c.state.state_post back to field-complete c.state.fields_post
         self.transpose_to_field_complete(c)
 
+        # output the post state
+        # TODO: which version of posterior to output? ideally the inflated one? 
+        # algorithmically clean way is to output the intermediate versions as well and 
+        # let the files be input/output to the inflation func
+        # but this is too much IO overhead.
+        c.state.output_state(c, 'post')
+        c.state.output_ens_mean(c, 'post')
+
         # posterior inflation
         c.inflation_func(c, 'post')
 

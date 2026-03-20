@@ -30,7 +30,8 @@ class OfflineIO(IOBackend):
         binfile = self.binfile_name(c, tag)
         if c.pid == 0:
             ##if file doesn't exist, create the file
-            open(binfile, 'wb')
+            with open(binfile, 'wb') as f:
+                pass
             ##write state_info to the accompanying .dat file
             c.state.info.write_to_file(binfile)
         c.comm.Barrier()
@@ -82,8 +83,6 @@ class OfflineIO(IOBackend):
         with open(binfile, 'r+b') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
             f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
-
-        c.comm.Barrier()
 
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)

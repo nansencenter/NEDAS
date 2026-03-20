@@ -148,6 +148,7 @@ class FilterAnalysisScheme(Scheme):
             timer(self.c)(self.c.assimilator.assimilate)(self.c)
 
             # update the state to get posteriors
+            # TODO: there is a bug here -> restart files not updated, UCX WARN raised.
             timer(self.c)(self.c.updator.update)(self.c)
 
     def perturb(self) -> None:

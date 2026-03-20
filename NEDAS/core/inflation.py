@@ -19,23 +19,6 @@ class Inflation(ABC):
         """
         Perform the covariance inflation method
         """
-    # def prior_inflation(self, c, state, obs):
-    #     """
-    #     Apply covariance inflation for the prior ensemble
-    #     """
-    #     state.output_ens_mean(c, state.fields_prior, state.prior_mean_file)
-    #     c.inflation_func(c, state, obs, 'prior')
-    #     state.output_state(c, state.fields_prior, state.prior_file)
-
-    # def posterior_inflation(self, c, state, obs):
-    #     """
-    #     Apply covariance inflation for the posterior ensemble
-    #     """
-    #     obs.prepare_obs_from_state(c, state, 'posterior')  ##update obs_post_seq for stats
-    #     state.output_ens_mean(c, state.fields_post, state.post_mean_file)
-    #     c.inflation_func(c, state, obs, 'posterior')
-    #     state.output_state(c, state.fields_post, state.post_file)
-        c.state.output_ens_mean(c, flag)
         if flag == 'prior' and self.prior:
             if self.adaptive:
                 self.adaptive_prior_inflation(c)
@@ -45,6 +28,8 @@ class Inflation(ABC):
             if self.adaptive:
                 self.adaptive_post_inflation(c)
             self.apply_inflation(c, flag)
+        # c.state.output_state(c, flag)
+        # c.state.output_ens_mean(c, flag)
 
     def obs_space_stats(self, c: Context):
         """observation-space statistics"""
