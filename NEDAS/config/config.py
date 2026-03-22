@@ -45,6 +45,7 @@ class Config:
     time_analysis_start: datetime
     time_analysis_end: datetime
     cycle_period: float
+    forecast_period: float
     obs_time_steps: list[float]
     obs_time_scale: float
     state_time_steps: list[float]

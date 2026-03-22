@@ -1,6 +1,5 @@
 
 from typing import Any
-from NEDAS.utils.parallel import by_rank
 from NEDAS.utils.progress import timer
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
 
@@ -97,7 +96,10 @@ class FilterAnalysisScheme(Scheme):
             self.c.print_1p(f"Running {model_name} preprocessing:\n")
             self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
 
-            opts = self.get_task_opts(model_name, nproc=self.config.nproc_util, nproc_per_task=model.nproc_per_util)
+            opts = self.get_task_opts(model_name,
+                                      restart_dir=self.get_restart_dir(model_name),
+                                      nproc=self.config.nproc_util,
+                                      nproc_per_task=model.nproc_per_util)
 
             self.run_ensemble_tasks('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
 
@@ -108,7 +110,10 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             self.c.print_1p(f"Running {model_name} postprocessing:\n")
 
-            opts = self.get_task_opts(model_name, nproc=self.config.nproc_util, nproc_per_task=model.nproc_per_util)
+            opts = self.get_task_opts(model_name,
+                                      restart_dir=self.get_restart_dir(model_name),
+                                      nproc=self.config.nproc_util,
+                                      nproc_per_task=model.nproc_per_util)
 
             self.run_ensemble_tasks('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
 
@@ -119,7 +124,11 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             self.c.print_1p(f"Running {model_name} ensemble forecast:\n")
 
-            opts = self.get_task_opts(model_name, nproc=self.config.nproc, nproc_per_task=model.nproc_per_run, walltime=model.walltime)
+            opts = self.get_task_opts(model_name,
+                                      restart_dir=self.get_restart_dir(model_name),
+                                      nproc=self.config.nproc,
+                                      nproc_per_task=model.nproc_per_run,
+                                      walltime=model.walltime)
 
             self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
 
@@ -148,7 +157,6 @@ class FilterAnalysisScheme(Scheme):
             timer(self.c)(self.c.assimilator.assimilate)(self.c)
 
             # update the state to get posteriors
-            # TODO: there is a bug here -> restart files not updated, UCX WARN raised.
             timer(self.c)(self.c.updator.update)(self.c)
 
     def perturb(self) -> None:
@@ -185,7 +193,6 @@ class FilterAnalysisScheme(Scheme):
             'model_src': model_name,
             'time': self.c.time,
             'forecast_period': self.config.cycle_period,
-            'restart_dir':self.get_restart_dir(model_name),
             **(self.config.job_submit or {}),
             **other_opts,
         }
@@ -194,7 +201,7 @@ class FilterAnalysisScheme(Scheme):
     def get_restart_dir(self, model_name) -> str:
         model = self.c.models[model_name]
         if self.c.time == self.config.time_start and model.ens_init_dir is not None:
-            restart_dir = model.ens_init_dir
+            restart_dir = model.ens_init_dir.format(time=self.c.time)
         else:
             restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
         if self.config.debug:
