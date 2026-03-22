@@ -22,7 +22,7 @@ class FilterAnalysisScheme(Scheme):
             self.run_step('generate_truth')
             self.run_step('generate_init_ensemble')
 
-        print("\nCycling start.\n")
+        self.c.print_1p("\nCycling start.\n")
         while self.c.time < self.config.time_end:
             self.c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {self.c.time} => {self.c.next_time}\n")
 

@@ -69,6 +69,11 @@ class OfflineIO(IOBackend):
         """
         Write a field to a binary file
         """
+        # only write to binfile if the field is owned by the pid_mem
+        # for ensemble mean every pid_mem receives a copy from allreduce, but only root need to write it.
+        if mem_id not in c.mem_list[c.pid_mem]:
+            return
+
         self.validate_tag(tag)
         rec = c.state.info.fields[rec_id]
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape

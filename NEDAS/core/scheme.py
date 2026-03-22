@@ -18,7 +18,6 @@ class Scheme(ABC):
     """
     config: Config
     online_mode: bool
-    mpi: bool
     _context: Context|None = None
 
     def __init__(self, config_file: str|None=None,
@@ -28,7 +27,6 @@ class Scheme(ABC):
         self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         self.online_mode = (self.config.io_mode == 'online')
-        self.mpi = (self.config.nproc > 1)
 
     @property
     def c(self):
@@ -47,16 +45,13 @@ class Scheme(ABC):
         # Environment check:
         # 1. Online mode: (requires mpi environment if nproc>1)
         if self.online_mode:
-            if not self.c.comm.mpi_ready:
+            if self.c.comm.mpi_ready or self.config.nproc==1:
                 # we are already inside the mpi environment, proceed
                 self.run_all()
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
                 self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
-                # we return here because this parent process is done;
-                # the child subprocess spawned by the external call will handle the actual work
-                return
 
         # 2. offline mode (manual dispatch per step)
         else:

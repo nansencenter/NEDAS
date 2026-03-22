@@ -207,13 +207,13 @@ class State:
             for mem_id in c.mem_list[c.pid_mem]:
                 sum_fld_pid += fields[mem_id, rec_id]
 
-            ##sum over all field sums on different pids together to get the total sum
-            ##TODO:reduce is expensive if only part of pid holds state in memory
-            sum_fld = c.comm_mem.reduce(sum_fld_pid, root=0)
+            # sum over all field sums on different pids together to get the total sum
+            # TODO:reduce is expensive if only sparse pid holds state in memory, so in runtime should try to
+            # populate the comm_mem with members as much as possible.
+            sum_fld = c.comm_mem.allreduce(sum_fld_pid)
 
-            if c.pid_mem == 0:
-                mean_fld = sum_fld / c.config.nens
-                c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
+            mean_fld = sum_fld / c.config.nens
+            c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.comm.Barrier()
         c.print_1p(' done.\n')
