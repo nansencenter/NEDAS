@@ -26,7 +26,7 @@ def get_transform_funcs(c: Context) -> list[Transform]:
         
         module = importlib.import_module('NEDAS.assim_tools.transforms.'+transform_func_type)
         TransformClass = getattr(module, registry[transform_func_type])
-        transform_func = TransformClass(**transform_func_def)
+        transform_func = TransformClass(c, **transform_func_def)
         transform_funcs.append(transform_func)
 
     return transform_funcs
