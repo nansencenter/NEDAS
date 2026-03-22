@@ -166,7 +166,8 @@ class Scheme(ABC):
     def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
         # setup an offline scheduler to distribute tasks
         # get number of available workers to initialize the scheduler
-        nworker = opts['nproc'] // opts['nproc_per_task']
+        total_nproc = opts.get('total_nproc', self.config.nproc)
+        nworker = total_nproc // opts['nproc']
 
         if isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
             # the scheduling is then delegated to HPC's scheduler (each task submitted as a separate job)
@@ -178,8 +179,12 @@ class Scheme(ABC):
 
         # submit jobs
         for mem_id in range(self.config.nens):
-            opts['member'] = mem_id
-            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **opts)
+            job_opts = {
+                **opts,
+                'member': mem_id,
+                'debug': self.config.debug,
+            }
+            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
         scheduler.start_queue() ##start the job queue
         scheduler.shutdown()
         print(' done.')

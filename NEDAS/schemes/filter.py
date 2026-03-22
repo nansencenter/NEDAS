@@ -78,7 +78,9 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             self.c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
 
-            opts = self.get_task_opts(model_name, nproc=self.config.nproc, nproc_per_task=model.nproc_per_run)
+            opts = self.get_task_opts(model_name,
+                                      total_nproc=self.config.nproc,
+                                      nproc=model.nproc_per_run)
 
             self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
@@ -98,8 +100,8 @@ class FilterAnalysisScheme(Scheme):
 
             opts = self.get_task_opts(model_name,
                                       restart_dir=self.get_restart_dir(model_name),
-                                      nproc=self.config.nproc_util,
-                                      nproc_per_task=model.nproc_per_util)
+                                      total_nproc=self.config.nproc_util,
+                                      nproc=model.nproc_per_util)
 
             self.run_ensemble_tasks('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
 
@@ -112,8 +114,8 @@ class FilterAnalysisScheme(Scheme):
 
             opts = self.get_task_opts(model_name,
                                       restart_dir=self.get_restart_dir(model_name),
-                                      nproc=self.config.nproc_util,
-                                      nproc_per_task=model.nproc_per_util)
+                                      total_nproc=self.config.nproc_util,
+                                      nproc=model.nproc_per_util)
 
             self.run_ensemble_tasks('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
 
@@ -126,8 +128,8 @@ class FilterAnalysisScheme(Scheme):
 
             opts = self.get_task_opts(model_name,
                                       restart_dir=self.get_restart_dir(model_name),
-                                      nproc=self.config.nproc,
-                                      nproc_per_task=model.nproc_per_run,
+                                      total_nproc=self.config.nproc,
+                                      nproc=model.nproc_per_run,
                                       walltime=model.walltime)
 
             self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
