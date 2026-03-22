@@ -240,3 +240,9 @@ class Grid1D:
         if self.cyclic:
             dist_x = np.minimum(dist_x, self.Lx - dist_x)
         return dist_x
+
+    def plot_field(self, ax, fld, vmin, vmax):
+        ...
+
+    def plot_vectors(self, ax, vec_fld):
+        ...

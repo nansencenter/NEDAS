@@ -48,7 +48,7 @@ class ObsInfo:
 
         self.complete_err_cross_corr_matrix()
 
-        if c.config.debug:
+        if c.debug:
             print(f"number of unique observation records = {len(self.records)}", flush=True)
             print(f"observation variables: {self.variables}", flush=True)
 

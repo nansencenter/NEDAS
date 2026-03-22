@@ -3,12 +3,14 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from NEDAS.grid.grid_2d_base import Grid2DBase
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 from NEDAS.core.state import State
 from NEDAS.core.obs import Obs
+from NEDAS.core.context import Context
 
-def get_task_list(c, **kwargs) -> list:
+def get_task_list(c: Context, **kwargs) -> list:
 
     variables = ensure_list(kwargs['variables'])
     dataset_src = ensure_list(kwargs['dataset_src'])
@@ -50,15 +52,15 @@ def get_task_list(c, **kwargs) -> list:
                     tasks.append({**kwargs, 'obs_rec_id':obs_rec_id, 'member':m, 'k':k, 't':t, 'dt':obs_dt[i], 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i], 'vmin_diff':vmin_diff[i], 'vmax_diff':vmax_diff[i], 'nlevels_diff':nlevels_diff[i], 'cmap_diff':cmap_diff[i]})
     return tasks
 
-def run(c, **kwargs) -> None:
+def run(c: Context, **kwargs) -> None:
     """
     Run diagnostics: plot the ensemble states
     """
     if 'plot_dir' in kwargs:
         plot_dir = kwargs['plot_dir']
     else:
-        plot_dir = os.path.join(c.work_dir, 'plots', 'observations')
-    c.io.make_dir(plot_dir)
+        plot_dir = os.path.join(c.config.work_dir, 'plots', 'observations')
+    c.fs.make_dir(plot_dir)
 
     c.state = State(c)
     c.obs = Obs(c)
@@ -81,7 +83,7 @@ def run(c, **kwargs) -> None:
     k = kwargs['k']
     t = kwargs['t']
     dt = kwargs['dt']
-    if c.config.debug:
+    if c.debug:
         print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
 
     ##if the viewer html file does not exist, generate it
@@ -93,8 +95,9 @@ def run(c, **kwargs) -> None:
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     ##read the obs data from debug data
-    obs_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
-    obs_prior_seq = np.load(os.path.join(c.io.analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
+    analysis_dir = c.fs.analysis_dir(c.time, c.iter)
+    obs_seq = np.load(os.path.join(analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
+    obs_prior_seq = np.load(os.path.join(analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 
     ##filter for the obs within time and vertical level range
     tmask = (obs_seq['t'] > t) & (obs_seq['t'] <= t+dt*dt1h)
@@ -114,6 +117,7 @@ def run(c, **kwargs) -> None:
     ##plot the observations as scattered data over c.grid
     try:
         fig, ax = plt.subplots(1, 2, figsize=figsize)
+        assert isinstance(c.grid, Grid2DBase)
         if obs_rec['is_vector']:
             obs_u = obs_seq['obs'][0,...][ind]
             obs_v = obs_seq['obs'][1,...][ind]
@@ -130,12 +134,12 @@ def run(c, **kwargs) -> None:
 
         else:
             obs = obs_seq['obs'][ind]
-            c.grid.plot_scatter(ax[0], obs, vmin, vmax, nlevels, cmap=cmap, markersize=10, x=obs_x[ind], y=obs_y[ind])
+            c.grid.plot_scatter(ax[0], obs, vmin, vmax, nlevels, cmap=cmap, markersize=10, x=obs_x[ind], y=obs_y[ind])  # type: ignore
             add_colorbar(fig, ax[0], cmap, vmin, vmax, nlevels, units=obs_rec['units'])
 
             obs_prior = obs_prior_seq[ind]
             obs_diff = obs - obs_prior
-            c.grid.plot_scatter(ax[1], obs_diff, vmin_diff, vmax_diff, nlevels_diff, cmap=cmap_diff, markersize=10, x=obs_x[ind], y=obs_y[ind])
+            c.grid.plot_scatter(ax[1], obs_diff, vmin_diff, vmax_diff, nlevels_diff, cmap=cmap_diff, markersize=10, x=obs_x[ind], y=obs_y[ind])  # type: ignore
             add_colorbar(fig, ax[1], cmap_diff, vmin_diff, vmax_diff, nlevels_diff, units=obs_rec['units'])
 
         for i in range(2):

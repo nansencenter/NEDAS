@@ -149,7 +149,7 @@ class Scheme(ABC):
         # the func should handle the entire ensemble in one go
         # make sure nens is defined in opts
         print(f"running {task_name} in batch mode...")
-        opts['nens'] = self.config.nens
+        opts['nens'] = self.c.nens
         self.c.io.call_method(self.c, tag, func, **opts)
         print("done.")
 
@@ -172,13 +172,13 @@ class Scheme(ABC):
         if isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
             # the scheduling is then delegated to HPC's scheduler (each task submitted as a separate job)
             # here, the offline scheduler should just submit all tasks at once
-            nworker = self.config.nens
+            nworker = self.c.nens
 
         # initialize the scheduler
         scheduler = OfflineScheduler(nworker, opts.get('walltime'), debug=self.config.debug)
 
         # submit jobs
-        for mem_id in range(self.config.nens):
+        for mem_id in range(self.c.nens):
             job_opts = {
                 **opts,
                 'member': mem_id,

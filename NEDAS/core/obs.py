@@ -342,7 +342,7 @@ class Obs:
             obs_rec.nobs = seq['obs'].shape[-1]  # update nobs in obs_rec
 
         # output obs sequence for debugging
-        if c.config.debug and c.pid_mem == 0:
+        if c.debug and c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
                 c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
 
@@ -393,7 +393,7 @@ class Obs:
         c.print_1p(' done.\n')
 
         ##output the obs sequeneces for debugging
-        if c.config.debug:
+        if c.debug:
             for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
@@ -699,7 +699,7 @@ class Obs:
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
             v_list = [0, 1] if obs_rec.is_vector else [None]
-            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.config.nens) for v in v_list], axis=0)
+            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list], axis=0)
             no_nan_mask = ~np.isnan(values).any(axis=0)
             self.valid[obs_rec_id] = np.where(no_nan_mask)[0].tolist()
             nlobs += len(self.valid[obs_rec_id]) * len(v_list)
@@ -712,7 +712,7 @@ class Obs:
         data['z'] = np.full(nlobs, np.nan)
         data['t'] = np.full(nlobs, np.nan)
         data['err_std'] = np.full(nlobs, np.nan)
-        data['obs_prior'] = np.full((c.config.nens, nlobs), np.nan)
+        data['obs_prior'] = np.full((c.nens, nlobs), np.nan)
         data['used'] = np.full(nlobs, False)
         data['hroi'] = np.ones(n_obs_rec)
         data['vroi'] = np.ones(n_obs_rec)
@@ -743,7 +743,7 @@ class Obs:
                 data['z'][i:i+d] = lobs[obs_rec_id][par_id]['z'][valid].astype(np.float32)
                 data['t'][i:i+d] = np.array([t2h(t) for t in lobs[obs_rec_id][par_id]['t'][valid]])
                 data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std'][valid]
-                for m in range(c.config.nens):
+                for m in range(c.nens):
                     data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, valid].copy())
                 i += d
 
@@ -761,6 +761,6 @@ class Obs:
             d = len(local_inds[valid])
             v_list = [0, 1] if obs_rec.is_vector else [None]
             for v in v_list:
-                for m in range(c.config.nens):
+                for m in range(c.nens):
                     lobs_prior[m, obs_rec_id][par_id][v, valid] = data['obs_prior'][m, i:i+d]
                 i += d

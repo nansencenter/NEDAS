@@ -227,7 +227,7 @@ class Perturbation:
     def distribute_perturb_tasks(self, c: Context) -> dict[int, list[dict]]:
         task_list_full = []
         for perturb_rec in ensure_list(c.config.perturb):
-            for mem_id in range(c.config.nens):
+            for mem_id in range(c.nens):
                 task_list_full.append({**perturb_rec, 'member':mem_id})
         task_list = parallel.distribute_tasks(c.comm, task_list_full)
         return task_list

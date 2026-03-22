@@ -11,7 +11,7 @@ nproc: 5
 nens: 20
 run_forecast: True
 run_analysis: True
-run_diagnose: False
+run_diagnose: True
 debug: False
 
 time_start: 2001-01-01T00:00:00Z

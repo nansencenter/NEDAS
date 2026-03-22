@@ -288,7 +288,7 @@ class NextsimDGModel(Model[RegularGrid]):
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
-        debug = self.c.config.debug
+        debug = self.c.debug
 
         # 2. get the restart and forcing filename
         file_options_restart = self.files['restart']

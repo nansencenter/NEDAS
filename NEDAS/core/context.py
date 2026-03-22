@@ -16,6 +16,7 @@ class Context:
     """
     Runtime context manages the generation and interaction of dynamic objects in runtime
     """
+    debug: bool
     comm: parallel.Comm
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
@@ -49,6 +50,8 @@ class Context:
         else:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
+        self.debug = self.config.debug
+
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
         self.time = self.config.time
@@ -56,6 +59,9 @@ class Context:
         self.iter = self.config.iter
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
+
+        # ensemble size
+        self.nens = self.config.nens
 
         # setup the parallel (serial or MPI program) communicator
         self.set_comm()
@@ -81,7 +87,7 @@ class Context:
         Distribute mem_id across processors
         """
         ##list of mem_id as tasks
-        mem_list_full = [m for m in range(self.config.nens)]
+        mem_list_full = [m for m in range(self.nens)]
         mem_list = parallel.distribute_tasks(self.comm_mem, mem_list_full)
         return mem_list
 
@@ -270,7 +276,7 @@ class Context:
         If debug=True, print the debug_message with flush=True
         Otherwise, show a progress bar, indicating current task/total_ntask percentage.
         """
-        if self.config.debug:
+        if self.debug:
             print(debug_message, flush=True)
         else:
             self.print_1p(progress.progress_bar(task, total_ntask))

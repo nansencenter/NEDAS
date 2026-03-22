@@ -61,7 +61,7 @@ class Inflation(ABC):
                 sum_obs_prior_pid += c.obs.obs_prior[mem_id, obs_rec_id]
             ##sum over all obs_prior_seq on differnet pids to get the total sum
             sum_obs_prior = c.comm_mem.allreduce(sum_obs_prior_pid)
-            mean_obs_prior = sum_obs_prior / c.config.nens
+            mean_obs_prior = sum_obs_prior / c.nens
             mean_obs_post = None
 
             if c.obs.obs_post:
@@ -71,14 +71,14 @@ class Inflation(ABC):
                     sum_obs_post_pid += c.obs.obs_post[mem_id, obs_rec_id]
                 ##sum over all obs_prior_seq on differnet pids to get the total sum
                 sum_obs_post = c.comm_mem.allreduce(sum_obs_post_pid)
-                mean_obs_post = sum_obs_post / c.config.nens
+                mean_obs_post = sum_obs_post / c.nens
 
             ##2. get ensemble spread obs_prior:
             pert2_obs_prior_pid = np.zeros(shape)
             for mem_id in c.mem_list[c.pid_mem]:
                 pert2_obs_prior_pid += (c.obs.obs_prior[mem_id, obs_rec_id] - mean_obs_prior)**2
             pert2_obs_prior = c.comm_mem.allreduce(pert2_obs_prior_pid)
-            variance_obs_prior = pert2_obs_prior / (c.config.nens - 1)
+            variance_obs_prior = pert2_obs_prior / (c.nens - 1)
             variance_obs_post = None
 
             if c.obs.obs_post:
@@ -86,7 +86,7 @@ class Inflation(ABC):
                 for mem_id in c.mem_list[c.pid_mem]:
                     pert2_obs_post_pid += (c.obs.obs_post[mem_id, obs_rec_id] - mean_obs_post)**2
                 pert2_obs_post = c.comm_mem.allreduce(pert2_obs_post_pid)
-                variance_obs_post = pert2_obs_post / (c.config.nens - 1)
+                variance_obs_post = pert2_obs_post / (c.nens - 1)
 
             obs_value = c.obs.obs_seq[obs_rec_id]['obs']
             stats['total_nobs'] += nv * nobs

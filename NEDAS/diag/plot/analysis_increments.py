@@ -3,11 +3,13 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from NEDAS.grid.grid_2d_base import Grid2DBase
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils.graphics import add_colorbar, adjust_ax_size, get_cmap
 from NEDAS.core.state import State
+from NEDAS.core.context import Context
 
-def get_task_list(c, **kwargs) -> list:
+def get_task_list(c: Context, **kwargs) -> list:
 
     variables = ensure_list(kwargs['variables'])
     vmin_diff = ensure_list(kwargs['vmin_diff'])
@@ -23,19 +25,19 @@ def get_task_list(c, **kwargs) -> list:
             levels = [r.k for id,r in c.state.info.fields.items() if r.name==vname]
             assert len(levels)>0, f"cannot find state variable '{vname}'"
             for k in levels:
-                for t in c.time + np.array(c.state_time_steps) * dt1h:
+                for t in c.time + np.array(c.config.state_time_steps) * dt1h:
                     tasks.append({**kwargs, 'time':t, 'member':member, 'vname':vname, 'k':k, 'vmin_diff':vmin_diff[i], 'vmax_diff':vmax_diff[i], 'nlevels_diff':nlevels_diff[i], 'cmap_diff':cmap_diff[i]})
     return tasks
 
-def run(c, **kwargs) -> None:
+def run(c: Context, **kwargs) -> None:
     """
     Run diagnostics: plot the ensemble states
     """
     if 'plot_dir' in kwargs:
         plot_dir = kwargs['plot_dir']
     else:
-        plot_dir = os.path.join(c.work_dir, 'plots', 'analysis_increments')
-    c.io.make_dir(plot_dir)
+        plot_dir = os.path.join(c.config.work_dir, 'plots', 'analysis_increments')
+    c.fs.make_dir(plot_dir)
 
     figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
     landcolor = kwargs.get('land_color', 'gray')
@@ -57,7 +59,7 @@ def run(c, **kwargs) -> None:
     rec_id = rec_query[0]
     rec = c.state.info.fields[rec_id].asdict()
 
-    if c.config.debug:
+    if c.debug:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
 
     ##if the viewer html file does not exist, generate it
@@ -74,6 +76,7 @@ def run(c, **kwargs) -> None:
     incr = var_post - var_prior
 
     ##plot the field
+    assert isinstance(c.grid, Grid2DBase)
     try:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         if rec['is_vector']:
@@ -81,7 +84,7 @@ def run(c, **kwargs) -> None:
             adjust_ax_size(ax)
 
         else:
-            c.grid.plot_field(ax, incr, vmin=vmin_diff, vmax=vmax_diff, cmap=cmap_diff)
+            c.grid.plot_field(ax, incr, vmin=vmin_diff, vmax=vmax_diff, cmap=cmap_diff)  # type: ignore
             add_colorbar(fig, ax, cmap_diff, vmin_diff, vmax_diff, nlevels_diff, units=rec['units'])
 
         c.grid.plot_land(ax, color=landcolor)

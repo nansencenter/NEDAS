@@ -136,7 +136,7 @@ class State:
         c.print_1p(' done.\n')
 
         ##additonal output of debugging
-        if c.config.debug:
+        if c.debug:
             c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
             ##TODO: data is (mem, rec) -> ndarray, but savez needs str keys
 
@@ -212,7 +212,7 @@ class State:
             # populate the comm_mem with members as much as possible.
             sum_fld = c.comm_mem.allreduce(sum_fld_pid)
 
-            mean_fld = sum_fld / c.config.nens
+            mean_fld = sum_fld / c.nens
             c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.comm.Barrier()
@@ -436,15 +436,15 @@ class State:
         data['z'] = np.zeros((nfld, nloc))
         data['var_id'] = np.full(nfld, 0)
         data['err_type'] = np.full(nfld, 0)
-        data['state_prior'] = np.full((c.config.nens, nfld, nloc), np.nan)
+        data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
         for n in range(nfld):
             rec_id, v = data['field_ids'][n]
             rec = self.info.fields[rec_id]
             data['t'][n] = t2h(rec.time)
             data['err_type'][n] = self.info.err_types.index(rec.err_type)
             data['var_id'][n] = self.info.variables.index(rec.name)
-            for m in range(c.config.nens):
-                data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.config.nens  ##ens mean z
+            for m in range(c.nens):
+                data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  ##ens mean z
                 data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
 
         return data
@@ -452,7 +452,7 @@ class State:
     def unpack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, data: dict) -> None:
         """unpack data and write back to the state dict"""
         nfld = len(data['field_ids'])
-        for m in range(c.config.nens):
+        for m in range(c.nens):
             for n in range(nfld):
                 rec_id, v = data['field_ids'][n]
                 state_prior[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]

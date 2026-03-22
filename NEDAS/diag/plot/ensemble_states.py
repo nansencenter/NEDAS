@@ -5,8 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from NEDAS.utils.conversion import ensure_list, t2h, h2t, dt1h
 from NEDAS.utils.graphics import add_colorbar, adjust_ax_size, get_cmap
+from NEDAS.core.context import Context
 
-def get_task_list(c, **kwargs) -> list:
+def get_task_list(c: Context, **kwargs) -> list:
 
     variables = ensure_list(kwargs['variables'])
     model_src = ensure_list(kwargs['model_src'])
@@ -19,22 +20,22 @@ def get_task_list(c, **kwargs) -> list:
     for member in range(c.nens):
         for i, vname in enumerate(variables):
             model = c.models[model_src[i]]
-            levels = model.variables[vname]['levels']
-            dt = model.variables[vname]['dt']
+            levels = model.variables[vname].levels
+            dt = model.variables[vname].dt
             for k in levels:
                 for t in np.arange(t2h(c.time), t2h(c.next_time), dt):
                     tasks.append({**kwargs, 'time':h2t(float(t)), 'member':member, 'model_src':model_src[i], 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i]})
     return tasks
 
-def run(c, **kwargs) -> None:
+def run(c: Context, **kwargs) -> None:
     """
     Run diagnostics: plot the ensemble states
     """
     if 'plot_dir' in kwargs:
         plot_dir = kwargs['plot_dir']
     else:
-        plot_dir = os.path.join(c.work_dir, 'plots', 'ensemble_states')
-    c.io.make_dir(plot_dir)
+        plot_dir = os.path.join(c.config.work_dir, 'plots', 'ensemble_states')
+    c.fs.make_dir(plot_dir)
 
     figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
     landcolor = kwargs.get('land_color', 'gray')
@@ -67,7 +68,7 @@ def run(c, **kwargs) -> None:
     if 'forecast_dir' in kwargs:
         fdir = kwargs['forecast_dir'].format(time=c.time)
     else:
-        fdir = c.forecast_dir(c.time, model_src)
+        fdir = c.fs.forecast_dir(c.time, model_src)
     model.read_grid(path=fdir, name=vname, k=k, member=member, time=time)
     var = model.read_var(path=fdir, name=vname, k=k, member=member, time=time)
     grid = model.grid
@@ -77,12 +78,12 @@ def run(c, **kwargs) -> None:
     ##plot the field
     try:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
-        if rec['is_vector']:
-            grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec['units'])
+        if rec.is_vector:
+            grid.plot_vectors(ax, var, V=vmax, showref=True, ref_units=rec.units)
             adjust_ax_size(ax)
         else:
             grid.plot_field(ax, var, vmin=vmin, vmax=vmax, cmap=cmap)
-            add_colorbar(fig, ax, cmap, vmin, vmax, nlevels, units=rec['units'])
+            add_colorbar(fig, ax, cmap, vmin, vmax, nlevels, units=rec.units)
         grid.plot_land(ax, color=landcolor)
         ax.set_title(f'member {member+1}', fontsize=16)
         ax.set_xlabel('x (m)', fontsize=14)
