@@ -121,6 +121,7 @@ MemID = Annotated[int, 'member id']
 FieldRecordID = Annotated[int, 'field record id']
 ObsRecordID = Annotated[int, 'obs record id']
 PartitionID = Annotated[int, 'partition id']
+#TODO: Partition = Annotated[tuple[int, int, int, int, int, int] | np.typing.NDArray, 'partition: (istart,iend,di,jstart,jend,dj) or just inds array']
 
 FieldEns = Annotated[dict[tuple[MemID, FieldRecordID], np.ndarray], 'field-complete ensemble data']
 StateEns = Annotated[dict[tuple[MemID, FieldRecordID], dict[PartitionID, np.ndarray]], 'state-complete ensemble data']

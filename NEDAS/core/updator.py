@@ -44,7 +44,8 @@ class Updator(ABC):
             for m in range(nm_max):
                 pid_active = ( m < len(mem_list[c.pid_mem]) and r < len(rec_list[c.pid_rec]) )
 
-                self.prepare_async_file_io(c, r, m, pid_active)
+                #TODO: there is a bug here -> UCX WARN raised.
+                #self.prepare_async_file_io(c, r, m, pid_active)
 
                 if pid_active:
                     mem_id = mem_list[c.pid_mem][m]

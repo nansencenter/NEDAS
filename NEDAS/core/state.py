@@ -37,7 +37,7 @@ class State:
     """
     info: StateInfo
     rec_list: dict[ProcIDRec, list[FieldRecordID]]
-    partitions: list[tuple] = []  # will be created by assimilator.partition_grid()
+    partitions: list = []  # will be created by assimilator.partition_grid()
     par_list: dict[ProcIDMem, list[PartitionID]] = {}
     fields_prior: FieldEns = {}   # will be created by self.prepare_state()
     fields_z: FieldEns = {}
@@ -259,7 +259,7 @@ class State:
             else:
                 inds = self.partitions[par_id]
                 mask_chk = c.grid.mask[inds]
-                fld[..., inds][..., ~mask_chk] = fld_chk[par_id]
+                fld[..., inds[~mask_chk]] = fld_chk[par_id]
 
     def transpose_to_ensemble_complete(self, c: Context, fields: FieldEns) -> StateEns:
         """

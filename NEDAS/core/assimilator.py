@@ -54,7 +54,7 @@ class Assimilator(ABC):
         c.state.par_list = bcast_by_root(c.comm)(self.distribute_partitions)(c)
 
     @abstractmethod
-    def init_partitions(self, c: Context) -> list[tuple]:
+    def init_partitions(self, c: Context) -> list:
         """
         Generate spatial partitioning of the domain
         """

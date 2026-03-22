@@ -9,7 +9,7 @@ class SerialAssimilator(Assimilator):
     Subclass for serial assimilation algorithms
     """
 
-    def init_partitions(self, c: Context) -> list[tuple]:
+    def init_partitions(self, c: Context) -> list:
         """
         Generate spatial partitioning of the domain
         """
@@ -35,7 +35,7 @@ class SerialAssimilator(Assimilator):
             npoints = c.grid.x.size
             ##just divide the list of points into nproc_mem parts, each part spanning the entire domain
             nparts = c.config.nproc_mem
-            partitions = [tuple(np.arange(i, npoints, nparts)) for i in np.arange(nparts)]
+            partitions = [np.arange(i, npoints, nparts) for i in np.arange(nparts)]
 
         return partitions
 

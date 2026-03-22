@@ -5,7 +5,7 @@ from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
-    def init_partitions(self, c: Context) -> list[tuple]:
+    def init_partitions(self, c: Context) -> list:
         """
         Generate spatial partitioning of the domain
         partitions: dict[par_id, tuple(istart, iend, di, jstart, jend, dj)]
@@ -20,14 +20,14 @@ class BatchAssimilator(Assimilator):
             ##so we divide into 3*nproc tiles so that they can be distributed
             ##according to their load (number of unmasked points)
             ntile = c.config.nproc_mem * 3
-            nx_tile = np.maximum(int(np.round(np.sqrt(nx * ny / ntile))), 1)
+            nx_tile = max(int(np.round(np.sqrt(nx * ny / ntile))), 1)
 
             ##a list of (istart, iend, di, jstart, jend, dj) for tiles
             ##note: we have 3*nproc entries in the list
-            partitions = [(i, np.minimum(i+nx_tile, nx), 1,   ##istart, iend, di
-                           j, np.minimum(j+nx_tile, ny), 1)   ##jstart, jend, dj
-                          for j in np.arange(0, ny, nx_tile)
-                          for i in np.arange(0, nx, nx_tile) ]
+            partitions = [(i, min(i+nx_tile, nx), 1,   ##istart, iend, di
+                           j, min(j+nx_tile, ny), 1)   ##jstart, jend, dj
+                          for j in range(0, ny, nx_tile)
+                          for i in range(0, nx, nx_tile) ]
 
         else:
             ##divide the domain into sqaure tiles, similar to regular_grid case, but collect
@@ -37,7 +37,7 @@ class BatchAssimilator(Assimilator):
             if c.grid.Ly==0:
                 ##for 1D grid, just divide into equal sections, no y dimension
                 Dx = c.grid.Lx / ntile
-                partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))
+                partitions = [np.where(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx))[0]
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
             else:
@@ -47,7 +47,7 @@ class BatchAssimilator(Assimilator):
                 Dx = c.grid.Lx / ntile_x
                 Dy = c.grid.Ly / ntile_y
                 partitions = [np.where(np.logical_and(np.logical_and(c.grid.x>=x, c.grid.x<x+Dx),
-                                                            np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))
+                                                      np.logical_and(c.grid.y>=y, c.grid.y<y+Dy)))[0]
                               for y in np.arange(c.grid.ymin, c.grid.ymax, Dy)
                               for x in np.arange(c.grid.xmin, c.grid.xmax, Dx)]
 
