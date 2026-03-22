@@ -1,0 +1,122 @@
+work_dir: /home/yingyue/qg
+
+python_env: /home/yingyue/python.src
+
+job_submit:
+  host: local
+  parallel_mode: mpi
+
+nproc: 5
+
+nens: 20
+run_forecast: True
+run_analysis: True
+run_diagnose: False
+debug: False
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-14T00:00:00Z
+time_analysis_start: 2001-01-03T00:00:00Z
+time_analysis_end: 2001-01-09T00:00:00Z
+cycle_period: 12
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'qg.fortran'
+
+state_def:
+- name: 'streamfunc'
+  model_src: 'qg.fortran'
+  var_type: 'field'
+  err_type: 'normal'
+
+model_def:
+  qg.fortran:
+    config_file: '{nedas_root}/models/qg/fortran/default.yml'
+    model_env: '{nedas_root}/models/qg/fortran/env/setup_local.src'
+    model_code_dir: '{nedas_root}/models/qg/fortran'
+    nproc_per_run: 1
+    nproc_per_util: 1
+    walltime: 1000
+    restart_dt: 24
+    forcing_dt: 24
+    ens_run_strategy: scheduler
+    use_job_array: False
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+
+obs_def:
+- name: 'streamfunc'
+  dataset_src: 'synthetic'
+  model_src: 'qg.fortran'
+  nobs: 3000
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 100
+  vroi: 5
+  troi: 24
+
+dataset_def:
+  synthetic:
+    model_src: qg.fortran
+    config_file:
+    obs_window_min: -6
+    obs_window_max: 0
+
+perturb:
+
+# more details in assimilation algorithm
+scheme: filter  # type of analysis to perform: filter/smoother/etc.
+
+niter: 1
+iter:
+resolution_level: [0]       # resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
+character_length: [16]      # characteristic length (in grid coord unit) for each scale (large to small)
+localize_scale_fac: [1]     # scale factor for localization distances
+obs_err_scale_fac: [1]      # scale factor for observation error variances
+
+assimilator_def:
+  type: ETKF      # assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+  config_file:    # configuration for the specific assimilator
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+# covariance inflation technique in assimilation
+inflation_def:
+  type: post,RTPP      # type of inflation (post/prior, multiplicative/RTPP...)
+  adaptive: True            # if true, run an adaptive version of the inflation scheme
+  coef: 1.0                 # static inflation coefficient
+
+# covariance localization technique in assimilation
+localization_def:       # localization is configured separately for horizontal, vertical and temporal relations
+  horizontal:
+    type: gaspari_cohn  # type of localization kernel (gaspari_cohn, step, exp, nice...)
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass        # e.g. used in multiscale approach
+  decompose_obs: False        # if true, decompose observations as well
+
+# diagnostic methods configuration
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '{nedas_root}/diag/misc/convert_output/default.yml'
+  model_src: 'qg.fortran'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '{work_dir}/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

@@ -42,6 +42,8 @@ class QGFortranModel(Model):
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
 
+        assert self.nproc_per_run==1, f'qg model only support serial runs (got task_nproc={self.nproc_per_run})'
+
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if kwargs['member'] is not None:
@@ -163,8 +165,6 @@ class QGFortranModel(Model):
         kwargs = super().parse_kwargs(kwargs)
         task_id = kwargs.get('worker_id', 0)
 
-        task_nproc = self.nproc_per_run
-        assert task_nproc==1, f'qg model only support serial runs (got task_nproc={task_nproc})'
         self.run_status = 'running'
 
         input_file = self.filename(**kwargs)
@@ -201,7 +201,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            self.c.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+            self.c.run_job(shell_cmd, offset=task_id*self.nproc_per_run, **kwargs)
 
             ##check output
             with open(log_file, 'rt') as f:
@@ -217,7 +217,7 @@ class QGFortranModel(Model):
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
-        self.c.run_job(shell_cmd, nproc=task_nproc, offset=task_id*task_nproc, **kwargs)
+        self.c.run_job(shell_cmd, offset=task_id*self.nproc_per_run, **kwargs)
 
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None

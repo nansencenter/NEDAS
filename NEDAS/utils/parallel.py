@@ -32,11 +32,11 @@ class Comm:
     mpi_ready: bool = False
 
     def __init__(self):
-        ##detect if mpi environment exists
-        ##possible environ variable names from mpi calls
+        # detect if mpi environment exists
+        # possible environ variable names from mpi calls
         mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
         if any([ev in os.environ for ev in mpi_env_var]):
-            ##program is called from mpi, initialize comm
+            # program is called from mpi, initialize comm
             try:
                 from mpi4py import MPI   #type: ignore
                 self._MPI = MPI
@@ -49,13 +49,13 @@ class Comm:
                 self._comm = DummyComm()
 
         else:
-            ##serial program, use a dummy communicator
+            # serial program, use a dummy communicator
             self._MPI = None
             self._comm = DummyComm()
 
         self.parallel_io = self.check_parallel_io()
 
-        ##file lock to ensure only one processor access a file at a time
+        # file lock to ensure only one processor access a file at a time
         self._locks = {}
 
     def __getattr__(self, attr):
@@ -76,7 +76,7 @@ class Comm:
         if self._MPI is None or isinstance(self._comm, DummyComm) or not filename:
             return
         if filename not in self._locks:
-            ##create the lock memory
+            # create the lock memory
             if self.Get_rank() == 0:
                 lock_mem = np.zeros(1, dtype='B')
             else:
@@ -114,7 +114,7 @@ class Comm:
             return
         assert filename in self._locks, f"Comm: file lock for {filename} not initialized"
         lock_win = self._locks[filename]
-        check_dt = 0.1  ##check file locks every 0.1 seconds, can make this configurable
+        check_dt = 0.1  # check file locks every 0.1 seconds, can make this configurable
         while True:
             # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
             lock_mem = np.zeros(1, dtype='B')
@@ -241,43 +241,43 @@ def distribute_tasks(comm: Comm, tasks: np.ndarray|Sequence, load: np.ndarray|Se
         dict: Dictionary {rank:list}, list is the subset of tasks for the processor rank
             calling this function to work on
     """
-    nproc = comm.Get_size()  ##number of processors
-    ntask = len(tasks)       ##number of tasks
+    nproc = comm.Get_size()  # number of processors
+    ntask = len(tasks)       # number of tasks
 
-    ##assume equal load between tasks if not specified
+    # assume equal load between tasks if not specified
     if load is None:
         load = np.ones(ntask)
     
-    ##make sure load has right length
+    # make sure load has right length
     _load = np.array(load)
     if _load.size != ntask:
         raise ValueError(f'Length of task load = {_load.size} not equal to ntask = {ntask}')
 
-    ##normalize to get load distribution function
+    # normalize to get load distribution function
     _load = _load / np.sum(_load)
 
-    ##cumulative load distribution, rounded to 5 decimals
+    # cumulative load distribution, rounded to 5 decimals
     cum_load = np.round(np.cumsum(_load), decimals=5)
 
-    ##given the load distribution function, we assign load to processors
-    ##by evenly divide the distribution into nproc parts
-    ##this is done by searching for r/nproc in the cumulative load for rank r
-    ##task_id holds the start/end index of task for each rank in a sequence
+    # given the load distribution function, we assign load to processors
+    # by evenly divide the distribution into nproc parts
+    # this is done by searching for r/nproc in the cumulative load for rank r
+    # task_id holds the start/end index of task for each rank in a sequence
     task_id = np.zeros(nproc+1, dtype=int)
 
-    target_cum_load = np.arange(nproc)/nproc  ##we want even distribution of load
-    tol = 0.1/nproc  ##allow some tolerance for rounding error in comparing cum_load to target_cum_load
+    target_cum_load = np.arange(nproc)/nproc  # we want even distribution of load
+    tol = 0.1/nproc  # allow some tolerance for rounding error in comparing cum_load to target_cum_load
     ind1 = np.searchsorted(cum_load+tol, target_cum_load, side='right')
     ind2 = np.searchsorted(cum_load-tol, target_cum_load, side='right')
 
-    ##choose between ind1,ind2, whoever gives best match between cum_load[ind?] and target_cum_load
+    # choose between ind1,ind2, whoever gives best match between cum_load[ind?] and target_cum_load
     task_id[0:-1] = np.where(np.abs(cum_load[ind1-1]-target_cum_load) < np.abs(cum_load[ind2-1]-target_cum_load), ind1, ind2)
 
-    ##make sure the two end points are right
+    # make sure the two end points are right
     task_id[0] = 0
     task_id[-1] = ntask
 
-    ##dict for each rank r -> its own task list given start/end index
+    # dict for each rank r -> its own task list given start/end index
     task_list = {}
     for r in range(nproc):
         task_list[r] = tasks[task_id[r]:task_id[r+1]]
@@ -328,7 +328,7 @@ class OfflineScheduler:
         """
         while len(self.completed_jobs) < self.njob:
 
-            ##assign pending job to available workers
+            # assign pending job to available workers
             while self.available_workers and self.pending_jobs and self.queue_open:
                 worker_id = self.available_workers.pop(0)
                 name = self.pending_jobs.pop(0)
@@ -340,24 +340,24 @@ class OfflineScheduler:
                 if self.debug:
                     print(f"Scheduler: Job {name} started by worker {worker_id}", flush=True)
 
-            ##if there are completed jobs, free up their workers
+            # if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
             for name in names:
-                ##catch errors from job
+                # catch errors from job
                 try:
                     self.jobs[name]['future'].result()
                 except Exception as e:
                     tb = traceback.format_exc()
                     print(f'Scheduler: Job {name} raised exception: \n{tb}', flush=True)
                     self.error_jobs[name] = tb
-                    #return  ###if exit right away and don't wait for other jobs to finish, uncomment this
+                    #return  # #if exit right away and don't wait for other jobs to finish, uncomment this
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
                 if self.debug:
                     print(f"Scheduler: Job {name} completed", flush=True)
 
-            ##kill jobs that exceed walltime
+            # kill jobs that exceed walltime
             if self.walltime is not None:
                 for name in self.running_jobs:
                     elapsed_time = time.time() - self.jobs[name]['start_time']
@@ -369,7 +369,9 @@ class OfflineScheduler:
                         self.error_jobs[name] = e
                         self.completed_jobs.append(name)
 
-            ##just show a progress bar if not output debug messages
+            # just show a progress bar if not output debug messages
+            # TODO: model may print message even if not debug
+            #       still need a better solution for logging levels
             if not self.debug:
                 print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
 
@@ -385,7 +387,7 @@ class OfflineScheduler:
             monitor_thread.join()
         except KeyboardInterrupt:
             self.queue_open = False
-            ##kill running jobs
+            # kill running jobs
             self.shutdown()
 
     def shutdown(self):

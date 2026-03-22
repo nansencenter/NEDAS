@@ -123,3 +123,30 @@ class FileSystem:
                 raise
         if self.config.debug:
             print(f"removed {dirname}", flush=True)
+
+    def link_file(self, src: str, dst: str) -> None:
+            """
+            Tries to create a symbolic link. If the filesystem doesn't support it 
+            (like exFAT), falls back to a file copy.
+            """
+            # Ensure the source exists before trying anything
+            if not os.path.exists(src):
+                raise FileNotFoundError(f"Source file {src} not found.")
+
+            # Remove destination if it exists to avoid 'File exists' errors
+            if os.path.exists(dst):
+                os.remove(dst)
+
+            try:
+                os.symlink(src, dst)
+                if self.config.debug:
+                    print(f"linked {src} -> {dst}", flush=True)
+            except OSError as e:
+                # Error 1: Operation not permitted (typical for exFAT/NTFS)
+                # Error 95: Operation not supported
+                if e.errno in (errno.EPERM, errno.EOPNOTSUPP):
+                    if self.config.debug:
+                        print(f"Symlink failed (FS limitation), copying instead: {src} -> {dst}", flush=True)
+                    self.copy_file(src, dst)
+                else:
+                    raise
