@@ -17,12 +17,11 @@ class Diagnostics:
         ##the processor with most work load will show progress messages
         c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
 
+        ##init file locks for collective i/o
+        self.init_file_locks(c)
 
     def __call__(self, c: Context) -> None:
         c.print_1p(f"Running diagnostics:")
-
-        ##init file locks for collective i/o
-        #c.io.init_file_locks(c)
 
         ntask = len(self.task_list[c.pid])
         for task_id, rec in enumerate(self.task_list[c.pid]):
@@ -55,3 +54,17 @@ class Diagnostics:
         ##collected full list of tasks is evenly distributed across the mpi communicator
         task_list = distribute_tasks(c.comm, task_list_full)
         return task_list
+    
+    def init_file_locks(self, c: Context):
+        """Build the full task list for the diagnostics part of the config"""
+        for rec in ensure_list(c.config.diag):
+            ##load the module for the given method
+            method_name = f"NEDAS.diag.{rec['method']}"
+            module = importlib.import_module(method_name)
+            ##module get_file_list returns a list of files for collective i/o
+            if not hasattr(module, 'get_file_list'):
+                continue
+            files = module.get_file_list(c, **rec)
+            for file in files:
+                ##create the file lock across mpi ranks for this file
+                c.comm.init_file_lock(file)

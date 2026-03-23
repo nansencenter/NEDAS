@@ -115,7 +115,7 @@ def nc_write_var(filename: str,
     if isinstance(dat, np.ndarray):
         dat = dat.astype(dtype)
     else:
-        dat = dtype(dat)
+        dat = np.dtype(dtype).type(dat)
 
     group[varname][s] = dat  ##write dat to file
 

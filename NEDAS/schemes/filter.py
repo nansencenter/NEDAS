@@ -168,7 +168,9 @@ class FilterAnalysisScheme(Scheme):
         This step adds random perturbations to the model initial and/or boundary conditions,
         at the first or all the analysis cycles.
         """
-        self.c.print_1p(f"Perturbing state:")
+        if self.c.config.perturb is None:
+            self.c.print_1p("Config: 'perturb' is not defined. Exiting...\n")
+            return
 
         pert = Perturbation(self.c)
         timer(self.c)(pert)(self.c)
@@ -182,7 +184,9 @@ class FilterAnalysisScheme(Scheme):
         The ``diag`` section in configuration file defines the methods and parameters of the diagnostics,
         corresponding to the ``diag.method`` module that implements the particular diagnostic method.
         """
-        self.c.print_1p(f"Running diagnostics:")
+        if self.c.config.diag is None:
+            self.c.print_1p("Config: 'diag' is not defined. Exiting...\n")
+            return
 
         diag = Diagnostics(self.c)
         timer(self.c)(diag)(self.c)
