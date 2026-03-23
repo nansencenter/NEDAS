@@ -39,7 +39,6 @@ class Context:
     inflation_func: Inflation
     state: State
     obs: Obs
-    use_synthetic_obs: bool = False
 
     def __init__(self, config: Config|None=None,
                  config_file: str|None=None,
@@ -226,8 +225,6 @@ class Context:
         """
         self.datasets = {}
         for dataset_name, kwargs in self.config.dataset_def.items():
-            if dataset_name == 'synthetic':
-                self.use_synthetic_obs = True
             DatasetClass = datasets.get_dataset_class(dataset_name)
             self.datasets[dataset_name] = DatasetClass(context=self, **(kwargs or {}))
 

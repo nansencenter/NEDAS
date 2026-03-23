@@ -5,7 +5,8 @@ import inspect
 from typing import Callable
 from abc import ABC, abstractmethod
 from NEDAS.job_submitters.hpc import HPCJobSubmitter
-from NEDAS.utils.parallel import OfflineScheduler, by_rank
+from NEDAS.utils.parallel import OfflineScheduler
+from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.config import Config
 from NEDAS.core.context import Context
 from NEDAS.core.types import EnsRunStrategy, IOTag
@@ -18,6 +19,7 @@ class Scheme(ABC):
     """
     config: Config
     online_mode: bool
+    use_synthetic_obs: bool = False
     _context: Context|None = None
 
     def __init__(self, config_file: str|None=None,
@@ -26,7 +28,13 @@ class Scheme(ABC):
         # parse configuration
         self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
+        # check if io mode is online:
         self.online_mode = (self.config.io_mode == 'online')
+
+        # check if one or more of the datasets is synthetic type:
+        for dataset in self.c.datasets.values():
+            if isinstance(dataset, SyntheticObs):
+                self.use_synthetic_obs = True
 
     @property
     def c(self):

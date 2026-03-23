@@ -24,17 +24,21 @@ class MultiplicativeInflation(Inflation):
         if stats['total_nobs'] < 3:
             c.print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
             self.coef = 1.
-        else:
-            varb = stats['varb'] / stats['total_nobs']
-            vara = stats['vara'] / stats['total_nobs']
-            varo = stats['varo'] / stats['total_nobs']
-            omb2 = stats['omb2'] / stats['total_nobs']
-            omaamb = stats['omaamb'] / stats['total_nobs']
-            amb2 = stats['amb2'] / stats['total_nobs']
-            c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-            c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-            # self.coef = np.sqrt(omaamb/vara)
-            self.coef = np.sqrt((omb2-varo-amb2)/vara)
+            return
+        if stats['vara'] == 0:
+            c.print_1p(f"vara=0 detected, skipping with coef=1 (no inflation)")
+            self.coef = 1.
+            return
+        varb = stats['varb'] / stats['total_nobs']
+        vara = stats['vara'] / stats['total_nobs']
+        varo = stats['varo'] / stats['total_nobs']
+        omb2 = stats['omb2'] / stats['total_nobs']
+        omaamb = stats['omaamb'] / stats['total_nobs']
+        amb2 = stats['amb2'] / stats['total_nobs']
+        c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
+        c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+        # self.coef = np.sqrt(omaamb/vara)
+        self.coef = np.sqrt((omb2-varo-amb2)/vara)
 
     def apply_inflation(self, c, flag):
         if flag not in ['prior', 'post']:

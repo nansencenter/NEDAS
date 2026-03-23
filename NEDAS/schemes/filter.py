@@ -59,7 +59,7 @@ class FilterAnalysisScheme(Scheme):
         Generate the verifying truth
         """
         # skip if not using synthetic obs (no need for the truth)
-        if not self.c.use_synthetic_obs:
+        if not self.use_synthetic_obs:
             return
 
         for model_name, model in self.c.models.items():

@@ -132,7 +132,8 @@ class BatchAssimilator(Assimilator):
         the local states in each partition are processed in parallel
         """
         c.state.state_post = copy.deepcopy(c.state.state_prior)
-        c.obs.lobs_post = copy.deepcopy(c.obs.lobs_prior)
+        # TODO: obs_prior is not updated to obs_post by the filter
+        #c.obs.lobs_post = copy.deepcopy(c.obs.lobs_prior)
 
         ##pid with the most obs in its task list with show progress message
         obs_count = np.array([np.sum([len(c.obs.obs_inds[r][p])
@@ -203,7 +204,7 @@ class BatchAssimilator(Assimilator):
                 task += 1
 
             c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
-            c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
+            #c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
         c.print_1p(' done.\n')
 
     @abstractmethod

@@ -42,6 +42,11 @@ class Assimilator(ABC):
         c.state.output_state(c, 'post')
         c.state.output_ens_mean(c, 'post')
 
+        if not c.obs.obs_post:
+            # for batch filters the obs_post needs to be computed
+            # (TODO: they can be updated along with the state, as an alternative)
+            c.obs.prepare_obs_from_state(c, 'post')
+
         # posterior inflation
         c.inflation_func(c, 'post')
 
@@ -115,9 +120,10 @@ class Assimilator(ABC):
         c.print_1p('state variables: ')
         c.state.fields_post = c.state.transpose_to_field_complete(c, c.state.state_post)
 
-        # c.print_1p('obs prior sequences: ')
-        ##TODO there is a bug here, in transpose seq[:, ind] out of bound
-        # obs.obs_post_seq = obs.transpose_to_field_complete(c, state, obs.lobs_post)
+        c.print_1p('obs ens sequences: ')
+        if c.obs.lobs_post:
+            ##TODO there is a bug here, in transpose seq[:, ind] out of bound
+            c.obs.obs_post = c.obs.transpose_to_field_complete(c, c.obs.lobs_post)
 
     @abstractmethod
     def assimilation_algorithm(self, c: Context) -> None:

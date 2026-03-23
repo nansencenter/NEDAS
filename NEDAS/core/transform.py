@@ -7,7 +7,7 @@ class Transform(ABC):
     """
     Base class for miscellaneous transform functions
     """
-    def __init__(self, **kwargs):
+    def __init__(self, c: Context, **kwargs) -> None:
         ...
 
     @abstractmethod

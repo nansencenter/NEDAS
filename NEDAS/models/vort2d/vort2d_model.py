@@ -80,7 +80,7 @@ class Vort2DModel(Model[RegularGrid]):
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
-        comm = kwargs['comm']
+        comm = None # don't need synchronous io, because each member has a separate file.
         if rec['is_vector']:
             u = nc_read_var(fname, rec['name'][0], comm=comm)[0, ...]
             v = nc_read_var(fname, rec['name'][1], comm=comm)[0, ...]
@@ -112,7 +112,7 @@ class Vort2DModel(Model[RegularGrid]):
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
-        comm = kwargs['comm']
+        comm = None # don't need synchronous io, because each member has a separate file.
         if rec['is_vector']:
             for i in range(2):
                 nc_write_var(fname, {'t':None, 'y':self.ny, 'x':self.nx}, rec['name'][i], var[i,...], recno={'t':0}, comm=comm)
@@ -153,6 +153,7 @@ class Vort2DModel(Model[RegularGrid]):
     def generate_truth(self, *args, **kwargs) -> None:
         assert self.truth_dir is not None
         kwargs = super().parse_kwargs(kwargs)
+        debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
 
         t = self.c.config.time_start
@@ -166,20 +167,20 @@ class Vort2DModel(Model[RegularGrid]):
 
             if t == self.c.config.time_start:
                 state = self.generate_initial_condition()
-                print(f"generating initial condition {self.filename(**opts)}")
+                if debug:
+                    print(f"generating initial condition {self.filename(**opts)}")
                 self.write_var(state, **opts)
 
             next_t = t + kwargs['forecast_period'] * dt1h
-            print(f"running model, saving output {self.filename(**{**opts, 'time':next_t})}")
+            if debug:
+                print(f"running model, saving output {self.filename(**{**opts, 'time':next_t})}")
             self.run(path=self.truth_dir, time=t, forecast_period=kwargs['forecast_period'])
-
             t = next_t
-        print("done.")
-
     
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)
+        debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.ens_init_dir)
 
         opts = {
@@ -189,8 +190,8 @@ class Vort2DModel(Model[RegularGrid]):
             'time': kwargs['time'],
             'member': kwargs['member'],
             }
-        print(f"generating initial condition for member {kwargs['member']+1}, output to {self.filename(**opts)}")
+        if debug:
+            print(f"generating initial condition for member {kwargs['member']+1}, output to {self.filename(**opts)}")
 
         state = self.generate_initial_condition()
-
         self.write_var(state, **opts)

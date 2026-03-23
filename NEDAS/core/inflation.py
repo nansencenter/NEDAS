@@ -21,15 +21,28 @@ class Inflation(ABC):
         """
         if flag == 'prior' and self.prior:
             if self.adaptive:
+                assert self.validate_obs_ens(c, c.obs.obs_prior), "obs.obs_prior is corrupted, cannot compute obs_space_stats for adaptive inflation."
                 self.adaptive_prior_inflation(c)
             self.apply_inflation(c, flag)
 
         if flag == 'post' and self.post:
             if self.adaptive:
+                assert self.validate_obs_ens(c, c.obs.obs_prior), "obs.obs_prior is corrupted, cannot compute obs_space_stats for adaptive inflation."
+                assert self.validate_obs_ens(c, c.obs.obs_post), "obs.obs_post is corrupted, cannot compute obs_space_stats for adaptive inflation."
                 self.adaptive_post_inflation(c)
             self.apply_inflation(c, flag)
-        # c.state.output_state(c, flag)
-        # c.state.output_ens_mean(c, flag)
+
+    def validate_obs_ens(self, c: Context, obs_ens: dict) -> bool:
+        """ Check if the obs_ens has all member and records"""
+        if isinstance(obs_ens, dict):
+            for obs_rec_id in c.obs.obs_rec_list[c.pid_rec]:
+                for mem_id in c.mem_list[c.pid_mem]:
+                    if (mem_id, obs_rec_id) not in obs_ens:
+                        return False
+                    if not isinstance(obs_ens[mem_id, obs_rec_id], np.ndarray):
+                        return False
+            return True
+        return False
 
     def obs_space_stats(self, c: Context):
         """observation-space statistics"""

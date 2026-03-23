@@ -88,7 +88,7 @@ class Model(Generic[GridT], ABC):
         if 'units' not in kwargs:
             kwargs['units'] = self.variables[kwargs['name']].units
 
-        # some other runtime args need to be initialized
+        # some other runtime args need to be initialized for methods
         for key in ['restart_dir', 'forecast_period']:
             if key not in kwargs:
                 kwargs[key] = None

@@ -223,6 +223,7 @@ class QGFortranModel(Model):
         assert self.truth_dir is not None
         kwargs = super().parse_kwargs(kwargs)
         kwargs['member'] = None
+        debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
         # check if truth files already exists in model.truth_dir
         complete = True
@@ -234,13 +235,16 @@ class QGFortranModel(Model):
                 break
             kwargs['time'] += kwargs['forecast_period'] * dt1h
         if complete:
-            print(f"truth files already exist in {self.truth_dir}, skipping")
+            if debug:
+                print(f"truth files already exist in {self.truth_dir}, skipping")
             return
 
-        print(f"Creating truth run for qg model in {self.truth_dir}")
+        if debug:
+            print(f"Creating truth run for qg model in {self.truth_dir}")
         run_dir = os.path.join(self.truth_dir, 'run')
         init_file = f"output_{self.c.config.time_start:%Y%m%d_%H}.bin"
-        print(f"Running the model for spinup period to get initial condition: {init_file}")
+        if debug:
+            print(f"Running the model for spinup period to get initial condition: {init_file}")
         kwargs['time'] = self.c.config.time_start - self.spinup_hours * dt1h
         self.run(**{**kwargs, 'path':run_dir, 'member':0, 'forecast_period':self.spinup_hours})
 
@@ -249,38 +253,46 @@ class QGFortranModel(Model):
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
             next_file = f"output_{next_time:%Y%m%d_%H}.bin"
-            print(f"Running the model from condition {current_file} to reach {next_file}")
+            if debug:
+                print(f"Running the model from condition {current_file} to reach {next_file}")
             self.run(**{**kwargs, 'path':run_dir, 'member':0})
             kwargs['time'] = next_time
         print("done.")
 
         self.c.fs.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
-        print(f"removing temporary run directory: {run_dir}")
+        if debug:
+            print(f"removing temporary run directory: {run_dir}")
         self.c.fs.remove_dir(run_dir)
 
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)
+        debug = kwargs.get('debug', False)
         basename = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
         mstr = f"{kwargs['member']+1:04d}"
         init_file = os.path.join(self.ens_init_dir, mstr, basename)
 
         # check if restart file can be found in model.ens_init_dir already
         if os.path.exists(init_file):
-            print(f"Init file {init_file} already exists, skipping")
+            if debug:
+                print(f"Init file {init_file} already exists, skipping")
             return
 
-        print(f"Creating initial condition for qg modeli member {kwargs['member']+1}:")
+        if debug:
+            print(f"Creating initial condition for qg modeli member {kwargs['member']+1}:")
         init_time = kwargs['time'] - self.spinup_hours * dt1h
         next_time = kwargs['time']
         run_dir = self.c.fs.forecast_dir(init_time, 'qg.fortran')
-        print(f"initial condition type: {self.psi_init_type}")
-        print(f"spinup period: {self.spinup_hours} hours")
+        if debug:
+            print(f"initial condition type: {self.psi_init_type}")
+            print(f"spinup period: {self.spinup_hours} hours")
 
-        print(f"Spinning up member {kwargs['member']+1} from {init_time} to {next_time}")
+        if debug:
+            print(f"Spinning up member {kwargs['member']+1} from {init_time} to {next_time}")
         self.run(**{**kwargs, 'path':run_dir, 'time':init_time, 'forecast_period':self.spinup_hours})
 
-        print("Moving output files")
+        if debug:
+            print("Moving output files")
         src_file = os.path.join(run_dir, mstr, basename)
         self.c.fs.make_dir(os.path.dirname(init_file))
         self.c.fs.move_file(src_file, init_file)

@@ -1,10 +1,11 @@
-work_dir: 'vort2d'
+work_dir: /Users/yueng/scratch/vort2d
 
 job_submit:
   host: macos
   ppn: 8
+  parallel_mode: mpi
 
-nproc: 1
+nproc: 4
 
 nens: 20
 run_forecast: True
@@ -43,11 +44,11 @@ obs_def:
 - name: velocity
   dataset_src: vort2d
   model_src: vort2d
-  nobs: 10
+  nobs: 1000
   err:
     type: normal
     std: 1.0
-  hroi: 9e5
+  hroi: 1.44e5
   vroi: inf
   troi: inf
 

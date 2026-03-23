@@ -89,7 +89,12 @@ def random_flow(grid, amp, power_law):
 
     return np.array([u, v])
 
-def advance_time(fld, dx, t_intv, dt, gen, diss):
+def advance_time(fld: np.ndarray,
+                 dx: float,
+                 t_intv: float,
+                 dt: float,
+                 gen: float,
+                 diss: float) -> np.ndarray:
     """
     Advance forward in time to integrate the model (forecasting)
 
