@@ -80,7 +80,7 @@ class Vort2DModel(Model[RegularGrid]):
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
-        comm = None # don't need synchronous io, because each member has a separate file.
+        comm = None # reading files doesn't require collective io (file locks).
         if rec['is_vector']:
             u = nc_read_var(fname, rec['name'][0], comm=comm)[0, ...]
             v = nc_read_var(fname, rec['name'][1], comm=comm)[0, ...]
@@ -112,7 +112,7 @@ class Vort2DModel(Model[RegularGrid]):
         fname = self.filename(**kwargs)
 
         rec = self.variables[kwargs['name']].asdict()
-        comm = None # don't need synchronous io, because each member has a separate file.
+        comm = self.c.comm   # for async file io (netcdf without parallel support)
         if rec['is_vector']:
             for i in range(2):
                 nc_write_var(fname, {'t':None, 'y':self.ny, 'x':self.nx}, rec['name'][i], var[i,...], recno={'t':0}, comm=comm)
@@ -156,6 +156,7 @@ class Vort2DModel(Model[RegularGrid]):
         debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
 
+        # TODO: add check to skip if already exists
         t = self.c.config.time_start
         while t < self.c.config.time_end:
             opts = {
