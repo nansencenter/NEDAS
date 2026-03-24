@@ -6,6 +6,7 @@ from typing import Callable
 from abc import ABC, abstractmethod
 from NEDAS.job_submitters.hpc import HPCJobSubmitter
 from NEDAS.utils.parallel import OfflineScheduler
+from NEDAS.utils.progress import timer
 from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.config import Config
 from NEDAS.core.context import Context
@@ -20,6 +21,7 @@ class Scheme(ABC):
     config: Config
     online_mode: bool
     use_synthetic_obs: bool = False
+    steps_need_mpi: dict[str, bool] = {}
     _context: Context|None = None
 
     def __init__(self, config_file: str|None=None,
@@ -127,7 +129,7 @@ class Scheme(ABC):
         # in offline mode, run_step starts in serial
         # if the step requires mpi for nproc>1, make an external call
         if not self.online_mode and self.steps_need_mpi[step]:
-            if not self.c.comm.mpi_ready:
+            if self.config.nproc>1 and not self.c.comm.mpi_ready:
                 self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
@@ -136,7 +138,7 @@ class Scheme(ABC):
 
         # otherwise, just call the step func
         stepfunc = getattr(self, step)
-        stepfunc()
+        timer(self.c)(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
                            tag: IOTag,
@@ -170,7 +172,6 @@ class Scheme(ABC):
             opts['member'] = mem_id
             self.c.show_progress(f"PID {self.c.pid:4}: running {task_name} for mem{mem_id+1:03}", m, nm)
             self.c.io.call_method(self.c, tag, func, **opts)
-        self.c.print_1p(' done.\n')
 
     def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
         # setup an offline scheduler to distribute tasks

@@ -20,35 +20,41 @@ class Assimilator(ABC):
         """
         Main method to run the batch assimilation algorithm
         """
+        # switch on timer for substeps if necessary
+        if c.config.log_substeps:
+            timer_func = timer(c)
+        else:
+            timer_func = lambda f: f
+
         # prior inflation step
-        c.inflation_func(c, 'prior')
+        timer_func(c.inflation_func)(c, 'prior')
 
         # transpose c.state.fields_prior to ensemble-complete c.state.state_prior
         self.partition_grid(c)
-        timer(c)(self.transpose_to_ensemble_complete)(c)
+        timer_func(self.transpose_to_ensemble_complete)(c)
 
         # the core assimilation algorithm
         # assimilates c.obs.obs_seq into c.state.state_prior to get c.state.state_post
-        timer(c)(self.assimilation_algorithm)(c)
+        timer_func(self.assimilation_algorithm)(c)
 
         # transpose c.state.state_post back to field-complete c.state.fields_post
-        self.transpose_to_field_complete(c)
+        timer_func(self.transpose_to_field_complete)(c)
 
         # output the post state
         # TODO: which version of posterior to output? ideally the inflated one? 
         # algorithmically clean way is to output the intermediate versions as well and 
         # let the files be input/output to the inflation func
         # but this is too much IO overhead.
-        c.state.output_state(c, 'post')
-        c.state.output_ens_mean(c, 'post')
+        timer_func(c.state.output_state)(c, 'post')
+        timer_func(c.state.output_ens_mean)(c, 'post')
 
         if not c.obs.obs_post:
             # for batch filters the obs_post needs to be computed
             # (TODO: they can be updated along with the state, as an alternative)
-            c.obs.prepare_obs_from_state(c, 'post')
+            timer_func(c.obs.prepare_obs_from_state)(c, 'post')
 
         # posterior inflation
-        c.inflation_func(c, 'post')
+        timer_func(c.inflation_func)(c, 'post')
 
     def partition_grid(self, c: Context) -> None:
         """
@@ -101,7 +107,7 @@ class Assimilator(ABC):
         c.print_1p('obs sequences: ')
         c.obs.lobs = c.obs.transpose_obs_seq(c, c.obs.obs_seq)
 
-        c.print_1p('obs prior sequences: ')
+        c.print_1p('obs ens sequences: ')
         c.obs.lobs_prior = c.obs.transpose_to_ensemble_complete(c, c.obs.obs_prior)
 
         # if c.debug:
@@ -120,9 +126,9 @@ class Assimilator(ABC):
         c.print_1p('state variables: ')
         c.state.fields_post = c.state.transpose_to_field_complete(c, c.state.state_post)
 
-        c.print_1p('obs ens sequences: ')
         if c.obs.lobs_post:
             ##TODO there is a bug here, in transpose seq[:, ind] out of bound
+            c.print_1p('obs ens sequences: ')
             c.obs.obs_post = c.obs.transpose_to_field_complete(c, c.obs.lobs_post)
 
     @abstractmethod

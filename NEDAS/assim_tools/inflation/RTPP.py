@@ -50,7 +50,8 @@ class RTPPInflation(Inflation):
             fld_post_mean = c.io.read_field(c, 'post_mean', rec_id, mem_id=0)
 
             for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
-                c.show_progress(f"PID {c.pid:4}: relax_to_prior_perturb mem{mem_id+1:03}", m*nr+r, nm*nr)
+                c.show_progress(f"PID {c.pid:4}: relax_to_prior_perturb mem{mem_id+1:03}",
+                                m*nr+r, nm*nr, c.config.log_substeps)
 
                 ##inflate the ensemble perturbations by relaxing to prior perturbations
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
@@ -58,4 +59,3 @@ class RTPPInflation(Inflation):
                 fld_post = fld_post_mean + self.coef*(fld_prior - fld_prior_mean) + (1.-self.coef)*(fld_post - fld_post_mean)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')

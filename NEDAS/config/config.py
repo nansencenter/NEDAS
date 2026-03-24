@@ -60,6 +60,7 @@ class Config:
     interp_method: str
     perturb: dict|None
     scheme: str
+    log_substeps: bool
     niter: int
     iter: int  # avail in context
     resolution_level: list[int]

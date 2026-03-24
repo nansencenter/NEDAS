@@ -105,7 +105,9 @@ class State:
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
                 rec = self.info.fields[rec_id]
-                c.show_progress(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", m*nr+r, nm*nr)
+
+                c.show_progress(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}",
+                                m*nr+r, nm*nr, c.config.log_substeps)
 
                 model_name = rec.model_src
                 model = c.models[model_name]
@@ -133,7 +135,6 @@ class State:
                     self.fields_z[mem_id, rec_id] = z
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
         ##additonal output of debugging
         if c.debug:
@@ -168,7 +169,8 @@ class State:
                     continue
 
                 rec = self.info.fields[rec_id]
-                c.show_progress(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}", m*nr+r, nm*nr)
+                c.show_progress(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}",
+                                m*nr+r, nm*nr, c.config.log_substeps)
 
                 ##get the field record for output
                 fields = getattr(self, f"fields_{tag}")
@@ -177,7 +179,6 @@ class State:
                 c.io.write_field(fld, c, tag, rec_id, mem_id)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
     def output_ens_mean(self, c: Context, tag: str) -> None:
         """
@@ -197,7 +198,7 @@ class State:
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
             rec = self.info.fields[rec_id]
             c.show_progress(f"PID {c.pid:4}: saving mean field '{rec.name:20}' {rec.time} k={rec.k}",
-                            r, len(self.rec_list[c.pid_rec]))
+                            r, len(self.rec_list[c.pid_rec]), c.config.log_substeps)
 
             ##initialize a zero field with right dimensions for rec_id
             fld_shape = (2,)+self.info.shape if rec.is_vector else self.info.shape
@@ -216,7 +217,6 @@ class State:
             c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
     def output_ref_z(self, c: Context):
         # topaz uses the first ensemble member z coords as the reference z for obs
@@ -285,7 +285,8 @@ class State:
             mem_list_own = c.mem_list[c.pid_mem]
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]+1:03} rec{rec_id}" if m < len(mem_list_own) else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing field: {status}", r*nm_max+m, nr*nm_max)
+                c.show_progress(f"PID {c.pid:4}: transposing field: {status}",
+                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
 
                 ##prepare the fld for sending if not at the end of mem_list
                 fld = None
@@ -327,8 +328,7 @@ class State:
                     if m < len(c.mem_list[src_pid]):
                         src_mem_id = c.mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-        c.comm.Barrier()
-        c.print_1p(' done.\n')
+        c.comm.Barrier()    
         return state
 
     def transpose_to_field_complete(self, c: Context, state: StateEns) -> FieldEns:
@@ -355,7 +355,8 @@ class State:
 
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]} rec{rec_id}" if m < len(mem_list_own) else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing field: {status}", r*nm_max+m, nr*nm_max)
+                c.show_progress(f"PID {c.pid:4}: transposing field: {status}",
+                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
 
                 ##prepare an empty fld for receiving if not at the end of mem_list
                 mem_id = None
@@ -403,7 +404,6 @@ class State:
                         c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
                         del state[dst_mem_id, rec_id]   ##free up memory
         c.comm.Barrier()
-        c.print_1p(' done.\n')
         return fields
 
     def pack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, state_z: StateEns) -> dict:

@@ -33,6 +33,7 @@ run_postproc: True  # if true, run the postprocessing step
 run_diagnose: True  # if true, run the diagnose scripts
 debug: False        # if true, output debug data/message
 timer: True         # if true, output information on function runtime
+timer_substeps: False
 step:
 
 # time control of the experiment
@@ -125,7 +126,8 @@ interp_method: linear    # interpolation method: 'linear' or 'nearest'
 perturb:
 
 # more details in assimilation algorithm
-scheme: filter  # type of analysis to perform: filter/smoother/etc.
+scheme: filter      # type of analysis to perform: filter/smoother/etc.
+log_substeps: True  # if true, show detailed logs for filter substeps
 
 # outer loop iterations
 niter: 1

@@ -1,6 +1,6 @@
 work_dir: /cluster/work/users/yingyue/qg
 
-python_env: /cluster/home/yingyue/py/bin/activate
+python_env: /cluster/home/yingyue/python.src
 
 job_submit:
   host: local

@@ -88,7 +88,8 @@ class SerialAssimilator(Assimilator):
         for p in range(len(obs_list)):
             obs_rec_id, v, owner_pid, i = obs_list[p]
 
-            c.show_progress(f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}", p, len(obs_list))
+            c.show_progress(f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}",
+                            p, len(obs_list), c.config.log_substeps)
 
             ##1. if the pid owns this obs, broadcast it to all pid
             if c.pid_mem == owner_pid:
@@ -132,7 +133,6 @@ class SerialAssimilator(Assimilator):
 
         c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
         c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
-        c.print_1p(' done.\n')
 
     @abstractmethod
     def obs_increment(self, obs_prior, obs, obs_err) -> np.ndarray:

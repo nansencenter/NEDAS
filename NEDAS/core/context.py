@@ -266,17 +266,21 @@ class Context:
 
     def show_progress(self, debug_message: str,
                       task: int,
-                      total_ntask: int) -> None:
+                      total_ntask: int,
+                      on: bool=True) -> None:
         """
         Show progress
 
         If debug=True, print the debug_message with flush=True
         Otherwise, show a progress bar, indicating current task/total_ntask percentage.
         """
-        if self.debug:
-            print(debug_message, flush=True)
-        else:
-            self.print_1p(progress.progress_bar(task, total_ntask))
+        if on:
+            if self.debug:
+                print(debug_message, flush=True)
+            else:
+                self.print_1p(progress.progress_bar(task, total_ntask))
+                if task == (total_ntask-1):
+                    self.print_1p(" done.\n")
 
     def show_summary(self) -> None:
         conf_summary = self.config.summary()

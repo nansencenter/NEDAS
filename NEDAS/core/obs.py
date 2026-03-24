@@ -374,7 +374,8 @@ class Obs:
                 ##this is the obs record to process
                 obs_rec = self.info.records[obs_rec_id]
 
-                c.show_progress(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec.name:20}", m*nr+r, nr*nm)
+                c.show_progress(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec.name:20}",
+                                m*nr+r, nr*nm, c.config.log_substeps)
 
                 seq = {}
                 ##need the coordinates for transform later
@@ -390,7 +391,6 @@ class Obs:
                 ##collect obs ensemble data to the local memory
                 getattr(self, f"obs_{tag}")[mem_id, obs_rec_id] = seq['obs']
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
         ##output the obs sequeneces for debugging
         if c.debug:
@@ -457,7 +457,8 @@ class Obs:
                     mem_id = mem_list[c.pid_mem][m]
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
+                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
 
                 ##prepare the obs seq for sending if not at the end of mem_list
                 if m < len(mem_list[c.pid_mem]):
@@ -504,7 +505,6 @@ class Obs:
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
         ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
         ##        tmp_obs -> output_obs
@@ -560,7 +560,8 @@ class Obs:
                     seq = input_obs[mem_id, obs_rec_id].copy()
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
+                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
 
                 ##the collective send/recv follows the same idea under state.transpose_field_to_state
                 ##1) receive lobs_seq from src_pid, for src_pid<pid first
@@ -596,7 +597,6 @@ class Obs:
                         tmp_obs[src_mem_id, obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
         ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
         ##        tmp_obs -> output_obs
@@ -647,7 +647,8 @@ class Obs:
                         seq = np.full((rec.nobs,), np.nan)
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}", r*nm_max+m, nr*nm_max)
+                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
+                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
 
                 ##this is just the reverse of transpose_obs_to_lobs
                 ## we take the exact steps, but swap send and recv operations here
@@ -685,7 +686,6 @@ class Obs:
                         dst_mem_id = mem_list[dst_pid][m]
                         c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
         c.comm.Barrier()
-        c.print_1p(' done.\n')
         return obs_seq
 
     def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns) -> dict:

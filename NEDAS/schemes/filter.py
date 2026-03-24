@@ -148,28 +148,35 @@ class FilterAnalysisScheme(Scheme):
         """
         Main method for performing the analysis step
         """
+        # switch on timer for substeps if necessary
+        if self.config.log_substeps:
+            timer_func = timer(self.c)
+        else:
+            timer_func = lambda f: f
+
         # outer loop (iter = 0, ..., niter-1)
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         for self.c.iter in range(self.config.niter):
-            self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:\n")
+            if self.config.niter>1:
+                self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:\n")
 
             self.c.update_assim_tools()
             self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
 
             self.c.state = State(self.c)
-            timer(self.c)(self.c.state.prepare_state)(self.c)
+            timer_func(self.c.state.prepare_state)(self.c)
 
             # prepare the observations
             self.c.obs = Obs(self.c)
-            timer(self.c)(self.c.obs.prepare_obs)(self.c)
-            timer(self.c)(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
+            timer_func(self.c.obs.prepare_obs)(self.c)
+            timer_func(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
 
             # run assimilate algorithm
-            timer(self.c)(self.c.assimilator.assimilate)(self.c)
+            timer_func(self.c.assimilator.assimilate)(self.c)
 
             # update the state to get posteriors
-            timer(self.c)(self.c.updator.update)(self.c)
+            timer_func(self.c.updator.update)(self.c)
 
     def perturb(self) -> None:
         """
@@ -183,7 +190,7 @@ class FilterAnalysisScheme(Scheme):
             return
 
         pert = Perturbation(self.c)
-        timer(self.c)(pert)(self.c)
+        pert(self.c)
 
     def diagnose(self) -> None:
         """
@@ -199,7 +206,7 @@ class FilterAnalysisScheme(Scheme):
             return
 
         diag = Diagnostics(self.c)
-        timer(self.c)(diag)(self.c)
+        diag(self.c)
 
     def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
         """

@@ -34,7 +34,6 @@ class Diagnostics:
             mod.run(c, **rec)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
         c.comm.cleanup_file_locks()
 
     def distribute_diag_tasks(self, c: Context):

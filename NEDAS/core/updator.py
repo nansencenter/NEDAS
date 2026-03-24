@@ -45,21 +45,20 @@ class Updator(ABC):
                 pid_active = ( m < len(mem_list[c.pid_mem]) and r < len(rec_list[c.pid_rec]) )
 
                 #TODO: there is a bug here -> UCX WARN raised.
-                #self.prepare_async_file_io(c, r, m, pid_active)
+                #self.init_file_locks(c, r, m, pid_active)
 
                 if pid_active:
                     mem_id = mem_list[c.pid_mem][m]
                     rec_id = rec_list[c.pid_rec][r]
                     rec = c.state.info.fields[rec_id].asdict()
                     c.show_progress(f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}",
-                                    m*nr_max+r, nm_max*nr_max)
+                                    m*nr_max+r, nm_max*nr_max, c.config.log_substeps)
 
                     ##apply the increment to restart files (use io backend)
                     self.update_files(c, mem_id, rec_id)
 
         c.comm.Barrier()
         #c.comm.cleanup_file_locks()
-        c.print_1p(' done.\n')
 
     def prepare_async_file_io(self, c: Context, r: int, m: int, pid_active: bool):
         """

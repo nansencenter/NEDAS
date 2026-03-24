@@ -284,7 +284,6 @@ class Perturbation:
             self.save_perturb_data(c, **rec)
 
         c.comm.Barrier()
-        c.print_1p(' done.\n')
 
     def prepare_perturb_dir(self, c):
         """ Prepare and clear the directory where perturbation data will be stored (offline mode) """
