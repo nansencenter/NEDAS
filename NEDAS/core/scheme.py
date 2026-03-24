@@ -117,7 +117,7 @@ class Scheme(ABC):
             # run job
             self.c.run_job(commands, **job_opts)
 
-    def run_step(self, step: str, mpi: bool=False) -> None:
+    def run_step(self, step: str) -> None:
         """
         Manages how to run a specified step in the workflow.
         """
@@ -126,8 +126,9 @@ class Scheme(ABC):
 
         # in offline mode, run_step starts in serial
         # if the step requires mpi for nproc>1, make an external call
-        if not self.online_mode and mpi:
+        if not self.online_mode and self.steps_need_mpi[step]:
             if not self.c.comm.mpi_ready:
+                self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
 

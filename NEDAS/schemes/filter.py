@@ -13,6 +13,16 @@ class FilterAnalysisScheme(Scheme):
     as new initial conditions, the ensemble forecast is run again to reach the next analysis cycle, until
     the end of the period of interest. The length of forecasts between cycles is called the `cycling period`.
     """
+    steps_need_mpi = {
+        'generate_truth': False,
+        'generate_init_ensemble': False,
+        'preprocess': False,
+        'perturb': True,
+        'filter': True,
+        'postprocess': False,
+        'ensemble_forecast': False,
+        'diagnose': True,
+    }
 
     def run_all(self) -> None:
         self.c.print_1p("Initializing...\n")
@@ -32,11 +42,11 @@ class FilterAnalysisScheme(Scheme):
             if self.config.run_preproc:
                 self.run_step('preprocess')
                 if self.config.perturb:
-                    self.run_step('perturb', mpi=True)
+                    self.run_step('perturb')
 
             ##assimilation step
             if self.config.run_analysis and self.c.time >= self.config.time_analysis_start and self.c.time <= self.config.time_analysis_end:
-                self.run_step('filter', mpi=True)
+                self.run_step('filter')
                 if self.config.run_postproc:
                     self.run_step('postprocess')
 
@@ -47,7 +57,7 @@ class FilterAnalysisScheme(Scheme):
             ##compute diagnostics
             if self.config.run_diagnose:
                 if self.config.diag:
-                    self.run_step('diagnose', mpi=True)
+                    self.run_step('diagnose')
 
             ##advance to next cycle
             self.c.time = self.c.next_time
