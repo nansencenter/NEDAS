@@ -197,6 +197,7 @@ class BatchAssimilator(Assimilator):
                 if len(ind1) == 0:
                     c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)",
                                     task, ntask, c.config.log_substeps)
+                    task += 1
                     continue ##if all obs has no impact on state, just skip to next location
 
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
