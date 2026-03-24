@@ -50,7 +50,6 @@ class Scheme(ABC):
         The entry point that handles the environment check and starts the engine.
         """
         self.c.show_greeting()
-        self.c.print_1p(f"{self.__class__.__name__}: \n")
 
         # Environment check:
         # 1. Online mode: (requires mpi environment if nproc>1)
@@ -60,7 +59,7 @@ class Scheme(ABC):
                 self.run_all()
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
-                self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                self.c.print_1p(f"\n{self.__class__.__name__}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
 
         # 2. offline mode (manual dispatch per step)
@@ -130,7 +129,7 @@ class Scheme(ABC):
         # if the step requires mpi for nproc>1, make an external call
         if not self.online_mode and self.steps_need_mpi[step]:
             if self.config.nproc>1 and not self.c.comm.mpi_ready:
-                self.c.print_1p(f"Config: nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                self.c.print_1p(f"\n{self.__class__.__name__}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
 

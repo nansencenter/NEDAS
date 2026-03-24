@@ -175,19 +175,71 @@ class Config:
         with open(config_file, 'w') as f:
             yaml.dump(self.__dict__, f, sort_keys=False)
 
-
     def summary(self) -> str:
         """
-        Return a summary of the configuration.
+        Return a comprehensive summary of the NEDAS configuration.
         """
-        summary_text = f"""  working directory: {self.work_dir}
-  parallel scheme: nproc = {self.nproc}, nproc_mem = {self.nproc_mem}
-  cycling from {self.time_start} to {self.time_end}
-  analysis start at {self.time_analysis_start}
-  cycle_period = {self.cycle_period} hours
-  ensemble size: nens = {self.nens}
-  scheme = {self.scheme}, io_mode = {self.io_mode}
-  state: models
-  obs: datasets
- """
+        # Format the active flags for the workflow
+        workflow = []
+        if self.run_preproc: workflow.append("Preprocess")
+        if self.run_forecast: workflow.append("Forecast")
+        if self.run_analysis: workflow.append("Analysis")
+        if self.run_postproc: workflow.append("Postprocess")
+        if self.run_diagnose: workflow.append("Diagnose")
+        workflow_str = " -> ".join(workflow) if workflow else "None"
+
+        fcst_str = f"{self.forecast_period}h" if hasattr(self, 'forecast_period') and self.forecast_period else "N/A"
+        js = self.job_submit or {}
+        loc = self.localization_def or {}
+        h_loc = loc.get('horizontal', {}).get('type', 'N/A')
+        v_loc = loc.get('vertical', {}).get('type', 'N/A')
+        inf = self.inflation_def or {}
+        inf_str = f"{inf.get('type', 'None')} (coef: {inf.get('coef', 1.0)}, adaptive: {inf.get('adaptive', False)})"
+        state_vars = [f"{d.get('name')} ({d.get('model_src')})" for d in (self.state_def or [])]
+        obs_vars = [f"{d.get('name')} ({d.get('dataset_src')})" for d in (self.obs_def or [])]
+
+        # Construct the summary block
+        summary_text = f"""
+CONFIGURATION SUMMARY
+{'='*21}
+Directories:
+  Work Dir:      {self.work_dir}
+  NEDAS Root:    {self.nedas_root}
+
+Time Configuration:
+  Current Time:  {self.time}
+  Experiment:    [{self.time_start}] to [{self.time_end}]
+  Analysis:      [{self.time_analysis_start}] to [{self.time_analysis_end}]
+  Periods:       Cycle: {self.cycle_period}h | Forecast: {fcst_str}
+
+Parallel Scheme:
+  Total Procs:   {self.nproc}
+  Decomposition: {self.nproc_mem} (mem) x {self.nproc_rec} (rec)
+  Procs for utility funcs: {self.nproc_util}
+  Host:          {js.get('host', 'local')}
+  Scheduler:     {js.get('scheduler', 'None')} | Project: {js.get('project', 'N/A')}
+  Queue/Mode:    {js.get('queue', 'N/A')} | Parallel mode: {js.get('parallel_mode', 'serial')}
+
+Analysis Scheme:
+  General:       Scheme: {self.scheme} | Ensemble Size: {self.nens} | IO: {self.io_mode}
+  Grid Type:     {self.grid_def.get('type', 'N/A') if self.grid_def else 'N/A'}
+  Iteration:     {self.iter + 1} of {self.niter} (Outer Loops)
+  Assimilator:   Type: {self.assimilator_def.get('type') if self.assimilator_def else 'None'}
+  Updator:       Type: {self.updator_def.get('type') if self.updator_def else 'None'}
+  Inflation:     {inf_str}
+  Localization:  H: {h_loc} | V: {v_loc} | T: {loc.get('temporal', {}).get('type', 'N/A')}
+  Multiscale:    Resolution Levels: {self.resolution_level} | Character Lengths: {self.character_length}
+                 Localization Factor: {self.localize_scale_fac} | Obs Err Factor: {self.obs_err_scale_fac}
+
+Definitions:
+  Models Used:   {", ".join(self.model_def.keys()) if self.model_def else 'None'}
+  Datasets:      {", ".join(self.dataset_def.keys()) if self.dataset_def else 'None'}
+  State Vector:  {', '.join(state_vars) if state_vars else 'None'}
+  Observations:  {', '.join(obs_vars) if obs_vars else 'None'}
+
+Workflow Status:
+  Active Steps:  {workflow_str}
+  Debug Mode:    {self.debug} | Timer: {self.timer}
+
+"""
         return summary_text

@@ -283,11 +283,7 @@ class Context:
                     self.print_1p(" done.\n")
 
     def show_summary(self) -> None:
-        conf_summary = self.config.summary()
-        summary_text = f"""Configuration:\n{conf_summary}
-current time: {self.time}
-...
-"""
+        summary_text = self.config.summary()
         self.print_1p(summary_text)
 
     def run_job(self, commands: str,

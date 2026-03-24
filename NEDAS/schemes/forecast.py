@@ -1,5 +1,4 @@
 from typing import Any
-from NEDAS.utils.progress import timer
 from NEDAS.schemes.filter import FilterAnalysisScheme
 
 class ForecastScheme(FilterAnalysisScheme):
@@ -21,7 +20,7 @@ class ForecastScheme(FilterAnalysisScheme):
             if self.config.run_preproc:
                 self.run_step('preprocess')
                 if self.config.perturb:
-                    self.run_step('perturb', mpi=True)
+                    self.run_step('perturb')
 
             ##advance model state to next analysis cycle
             if self.config.run_forecast:
@@ -30,7 +29,7 @@ class ForecastScheme(FilterAnalysisScheme):
             ##compute diagnostics
             if self.config.run_diagnose:
                 if self.config.diag:
-                    self.run_step('diagnose', mpi=True)
+                    self.run_step('diagnose')
 
             ##advance to next cycle
             self.c.time = self.c.next_time

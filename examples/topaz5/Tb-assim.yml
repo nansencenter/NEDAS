@@ -152,9 +152,6 @@ dataset_def:
     ow_bias_file: "/cluster/work/users/yingyue/amsr_tb_assim_exp/monthly_means_ow_bias_2021.csv"
     obs_window_min: 0
     obs_window_max: 23
-  topaz:
-    config_file: '{nedas_root}/datasets/topaz/default.yml'
-    dataset_dir: '/cluster/work/users/yingyue/Data_TP5'
 
 use_synthetic_obs: False
 z_coords_from: mean

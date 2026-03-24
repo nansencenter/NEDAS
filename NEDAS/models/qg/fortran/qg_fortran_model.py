@@ -225,6 +225,7 @@ class QGFortranModel(Model):
         kwargs['member'] = None
         debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
+
         # check if truth files already exists in model.truth_dir
         complete = True
         kwargs['time'] = self.c.config.time_start
@@ -239,6 +240,7 @@ class QGFortranModel(Model):
                 print(f"truth files already exist in {self.truth_dir}, skipping")
             return
 
+        # create the truth files
         if debug:
             print(f"Creating truth run for qg model in {self.truth_dir}")
         run_dir = os.path.join(self.truth_dir, 'run')
@@ -259,6 +261,7 @@ class QGFortranModel(Model):
             kwargs['time'] = next_time
         print("done.")
 
+        # clean up
         self.c.fs.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
         if debug:
             print(f"removing temporary run directory: {run_dir}")
@@ -278,6 +281,7 @@ class QGFortranModel(Model):
                 print(f"Init file {init_file} already exists, skipping")
             return
 
+        # create the initial ensemble members
         if debug:
             print(f"Creating initial condition for qg modeli member {kwargs['member']+1}:")
         init_time = kwargs['time'] - self.spinup_hours * dt1h

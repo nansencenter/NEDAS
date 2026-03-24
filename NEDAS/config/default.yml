@@ -33,16 +33,15 @@ run_postproc: True  # if true, run the postprocessing step
 run_diagnose: True  # if true, run the diagnose scripts
 debug: False        # if true, output debug data/message
 timer: True         # if true, output information on function runtime
-timer_substeps: False
-step:
+step:               # current step in scheme (given in runtime context)
 
 # time control of the experiment
 time_start: 2001-01-01T00:00:00Z          # start time of the experiment
 time_end: 2001-01-30T00:00:00Z            # end time of the experiment
 time_analysis_start: 2001-01-07T00:00:00Z # start time of the first analysis cycle
 time_analysis_end: 2001-01-28T00:00:00Z   # end time of the last analysis cycle
-cycle_period: 12                    # cycle period, in hours
-time:
+cycle_period: 12                          # cycle period, in hours
+time:                            # current time (given in runtime context)
 obs_time_steps: [0]              # time steps defining observation window, hours, relative to cycle time
 obs_time_scale: 0                # smoothing window in hours for observations
 state_time_steps: [0]            # time steps defining the 4D state vector, hours, relative to cycle time
@@ -129,9 +128,8 @@ perturb:
 scheme: filter      # type of analysis to perform: filter/smoother/etc.
 log_substeps: True  # if true, show detailed logs for filter substeps
 
-# outer loop iterations
-niter: 1
-iter:
+niter: 1                  # number of outer loop iterations
+iter:                     # current iteration (given in runtime context)
 resolution_level: [0]       # resolution level for the analysis grid (0 default resolution as defined in grid_def, + reduce, - increase)
 character_length: [16]      # characteristic length (in grid coord unit) for each scale (large to small)
 localize_scale_fac: [1]     # scale factor for localization distances
