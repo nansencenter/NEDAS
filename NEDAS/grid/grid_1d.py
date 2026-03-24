@@ -19,10 +19,10 @@ class Grid1D:
 
     def __init__(self, x: np.ndarray, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
 
-        ##coordinates and properties of the 2D grid
+        # coordinates and properties of the 2D grid
         assert len(np.array(x).shape) == 1
         self.x = x
-        self.y = np.zeros(x.size)  ##dummy y coords
+        self.y = np.zeros(x.size)  # dummy y coords
         self.regular = regular
         self.cyclic = cyclic
         if bounds is not None:
@@ -66,7 +66,7 @@ class Grid1D:
         self = cls.__new__(cls)
         x = np.arange(xstart, xend, dx)
         if centered:
-            x += 0.5*dx  ##move coords to center of grid box
+            x += 0.5*dx  # move coords to center of grid box
         self.__init__(x, regular=True, **kwargs)
         return self
 
@@ -98,20 +98,20 @@ class Grid1D:
     @dst_grid.setter
     def dst_grid(self, grid):
         assert isinstance(grid, Grid1D), "dst_grid should be a Grid1D instance"
-        if grid == self.dst_grid:  ##the same grid is set before
+        if grid == self.dst_grid:  # the same grid is set before
             return
         self._dst_grid = grid
 
-        ##prepare indices and weights for interpolation
-        ##when dst_grid is set, these info are prepared and stored to avoid recalculating
-        ##too many times, when applying the same interp to a lot of flds
+        # prepare indices and weights for interpolation
+        # when dst_grid is set, these info are prepared and stored to avoid recalculating
+        # too many times, when applying the same interp to a lot of flds
         inside, vertices, in_coords, nearest = self.find_index(grid.x)
         self.interp_inside = inside
         self.interp_vertices = vertices
         self.interp_nearest = nearest
         self.interp_weights = self._interp_weights(inside, vertices, in_coords)
 
-        ##prepare indices for coarse-graining
+        # prepare indices for coarse-graining
         inside, _, _, nearest = grid.find_index(self.x)
         self.coarsen_inside = inside
         self.coarsen_nearest = nearest
@@ -130,7 +130,7 @@ class Grid1D:
         xi = self.x
         i_ = np.argsort(xi)
         xi_ = xi[i_]
-        ##pad cyclic coordinates with additional grid point
+        # pad cyclic coordinates with additional grid point
         if self.cyclic:
             if xi_[0]+self.Lx not in xi_:
                 xi_ = np.hstack((xi_, xi_[0] + self.Lx))
@@ -154,7 +154,7 @@ class Grid1D:
         return inside, vertices, in_coords, nearest
 
     def _interp_weights(self, inside, vertices, in_coords):
-        ##compute bilinear interp weights
+        # compute bilinear interp weights
         interp_weights = np.zeros(vertices.shape)
         interp_weights[:, 0] =  1-in_coords
         interp_weights[:, 1] =  in_coords
@@ -165,14 +165,14 @@ class Grid1D:
             raise ValueError("dst_grid not set for interpolation")
 
         if x is None:
-            ##use precalculated weights for self.dst_grid
+            # use precalculated weights for self.dst_grid
             inside = self.interp_inside
             vertices = self.interp_vertices
             nearest = self.interp_nearest
             weights = self.interp_weights
             x = self.dst_grid.x
         else:
-            ##otherwise compute the weights for the given x,y
+            # otherwise compute the weights for the given x,y
             inside, vertices, in_coords, nearest = self.find_index(x)
             weights = self._interp_weights(inside, vertices, in_coords)
 
@@ -190,12 +190,12 @@ class Grid1D:
             raise ValueError("field shape does not match grid shape, or number of triangle elements")
         return fld_interp.reshape(np.array(x).shape)
 
-    ###utility function for coarse-graining (high->low resolution)
+    # #utility function for coarse-graining (high->low resolution)
     def coarsen(self, fld):
         if self.dst_grid is None:
             raise ValueError("dst_grid not set for coarse-graining")
 
-        ##find which location x_,y_ falls in in dst_grid
+        # find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
             nearest = self.coarsen_nearest
@@ -205,13 +205,13 @@ class Grid1D:
         fld_coarse = np.zeros(self.dst_grid.x.flatten().shape)
         count = np.zeros(self.dst_grid.x.flatten().shape)
         fld_inside = fld.flatten()[inside]
-        valid = ~np.isnan(fld_inside)  ##filter out nan
+        valid = ~np.isnan(fld_inside)  # filter out nan
 
-        ##average the fld points inside each dst_grid box/element
+        # average the fld points inside each dst_grid box/element
         np.add.at(fld_coarse, nearest[valid], fld_inside[valid])
         np.add.at(count, nearest[valid], 1)
 
-        valid = (count>1)  ##do not coarse grain if only one point near by
+        valid = (count>1)  # do not coarse grain if only one point near by
         fld_coarse[valid] /= count[valid]
         fld_coarse[~valid] = np.nan
 
@@ -225,7 +225,7 @@ class Grid1D:
             fld_out = np.full(self.dst_grid.x.shape, np.nan)
             fld_out = self.interp(fld, method=method)
             if coarse_grain:
-                ##coarse-graining if more points fall in one grid
+                # coarse-graining if more points fall in one grid
                 fld_coarse = self.coarsen(fld)
                 ind = ~np.isnan(fld_coarse)
                 fld_out[ind] = fld_coarse[ind]
@@ -234,9 +234,9 @@ class Grid1D:
         return fld_out
 
     def distance(self, ref_x, x, ref_y=None, y=None, p=1):
-        ##normal cartesian distances in x and y
+        # normal cartesian distances in x and y
         dist_x = np.abs(x - ref_x)
-        ##if there are cyclic boundary condition, take care of the wrap around
+        # if there are cyclic boundary condition, take care of the wrap around
         if self.cyclic:
             dist_x = np.minimum(dist_x, self.Lx - dist_x)
         return dist_x

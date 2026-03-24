@@ -17,8 +17,8 @@ class IrregularGrid(Grid2DBase):
         super().__init__(proj, x, y, bounds, cyclic_dim, distance_type, dst_grid)
         self.regular = False
 
-        ##Generate triangulation, if tiangles are provided its very quick,
-        ##otherwise Triangulation will generate one, but slower.
+        # Generate triangulation, if tiangles are provided its very quick,
+        # otherwise Triangulation will generate one, but slower.
         self.x = self.x.flatten()
         self.y = self.y.flatten()
         self.npoints = self.x.size
@@ -58,14 +58,14 @@ class IrregularGrid(Grid2DBase):
         s3 = np.hypot(self.x[t][:,2]-self.x[t][:,1], self.y[t][:,2]-self.y[t][:,1])
         sa = (s1 + s2 + s3)/3
 
-        ##try to remove very elongated triangles, so that mesh dx is more accurate
+        # try to remove very elongated triangles, so that mesh dx is more accurate
         e = 0.3
         valid = np.logical_and(np.abs(s1-sa) < e*sa, np.abs(s2-sa) < e*sa, np.abs(s3-sa) < e*sa)
         if ~valid.all():
-            ##all triangles are elongated, just take their mean size
+            # all triangles are elongated, just take their mean size
             dx = np.mean(sa)
         else:
-            ##take the mean of triangle size, excluding the elongated ones
+            # take the mean of triangle size, excluding the elongated ones
             dx = np.mean(sa[valid])
         return float(dx)
 
@@ -81,17 +81,17 @@ class IrregularGrid(Grid2DBase):
         s2 = np.hypot(x[t[:,0]] - x[t[:,2]], y[t[:,0]] - y[t[:,2]])
         s3 = np.hypot(x[t[:,2]] - x[t[:,1]], y[t[:,2]] - y[t[:,1]])
         s = 0.5*(s1+s2+s3)
-        p = 2.0 * s  ##circumference
-        a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  ##area
+        p = 2.0 * s  # circumference
+        a = np.sqrt(s*(s-s1)*(s-s2)*(s-s3))  # area
         setattr(self.tri, 'p', p)
         setattr(self.tri, 'a', a)
-        ##circumference-to-area ratio
+        # circumference-to-area ratio
         ratio = a / s**2 * 3**(3/2)
-        ##(1: equilateral triangle, ~0: very elongated)
+        # (1: equilateral triangle, ~0: very elongated)
         setattr(self.tri, 'ratio', ratio)
 
     def _pad_cyclic_mesh_bounds(self):
-        ##repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
+        # repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
         x = self.x
         y = self.y
         inds = np.arange(self.npoints)
@@ -110,7 +110,7 @@ class IrregularGrid(Grid2DBase):
                 inds = np.hstack([inds, inds, inds, inds, inds])
         tri = Triangulation(x, y)
 
-        ##find the triangles that covers the domain and keep them
+        # find the triangles that covers the domain and keep them
         triangles = []
         for i in range(tri.triangles.shape[0]):
             t = tri.triangles[i,:]
@@ -118,7 +118,7 @@ class IrregularGrid(Grid2DBase):
                 triangles.append(t)
         triangles = np.array(triangles)
 
-        ##collect the uniq grid point indices (in self.x and self.y) and assign them to the triangles
+        # collect the uniq grid point indices (in self.x and self.y) and assign them to the triangles
         uniq_inds = list(np.unique(triangles.reshape(-1)))
         for i in np.ndindex(triangles.shape):
             triangles[i] = uniq_inds.index(triangles[i])
@@ -129,30 +129,30 @@ class IrregularGrid(Grid2DBase):
         x_ = np.array(x_).flatten()
         y_ = np.array(y_).flatten()
 
-        ##lon: pyproj.Proj works only for lon=-180:180
+        # lon: pyproj.Proj works only for lon=-180:180
         if self.proj_name == 'longlat':
             x_ = np.mod(x_ + 180., 360.) - 180.
 
-        ###account for cyclic dim, when points drop "outside" then wrap around
+        # #account for cyclic dim, when points drop "outside" then wrap around
         x_, y_ = self._wrap_cyclic_xy(x_, y_)
 
-        ##for irregular mesh, use tri_finder to find index
+        # for irregular mesh, use tri_finder to find index
         tri_finder = self.tri.get_trifinder()
         triangle_map = np.asarray(tri_finder(x_, y_))
         inside = (triangle_map >= 0)
         indices = triangle_map[inside]
 
-        ##internal coords are the barycentric coords (in1, in2, in3) in a triangle
-        ##note: larger in1 means closer to the vertice 1!
-        ##     (0,0,1) p3\
-        ##            / | \
-        ##           / in3. \
-        ##          /  :* .   \
-        ##         /in1  | in2  \
-        ##(1,0,0) p1-------------p2 (0,1,0)
+        # internal coords are the barycentric coords (in1, in2, in3) in a triangle
+        # note: larger in1 means closer to the vertice 1!
+        #      (0,0,1) p3\
+        #             / | \
+        #            / in3. \
+        #           /  :* .   \
+        #          /in1  | in2  \
+        # (1,0,0) p1-------------p2 (0,1,0)
         vertices = self.tri.triangles[triangle_map[inside], :]
 
-        ##transform matrix for barycentric coords computation
+        # transform matrix for barycentric coords computation
         a = self.tri.x[vertices[:,0]] - self.tri.x[vertices[:,2]]
         b = self.tri.x[vertices[:,1]] - self.tri.x[vertices[:,2]]
         c = self.tri.y[vertices[:,0]] - self.tri.y[vertices[:,2]]
@@ -166,13 +166,13 @@ class IrregularGrid(Grid2DBase):
         t_matrix[:,2,0] = self.tri.x[vertices[:,2]]
         t_matrix[:,2,1] = self.tri.y[vertices[:,2]]
 
-        ##get barycentric coords, according to https://en.wikipedia.org/wiki/
-        ##Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
+        # get barycentric coords, according to https://en.wikipedia.org/wiki/
+        # Barycentric_coordinate_system#Barycentric_coordinates_on_triangles,
         delta = np.array([x_[inside], y_[inside]]).T - t_matrix[:,2,:]
         in12 = np.einsum('njk,nk->nj', t_matrix[:,:2,:], delta)
         in_coords = np.hstack((in12, 1.-in12.sum(axis=1, keepdims=True)))
 
-        ##index of grid nearest to (x_,y_)
+        # index of grid nearest to (x_,y_)
         nearest = vertices[np.arange(len(in_coords), dtype=int), np.argmax(in_coords, axis=1)]
 
         return inside, indices, vertices, in_coords, nearest
@@ -187,7 +187,7 @@ class IrregularGrid(Grid2DBase):
         Output:
         - interp_weights: float, np.array with vertices.shape
         """
-        ##use barycentric coordinates as interp weights
+        # use barycentric coordinates as interp weights
         interp_weights = in_coords
         return interp_weights
 
@@ -195,7 +195,7 @@ class IrregularGrid(Grid2DBase):
         if self.dst_grid is None:
             raise ValueError("dst_grid not set for interpolation")
         if x is None or y is None:
-            ##use precalculated weights for self.dst_grid
+            # use precalculated weights for self.dst_grid
             inside = self.interp_inside
             indices = self.interp_indices
             vertices = self.interp_vertices
@@ -203,7 +203,7 @@ class IrregularGrid(Grid2DBase):
             weights = self.interp_weights
             x = self.dst_grid.x
         else:
-            ##otherwise compute the weights for the given x,y
+            # otherwise compute the weights for the given x,y
             inside, indices, vertices, in_coords, nearest = self.find_index(x, y)
             weights = self._interp_weights(inside, vertices, in_coords)
 
@@ -229,7 +229,7 @@ class IrregularGrid(Grid2DBase):
         if self.dst_grid is None:
             raise ValueError("dst_grid not set for coarse-graining")
 
-        ##find which location x_,y_ falls in in dst_grid
+        # find which location x_,y_ falls in in dst_grid
         if fld.shape == self.x.shape:
             inside = self.coarsen_inside
             nearest = self.coarsen_nearest
@@ -242,13 +242,13 @@ class IrregularGrid(Grid2DBase):
         fld_coarse = np.zeros(self.dst_grid.x.flatten().shape)
         count = np.zeros(self.dst_grid.x.flatten().shape)
         fld_inside = fld.flatten()[inside]
-        valid = ~np.isnan(fld_inside)  ##filter out nan
+        valid = ~np.isnan(fld_inside)  # filter out nan
 
-        ##average the fld points inside each dst_grid element
+        # average the fld points inside each dst_grid element
         np.add.at(fld_coarse, nearest[valid], fld_inside[valid])
         np.add.at(count, nearest[valid], 1)
 
-        valid = (count>1)  ##do not coarse grain if only one point near by
+        valid = (count>1)  # do not coarse grain if only one point near by
         fld_coarse[valid] /= count[valid]
         fld_coarse[~valid] = np.nan
 
