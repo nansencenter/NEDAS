@@ -26,10 +26,10 @@ class OfflineIO(IOBackend):
         analysis_dir = c.fs.analysis_dir(c.time, c.iter)
         return os.path.join(analysis_dir, f'fields_{tag}.bin')
 
-    def prepare_collective_io(self, c: Context, tag: str):
+    def prepare_fields_storage(self, c: Context, tag: str):
         binfile = self.binfile_name(c, tag)
         if c.pid == 0:
-            ##if file doesn't exist, create the file
+            ##create the .bin file
             with open(binfile, 'wb') as f:
                 pass
             ##write state_info to the accompanying .dat file

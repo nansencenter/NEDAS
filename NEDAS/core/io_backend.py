@@ -24,11 +24,11 @@ class IOBackend(ABC):
         if tag not in self.tags:
             raise ValueError(f"IOBackend: unknown tag '{tag}', supported: {self.tags}")
 
-    def prepare_collective_io(self, c: Context, tag: str) -> None:
+    def prepare_fields_storage(self, c: Context, tag: str) -> None:
         """
-        Prepare for collective io, needed typically for offline io modes.
-
-        Creating files for writing if not existing yet. Creating file locks for parallel io, etc.
+        Prepare for storage of fields data.
+        Only needed for offline io modes: initialize the binary file that stores fields
+        and write its metadata.
         """
         pass
 
