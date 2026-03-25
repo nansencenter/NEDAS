@@ -136,7 +136,7 @@ class Scheme(ABC):
 
         # otherwise, just call the step func
         stepfunc = getattr(self, step)
-        self.c.logger(f'\033[1;33mRUNNING\033[0m {step} step')(stepfunc)()
+        self.c.logger(f'Running {step} step')(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
                            tag: IOTag,
