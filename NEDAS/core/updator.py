@@ -28,8 +28,6 @@ class Updator(ABC):
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
 
-        c.print_1p(f'>>> update model restart files with analysis increments\n')
-
         # compute analysis increments
         self.compute_increment(c)
 
@@ -42,6 +40,7 @@ class Updator(ABC):
         # but need to keep every rank in sync to coordinate multiprocess file access
         nm_max = np.max([len(lst) for _,lst in c.mem_list.items()])
         nr_max = np.max([len(lst) for _,lst in c.state.rec_list.items()])
+        c.total_tasks = nr_max * nm_max
         for r in range(nr_max):
             for m in range(nm_max):
                 pid_active = ( m < len(c.mem_list[c.pid_mem]) and r < len(c.state.rec_list[c.pid_rec]) )
@@ -49,14 +48,15 @@ class Updator(ABC):
                     mem_id = c.mem_list[c.pid_mem][m]
                     rec_id = c.state.rec_list[c.pid_rec][r]
                     rec = c.state.info.fields[rec_id].asdict()
-                    debug_msg = f"PID {c.pid:4}: update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}"
+                    debug_msg = f"update_restartfile mem{mem_id+1:03} '{rec['name']:20}' {rec['time']} k={rec['k']}"
 
                     # apply the increment to restart files (use io backend)
                     self.update_files(c, mem_id, rec_id)
 
                 else:
-                    debug_msg = f"PID {c.pid:4}: waiting"
-                c.show_progress(debug_msg, m*nr_max+r, nm_max*nr_max, c.config.log_substeps)
+                    debug_msg = f"waiting"
+                c.debug_message = debug_msg
+                c.current_task = m*nr_max+r
 
         c.comm.Barrier()
         c.comm.cleanup_file_locks()

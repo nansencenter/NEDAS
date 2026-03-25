@@ -251,6 +251,7 @@ class Perturbation:
         c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
 
         # go through the tasks
+        c.total_tasks = self.nfld+1
         fld_id = 0
         for rec in self.task_list[c.pid]:
             p = PerturbField(**rec)
@@ -273,7 +274,8 @@ class Perturbation:
                 # Note: assuming all variables in the list have the same k levels
                 for k in model.variables[variable_list[0]].levels:
                     fld_id += 1
-                    c.show_progress(f"PID {c.pid:4}: perturbing mem{member+1:03} {variable_list} at {t} level {k}", fld_id, self.nfld+1)
+                    c.debug_message = f"perturbing mem{member+1:03} {variable_list} at {t} level {k}"
+                    c.current_task = fld_id
 
                     fields = self.collect_fields(c, t, k, **rec)
                     self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n)

@@ -66,14 +66,14 @@ class State:
         """
         Main method to collect fields from model to form the complete state (field-complete distributed)
         """
-        self.collect_prior_fields(c)
+        c.logger('Collect prior fields')(self.collect_prior_fields)(c)
         #self.scalars_prior = self.collect_scalars(c)
 
-        self.output_ref_z(c)
+        c.logger('Collect reference z coords')(self.output_ref_z)(c)
 
         # compute and save the prior ensemble and mean fields
-        self.output_state(c, 'prior')
-        self.output_ens_mean(c, 'prior')
+        c.logger('Output prior ensemble members')(self.output_state)(c, 'prior')
+        c.logger('Output prior ensemble mean')(self.output_ens_mean)(c, 'prior')
 
     def collect_prior_fields(self, c: Context) -> None:
         """
@@ -91,23 +91,20 @@ class State:
         """
         pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.rec_list.items() if len(lst)>0][0]
-        c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
-
         ##pid_show has some workload, it will print progress message
-        c.print_1p('>>> prepare state by reading fields from model restart\n')
-        #if self.fields_prior and self.fields_z are not empty, warning that they will be overwritten
+        c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
 
         ##process the fields, each proc gets its own workload as a subset of
         ##mem_id,rec_id; all pid goes through their own task list simultaneously
         nm = len(c.mem_list[c.pid_mem])
         nr = len(self.rec_list[c.pid_rec])
-
+        c.total_tasks = nm*nr
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
                 rec = self.info.fields[rec_id]
 
-                c.show_progress(f"PID {c.pid:4}: prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}",
-                                m*nr+r, nm*nr, c.config.log_substeps)
+                c.debug_message = f"prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
+                c.current_task = m*nr+r
 
                 model_name = rec.model_src
                 model = c.models[model_name]
@@ -133,7 +130,6 @@ class State:
                     self.fields_z[mem_id, rec_id] = np.array([z, z])
                 else:
                     self.fields_z[mem_id, rec_id] = z
-
         c.comm.Barrier()
 
         ##additonal output of debugging
@@ -155,29 +151,25 @@ class State:
             mem_id_out (int, optional): member id to be output, if None all available ids will output.
             rec_id_out (int, optional): record id to be output, if None all available ids will output.
         """
-        c.print_1p('>>> saving data to fields_'+tag+'\n')
-
         c.io.prepare_fields_storage(c, tag)
 
         nm = len(c.mem_list[c.pid_mem])
         nr = len(self.rec_list[c.pid_rec])
+        c.total_tasks = nm*nr
         for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
             if mem_id_out is not None and mem_id != mem_id_out:
                 continue
             for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
                 if rec_id_out is not None and rec_id != rec_id_out:
                     continue
-
                 rec = self.info.fields[rec_id]
-                c.show_progress(f"PID {c.pid:4}: saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}",
-                                m*nr+r, nm*nr, c.config.log_substeps)
+                c.debug_message = f"saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
+                c.current_task = m*nr+r
 
                 ##get the field record for output
                 fields = getattr(self, f"fields_{tag}")
                 fld = fields[mem_id, rec_id]
-
                 c.io.write_field(fld, c, tag, rec_id, mem_id)
-
         c.comm.Barrier()
 
     def output_ens_mean(self, c: Context, tag: str) -> None:
@@ -190,15 +182,14 @@ class State:
             tag (str): which version of state this is: 'prior_mean', 'post_mean', or 'z'
             mean_file (str): path to the output binary file for the ensemble mean
         """
-        c.print_1p('>>> compute ensemble mean, and save to fields_'+tag+'_mean\n')
-
         fields = getattr(self, f"fields_{tag}")
         c.io.prepare_fields_storage(c, f"{tag}_mean")
 
+        c.total_tasks = len(self.rec_list[c.pid_rec])
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
             rec = self.info.fields[rec_id]
-            c.show_progress(f"PID {c.pid:4}: saving mean field '{rec.name:20}' {rec.time} k={rec.k}",
-                            r, len(self.rec_list[c.pid_rec]), c.config.log_substeps)
+            c.debug_message = f"saving mean field '{rec.name:20}' {rec.time} k={rec.k}"
+            c.current_task = r
 
             ##initialize a zero field with right dimensions for rec_id
             fld_shape = (2,)+self.info.shape if rec.is_vector else self.info.shape
@@ -274,19 +265,19 @@ class State:
         Returns:
             StateEns: The locally stored ensemble-complete field chunks on partitions, dict[(mem_id, rec_id), dict[par_id, fld_chk]]
         """
-        c.print_1p('transpose field-complete to ensemble-complete\n')
         state = {}
 
         nr = len(self.rec_list[c.pid_rec])
+        nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
+        c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
             ##all pid goes through their own mem_list simultaneously
-            nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
             mem_list_own = c.mem_list[c.pid_mem]
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]+1:03} rec{rec_id}" if m < len(mem_list_own) else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing field: {status}",
-                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
+                c.debug_message = f"transposing field: {status}"
+                c.current_task = r*nm_max+m
 
                 ##prepare the fld for sending if not at the end of mem_list
                 fld = None
@@ -342,21 +333,21 @@ class State:
         Returns:
             FieldEns: the locally stored field-complete fields for subset of mem_id,rec_id.
         """
-        c.print_1p('transpose ensemble-complete to field-complete\n')
         fields = {}
 
         ##all pid goes through their own task list simultaneously
         nr = len(self.rec_list[c.pid_rec])
+        nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
+        c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
             ##all pid goes through their own mem_list simultaneously
-            nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
             mem_list_own = c.mem_list[c.pid_mem]
 
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]} rec{rec_id}" if m < len(mem_list_own) else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing field: {status}",
-                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
+                c.debug_message = f"transposing field: {status}"
+                c.current_task = r*nm_max+m
 
                 ##prepare an empty fld for receiving if not at the end of mem_list
                 mem_id = None

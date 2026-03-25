@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 import numpy as np
 from NEDAS.config import parse_config
 from NEDAS.utils.parallel import bcast_by_root
-from NEDAS.utils.progress import timer
 from .context import Context
 from .types import ObsRecordID, PartitionID, ProcIDMem
 
@@ -20,41 +19,35 @@ class Assimilator(ABC):
         """
         Main method to run the batch assimilation algorithm
         """
-        # switch on timer for substeps if necessary
-        if c.config.log_substeps:
-            timer_func = timer(c)
-        else:
-            timer_func = lambda f: f
-
         # prior inflation step
-        timer_func(c.inflation_func)(c, 'prior')
+        c.logger('Prior inflation')(c.inflation_func)(c, 'prior')
 
         # transpose c.state.fields_prior to ensemble-complete c.state.state_prior
         self.partition_grid(c)
-        timer_func(self.transpose_to_ensemble_complete)(c)
+        c.logger('Transpose to ensemble-complete')(self.transpose_to_ensemble_complete)(c)
 
         # the core assimilation algorithm
         # assimilates c.obs.obs_seq into c.state.state_prior to get c.state.state_post
-        timer_func(self.assimilation_algorithm)(c)
+        c.logger('Assimilation algorithm')(self.assimilation_algorithm)(c)
 
         # transpose c.state.state_post back to field-complete c.state.fields_post
-        timer_func(self.transpose_to_field_complete)(c)
+        c.logger('Transpose back to field-complete')(self.transpose_to_field_complete)(c)
 
         # output the post state
         # TODO: which version of posterior to output? ideally the inflated one? 
         # algorithmically clean way is to output the intermediate versions as well and 
         # let the files be input/output to the inflation func
         # but this is too much IO overhead.
-        timer_func(c.state.output_state)(c, 'post')
-        timer_func(c.state.output_ens_mean)(c, 'post')
+        c.logger('Output posterior ensemble members')(c.state.output_state)(c, 'post')
+        c.logger('Output posterior ensemble mean')(c.state.output_ens_mean)(c, 'post')
 
         if not c.obs.obs_post:
             # for batch filters the obs_post needs to be computed
             # (TODO: they can be updated along with the state, as an alternative)
-            timer_func(c.obs.prepare_obs_from_state)(c, 'post')
+            c.logger('Prepare obs from posterior state')(c.obs.prepare_obs_from_state)(c, 'post')
 
         # posterior inflation
-        timer_func(c.inflation_func)(c, 'post')
+        c.logger('Posterior inflation')(c.inflation_func)(c, 'post')
 
     def partition_grid(self, c: Context) -> None:
         """
@@ -96,19 +89,13 @@ class Assimilator(ABC):
         """
         Communicate among mpi ranks and transpose the locally-stored state/obs chunks to ensemble-complete
         """
-        c.print_1p('>>> transpose to ensemble complete:\n')
+        c.state.state_prior = c.logger('Transpose prior state')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_prior)
 
-        c.print_1p('state variables: ')
-        c.state.state_prior = c.state.transpose_to_ensemble_complete(c, c.state.fields_prior)
+        c.state.state_z = c.logger('Transpose z coordinates')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_z)
 
-        c.print_1p('z coords: ')
-        c.state.state_z = c.state.transpose_to_ensemble_complete(c, c.state.fields_z)
+        c.obs.lobs = c.logger('Transpose obs sequences')(c.obs.transpose_obs_seq)(c, c.obs.obs_seq)
 
-        c.print_1p('obs sequences: ')
-        c.obs.lobs = c.obs.transpose_obs_seq(c, c.obs.obs_seq)
-
-        c.print_1p('obs ens sequences: ')
-        c.obs.lobs_prior = c.obs.transpose_to_ensemble_complete(c, c.obs.obs_prior)
+        c.obs.lobs_prior = c.logger('Transpose obs prior ensemble')(c.obs.transpose_to_ensemble_complete)(c, c.obs.obs_prior)
 
         # if c.debug:
         #     np.save(os.path.join(self.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state.state_prior)
@@ -121,15 +108,11 @@ class Assimilator(ABC):
         Communicate among mpi ranks and transpose the locally-stored state/obs chunks
         back to field-complete
         """
-        c.print_1p('>>> transpose back to field complete\n')
-
-        c.print_1p('state variables: ')
-        c.state.fields_post = c.state.transpose_to_field_complete(c, c.state.state_post)
+        c.state.fields_post = c.logger('Tranpose posterior state back')(c.state.transpose_to_field_complete)(c, c.state.state_post)
 
         if c.obs.lobs_post:
             ##TODO there is a bug here, in transpose seq[:, ind] out of bound
-            c.print_1p('obs ens sequences: ')
-            c.obs.obs_post = c.obs.transpose_to_field_complete(c, c.obs.lobs_post)
+            c.obs.obs_post = c.logger('Transpose obs posterior ensemble back')(c.obs.transpose_to_field_complete)(c, c.obs.lobs_post)
 
     @abstractmethod
     def assimilation_algorithm(self, c: Context) -> None:

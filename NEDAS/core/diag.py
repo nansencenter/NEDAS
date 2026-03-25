@@ -23,9 +23,10 @@ class Diagnostics:
     def __call__(self, c: Context) -> None:
         c.print_1p(f"Running diagnostics:")
 
-        ntask = len(self.task_list[c.pid])
+        c.total_tasks = len(self.task_list[c.pid])
         for task_id, rec in enumerate(self.task_list[c.pid]):
-            c.show_progress(f"PID {c.pid:4} running diagnostics '{rec['method']}'", task_id, ntask)
+            c.debug_message = f"running diagnostics '{rec['method']}'"
+            c.current_task = task_id
 
             method_name = f"NEDAS.diag.{rec['method']}"
             mod = importlib.import_module(method_name)

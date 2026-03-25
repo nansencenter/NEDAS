@@ -153,10 +153,10 @@ class BatchAssimilator(Assimilator):
                 msk = c.grid.mask[inds]
             for loc_id in range(np.sum((~msk).astype(int))):
                 ntask += 1
+        c.total_tasks = ntask
 
         ##now the actual work starts, loop through partitions stored on pid_mem
-        c.print_1p('>>> assimilate in batch mode:\n')
-        task = 0
+        c.current_task = 0
         for par_id in c.state.par_list[c.pid_mem]:
             state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z)
             nloc = state_data['state_prior'].shape[-1]
@@ -168,9 +168,8 @@ class BatchAssimilator(Assimilator):
             nlobs = obs_data['x'].size
             ##if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:
-                task += nloc
-                c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} (which is empty)",
-                                task-1, ntask, c.config.log_substeps)
+                c.debug_message = f"processed partition {par_id:7} (which is empty)"
+                c.current_task += nloc
                 continue
 
             ##loop through the unmasked grid points in the partition
@@ -195,17 +194,15 @@ class BatchAssimilator(Assimilator):
                 hlfactor = hlfactor[ind1]
 
                 if len(ind1) == 0:
-                    c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)",
-                                    task, ntask, c.config.log_substeps)
-                    task += 1
+                    c.debug_message = f"processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)"
+                    c.current_task += 1
                     continue ##if all obs has no impact on state, just skip to next location
 
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
 
                 ##add progress message
-                c.show_progress(f"PID {c.pid:4} processed partition {par_id:7} grid point {loc_id}",
-                                task, ntask, c.config.log_substeps)
-                task += 1
+                c.debug_message = f"processed partition {par_id:7} grid point {loc_id}"
+                c.current_task += 1
 
             c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
             #c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)

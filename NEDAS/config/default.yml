@@ -33,6 +33,7 @@ run_postproc: True  # if true, run the postprocessing step
 run_diagnose: True  # if true, run the diagnose scripts
 debug: False        # if true, output debug data/message
 timer: True         # if true, output information on function runtime
+logger_level: 3
 step:               # current step in scheme (given in runtime context)
 
 # time control of the experiment
@@ -126,7 +127,6 @@ perturb:
 
 # more details in assimilation algorithm
 scheme: filter      # type of analysis to perform: filter/smoother/etc.
-log_substeps: True  # if true, show detailed logs for filter substeps
 
 niter: 1                  # number of outer loop iterations
 iter:                     # current iteration (given in runtime context)

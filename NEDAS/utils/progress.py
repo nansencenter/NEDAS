@@ -1,41 +1,8 @@
 import os
 import subprocess
 import time
-import numpy as np
-from functools import wraps
 
-def timer(c=None):
-    """
-    Decorator to show the time spent on a function.
-
-    Args:
-        c (Context, optional): the runtime context
-
-    Once decorated, only processor with ID :code:`c.pid_show` in :code:`c.comm` will run the timer in the function.
-    """
-    def decorator(func):
-        if c is not None and not getattr(c.config, 'timer', True):
-            # if the config states timer=False, just return original func
-            return func
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            t0 = time.time()
-            try:
-                return func(*args, **kwargs)
-            finally:
-                t1 = time.time()
-                # show the timing message on processor c.pid_show
-                if c is None or (hasattr(c, 'comm') and c.comm.Get_rank() == getattr(c, 'pid_show', 0)):
-                    # try to get func name
-                    func_name = getattr(func, '__name__', type(func).__name__)
-                    # show the message
-                    print(f"timer: {func_name} took {t1 - t0} seconds", flush=True)
-        return wrapper
-
-    return decorator
-
-def progress_bar(task_id: int, ntask: int, width: int=50) -> str:
+def progress_bar(task_id: int, ntask: int, width: int=20) -> str:
     """
     Generate a progress bar based on task_id and ntask.
 
@@ -48,18 +15,16 @@ def progress_bar(task_id: int, ntask: int, width: int=50) -> str:
         str: The progress bar msg to be shown.
             Will require the print command with end="" option so that new line updated is overwritting the old line.
     """
-    if ntask==0:
-        progress = 1
-    else:
-        progress = (task_id+1) / ntask
-
-    ##the progress bar looks like this: .....  | ??%
-    pstr = '\r{:{}}| '.format('.'*int(np.ceil(progress * width)), width)
-
-    ##add the percentage completed at the end
-    pstr += '{:.0f}%'.format(100*progress)
-
-    return pstr
+    progress = (task_id + 1) / ntask if ntask > 0 else 1.0
+    filled_width = int(progress * width)
+    
+    # ANSI Green for the bar, Reset for the track
+    green = "\033[32m"
+    reset = "\033[0m"
+    dim   = "\033[2m"
+    
+    bar = f"{green}{'━' * filled_width}{reset}{dim}{'─' * (width - filled_width)}{reset}"
+    return f"[{bar}] {100*progress:3.0f}%"
 
 def print_with_cache(msg: str) -> None:
     ##previous message is cached so that new message is displayed only

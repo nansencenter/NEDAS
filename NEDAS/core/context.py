@@ -1,6 +1,9 @@
 from __future__ import annotations
-from typing import get_args, Callable, TYPE_CHECKING
 import copy
+import sys
+import time
+from typing import get_args, Callable, TYPE_CHECKING
+from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
@@ -17,10 +20,17 @@ class Context:
     Runtime context manages the generation and interaction of dynamic objects in runtime
     """
     debug: bool
+    logger_level: int
     comm: parallel.Comm
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
+    interactive: bool
+    elapsed_time: float
+    call_stack: list[str] = []
+    _current_task: int = 0
+    _total_tasks: int = 0
+    _debug_message: str = ''
     fs: FileSystem
     io: IOBackend
     jsub: JobSubmitter
@@ -50,6 +60,8 @@ class Context:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         self.debug = self.config.debug
+        self.logger_level = self.config.logger_level
+        self.interactive = sys.stdout.isatty()
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -229,6 +241,41 @@ class Context:
             self.datasets[dataset_name] = DatasetClass(context=self, **(kwargs or {}))
 
     @property
+    def current_func(self):
+        if self.call_stack:
+            return self.call_stack[-1]
+        return ''
+
+    @property
+    def total_tasks(self):
+        return self._total_tasks
+    
+    @total_tasks.setter
+    def total_tasks(self, value: int):
+        self._total_tasks = value
+        if self.debug:
+            self.print_1p(f"total tasks: {self._total_tasks}\n")
+
+    @property
+    def current_task(self):
+        return self._current_task
+    
+    @current_task.setter
+    def current_task(self, value: int):
+        self._current_task = value
+        self.show_progress()
+
+    @property
+    def debug_message(self):
+        return self._debug_message
+
+    @debug_message.setter
+    def debug_message(self, value: str):
+        self._debug_message = value
+        if self.debug:
+            print(f"PID {self.pid:4}: {self._debug_message}", flush=True)
+
+    @property
     def print_1p(self):
         """
         Customized print function for showing runtime message.
@@ -238,6 +285,101 @@ class Context:
         """
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(parallel.print_with_cache)
+
+    def timer(self, func: Callable):
+        """
+        Decorator to count the elapsed time for a function at runtime.
+        """
+        if not self.config.timer:
+            # if the config states timer=False, just return original func
+            return func
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            t0 = time.time()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                t1 = time.time()
+                self.elapsed_time = t1 - t0
+        return wrapper
+
+    def logger(self, func_name: str):
+        """
+        Decorator to register the func in call stack and show logging messages at func start and end.
+        """
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                try:
+                    self.call_stack_push(func_name)
+                    return self.timer(func)(*args, **kwargs)
+                finally:
+                    self.call_stack_pop()
+            return wrapper
+        return decorator
+
+    def call_stack_push(self, func_name: str):
+        if self.debug:
+            self.print_1p(f"ENTERING '{func_name}'\n")
+        else:
+            if len(self.call_stack)>0:
+                self.print_1p('\n')
+            self.print_1p(f"{self.status_indent}{func_name}")
+        self.call_stack.append(func_name)
+
+    def call_stack_pop(self):
+        if self.debug:
+            self.print_1p("DONE\n")
+        else:
+            timer_msg = f"{self.elapsed_time:7.2f}s" if self.config.timer else ""
+            clear_seq = "\r\033[K"
+            self.print_1p(f"{clear_seq}{self.status} [DONE] {timer_msg}")
+        self.call_stack.pop()
+        if len(self.call_stack)==0:
+            self.print_1p("\n")
+
+    @property
+    def status_indent(self):
+        tabspace = 2
+        nstack = len(self.call_stack)
+        indent = nstack * tabspace
+        return f"{' '*indent}" if indent > 0 else ""
+
+    @property
+    def status(self) -> str:
+        anchor = 42
+        name_len = len(self.current_func) + len(self.status_indent)
+        dot_string = "." * (anchor - name_len) if name_len < anchor else ".."
+        stat_str = f"\r{self.status_indent}{self.current_func} {dot_string}"
+        return stat_str
+
+    def show_greeting(self) -> None:
+        greeting_msg = """
+░░█▀█░█▀▀░█▀▄░█▀█░█▀▀░░
+░░█░█░█▀▀░█░█░█▀█░▀▀█░░
+░░▀░▀░▀▀▀░▀▀░░▀░▀░▀▀▀░░
+
+"""
+        self.print_1p(greeting_msg)
+
+    def show_progress(self) -> None:
+        """
+        Show progress
+
+        If debug=True, print self.debug_message with flush=True
+        Otherwise, show a progress bar, indicating current task/total_ntask percentage.
+        """
+        if self.debug:
+            return
+        if self.interactive:
+            pbar = progress.progress_bar(self.current_task, self.total_tasks, 10)
+            self.print_1p(f"{self.status} [RUNNING] {pbar}")
+        else:
+            self.print_1p(f".")
+
+    def show_summary(self) -> None:
+        summary_text = self.config.summary()
+        self.print_1p(summary_text)
 
     def dump_config(self, config_file: str) -> None:
         """
@@ -254,37 +396,6 @@ class Context:
 
         # save the config to yaml file
         tmp_config.dump_yaml(config_file)
-
-    def show_greeting(self) -> None:
-        greeting_msg = """
-░░█▀█░█▀▀░█▀▄░█▀█░█▀▀░░
-░░█░█░█▀▀░█░█░█▀█░▀▀█░░
-░░▀░▀░▀▀▀░▀▀░░▀░▀░▀▀▀░░
-
-"""
-        self.print_1p(greeting_msg)
-
-    def show_progress(self, debug_message: str,
-                      task: int,
-                      total_ntask: int,
-                      on: bool=True) -> None:
-        """
-        Show progress
-
-        If debug=True, print the debug_message with flush=True
-        Otherwise, show a progress bar, indicating current task/total_ntask percentage.
-        """
-        if on:
-            if self.debug:
-                print(debug_message, flush=True)
-            else:
-                self.print_1p(progress.progress_bar(task, total_ntask))
-                if task == (total_ntask-1):
-                    self.print_1p(" done.\n")
-
-    def show_summary(self) -> None:
-        summary_text = self.config.summary()
-        self.print_1p(summary_text)
 
     def run_job(self, commands: str,
                 parallel_mode: ParallelMode='serial',

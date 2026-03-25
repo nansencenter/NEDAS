@@ -8,7 +8,6 @@ import traceback
 import numpy as np
 from NEDAS.utils.progress import print_with_cache, progress_bar
 
-
 class Comm:
     """
     Communicator class supporting both serial and MPI programs.
@@ -369,11 +368,11 @@ class OfflineScheduler:
                         self.error_jobs[name] = e
                         self.completed_jobs.append(name)
 
-            # just show a progress bar if not output debug messages
-            # TODO: model may print message even if not debug
-            #       still need a better solution for logging levels
-            if not self.debug:
-                print_with_cache(progress_bar(len(self.completed_jobs), self.njob+1))
+            # log the progress info and let context handle the messaging
+            # if not self.debug:
+            #     pbar = progress_bar(len(self.completed_jobs), self.njob+1)
+            #     sline = status_line('scheduler', 2)
+            #     print_with_cache(f"\r{sline}{pbar}")
 
             time.sleep(self.check_dt)
 

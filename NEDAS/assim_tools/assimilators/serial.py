@@ -83,13 +83,13 @@ class SerialAssimilator(Assimilator):
         obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
         obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c)
 
-        c.print_1p('>>> assimilate in serial mode:\n')
         ##go through the entire obs list, indexed by p, one scalar obs at a time
+        c.total_tasks = len(obs_list)
         for p in range(len(obs_list)):
             obs_rec_id, v, owner_pid, i = obs_list[p]
 
-            c.show_progress(f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}",
-                            p, len(obs_list), c.config.log_substeps)
+            c.debug_message = f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}"
+            c.current_task = p
 
             ##1. if the pid owns this obs, broadcast it to all pid
             if c.pid_mem == owner_pid:

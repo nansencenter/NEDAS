@@ -1,6 +1,5 @@
 
 from typing import Any
-from NEDAS.utils.progress import timer
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
 
 class FilterAnalysisScheme(Scheme):
@@ -25,16 +24,17 @@ class FilterAnalysisScheme(Scheme):
     }
 
     def run_all(self) -> None:
-        self.c.print_1p("Initializing...\n")
+        self.c.print_1p("INITIALIZING...\n")
         self.c.show_summary()
 
         if self.c.time == self.config.time_start:
             self.run_step('generate_truth')
             self.run_step('generate_init_ensemble')
 
-        self.c.print_1p("\nCycling start.\n")
+        self.c.print_1p("\nCYCLING START...\n")
         while self.c.time < self.config.time_end:
-            self.c.print_1p(f"\n\033[1;33mCURRENT CYCLE\033[0m: {self.c.time} => {self.c.next_time}\n")
+            msg = f"CURRENT CYCLE: {self.c.time} => {self.c.next_time}"
+            self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
 
             if self.check_cycle_complete():
                 continue
@@ -62,7 +62,7 @@ class FilterAnalysisScheme(Scheme):
             ##advance to next cycle
             self.c.time = self.c.next_time
 
-        self.c.print_1p("Cycling complete.\n")
+        self.c.print_1p("CYCLING COMPLETE.\n")
 
     def generate_truth(self) -> None:
         """
@@ -73,12 +73,9 @@ class FilterAnalysisScheme(Scheme):
             return
 
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Generating truth for '{model_name}' model...")
-
             opts = self.get_task_opts(model_name, member=None)
 
-            self.c.io.call_method(self.c, 'truth', model.generate_truth, **opts)
-        self.c.print_1p(' done.\n')
+            self.c.logger(f'Generate truth: {model_name}')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self) -> None:
         """
@@ -86,13 +83,11 @@ class FilterAnalysisScheme(Scheme):
         """
         #
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Generating initial ensemble for '{model_name}' model...\n")
-
             opts = self.get_task_opts(model_name,
                                       total_nproc=self.config.nproc,
                                       nproc=model.nproc_per_run)
 
-            self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
+            self.c.logger(f'Generate init ensemble: {model_name}')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:
         """
@@ -105,7 +100,6 @@ class FilterAnalysisScheme(Scheme):
         Pre-processing step before the assimilation.
         """
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Running {model_name} preprocessing:\n")
             self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
 
             opts = self.get_task_opts(model_name,
@@ -113,21 +107,19 @@ class FilterAnalysisScheme(Scheme):
                                       total_nproc=self.config.nproc_util,
                                       nproc=model.nproc_per_util)
 
-            self.run_ensemble_tasks('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
+            self.c.logger(f'Preprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
 
     def postprocess(self) -> None:
         """
         Post-processing step after the assimilation and before the next forecast.
         """
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Running {model_name} postprocessing:\n")
-
             opts = self.get_task_opts(model_name,
                                       restart_dir=self.get_restart_dir(model_name),
                                       total_nproc=self.config.nproc_util,
                                       nproc=model.nproc_per_util)
 
-            self.run_ensemble_tasks('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
+            self.c.logger(f'Postprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
 
     def ensemble_forecast(self) -> None:
         """
@@ -142,41 +134,38 @@ class FilterAnalysisScheme(Scheme):
                                       nproc=model.nproc_per_run,
                                       walltime=model.walltime)
 
-            self.run_ensemble_tasks(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
+            self.c.logger(f'Ensemble forecast: {model_name}')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
 
     def filter(self) -> None:
         """
         Main method for performing the analysis step
         """
-        # switch on timer for substeps if necessary
-        if self.config.log_substeps:
-            timer_func = timer(self.c)
-        else:
-            timer_func = lambda f: f
-
         # outer loop (iter = 0, ..., niter-1)
         ##multiscale approach: loop over scale components and perform assimilation on each scale
         ##more complex outer loops can be implemented here
         for self.c.iter in range(self.config.niter):
-            if self.config.niter>1:
-                self.c.print_1p(f"Running analysis for outer iteration step {self.c.iter}:\n")
+            if self.config.niter > 1:
+                self.c.logger(f"Outer-loop iteration #{self.c.iter+1}")(self.filter_iter)()
+            else:
+                self.filter_iter()
 
-            self.c.update_assim_tools()
-            self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
+    def filter_iter(self) -> None:
+        self.c.update_assim_tools()
+        self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
 
-            self.c.state = State(self.c)
-            timer_func(self.c.state.prepare_state)(self.c)
+        self.c.state = State(self.c)
+        self.c.logger('Prepare prior state')(self.c.state.prepare_state)(self.c)
 
-            # prepare the observations
-            self.c.obs = Obs(self.c)
-            timer_func(self.c.obs.prepare_obs)(self.c)
-            timer_func(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
+        # prepare the observations
+        self.c.obs = Obs(self.c)
+        self.c.logger('Prepare obs')(self.c.obs.prepare_obs)(self.c)
+        self.c.logger('Prepare obs from prior state')(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
 
-            # run assimilate algorithm
-            timer_func(self.c.assimilator.assimilate)(self.c)
+        # run assimilate algorithm
+        self.c.logger('Assimilator')(self.c.assimilator.assimilate)(self.c)
 
-            # update the state to get posteriors
-            timer_func(self.c.updator.update)(self.c)
+        # update the state to get posteriors
+        self.c.logger('Updator')(self.c.updator.update)(self.c)
 
     def perturb(self) -> None:
         """

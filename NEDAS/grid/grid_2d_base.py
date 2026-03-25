@@ -275,6 +275,8 @@ class Grid2DBase(ABC):
     def _set_rotation_matrix(self):
         """
         setting the rotation matrix for converting vector fields from self to dst_grid
+
+        Note: self.rotate_matrix is rotating two unit vectors with different angles, not the classic rotation matrix
         """
         if self.dst_grid is None:
             raise ValueError("dst_grid is not set, cannot set rotation matrix")
@@ -284,7 +286,6 @@ class Grid2DBase(ABC):
             x, y = self._proj_to(self.x, self.y)
 
             # find small increments in x,y due to small changes in self.x,y in dst_proj
-            # TODO: only works for conformal mapping (longlat is not)
             eps = 0.1 * self.dx    # grid spacing is specified in Grid object
             xu, yu = self._proj_to(self.x + eps, self.y      )  # move a bit in x dirn
             xv, yv = self._proj_to(self.x      , self.y + eps)  # move a bit in y dirn
@@ -296,9 +297,9 @@ class Grid2DBase(ABC):
             dyv = yv-y
             hu = np.hypot(dxu, dyu)
             hv = np.hypot(dxv, dyv)
-            self.rotate_matrix[0, :] = dxu/hu
-            self.rotate_matrix[1, :] = dxv/hv
+            self.rotate_matrix[0, :] = dxu/hu  # rotation of x
             self.rotate_matrix[2, :] = dyu/hu
+            self.rotate_matrix[1, :] = dxv/hv  # rotation of v
             self.rotate_matrix[3, :] = dyv/hv
         else:
             # if no change in proj, we can skip the calculation

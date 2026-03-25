@@ -298,8 +298,7 @@ class Obs:
                 'err_std' the uncertainties for each measurement
                 there can be other optional keys provided by read_obs() but we don't use them
         """
-        if c.pid == 0:
-            print('>>> read observation sequence from datasets', flush=True)
+        c.debug_message = '>>> read observation sequence from datasets'
 
         # get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
         obs_seq = {}
@@ -331,7 +330,7 @@ class Obs:
 
             self.validate_seq_shape(seq['obs'], obs_rec.is_vector)
 
-            if c.pid_mem == 0:
+            if c.debug and c.pid_mem == 0:
                 print(f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}", flush=True)
 
             # misc. transform here
@@ -363,19 +362,19 @@ class Obs:
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
-        c.print_1p('>>> compute observation priors\n')
 
         ##process the obs, each proc gets its own workload as a subset of
         ##all proc goes through their own task list simultaneously
         nr = len(self.obs_rec_list[c.pid_rec])
         nm = len(mem_list[c.pid_mem])
+        c.total_tasks = nr * nm
         for m, mem_id in enumerate(mem_list[c.pid_mem]):
             for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
                 ##this is the obs record to process
                 obs_rec = self.info.records[obs_rec_id]
 
-                c.show_progress(f"PID {c.pid:4}: obs_prior mem{mem_id+1:03} {obs_rec.name:20}",
-                                m*nr+r, nr*nm, c.config.log_substeps)
+                c.debug_message = f"obs_prior mem{mem_id+1:03} {obs_rec.name:20}"
+                c.current_task = m*nr+r
 
                 seq = {}
                 ##need the coordinates for transform later
@@ -439,17 +438,16 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        c.print_1p('transpose obs_seq to local obs\n')
-
         ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
         ##        input_obs -> tmp_obs
         tmp_obs = {}  ##local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
+        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
             ##all pid goes through their own mem_list simultaneously
-            nm_max = np.max([len(lst) for p,lst in mem_list.items()])
             for m in range(nm_max):
                 mem_id = None
                 seq = None
@@ -457,8 +455,8 @@ class Obs:
                     mem_id = mem_list[c.pid_mem][m]
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
-                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
+                c.debug_message = f"transposing obs: {status}"
+                c.current_task = r*nm_max+m
 
                 ##prepare the obs seq for sending if not at the end of mem_list
                 if m < len(mem_list[c.pid_mem]):
@@ -540,17 +538,18 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        c.print_1p('transpose obs prior ensemble to local obs priors\n')
+        # c.print_1p('transpose obs prior ensemble to local obs priors\n')
 
         ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
         ##        input_obs -> tmp_obs
         tmp_obs = {}  ##local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
+        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
             ##all pid goes through their own mem_list simultaneously
-            nm_max = np.max([len(lst) for p,lst in mem_list.items()])
             for m in range(nm_max):
                 mem_id = None
                 seq = None
@@ -560,8 +559,8 @@ class Obs:
                     seq = input_obs[mem_id, obs_rec_id].copy()
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
-                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
+                c.debug_message = f"transposing obs: {status}"
+                c.current_task = r*nm_max+m
 
                 ##the collective send/recv follows the same idea under state.transpose_field_to_state
                 ##1) receive lobs_seq from src_pid, for src_pid<pid first
@@ -625,15 +624,16 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        c.print_1p('obs post sequences: ')
-        c.print_1p('transpose local obs to obs\n')
+        # c.print_1p('obs post sequences: ')
+        # c.print_1p('transpose local obs to obs\n')
 
         obs_seq = {}
         nr = len(self.obs_rec_list[c.pid_rec])
+        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
             ##all pid goes through their own mem_list simultaneously
-            nm_max = np.max([len(lst) for p,lst in mem_list.items()])
             for m in range(nm_max):
                 mem_id = None
                 seq = None
@@ -647,8 +647,8 @@ class Obs:
                         seq = np.full((rec.nobs,), np.nan)
 
                 status = f"processing mem{mem_id+1:03} obs_rec{obs_rec_id}" if mem_id else "waiting"
-                c.show_progress(f"PID {c.pid:4}: transposing obs: {status}",
-                                r*nm_max+m, nr*nm_max, c.config.log_substeps)
+                c.debug_message = f"transposing obs: {status}"
+                c.current_task = r*nm_max+m
 
                 ##this is just the reverse of transpose_obs_to_lobs
                 ## we take the exact steps, but swap send and recv operations here

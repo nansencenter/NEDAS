@@ -6,7 +6,6 @@ from typing import Callable
 from abc import ABC, abstractmethod
 from NEDAS.job_submitters.hpc import HPCJobSubmitter
 from NEDAS.utils.parallel import OfflineScheduler
-from NEDAS.utils.progress import timer
 from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.config import Config
 from NEDAS.core.context import Context
@@ -59,7 +58,7 @@ class Scheme(ABC):
                 self.run_all()
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
-                self.c.print_1p(f"\n{self.__class__.__name__}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                self.c.print_1p(f"\nrun_all: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
 
         # 2. offline mode (manual dispatch per step)
@@ -129,15 +128,13 @@ class Scheme(ABC):
         # if the step requires mpi for nproc>1, make an external call
         if not self.online_mode and self.steps_need_mpi[step]:
             if self.config.nproc>1 and not self.c.comm.mpi_ready:
-                self.c.print_1p(f"\n{self.__class__.__name__}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                self.c.print_1p(f"\n{step}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
 
-        self.c.print_1p(f"\n\033[1;33mRUNNING\033[0m {step} step\n")
-
         # otherwise, just call the step func
         stepfunc = getattr(self, step)
-        timer(self.c)(stepfunc)()
+        self.c.logger(f'RUNNING {step} step')(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
                            tag: IOTag,
@@ -161,15 +158,16 @@ class Scheme(ABC):
         print(f"running {task_name} in batch mode...")
         opts['nens'] = self.c.nens
         self.c.io.call_method(self.c, tag, func, **opts)
-        print("done.")
 
     def _run_ensemble_tasks_online(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
         # scheduling internally within mpi environment
         # using the mem_list (member lists distributed on pid ranks by comm)
         nm = len(self.c.mem_list[self.c.pid_mem])
+        self.c.total_tasks = nm
         for m, mem_id in enumerate(self.c.mem_list[self.c.pid_mem]):
             opts['member'] = mem_id
-            self.c.show_progress(f"PID {self.c.pid:4}: running {task_name} for mem{mem_id+1:03}", m, nm)
+            self.c.debug_message = f"running {task_name} for mem{mem_id+1:03}"
+            self.c.current_task = m
             self.c.io.call_method(self.c, tag, func, **opts)
 
     def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
@@ -196,4 +194,3 @@ class Scheme(ABC):
             scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
         scheduler.start_queue() ##start the job queue
         scheduler.shutdown()
-        print(' done.')
