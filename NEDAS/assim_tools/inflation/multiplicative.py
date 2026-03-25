@@ -4,22 +4,25 @@ from NEDAS.core.inflation import Inflation
 class MultiplicativeInflation(Inflation):
     def adaptive_prior_inflation(self, c):
         """compute prior inflate coef by obs-space statistics (Desroziers et al. 2005)"""
-        c.print_1p(">>> adaptive prior inflation:\n")
+        if c.debug:
+            c.print_1p(">>> adaptive prior inflation:\n")
         stats = self.obs_space_stats(c)
         if stats['total_nobs'] < 3:
-            c.print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
+            if c.debug:
+                c.print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
             self.coef = 1.
-        else:
-            varb = stats['varb'] / stats['total_nobs']
-            varo = stats['varo'] / stats['total_nobs']
-            omb2 = stats['omb2'] / stats['total_nobs']
-            c.print_1p(f"varb = {varb}, varo={varo}\n")
-            c.print_1p(f"omb2 = {omb2}\n")
-            self.coef = np.sqrt((omb2 - varo) / varb)
+            return
+        varb = stats['varb'] / stats['total_nobs']
+        varo = stats['varo'] / stats['total_nobs']
+        omb2 = stats['omb2'] / stats['total_nobs']
+        c.print_1p(f"varb = {varb}, varo={varo}\n")
+        c.print_1p(f"omb2 = {omb2}\n")
+        self.coef = np.sqrt((omb2 - varo) / varb)
 
     def adaptive_post_inflation(self, c):
         """compute posterior inflate coef by obs-space statistics (Desroziers et al. 2005) """
-        c.print_1p(">>> adaptive posterior inflation:\n")
+        if c.debug:
+            c.print_1p(">>> adaptive posterior inflation:\n")
         stats = self.obs_space_stats(c)
         if stats['total_nobs'] < 3:
             if c.debug:

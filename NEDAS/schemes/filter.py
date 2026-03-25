@@ -28,10 +28,14 @@ class FilterAnalysisScheme(Scheme):
         self.c.show_summary()
 
         if self.c.time == self.config.time_start:
+            msg = f"PREPARATION"
+            self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
+
             self.run_step('generate_truth')
+
             self.run_step('generate_init_ensemble')
 
-        self.c.print_1p("\nCYCLING START...\n")
+        self.c.print_1p("CYCLING START...\n")
         while self.c.time < self.config.time_end:
             msg = f"CURRENT CYCLE: {self.c.time} => {self.c.next_time}"
             self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
@@ -126,8 +130,6 @@ class FilterAnalysisScheme(Scheme):
         Ensemble forecast step.
         """
         for model_name, model in self.c.models.items():
-            self.c.print_1p(f"Running {model_name} ensemble forecast:\n")
-
             opts = self.get_task_opts(model_name,
                                       restart_dir=self.get_restart_dir(model_name),
                                       total_nproc=self.config.nproc,

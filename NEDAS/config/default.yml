@@ -33,7 +33,6 @@ run_postproc: True  # if true, run the postprocessing step
 run_diagnose: True  # if true, run the diagnose scripts
 debug: False        # if true, output debug data/message
 timer: True         # if true, output information on function runtime
-logger_level: 3
 step:               # current step in scheme (given in runtime context)
 
 # time control of the experiment

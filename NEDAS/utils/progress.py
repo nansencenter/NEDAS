@@ -19,7 +19,7 @@ def progress_bar(task_id: int, ntask: int, width: int=20) -> str:
     filled_width = int(progress * width)
     
     # ANSI Green for the bar, Reset for the track
-    green = "\033[32m"
+    green = "\033[1;32m"
     reset = "\033[0m"
     dim   = "\033[2m"
     

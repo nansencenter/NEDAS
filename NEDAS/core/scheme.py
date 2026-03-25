@@ -58,7 +58,8 @@ class Scheme(ABC):
                 self.run_all()
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
-                self.c.print_1p(f"\nrun_all: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                if self.c.debug:
+                    self.c.print_1p(f"\nrun_all: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
 
         # 2. offline mode (manual dispatch per step)
@@ -128,13 +129,14 @@ class Scheme(ABC):
         # if the step requires mpi for nproc>1, make an external call
         if not self.online_mode and self.steps_need_mpi[step]:
             if self.config.nproc>1 and not self.c.comm.mpi_ready:
-                self.c.print_1p(f"\n{step}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
+                if self.c.debug:
+                    self.c.print_1p(f"\n{step}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...\n")
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
 
         # otherwise, just call the step func
         stepfunc = getattr(self, step)
-        self.c.logger(f'RUNNING {step} step')(stepfunc)()
+        self.c.logger(f'\033[1;33mRUNNING\033[0m {step} step')(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
                            tag: IOTag,
@@ -155,7 +157,7 @@ class Scheme(ABC):
     def _run_ensemble_tasks_batch(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
         # the func should handle the entire ensemble in one go
         # make sure nens is defined in opts
-        print(f"running {task_name} in batch mode...")
+        self.c.debug_message = f"running {task_name} in batch mode..."
         opts['nens'] = self.c.nens
         self.c.io.call_method(self.c, tag, func, **opts)
 
@@ -182,7 +184,7 @@ class Scheme(ABC):
             nworker = self.c.nens
 
         # initialize the scheduler
-        scheduler = OfflineScheduler(nworker, opts.get('walltime'), debug=self.config.debug)
+        scheduler = OfflineScheduler(self.c, nworker, opts.get('walltime'), debug=self.config.debug)
 
         # submit jobs
         for mem_id in range(self.c.nens):

@@ -156,8 +156,11 @@ class Vort2DModel(Model[RegularGrid]):
         debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
 
+        self.c.total_tasks = int((self.c.config.time_end - self.c.config.time_start) / (dt1h*self.c.config.cycle_period))
+
         # TODO: add check to skip if already exists
         t = self.c.config.time_start
+        self.c.current_task = 0
         while t < self.c.config.time_end:
             opts = {
                 'path': self.truth_dir,
@@ -173,10 +176,10 @@ class Vort2DModel(Model[RegularGrid]):
                 self.write_var(state, **opts)
 
             next_t = t + kwargs['forecast_period'] * dt1h
-            if debug:
-                print(f"running model, saving output {self.filename(**{**opts, 'time':next_t})}")
+            self.c.debug_message = f"running model, saving output {self.filename(**{**opts, 'time':next_t})}"
             self.run(path=self.truth_dir, time=t, forecast_period=kwargs['forecast_period'])
             t = next_t
+            self.c.current_task += 1
     
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None

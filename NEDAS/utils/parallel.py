@@ -289,7 +289,7 @@ class OfflineScheduler:
     The jobs are submitted by one processor with the scheduler, while the job.run code is calling subprocess
     to be run on the worker
     """
-    def __init__(self, nworker: int, walltime: int|None=None, check_dt: float=0.1, debug: bool=False) -> None:
+    def __init__(self, c, nworker: int, walltime: int|None=None, check_dt: float=0.1, debug: bool=False) -> None:
         self.nworker = nworker
         self.available_workers = list(range(nworker))
         self.walltime = walltime
@@ -303,6 +303,7 @@ class OfflineScheduler:
         self.completed_jobs = []
         self.error_jobs = {}
         self.njob = 0
+        self.c = c
 
     def submit_job(self, name: str, job: Callable, *args, **kwargs) -> None:
         """
@@ -316,8 +317,7 @@ class OfflineScheduler:
                            'args': args, 'kwargs': kwargs, 'future':None }
         self.pending_jobs.append(name)
         self.njob += 1
-        if self.debug:
-            print(f"Scheduler: Job {name} added: {job.__name__}, args={args}, kwargs={kwargs})", flush=True)
+        self.c.debug_message = f"Scheduler: Job {name} added: {job.__name__}, args={args}, kwargs={kwargs})"
 
     def monitor_job_queue(self) -> None:
         """
@@ -325,6 +325,7 @@ class OfflineScheduler:
         Monitor the running_jobs for jobs that are finished, kill jobs that exceed walltime,
         and move the finished jobs to completed_jobs
         """
+        self.c.total_tasks = self.njob + 1
         while len(self.completed_jobs) < self.njob:
 
             # assign pending job to available workers
@@ -336,8 +337,7 @@ class OfflineScheduler:
                 info['start_time'] = time.time()
                 info['future'] = self.executor.submit(info['job'], *info['args'], worker_id=worker_id, **info['kwargs'])
                 self.running_jobs.append(name)
-                if self.debug:
-                    print(f"Scheduler: Job {name} started by worker {worker_id}", flush=True)
+                self.c.debug_message = f"Scheduler: Job {name} started by worker {worker_id}"
 
             # if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -347,14 +347,13 @@ class OfflineScheduler:
                     self.jobs[name]['future'].result()
                 except Exception as e:
                     tb = traceback.format_exc()
-                    print(f'Scheduler: Job {name} raised exception: \n{tb}', flush=True)
+                    self.c.debug_message = f'Scheduler: Job {name} raised exception: \n{tb}'
                     self.error_jobs[name] = tb
                     #return  # #if exit right away and don't wait for other jobs to finish, uncomment this
                 self.running_jobs.remove(name)
                 self.completed_jobs.append(name)
                 self.available_workers.append(self.jobs[name]['worker_id'])
-                if self.debug:
-                    print(f"Scheduler: Job {name} completed", flush=True)
+                self.c.debug_message = f"Scheduler: Job {name} completed"
 
             # kill jobs that exceed walltime
             if self.walltime is not None:
@@ -369,10 +368,7 @@ class OfflineScheduler:
                         self.completed_jobs.append(name)
 
             # log the progress info and let context handle the messaging
-            # if not self.debug:
-            #     pbar = progress_bar(len(self.completed_jobs), self.njob+1)
-            #     sline = status_line('scheduler', 2)
-            #     print_with_cache(f"\r{sline}{pbar}")
+            self.c.current_task = len(self.completed_jobs)
 
             time.sleep(self.check_dt)
 

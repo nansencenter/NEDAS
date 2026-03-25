@@ -229,42 +229,41 @@ class QGFortranModel(Model):
         # check if truth files already exists in model.truth_dir
         complete = True
         kwargs['time'] = self.c.config.time_start
+        ntask = 0
         while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             if not os.path.exists(os.path.join(self.truth_dir, current_file)):
                 complete = False
                 break
             kwargs['time'] += kwargs['forecast_period'] * dt1h
+            ntask += 1
         if complete:
-            if debug:
-                print(f"truth files already exist in {self.truth_dir}, skipping")
+            self.c.debug_message = f"truth files already exist in {self.truth_dir}, skipping"
             return
 
         # create the truth files
-        if debug:
-            print(f"Creating truth run for qg model in {self.truth_dir}")
+        self.c.debug_message = f"Creating truth run for qg model in {self.truth_dir}"
         run_dir = os.path.join(self.truth_dir, 'run')
         init_file = f"output_{self.c.config.time_start:%Y%m%d_%H}.bin"
-        if debug:
-            print(f"Running the model for spinup period to get initial condition: {init_file}")
+        self.c.debug_message = f"Running the model for spinup period to get initial condition: {init_file}"
         kwargs['time'] = self.c.config.time_start - self.spinup_hours * dt1h
         self.run(**{**kwargs, 'path':run_dir, 'member':0, 'forecast_period':self.spinup_hours})
 
         kwargs['time'] = self.c.config.time_start
+        self.c.total_tasks = ntask
+        self.c.current_task = 0
         while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
             next_file = f"output_{next_time:%Y%m%d_%H}.bin"
-            if debug:
-                print(f"Running the model from condition {current_file} to reach {next_file}")
+            self.c.debug_message = f"Running the model from condition {current_file} to reach {next_file}"
             self.run(**{**kwargs, 'path':run_dir, 'member':0})
             kwargs['time'] = next_time
-        print("done.")
+            self.c.current_task += 1
 
         # clean up
         self.c.fs.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
-        if debug:
-            print(f"removing temporary run directory: {run_dir}")
+        self.c.debug_message = f"removing temporary run directory: {run_dir}"
         self.c.fs.remove_dir(run_dir)
 
     def generate_init_ensemble(self, *args, **kwargs) -> None:

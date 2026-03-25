@@ -38,7 +38,6 @@ class Config:
     run_diagnose: bool
     debug: bool
     timer: bool
-    logger_level: int
     step: str|None
     time: datetime  # avail in context
     time_start: datetime

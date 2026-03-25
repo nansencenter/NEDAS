@@ -2,7 +2,7 @@ from __future__ import annotations
 import copy
 import sys
 import time
-from typing import get_args, Callable, TYPE_CHECKING
+from typing import get_args, Callable, Any, TYPE_CHECKING
 from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
@@ -20,14 +20,13 @@ class Context:
     Runtime context manages the generation and interaction of dynamic objects in runtime
     """
     debug: bool
-    logger_level: int
     comm: parallel.Comm
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
     interactive: bool
     elapsed_time: float
-    call_stack: list[str] = []
+    call_stack: list[dict[str, Any]] = []
     _current_task: int = 0
     _total_tasks: int = 0
     _debug_message: str = ''
@@ -60,8 +59,7 @@ class Context:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         self.debug = self.config.debug
-        self.logger_level = self.config.logger_level
-        self.interactive = sys.stdout.isatty()
+        self.interactive = True #sys.stdout.isatty()
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -243,7 +241,7 @@ class Context:
     @property
     def current_func(self):
         if self.call_stack:
-            return self.call_stack[-1]
+            return self.call_stack[-1]['name']
         return ''
 
     @property
@@ -319,42 +317,54 @@ class Context:
         return decorator
 
     def call_stack_push(self, func_name: str):
+        lv = len(self.call_stack)
+        self.call_stack.append({'name':func_name, 'level':lv, 'substeps':0})
         if self.debug:
             self.print_1p(f"ENTERING '{func_name}'\n")
         else:
-            if len(self.call_stack)>0:
+            if lv > 0 and self.call_stack[lv-1]['substeps'] == 0:
                 self.print_1p('\n')
             self.print_1p(f"{self.status_indent}{func_name}")
-        self.call_stack.append(func_name)
+        if lv > 0:
+            self.call_stack[lv-1]['substeps'] += 1
 
     def call_stack_pop(self):
         if self.debug:
             self.print_1p("DONE\n")
         else:
             timer_msg = f"{self.elapsed_time:7.2f}s" if self.config.timer else ""
-            clear_seq = "\r\033[K"
-            self.print_1p(f"{clear_seq}{self.status} [DONE] {timer_msg}")
+            if self.call_stack[-1]['substeps']>0:
+                self.print_1p(f"{self.status_indent}\033[2m└──\033[0m \033[1;32mDONE\033[0m {timer_msg}\n")
+            else:
+                clear_seq = "\r\033[K"
+                self.print_1p(f"{clear_seq}{self.status} \033[1;32mDONE\033[0m {timer_msg}\n")
         self.call_stack.pop()
         if len(self.call_stack)==0:
             self.print_1p("\n")
 
     @property
     def status_indent(self):
-        tabspace = 2
-        nstack = len(self.call_stack)
-        indent = nstack * tabspace
-        return f"{' '*indent}" if indent > 0 else ""
+        nlv = len(self.call_stack)
+        indent = '\033[2m'
+        for lv in range(nlv):
+            if lv == 0:
+                indent += '    '
+            else:
+                indent += f'│   '
+        indent += '\033[0m'
+        return indent
 
     @property
     def status(self) -> str:
-        anchor = 42
+        anchor = 66
         name_len = len(self.current_func) + len(self.status_indent)
-        dot_string = "." * (anchor - name_len) if name_len < anchor else ".."
+        ndots = anchor - name_len if name_len < anchor else 2
+        dot_string = f"\033[2m{'─'*ndots}\033[0m"
         stat_str = f"\r{self.status_indent}{self.current_func} {dot_string}"
         return stat_str
 
     def show_greeting(self) -> None:
-        greeting_msg = """
+        greeting_msg = f"""
 ░░█▀█░█▀▀░█▀▄░█▀█░█▀▀░░
 ░░█░█░█▀▀░█░█░█▀█░▀▀█░░
 ░░▀░▀░▀▀▀░▀▀░░▀░▀░▀▀▀░░
@@ -373,7 +383,7 @@ class Context:
             return
         if self.interactive:
             pbar = progress.progress_bar(self.current_task, self.total_tasks, 10)
-            self.print_1p(f"{self.status} [RUNNING] {pbar}")
+            self.print_1p(f"{self.status} \033[1;33mRUNNING\033[0m {pbar}")
         else:
             self.print_1p(f".")
 
