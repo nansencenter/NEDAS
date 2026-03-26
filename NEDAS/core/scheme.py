@@ -50,6 +50,9 @@ class Scheme(ABC):
         """
         self.c.show_greeting()
 
+        self.c.print_1p("INITIALIZING...\n")
+        self.c.show_summary()
+
         # Environment check:
         # 1. Online mode: (requires mpi environment if nproc>1)
         if self.online_mode:
@@ -136,7 +139,11 @@ class Scheme(ABC):
 
         # otherwise, just call the step func
         stepfunc = getattr(self, step)
-        self.c.logger(f'Running {step} step')(stepfunc)()
+        if step == 'run_all':
+            func_name = self.__class__.__name__
+        else:
+            func_name = f'Running {step} step'
+        self.c.logger(func_name)(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
                            tag: IOTag,

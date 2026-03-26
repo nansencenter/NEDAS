@@ -25,7 +25,7 @@ class Context:
     pid_show: int
     formatter: progress.Formatter
     elapsed_time: float
-    call_stack: list[dict[str, Any]] = []
+    call_stack: list[dict[str, Any]]
     _current_task: int = 0
     _total_tasks: int = 0
     _debug_message: str = ''
@@ -57,6 +57,9 @@ class Context:
         else:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
+        self.call_stack = []
+        if self.config.call_stack:
+            self.call_stack = self.config.call_stack
         self.debug = self.config.debug
         self.formatter = progress.Formatter()
 
@@ -385,8 +388,8 @@ class Context:
         if self.debug:
             return
         pbar = self.formatter.progress_bar(self.current_task, self.total_tasks)
-        indent = self._indent()
-        self.print_1p(f"{self.status} {self.formatter.running} {pbar}")
+        if self.formatter.tty:
+            self.print_1p(f"{self.status} {self.formatter.running} {pbar}")
 
     def show_summary(self) -> None:
         summary_text = self.config.summary()
@@ -401,7 +404,7 @@ class Context:
         tmp_config = copy.copy(self.config)
 
         # inject runtime state to the temporary config
-        for rt_state in ['time', 'iter', 'pid_show']:
+        for rt_state in ['time', 'iter', 'call_stack', 'pid_show']:
             val = getattr(self, rt_state)
             setattr(tmp_config, rt_state, val)
 

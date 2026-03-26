@@ -30,6 +30,7 @@ class Config:
     pid_mem: int
     pid_rec: int
     pid_show: int  # avail in context
+    call_stack: list[dict]|None = None
     nens: int
     run_preproc: bool
     run_forecast: bool

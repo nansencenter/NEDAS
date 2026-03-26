@@ -76,8 +76,11 @@ class Formatter:
     tabspace = 4
 
     def __init__(self):
-        # check if a tty is available, if not avoid using ansi format strings
-        if not sys.stdout.isatty():
+        ...
+        # check if runtime output is redirected to a file
+        # if so turn of format strings to keep log file clean
+        #if not os.isatty(sys.stdout.fileno()):
+        if True:
             for key in ['reset', 'dim', 'red', 'green', 'yellow', 'clear_line']:
                 setattr(self, key, '')
             self.tty = False
@@ -145,7 +148,7 @@ class Formatter:
         progress = (task_id + 1) / ntask if ntask > 0 else 1.0
         filled_width = int(progress * width)
         
-        bar = f"{self.green}{'━' * filled_width}{self.reset}{self.dim}{'─' * (width - filled_width)}{self.reset}"
+        bar = f"{self.yellow}{'━' * filled_width}{self.reset}{self.dim}{'─' * (width - filled_width)}{self.reset}"
         return f"[{bar}] {100*progress:3.0f}%"
 
     @classmethod
