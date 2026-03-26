@@ -55,7 +55,7 @@ class Scheme(ABC):
         if self.online_mode:
             if self.c.comm.mpi_ready or self.config.nproc==1:
                 # we are already inside the mpi environment, proceed
-                self.run_all()
+                self.c.logger(self.__class__.__name__)(self.run_all)()
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
                 if self.c.debug:
@@ -71,7 +71,7 @@ class Scheme(ABC):
                                    "The main program should be run in serial.")
 
             # in offline io mode, each step in run_all will decide how to dispatch itself
-            self.run_all()
+            self.c.logger(self.__class__.__name__)(self.run_all)()
 
     @abstractmethod
     def run_all(self):

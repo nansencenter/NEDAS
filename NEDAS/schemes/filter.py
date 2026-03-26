@@ -13,6 +13,7 @@ class FilterAnalysisScheme(Scheme):
     the end of the period of interest. The length of forecasts between cycles is called the `cycling period`.
     """
     steps_need_mpi = {
+        'run_all': True,
         'generate_truth': False,
         'generate_init_ensemble': False,
         'preprocess': False,
@@ -29,7 +30,7 @@ class FilterAnalysisScheme(Scheme):
 
         if self.c.time == self.config.time_start:
             msg = f"PREPARATION"
-            self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
+            self.c.print_1p(f"{msg}\n{'═'*len(msg)}\n")
 
             self.run_step('generate_truth')
 
@@ -37,8 +38,8 @@ class FilterAnalysisScheme(Scheme):
 
         self.c.print_1p("CYCLING START...\n")
         while self.c.time < self.config.time_end:
-            msg = f"CURRENT CYCLE: {self.c.time} => {self.c.next_time}"
-            self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
+            msg = f"CURRENT CYCLE: {self.c.time} ➜ {self.c.next_time}"
+            self.c.print_1p(f"{msg}\n{'═'*len(msg)}\n")
 
             if self.check_cycle_complete():
                 continue

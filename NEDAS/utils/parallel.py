@@ -6,7 +6,6 @@ from concurrent.futures import ProcessPoolExecutor
 import threading
 import traceback
 import numpy as np
-from NEDAS.utils.progress import print_with_cache, progress_bar
 
 class Comm:
     """

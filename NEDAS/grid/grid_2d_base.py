@@ -745,7 +745,8 @@ class Grid2DBase(ABC):
                 dist = np.hypot(xtraj[0,i]-xtraj[1,i], ytraj[0,i]-ytraj[1,i])
                 if hl < 1.6*dist:
                     ax.fill(*arrowhead_xy(xtraj[1,i], xtraj[0,i], ytraj[1,i], ytraj[0,i], hw, hl), color=linecolor, zorder=5)
-            draw_reference_vector_legend(ax, ref_x, ref_y, V, L, hw, hl, refcolor, linecolor, ref_units)
+            if kwargs.get('showref', True):
+                draw_reference_vector_legend(ax, ref_x, ref_y, V, L, hw, hl, refcolor, linecolor, ref_units)
 
         else:
             assert fld.shape == x.shape

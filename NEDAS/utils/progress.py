@@ -1,30 +1,7 @@
 import os
+import sys
 import subprocess
 import time
-
-def progress_bar(task_id: int, ntask: int, width: int=20) -> str:
-    """
-    Generate a progress bar based on task_id and ntask.
-
-    Args:
-        task_id (int): Current task index, from 0 to ntask-1
-        ntask (int): Total number of tasks
-        width (int): The length of the progress bar (number of characters)
-
-    Returns:
-        str: The progress bar msg to be shown.
-            Will require the print command with end="" option so that new line updated is overwritting the old line.
-    """
-    progress = (task_id + 1) / ntask if ntask > 0 else 1.0
-    filled_width = int(progress * width)
-    
-    # ANSI Green for the bar, Reset for the track
-    green = "\033[1;32m"
-    reset = "\033[0m"
-    dim   = "\033[2m"
-    
-    bar = f"{green}{'━' * filled_width}{reset}{dim}{'─' * (width - filled_width)}{reset}"
-    return f"[{bar}] {100*progress:3.0f}%"
 
 def print_with_cache(msg: str) -> None:
     ##previous message is cached so that new message is displayed only
@@ -86,3 +63,91 @@ def count_lines_in_file(file: str) -> int:
         n = int(p.stdout.split(' ')[0])
     return n
 
+class Formatter:
+    tty = True
+    reset = "\033[0m"
+    dim = "\033[2m"
+    red = "\033[1;31m"
+    green = "\033[1;32m"
+    yellow = "\033[1;33m"
+    clear_line = "\r\033[K"
+    progress_bar_width = 10
+    anchor = 66
+    tabspace = 4
+
+    def __init__(self):
+        # check if a tty is available, if not avoid using ansi format strings
+        if not sys.stdout.isatty():
+            for key in ['reset', 'dim', 'red', 'green', 'yellow', 'clear_line']:
+                setattr(self, key, '')
+            self.tty = False
+
+    @property
+    def running(self):
+        return f"{self.yellow}RUNNING{self.reset} ⏳"
+
+    @property
+    def done(self):
+        return f"{self.green}DONE{self.reset} ✅"
+
+    @property
+    def error(self):
+        return f"{self.red}ERROR{self.reset} ❌"
+    
+    @property
+    def pipe(self):
+        assert self.tabspace > 1
+        nspace = self.tabspace - 1
+        return f"│{' '*nspace}"
+
+    def indent(self, level: int, node: dict) -> str:
+        if node['substep_count'] > 0:
+            # this is a popping of node with substeps, just show its parent pipes
+            indent_str = f"{'│   '*(level-1)}" if level > 1 else ''
+        else:
+            # this is an end node, the last parent pipe needs a branch to current node
+            indent_str = f"{'│   '*(level-2)}" if level > 1 else ''
+            indent_str += f'├── '
+        return indent_str
+
+    def status_line(self, level: int, node: dict, status: str) -> str:
+        # indent part
+        indent = self.indent(level, node)
+
+        # func name and horizontal spacing until anchor point
+        func_name = node['name']
+        name_len = len(indent) + len(func_name)
+        ndots = self.anchor - name_len if name_len < self.anchor else 2
+        dot_string = f"{'─'*ndots} "
+
+        # status
+        status_label = getattr(self, status)
+
+        # format the entire status line
+        # stat_str = f"\r{self.status_indent}{self.current_func} {dot_string}"
+        return f"{self.clear_line}{self.dim}{indent}{self.reset}{func_name}{dot_string}{status_label}"
+
+    def progress_bar(self, task_id: int, ntask: int) -> str:
+        """
+        Generate a progress bar based on task_id and ntask.
+
+        Args:
+            task_id (int): Current task index, from 0 to ntask-1
+            ntask (int): Total number of tasks
+            width (int): The length of the progress bar (number of characters)
+
+        Returns:
+            str: The progress bar msg to be shown.
+
+        Note: Will require the print command with end="" option so that new line updated is overwritting the old line.
+        """
+        width = self.progress_bar_width
+        progress = (task_id + 1) / ntask if ntask > 0 else 1.0
+        filled_width = int(progress * width)
+        
+        bar = f"{self.green}{'━' * filled_width}{self.reset}{self.dim}{'─' * (width - filled_width)}{self.reset}"
+        return f"[{bar}] {100*progress:3.0f}%"
+
+    @classmethod
+    def progress(cls, task_id: int, ntask: int) -> str:
+        ...

@@ -1,6 +1,5 @@
 from __future__ import annotations
 import copy
-import sys
 import time
 from typing import get_args, Callable, Any, TYPE_CHECKING
 from functools import wraps
@@ -24,7 +23,7 @@ class Context:
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
-    interactive: bool
+    formatter: progress.Formatter
     elapsed_time: float
     call_stack: list[dict[str, Any]] = []
     _current_task: int = 0
@@ -59,7 +58,7 @@ class Context:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
         self.debug = self.config.debug
-        self.interactive = True #sys.stdout.isatty()
+        self.formatter = progress.Formatter()
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle 
@@ -282,7 +281,7 @@ class Context:
         this avoids the redundancy if all processors are showing the same message.
         """
         decorator = parallel.by_rank(self.comm, self.pid_show)
-        return decorator(parallel.print_with_cache)
+        return decorator(progress.print_with_cache)
 
     def timer(self, func: Callable):
         """
@@ -322,45 +321,49 @@ class Context:
         if self.debug:
             self.print_1p(f"ENTERING '{func_name}'\n")
         else:
-            if lv > 0 and self.call_stack[lv-1]['substeps'] == 0:
+            if self.call_stack[lv-1]['substeps'] == 0:
                 self.print_1p('\n')
-            self.print_1p(f"{self.status_indent}{func_name}")
+            indent = self._indent()
+            self.print_1p(f"\033[2m{indent}\033[0m{func_name}: ")
         if lv > 0:
             self.call_stack[lv-1]['substeps'] += 1
 
     def call_stack_pop(self):
+        flag = self.formatter.done
         if self.debug:
-            self.print_1p("DONE\n")
+            self.print_1p(f"{flag}\n")
         else:
             timer_msg = f"{self.elapsed_time:7.2f}s" if self.config.timer else ""
-            if self.call_stack[-1]['substeps']>0:
-                self.print_1p(f"{self.status_indent}\033[2m└──\033[0m \033[1;32mDONE\033[0m {timer_msg}\n")
+            pop = (self.call_stack[-1]['substeps']>0)
+            indent = self._indent(pop)
+            if pop:
+                self.print_1p(f"\033[2m{indent}\033[0m{flag} {timer_msg}\n")
             else:
-                clear_seq = "\r\033[K"
-                self.print_1p(f"{clear_seq}{self.status} \033[1;32mDONE\033[0m {timer_msg}\n")
+                self.print_1p(f"\r\033[K{self.status} {flag} {timer_msg}\n")
         self.call_stack.pop()
-        if len(self.call_stack)==0:
-            self.print_1p("\n")
+        if len(self.call_stack)==1:
+            self.print_1p("\033[2m│\033[0m\n")
 
-    @property
-    def status_indent(self):
+    def _indent(self, pop=False):
         nlv = len(self.call_stack)
-        indent = '\033[2m'
-        for lv in range(nlv):
-            if lv == 0:
-                indent += '    '
+        indent = ''
+        for lv in range(nlv-2):
+            indent += '│   '
+        if nlv > 1:
+            if pop:
+                indent += '│   '
             else:
-                indent += f'│   '
-        indent += '\033[0m'
+                indent += '├── '
         return indent
 
     @property
     def status(self) -> str:
-        anchor = 66
-        name_len = len(self.current_func) + len(self.status_indent)
+        anchor = 50
+        indent = self._indent()
+        name_len = len(self.current_func) + len(indent)
         ndots = anchor - name_len if name_len < anchor else 2
         dot_string = f"\033[2m{'─'*ndots}\033[0m"
-        stat_str = f"\r{self.status_indent}{self.current_func} {dot_string}"
+        stat_str = f"\r\033[2m{indent}\033[0m{self.current_func} {dot_string}"
         return stat_str
 
     def show_greeting(self) -> None:
@@ -381,11 +384,9 @@ class Context:
         """
         if self.debug:
             return
-        if self.interactive:
-            pbar = progress.progress_bar(self.current_task, self.total_tasks, 10)
-            self.print_1p(f"{self.status} \033[1;33mRUNNING\033[0m {pbar}")
-        else:
-            self.print_1p(f".")
+        pbar = self.formatter.progress_bar(self.current_task, self.total_tasks)
+        indent = self._indent()
+        self.print_1p(f"{self.status} {self.formatter.running} {pbar}")
 
     def show_summary(self) -> None:
         summary_text = self.config.summary()
