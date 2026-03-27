@@ -125,7 +125,7 @@ class HPCJobSubmitter(JobSubmitter):
         assert self.nnode+self.offset_node <= self.nnode_avail, f"Requested nnode={self.nnode} and offset_node={self.offset_node} exceeds nnode_avail={self.nnode_avail}"
 
     def run(self, commands):
-        if self.in_job_allocation:
+        if self.in_job_allocation or self.nproc==1:
             self.run_job_as_step(commands)
         else:
             self.submit_job_and_monitor(commands)

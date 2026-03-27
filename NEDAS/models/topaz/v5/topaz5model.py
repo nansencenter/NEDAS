@@ -857,3 +857,12 @@ class Topaz5Model(Model[RegularGrid]):
             self.c.run_job(f"mv {file1} {file2}")
         else:
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
+
+    def generate_truth(self, *args, **kwargs):
+        pass
+
+    def generate_init_ensemble(self, *args, **kwargs):
+        # TODO: check validity of self.ens_init_dir and restart files within
+        # some application may need to skip restart file checks, add an option for that?
+        pass
+

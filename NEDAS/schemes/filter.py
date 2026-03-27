@@ -209,7 +209,7 @@ class FilterAnalysisScheme(Scheme):
             **other_opts,
         }
         return opts
-    
+
     def get_restart_dir(self, model_name) -> str:
         model = self.c.models[model_name]
         if self.c.time == self.config.time_start and model.ens_init_dir is not None:

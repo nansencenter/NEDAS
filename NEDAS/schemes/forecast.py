@@ -10,13 +10,11 @@ class ForecastScheme(FilterAnalysisScheme):
     """
 
     def run_all(self) -> None:
-        self.c.print_1p("INITIALIZING...\n")
-        self.c.show_summary()
 
-        self.c.print_1p("\nSTART FORECASTS...\n")
+        self.c.print_1p("START FORECASTS...\n")
         while self.c.time < self.config.time_end:
             msg = f"CURRENT START TIME: {self.c.time}"
-            self.c.print_1p(f"\n{msg}\n{'='*len(msg)}\n")
+            self.c.print_1p(f"{msg}\n{'='*len(msg)}\n")
 
             if self.config.run_preproc:
                 self.run_step('preprocess')
@@ -35,7 +33,7 @@ class ForecastScheme(FilterAnalysisScheme):
             ##advance to next cycle
             self.c.time = self.c.next_time
 
-        print("ALL FINISHED.", flush=True)
+        self.c.print_1p("ALL FINISHED.\n")
 
     def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
         opts = {

@@ -8,6 +8,9 @@ from .hpc import HPCJobSubmitter
 
 class SLURMJobSubmitter(HPCJobSubmitter):
     """JobSubmitter Class customized for SLURM schedulers"""
+    MAX_NTASKS = 1000000
+    MAX_NNODES = 1000
+    MAX_PPN = 1000
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -22,19 +25,19 @@ class SLURMJobSubmitter(HPCJobSubmitter):
     def nproc_avail(self):
         if self.in_job_allocation:
             return int(os.environ['SLURM_NTASKS'])
-        return self.nproc
+        return self.MAX_NTASKS
 
     @property
     def nnode_avail(self):
         if self.in_job_allocation:
             return int(os.environ['SLURM_NNODES'])
-        return self.nnode
+        return self.MAX_NNODES
 
     @property
     def ppn_avail(self):
         if self.in_job_allocation:
             return int(os.environ['SLURM_TASKS_PER_NODE'].split('(')[0])
-        return self.ppn
+        return self.MAX_PPN
 
     @property
     def execute_command(self):

@@ -225,6 +225,8 @@ class Context:
         Store the model instances in :code:`models[model_name]`.
         """
         self.models = {}
+        if self.config.model_def is None:
+            return
         for model_name, kwargs in self.config.model_def.items():
             #instantiate the model class
             ModelClass = models.get_model_class(model_name)
@@ -236,6 +238,8 @@ class Context:
         Store the dataset instances in :code:`datasets[dataset_name]`.
         """
         self.datasets = {}
+        if self.config.dataset_def is None:
+            return
         for dataset_name, kwargs in self.config.dataset_def.items():
             DatasetClass = datasets.get_dataset_class(dataset_name)
             self.datasets[dataset_name] = DatasetClass(context=self, **(kwargs or {}))
@@ -249,7 +253,7 @@ class Context:
     @property
     def total_tasks(self):
         return self._total_tasks
-    
+
     @total_tasks.setter
     def total_tasks(self, value: int):
         self._total_tasks = value
@@ -259,7 +263,7 @@ class Context:
     @property
     def current_task(self):
         return self._current_task
-    
+
     @current_task.setter
     def current_task(self, value: int):
         self._current_task = value

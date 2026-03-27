@@ -53,9 +53,9 @@ class Config:
     state_time_scale: float
     grid_def: dict
     state_def: dict|None
-    model_def: dict
+    model_def: dict|None
     obs_def: dict|None
-    dataset_def: dict
+    dataset_def: dict|None
     shuffle_obs: bool
     z_coords_from: Literal['mean', 'member']
     interp_method: str
@@ -97,7 +97,7 @@ class Config:
 
         # set the attributes
         self.__dict__.update(config_dict)
-    
+
     def _parse_directories(self, data: Any) -> Any:
         """
         Parse the directories or file names defined in :code:`data`

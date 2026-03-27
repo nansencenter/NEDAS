@@ -20,7 +20,7 @@ class StateInfo:
     size: int
     variables: list[str]
     err_types: list[str]
-    
+
     def __init__(self, c: Context):
         """Parse the configuration to generate the state info object"""
         self.shape = c.grid.x.shape
