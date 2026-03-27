@@ -135,8 +135,14 @@ class Config:
                 config_dict[key] = config_dict[key].replace(tzinfo=timezone.utc)
 
         if config_dict['time'] is None:
-            ##initialize current time to start time, if not available
+            # initialize current time to start time, if not available
             config_dict['time'] = config_dict['time_start'].replace()
+        if config_dict['time_analysis_start'] is None:
+            # initialize analysis start time if not available
+            config_dict['time_analysis_start'] = config_dict['time_start'].replace()
+        if config_dict['time_analysis_end'] is None:
+            # initialize analysis end time if not available
+            config_dict['time_analysis_end'] = config_dict['time_end'].replace()
 
         return config_dict
 
