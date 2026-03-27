@@ -91,19 +91,15 @@ class OfflineIO(IOBackend):
 
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
-        # form the path in kwargs 
+        # form the path in kwargs
         # additional info from input args to form the path prefix
         model_name = kwargs['model_src']
         model = c.models[model_name]
-        time = kwargs['time']
         if tag in ['prior', 'z']:
-            path = c.fs.forecast_dir(time, model_name)
+            path = c.fs.forecast_dir(c.time, model_name)
 
         elif tag == 'post':
-            prev_time = time - c.config.cycle_period
-            if prev_time < c.config.time_start:
-                prev_time = c.config.time_start
-            path = c.fs.forecast_dir(prev_time, model_name)
+            path = c.fs.forecast_dir(c.prev_time, model_name)
 
         elif tag == 'truth':
             path = model.truth_dir
@@ -115,7 +111,6 @@ class OfflineIO(IOBackend):
             os.makedirs(path, exist_ok=True)  # use shell_utils makedir
 
         kwargs['path'] = path
-        kwargs['runtime'] = self
         return method(*args, **kwargs)
 
     def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:
