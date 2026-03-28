@@ -183,7 +183,7 @@ class Scheme(ABC):
         # setup an offline scheduler to distribute tasks
         # get number of available workers to initialize the scheduler
         total_nproc = opts.get('total_nproc', self.config.nproc)
-        assert total_nproc > opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
+        assert total_nproc >= opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
         nworker = total_nproc // opts['nproc']
 
         if opts['nproc']>1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
