@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Callable, Any
 from NEDAS.utils.conversion import ensure_list, dt1h
 from NEDAS.utils import random_perturb, spatial_operation, parallel
-from NEDAS.grid import GridType, Grid, RegularGrid
+from NEDAS.grid import GridType, RegularGrid
 from .context import Context
 
 class PerturbField:
