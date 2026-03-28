@@ -630,7 +630,7 @@ class Topaz5Model(Model[RegularGrid]):
             # seawifs
             file = os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
-        self.c.run_job(shell_cmd)
+        self.c.run_job(shell_cmd, nproc=1)
 
         # copy restart files from restart_dir
         restart_dir = kwargs['restart_dir']
@@ -639,16 +639,16 @@ class Topaz5Model(Model[RegularGrid]):
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
             file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
-            self.c.run_job(f"cp -fL {file} {file1}")
-            self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
+            self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
+            self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}", nproc=1)
         self.c.fs.make_dir(os.path.join(run_dir, 'cice'))
         tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
         file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         # TODO: use runtime file manipulation instead
-        self.c.run_job(f"cp -fL {file} {file1}")
-        self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
-        self.c.run_job(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
+        self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
+        self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}", nproc=1)
+        self.c.run_job(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}", nproc=1)
 
     def postprocess(self, task_id=0, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -676,7 +676,7 @@ class Topaz5Model(Model[RegularGrid]):
         file2 = f'ice_forecast{member+1:03}.nc'
         commands += f"ln -fs {file1} {file2}; "
         commands += f"ln -fs {self.reanalysis_code}/FILES/depths{self.idm}x{self.jdm}.uf .; "
-        self.c.run_job(commands)
+        self.c.run_job(commands, nproc=1)
 
         # restart2nc on forecast files
         commands = ""
@@ -684,13 +684,13 @@ class Topaz5Model(Model[RegularGrid]):
             commands += f". {self.model_env}; "
         commands += f"cd {run_dir}; "
         commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc"
-        self.c.run_job(commands)
+        self.c.run_job(commands, nproc=1)
 
         # add posterior ice variables in analysis abfile
         for ext in ['.a', '.b']:
             file1 = os.path.join(kwargs['path'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
             file2 = os.path.join(run_dir, f'analysis{member+1:03}{ext}')
-            self.c.run_job(f"cp -L {file1} {file2}")
+            self.c.run_job(f"cp -L {file1} {file2}", nproc=1)
         f = ABFileRestart(file2, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
         nfld = len(f.fields.keys())
         # fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
@@ -715,7 +715,7 @@ class Topaz5Model(Model[RegularGrid]):
         file1 = os.path.join(run_dir, f'fix_ice_forecast{member+1:03}.nc')
         file2 = os.path.join(kwargs['path'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
         commands += f"mv {file1} {file2}; "
-        self.c.run_job(commands)
+        self.c.run_job(commands, nproc=1)
 
     def postprocess_native(self, task_id=0, **kwargs):
         """Post processing the restart variables for next forecast"""
@@ -794,7 +794,7 @@ class Topaz5Model(Model[RegularGrid]):
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
         self.c.fs.make_dir(run_dir)
         log_file = os.path.join(run_dir, "run.log")
-        self.c.run_job("touch "+log_file)
+        self.c.run_job("touch "+log_file, nproc=1)
 
         run_success = False
         # early exit if the run is already finished
@@ -814,8 +814,8 @@ class Topaz5Model(Model[RegularGrid]):
                     raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
             # clean up some files from previous runs
-            self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
-            self.c.run_job(f"echo > {log_file}")
+            self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out", nproc=1)
+            self.c.run_job(f"echo > {log_file}", nproc=1)
 
             # build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
@@ -833,7 +833,7 @@ class Topaz5Model(Model[RegularGrid]):
                             walltime=self.walltime, log_file=log_file, **kwargs)
                 except RuntimeError as e:
                     print(f"{e}, retrying ({2-i} attempts remain)")
-                    self.c.run_job(f"cp {log_file} {log_file}.attempt{i}")
+                    self.c.run_job(f"cp {log_file} {log_file}.attempt{i}", nproc=1)
                     continue
                 # check output
                 if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
@@ -847,14 +847,14 @@ class Topaz5Model(Model[RegularGrid]):
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             if os.path.exists(file1):
-                self.c.run_job(f"mv {file1} {file2}")
+                self.c.run_job(f"mv {file1} {file2}", nproc=1)
             else:
                 assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
         tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         if os.path.exists(file1):
-            self.c.run_job(f"mv {file1} {file2}")
+            self.c.run_job(f"mv {file1} {file2}", nproc=1)
         else:
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
 
