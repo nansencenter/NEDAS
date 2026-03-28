@@ -28,9 +28,9 @@ class Vort2DObs(SyntheticObs):
         assert isinstance(model, Vort2DModel), 'random_network: ERROR: model must be an instance of Vort2DModel'
         grid = kwargs['grid']
 
-        ##get truth vortex position, some network is vortex-following
+        # get truth vortex position, some network is vortex-following
         velocity = self.get_velocity(**{**kwargs, 'path': model.truth_dir})
-        ##diagnose the vortex position on grid
+        # diagnose the vortex position on grid
         i, j = self.vortex_position(velocity[0,...], velocity[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
@@ -50,9 +50,9 @@ class Vort2DObs(SyntheticObs):
 
             elif network_type == 'targeted':
                 if nobs is None:
-                    nobs = 800   ##note: number of obs in entire domain
-                                 ##later only obs within range will be kept
-                obs_range = 180000  ##observed range from vortex center, m
+                    nobs = 800   # note: number of obs in entire domain
+                                 # later only obs within range will be kept
+                obs_range = 180000  # observed range from vortex center, m
                 y = np.random.uniform(grid.ymin, grid.ymax, nobs)
                 x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
@@ -96,14 +96,14 @@ class Vort2DObs(SyntheticObs):
 
         return obs_seq
 
-    ###utility functions for obs diagnostics
+    # #utility functions for obs diagnostics
     def vortex_position(self, u, v):
         ny, nx = u.shape
 
-        ##compute vorticity
+        # compute vorticity
         zeta = (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
 
-        ##search for max vorticity
+        # search for max vorticity
         zmax = -999
         center_x, center_y = -1, -1
         buff = 6
@@ -139,7 +139,7 @@ class Vort2DObs(SyntheticObs):
         if np.max(wind_rad)<wind_min or np.where(wind_rad>=wind_min)[0].size==0:
             Rsize = -1
         else:
-            i1 = np.where(wind_rad>=wind_min)[0][-1] ###last point with wind > 35knot
+            i1 = np.where(wind_rad>=wind_min)[0][-1] # #last point with wind > 35knot
             if i1==nr-1:
                 Rsize = i1
             else:
@@ -152,9 +152,9 @@ class Vort2DObs(SyntheticObs):
         model = kwargs['model']
         assert isinstance(model, Vort2DModel), 'get_velocity: ERROR: model must be an instance of Vort2DModel'
         grid = kwargs['grid']
-        ##read the velocity field from truth
+        # read the velocity field from truth
         model_velocity = model.read_var(**{**kwargs, 'name':'velocity'})
-        ##convert velocity to target grid
+        # convert velocity to target grid
         model.grid.set_destination_grid(grid)
         velocity = model.grid.convert(model_velocity, is_vector=True)
         return velocity

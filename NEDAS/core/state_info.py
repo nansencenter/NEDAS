@@ -6,7 +6,7 @@ from NEDAS.core.types import FieldRecord
 class StateInfo:
     """
     Manages the metadata, indexing, and memory offsets for the model state.
-    
+
     Attributes:
         shape (tuple): domain dimension(s) for the fields
         fields (dict[int, FieldRecord]): dictionary containing field ids and the corresponding field records
@@ -30,9 +30,9 @@ class StateInfo:
         self.size = 0
         variables = set()
         err_types = set()
-        self.pos = 0  ##seek position for rec
+        self.pos = 0  # seek position for rec
 
-        ##loop through variables in state_def
+        # loop through variables in state_def
         for vrec in ensure_list(c.config.state_def):
             vname = vrec['name']
             variables.add(vname)
@@ -87,9 +87,9 @@ class StateInfo:
                 )
                 self.fields[rec_id] = rec
 
-                ##update seek position
+                # update seek position
                 nv = 2 if rec.is_vector else 1
-                fld_size = np.sum((~self.mask).astype(int))  ##size of this 2D field
+                fld_size = np.sum((~self.mask).astype(int))  # size of this 2D field
                 self.pos += nv * fld_size * type_size[rec.dtype]
                 rec_id += 1
 
@@ -109,16 +109,16 @@ class StateInfo:
             binfile (str): File path for the .bin file
         """
         with open(binfile.replace('.bin','.dat'), 'wt') as f:
-            ##first line: grid dimension
+            # first line: grid dimension
             if len(self.shape) == 1:
                 f.write(f"{self.shape[0]}\n")
             else:
                 f.write(f"{self.shape[0]} {self.shape[1]}\n")
 
-            ##second line: total size of the state
+            # second line: total size of the state
             f.write(f"{self.size}\n")
 
-            ##followed by nfield lines: each for a field record
+            # followed by nfield lines: each for a field record
             for i, rec in self.fields.items():
                 f.write(f"{rec.name} {rec.model_src} {rec.dtype} {int(rec.is_vector)} {rec.units} {rec.err_type} {t2h(rec.time)} {rec.dt} {rec.k} {rec.pos}\n")
 
@@ -140,7 +140,7 @@ class StateInfo:
 
             self.size = int(lines[1])
 
-            ##records for uniq fields
+            # records for uniq fields
             self.fields = {}
             rec_id = 0
             for lin in lines[2:]:

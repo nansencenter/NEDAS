@@ -4,7 +4,7 @@ try:
 except ImportError:
     print("Warning: numba is not found in your environment, will skip the njit precompiling of functions.", flush=True)
 
-    ##define njit as en empty decorator
+    # define njit as en empty decorator
     from functools import wraps
 
     def njit(*njit_args, **njit_kwargs):

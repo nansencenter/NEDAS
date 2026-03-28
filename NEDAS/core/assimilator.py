@@ -9,7 +9,7 @@ from .types import ObsRecordID, PartitionID, ProcIDMem
 
 class Assimilator(ABC):
     def __init__(self, c: Context):
-        ##get parameters from config file
+        # get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, parse_args=False, **c.config.assimilator_def)
         for key, value in config_dict.items():
@@ -34,8 +34,8 @@ class Assimilator(ABC):
         c.logger('Transpose back to field-complete')(self.transpose_to_field_complete)(c)
 
         # output the post state
-        # TODO: which version of posterior to output? ideally the inflated one? 
-        # algorithmically clean way is to output the intermediate versions as well and 
+        # TODO: which version of posterior to output? ideally the inflated one?
+        # algorithmically clean way is to output the intermediate versions as well and
         # let the files be input/output to the inflation func
         # but this is too much IO overhead.
         c.logger('Output posterior ensemble members')(c.state.output_state)(c, 'post')
@@ -111,7 +111,7 @@ class Assimilator(ABC):
         c.state.fields_post = c.logger('Tranpose posterior state back')(c.state.transpose_to_field_complete)(c, c.state.state_post)
 
         if c.obs.lobs_post:
-            ##TODO there is a bug here, in transpose seq[:, ind] out of bound
+            # TODO there is a bug here, in transpose seq[:, ind] out of bound
             c.obs.obs_post = c.logger('Transpose obs posterior ensemble back')(c.obs.transpose_to_field_complete)(c, c.obs.lobs_post)
 
     @abstractmethod

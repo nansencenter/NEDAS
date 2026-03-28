@@ -17,14 +17,14 @@ class QGFortranModelEmulator(QGFortranModel):
         kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
-        ##load model weights if not yet
+        # load model weights if not yet
         if self.unet_model is None:
             from .netutils import Att_Res_UNet
             self.unet_model = Att_Res_UNet(**self.model_params).make_unet_model()
             self.unet_model.load_weights(self.weightfile)
 
         if nens>1:
-            ##running ensmeble together, ignore kwargs['member']
+            # running ensmeble together, ignore kwargs['member']
             members = list(range(nens))
         else:
             members = [kwargs['member']]
@@ -35,7 +35,7 @@ class QGFortranModelEmulator(QGFortranModel):
         nsteps = int(forecast_period / self.restart_dt)
         next_time = time + forecast_period * dt1h
 
-        ##input ensemble state
+        # input ensemble state
         state = np.zeros((nens,self.ny,self.nx,self.nz))
         for m in range(nens):
             kwargs_in = {**kwargs, 'member':members[m], 'time':time}
@@ -48,12 +48,12 @@ class QGFortranModelEmulator(QGFortranModel):
                 psik = read_data_bin(input_file, self.kmax, self.nz, k)
                 state[m,...,k] = spec2grid(psik).T
 
-        ##run prediction model
+        # run prediction model
         for i in range(nsteps):
             state = self.unet_model.predict(state, verbose=1)
         state_out = state
 
-        ##output to restart file
+        # output to restart file
         for m in range(nens):
             kwargs_out = {**kwargs, 'member':members[m], 'time':next_time}
             output_file = self.filename(**kwargs_out)

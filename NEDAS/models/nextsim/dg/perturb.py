@@ -31,7 +31,7 @@ def gen_perturb(grid: RegularGrid,
     np.ndarray
         random perturbation field
     """
-    ##generate perturbation according to prescribed parameters
+    # generate perturbation according to prescribed parameters
     if perturb_type == 'gaussian':
         perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
         perturb = perturb - perturb.mean()
@@ -55,7 +55,7 @@ def apply_AR1_perturb(perturb: np.ndarray,
     prev_perturb : typing.Union[None, np.ndarray], optional
         previous perturbation field, by default None
     """
-    ##create perturbations that are correlated in time
+    # create perturbations that are correlated in time
     autocorr = np.exp(-1.0)
     alpha = autocorr**(1.0/tcorr)
     if prev_perturb is not None:
@@ -85,7 +85,7 @@ def apply_perturb(grid: RegularGrid,
     np.ndarray
         perturbed field
     """
-    ##apply the perturbation
+    # apply the perturbation
     # todo: adding logorithmic perturbation
     field += perturb
     return field

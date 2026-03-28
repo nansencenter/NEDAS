@@ -31,14 +31,14 @@ class EcmwfForecastData(Dataset):
         self.diag_variable_getter = {
             'atmos_surf_vapor_mix': self.get_vapmix,
         }
-        
+
         self.files = {}
         self.lookup = {}
         self.grid = None
         if isinstance(self.time_start, str):
             self.time_start = s2t(self.time_start)
 
-    ###format filename
+    # #format filename
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         t = self.time_start
@@ -80,11 +80,11 @@ class EcmwfForecastData(Dataset):
 
     def read_data_from_grb(self, fname, time, member, vname, units):
         forecast_hours = int((time - self.time_start) / dt1h)
-        ##build search key
+        # build search key
         key = (vname, self.time_start, forecast_hours, member)
-        ##look up the message id
+        # look up the message id
         rec_id = self.lookup[fname][key]
-        ##read the message into var
+        # read the message into var
         grb = self.files[fname].message(rec_id)
         var = grb.values
         return var
@@ -112,25 +112,25 @@ class EcmwfForecastData(Dataset):
             else:
                 var = self.read_data_from_grb(fname, time, member, rec['name'], rec['units'])
 
-            ##some variables are accumulated over the dt_hours, convert them to fluxes
+            # some variables are accumulated over the dt_hours, convert them to fluxes
             if name in ('atmos_precip', 'atmos_down_shortwave', 'atmos_down_longwave'):
                 if time == self.time_start:
-                    ##first time step is zeros for these variables
-                    ##to ensure continuity in time, get the variable snapshot from ERA5 instead
+                    # first time step is zeros for these variables
+                    # to ensure continuity in time, get the variable snapshot from ERA5 instead
                     era5.read_grid(name=name, time=time)
                     tmp = era5.read_var(name=name, time=time)
-                    ##convert to grid
+                    # convert to grid
                     assert era5.grid is not None
                     era5.grid.set_destination_grid(self.grid)
                     var = era5.grid.convert(tmp)
                 else:
                     prev_time = time - dt1h * self.dt_hours
                     var -= self.read_data_from_grb(fname, prev_time, member, rec['name'], rec['units'])
-                    ##need to convert the fluxes to per second units
+                    # need to convert the fluxes to per second units
                     var /= 3600. * self.dt_hours
-                var[np.where(var<0.)] = 0. ##ensure positive definite        
+                var[np.where(var<0.)] = 0. # ensure positive definite
 
-        ##convert units if necessary
+        # convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 

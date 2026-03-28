@@ -46,22 +46,22 @@ class FilterAnalysisScheme(Scheme):
                 if self.config.perturb:
                     self.run_step('perturb')
 
-            ##assimilation step
+            # assimilation step
             if self.config.run_analysis and self.c.time >= self.config.time_analysis_start and self.c.time <= self.config.time_analysis_end:
                 self.run_step('filter')
                 if self.config.run_postproc:
                     self.run_step('postprocess')
 
-            ##advance model state to next analysis cycle
+            # advance model state to next analysis cycle
             if self.config.run_forecast:
                 self.run_step('ensemble_forecast')
 
-            ##compute diagnostics
+            # compute diagnostics
             if self.config.run_diagnose:
                 if self.config.diag:
                     self.run_step('diagnose')
 
-            ##advance to next cycle
+            # advance to next cycle
             self.c.time = self.c.next_time
 
         self.c.print_1p("CYCLING COMPLETE.\n")
@@ -141,8 +141,8 @@ class FilterAnalysisScheme(Scheme):
         Main method for performing the analysis step
         """
         # outer loop (iter = 0, ..., niter-1)
-        ##multiscale approach: loop over scale components and perform assimilation on each scale
-        ##more complex outer loops can be implemented here
+        # multiscale approach: loop over scale components and perform assimilation on each scale
+        # more complex outer loops can be implemented here
         for self.c.iter in range(self.config.niter):
             if self.config.niter > 1:
                 self.c.logger(f"Outer-loop iteration #{self.c.iter+1}")(self.filter_iter)()

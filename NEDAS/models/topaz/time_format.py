@@ -8,7 +8,7 @@ def diy(iyr):
     return days
 
 def forday(yrflag,dtime):
-    ## converts model day to "calendar" date (year,ordinal-day,hour).
+    #  converts model day to "calendar" date (year,ordinal-day,hour).
     if (yrflag==0):
         #  360 days per model year, starting Jan 16
         iyear =  int((dtime+15.001)/360) + 1
@@ -46,7 +46,7 @@ def forday(yrflag,dtime):
     return int(iyear), int(iday), int(ihour)
 
 def dayfor(yrflag, iyear,iday,ihour):
-    ##converts "calendar" date (year,ordinal-day,hour) to model day
+    # converts "calendar" date (year,ordinal-day,hour) to model day
     if     (yrflag==0):
        # 360 days per model year, starting Jan 16
        dtime =  (iyear-1) * 360. +  iday  + ihour/24. - 16.
@@ -62,12 +62,12 @@ def dayfor(yrflag, iyear,iday,ihour):
        dtime=0.
        for k in range (iyr):
           dtime=dtime+diy(k+1901)
- 
+
        iday2=iday
        while (iday2+ihour/24.>0.):
           iyr=iyr+1
           diy2=diy(iyr+1901)
- 
+
           if ((iday2+(ihour/24.))/diy2>=1.):
              dtime=dtime+diy2
           else:

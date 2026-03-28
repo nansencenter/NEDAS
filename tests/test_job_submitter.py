@@ -55,7 +55,7 @@ class TestLocalJobSubmitter(unittest.TestCase):
             self.c.jsub.offset = -2
         with self.assertRaises(ValueError):
             self.c.jsub.offset = '1'
-   
+
     def test_offset_edge_cases(self):
         # 1 + nproc_avail > nproc_avail, exceeds available resources
         with self.assertRaises(ValueError):

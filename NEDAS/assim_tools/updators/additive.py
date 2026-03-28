@@ -13,12 +13,12 @@ class AdditiveUpdator(Updator):
             fld_prior = c.state.fields_prior[mem_id, rec_id]
             fld_post = c.state.fields_post[mem_id, rec_id]
 
-            ##misc transform inverse
+            # misc transform inverse
             for transform_func in c.transform_funcs:
                 fld_prior = transform_func.backward_state(c, rec, fld_prior)
                 fld_post = transform_func.backward_state(c, rec, fld_post)
 
-            ##collect the increments
+            # collect the increments
             self.increment[mem_id, rec_id] = fld_post - fld_prior
 
     def update_files(self, c, mem_id, rec_id):
@@ -33,7 +33,7 @@ class AdditiveUpdator(Updator):
         rec = c.state.info.fields[rec_id].asdict()
         model = c.models[rec['model_src']]
 
-        ##convert the posterior variable back to native model grid
+        # convert the posterior variable back to native model grid
         var_prior = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
 
         c.grid.set_destination_grid(model.grid)
@@ -52,11 +52,11 @@ class AdditiveUpdator(Updator):
         else:
             raise RuntimeError(f"mismatch in field prior {var_prior.shape} with increment {incr.shape}")
 
-        ##TODO: temporary solution for nan values due to interpolation
+        # TODO: temporary solution for nan values due to interpolation
         ind = np.where(np.isnan(var_post))
         var_post[ind] = var_prior[ind]
         # if np.isnan(var_post).any():
         #     raise ValueError('nan detected in var_post')
 
-        ##write the posterior variable to restart file
+        # write the posterior variable to restart file
         c.io.call_method(c, 'prior', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)

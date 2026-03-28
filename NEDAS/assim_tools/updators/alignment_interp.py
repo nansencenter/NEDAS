@@ -21,7 +21,7 @@ class AlignmentUpdator(Updator):
                 continue
 
             for mem_id in c.mem_list[c.pid_mem]:
-                ##compute displacement on analysis grid
+                # compute displacement on analysis grid
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 displace = optical_flow(c.grid, fld_prior, fld_post, **c.config.alignment)
@@ -42,7 +42,7 @@ class AlignmentUpdator(Updator):
         fld_prior = c.state.fields_prior[mem_id, rec_id]
         fld_post = c.state.fields_post[mem_id, rec_id]
 
-        ##get model state variable prior
+        # get model state variable prior
         var_prior = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec)
         c.grid.set_destination_grid(model.grid)
 
@@ -51,28 +51,28 @@ class AlignmentUpdator(Updator):
         else:
             fld_shape = var_prior.shape
 
-        ##read the corresponding displacement and convert to model grid
+        # read the corresponding displacement and convert to model grid
         displace = self.displace[mem_id, rec['k']]
         # displace = np.load(os.path.join(state.analysis_dir, f"displace.m{mem_id}.k{rec['k']}.npy"))
 
-        ##warp the prior field with displacement
+        # warp the prior field with displacement
         fld_prior_warp = fld_prior.copy()
         u = displace[0,...]/c.grid.dx
         v = displace[1,...]/c.grid.dx
         for ind in np.ndindex(fld_prior.shape[:-2]):
             fld_prior_warp[ind] = warp(fld_prior[ind], -u, -v)
 
-        # ##residual increments not explained by the displacement
+        # # residual increments not explained by the displacement
         res_incr = fld_post - fld_prior_warp
 
-        ##convert the displacement from analysis grid to model grid
+        # convert the displacement from analysis grid to model grid
         displace_m = c.grid.convert(displace, is_vector=True, method='linear')
         u, v = displace_m[0,...], displace_m[1,...]
         taper_boundary = getattr(model, 'taper_boundary')
         u = taper_boundary(u)
         v = taper_boundary(v)
 
-        ##apply the residual increment
+        # apply the residual increment
         res_incr_m = c.grid.convert(res_incr, is_vector=rec['is_vector'], method='linear')
         if fld_shape == model.grid.x.shape:
             if rec['is_vector']:
@@ -108,14 +108,14 @@ def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1,
     x2[mask] = 0
     w = smoothness_weight
     ni, nj = x1.shape
-    ##normalize field so that w can be fixed
+    # normalize field so that w can be fixed
     xmax = np.max(x1[:, :]); xmin = np.min(x1[:, :])
     if (xmax>xmin):
         x1[:, :] = (x1[:, :] - xmin) / (xmax -xmin)
         x2[:, :] = (x2[:, :] - xmin) / (xmax -xmin)
     u = np.zeros((ni, nj))
     v = np.zeros((ni, nj))
-    ###pyramid levels
+    # #pyramid levels
     for lev in range(nlevel, -1, -1):
         x1w = warp(x1, -u, -v)
         x1c = coarsen(x1w, 1, lev)
@@ -124,7 +124,7 @@ def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1,
         xdx = 0.5*(deriv_x(x1c) + deriv_x(x2c))
         xdy = 0.5*(deriv_y(x1c) + deriv_y(x2c))
         xdt = x2c - x1c
-        ###compute incremental flow using iterative solver
+        # #compute incremental flow using iterative solver
         du = np.zeros(xdx.shape)
         dv = np.zeros(xdx.shape)
         du1 = np.zeros(xdx.shape)
@@ -132,7 +132,7 @@ def optical_flow(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1,
         niter = 0
         diff = 1e7
         while diff > 1e-3 and niter < niter_max:
-            du[0,:] = 0; du[-1,:] = 0; du[:,0] = 0; du[:,-1] = 0  ##boundary conditions
+            du[0,:] = 0; du[-1,:] = 0; du[:,0] = 0; du[:,-1] = 0  # boundary conditions
             dv[0,:] = 0; dv[-1,:] = 0; dv[:,0] = 0; dv[:,-1] = 0
             du[maskc] = 0
             dv[maskc] = 0
@@ -159,7 +159,7 @@ def warp(x, u, v):
     xw = interp2d(x, ii+v, jj+u)
     return xw
 
-def coarsen_mask(x, lev1, lev2):  ##only subsample no smoothing, avoid mask growing
+def coarsen_mask(x, lev1, lev2):  # only subsample no smoothing, avoid mask growing
     if lev1 < lev2:
         for _ in range(lev1, lev2):
             ni, nj = x.shape

@@ -34,8 +34,8 @@ class NextsimModel(Model):
 
         super().__init__(**kwargs)
 
-        ##Note: we only work with restart files, normal nextsim binfile have some variables names that
-        ##are different from restart files, e.g. Concentration instead of M_conc
+        # Note: we only work with restart files, normal nextsim binfile have some variables names that
+        # are different from restart files, e.g. Concentration instead of M_conc
         levels = np.array([0])
         self.native_variables = {
             'seaice_conc': VarDesc(name='M_conc', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units='m'),
@@ -77,7 +77,7 @@ class NextsimModel(Model):
 
     def filename(self, **kwargs):
         """
-        Get the filename with specified variable name, time, member, etc. 
+        Get the filename with specified variable name, time, member, etc.
         """
         kwargs = super().parse_kwargs(kwargs)
         if kwargs['member'] is not None:
@@ -95,7 +95,7 @@ class NextsimModel(Model):
                 search = os.path.join(kwargs['path'], mstr, self.restart_input_path, 'field_'+tstr+'.bin')
                 flist = glob.glob(search)
                 assert len(flist)>0, 'no matching files found: '+search
-                return flist[0]   ##return the first matching file
+                return flist[0]   # return the first matching file
 
         elif kwargs['name'] in self.atmos_forcing_variables:
             return os.path.join(kwargs['path'], mstr, "data", self.atmos_forcing_path, "generic_ps_atm_"+kwargs['time'].strftime('%Y%m%d')+".nc")
@@ -123,9 +123,9 @@ class NextsimModel(Model):
                 meshfile = kwargs['meshfile']
             else:
                 meshfile = self.filename(**kwargs).replace('field', 'mesh')
-            ###only need to read the uniq grid once, store known meshfile in memory bank
+            # #only need to read the uniq grid once, store known meshfile in memory bank
             if meshfile not in self.grid_bank:
-                ##read the grid from mesh file and add to grid_bank
+                # read the grid from mesh file and add to grid_bank
                 x = read_data(meshfile, 'Nodes_x')
                 y = read_data(meshfile, 'Nodes_y')
                 elements = read_data(meshfile, 'Elements')
@@ -138,7 +138,7 @@ class NextsimModel(Model):
         elif kwargs['name'] in self.atmos_forcing_variables:
             self.grid = Grid.regular_grid(proj, -2.5e6, 2.498e6, -2e6, 2.5e6, 3e3, centered=True)
 
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points should be masked
+        self.grid.mask = np.full(self.grid.x.shape, False)  # no grid points should be masked
 
     def write_grid(self, **kwargs):
         """
@@ -167,7 +167,7 @@ class NextsimModel(Model):
                     edges.remove(edge)  # If seen twice, it's an internal edge
                 else:
                     edges.add(edge)
-        return np.unique(np.array(list(edges)))  ##the boundary node indices
+        return np.unique(np.array(list(edges)))  # the boundary node indices
 
     def get_neighbor_nodes(self, nodes):
         assert isinstance(self.grid, IrregularGrid)
@@ -198,19 +198,19 @@ class NextsimModel(Model):
         Inputs:
         - u, v: displacement vectors defined on self.grid.x,y
         """
-        ##read grid, refresh self.grid.x, y
+        # read grid, refresh self.grid.x, y
         self.read_grid(**kwargs)
         assert self.grid is not None
 
-        ##make sure boundary is not moving
+        # make sure boundary is not moving
         u = self.taper_boundary(u)
         v = self.taper_boundary(v)
 
-        ##apply the displacement vectors -u, -v
+        # apply the displacement vectors -u, -v
         self.grid.x += u
         self.grid.y += v
 
-        ##write the updated mesh node xy to the restart file
+        # write the updated mesh node xy to the restart file
         self.write_grid(**kwargs)
 
     def read_mask(self, **kwargs):
@@ -229,13 +229,13 @@ class NextsimModel(Model):
         name = kwargs['name']
         rec = self.variables[name].asdict()
 
-        ##always update model.grid with given kwargs:
-        ##this is a nextsim specific requirement: mesh is changing in time
+        # always update model.grid with given kwargs:
+        # this is a nextsim specific requirement: mesh is changing in time
         self.read_grid(**kwargs)
 
         if name in self.native_variables:
             var = read_data(fname, rec['name'])
-            ##nextsim restart file concatenates u,v component, so reshape if is_vector
+            # nextsim restart file concatenates u,v component, so reshape if is_vector
             if rec['is_vector']:
                 var = var.reshape((2, -1))
 
@@ -254,7 +254,7 @@ class NextsimModel(Model):
         else:
             raise ValueError('unknown variable name: '+name)
 
-        ##convert units if native unit is not the same as required by kwargs
+        # convert units if native unit is not the same as required by kwargs
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
@@ -265,21 +265,21 @@ class NextsimModel(Model):
         name = kwargs['name']
         rec = self.variables[name].asdict()
 
-        ##convert units back if necessary
+        # convert units back if necessary
         var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.native_variables:
-            ##nextsim restart file concatenates u,v component, so flatten if is_vector
+            # nextsim restart file concatenates u,v component, so flatten if is_vector
             if rec['is_vector']:
                 var = var.flatten()
-            ##check if original var is on mesh nodes or elements
+            # check if original var is on mesh nodes or elements
             # var_orig = read_data(fname, rec['name']).flatten()
             # if var_orig.size != var.size:
-            #     ##the grid.convert interpolate to nodes by default, if size mismatch, this means
-            #     ##we need element values, take the average of the node values here
+            #     # the grid.convert interpolate to nodes by default, if size mismatch, this means
+            #     # we need element values, take the average of the node values here
             #     var = np.nanmean(var[grid.tri.triangles], axis=1)
 
-            ##output the var to restart file
+            # output the var to restart file
             write_data(fname, rec['name'], var)
 
         elif name in self.atmos_forcing_variables:
@@ -297,14 +297,14 @@ class NextsimModel(Model):
             raise ValueError('unknown variable name: '+name)
 
     def z_coords(self, **kwargs):
-        ##for nextsim, just discard inputs and simply return zero as z_coords
+        # for nextsim, just discard inputs and simply return zero as z_coords
         assert self.grid is not None
         return np.zeros(self.grid.x.shape)
 
     def get_seaice_drift(self, **kwargs):
         dt1day = timedelta(days=1)
         t2 = kwargs['time']
-        t1 = kwargs['time'] - dt1day*3  ##TODO: make the duration configurable
+        t1 = kwargs['time'] - dt1day*3  # TODO: make the duration configurable
         dt = (t2 - t1) / dt1day
 
         if kwargs['member'] is not None:
@@ -356,7 +356,7 @@ class NextsimModel(Model):
 
     def preprocess(self, task_id=0, **kwargs):
         """Preprocess the dir, collect input files for model run"""
-        ##put sequence of operation here to generate the initial condition files for nextsim
+        # put sequence of operation here to generate the initial condition files for nextsim
         kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
@@ -369,7 +369,7 @@ class NextsimModel(Model):
         run_dir = os.path.join(kwargs['path'], mstr)
         self.c.fs.make_dir(run_dir)
 
-        ##prepare restart files
+        # prepare restart files
         restart_file = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
         shell_cmd = f"cd {run_dir}; "
         shell_cmd += f"mkdir -p {self.restart_input_path}; cd {self.restart_input_path}; "
@@ -381,24 +381,24 @@ class NextsimModel(Model):
             shell_cmd += f"cp -fL {file} .; "
         self.c.run_job(shell_cmd)
 
-        ##prepare other input data (bathymetry, forcing, etc.) for the model run
+        # prepare other input data (bathymetry, forcing, etc.) for the model run
         shell_cmd = f"cd {run_dir}; "
         shell_cmd += f"rm -rf data; mkdir -p data; cd data; "
-        ##bathymetry data
+        # bathymetry data
         shell_cmd += f"ln -fs {os.path.join(self.nextsim_data_dir, 'BATHYMETRY', '*')} .; "
-        ##ocean forcing (for now it is just linked over)
+        # ocean forcing (for now it is just linked over)
         shell_cmd += f"ln -fs {os.path.join(self.nextsim_data_dir, self.ocean_forcing_path)} .; "
-        ##atmos forcing (make a copy, later they will be perturbed)
+        # atmos forcing (make a copy, later they will be perturbed)
         shell_cmd += f"mkdir -p {self.atmos_forcing_path}; cd {self.atmos_forcing_path}; "
         t = time
         while t <= next_time:
             shell_cmd += f"cp -fL {os.path.join(self.nextsim_data_dir, self.atmos_forcing_path, 'generic_ps_atm_'+t.strftime('%Y%m%d')+'.nc')} .; "
-            t += 24 * dt1h  ##forcing files are stored daily
+            t += 24 * dt1h  # forcing files are stored daily
         self.c.run_job(shell_cmd)
 
     def postprocess(self, task_id=0, **kwargs):
-        ##place holder for now
-        ##for any post processing needed after assimilation, to fix any model state that is not consistent
+        # place holder for now
+        # for any post processing needed after assimilation, to fix any model state that is not consistent
         kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']
         if kwargs['member'] is not None:
@@ -408,7 +408,7 @@ class NextsimModel(Model):
         run_dir = os.path.join(kwargs['path'], mstr)
         restart_file = self.filename(**kwargs)
 
-        ##read seaice conc and thick, check value, fix values out of normal range, then write back to file
+        # read seaice conc and thick, check value, fix values out of normal range, then write back to file
         sic = self.read_var(**{**kwargs, 'name':'seaice_conc', 'units':1})
         sit = self.read_var(**{**kwargs, 'name':'seaice_thick', 'units':'m'})
         damage = self.read_var(**{**kwargs, 'name':'seaice_damage', 'units':1})
@@ -441,7 +441,7 @@ class NextsimModel(Model):
         run_dir = os.path.join(kwargs['path'], mstr)
         self.c.fs.make_dir(run_dir)
 
-        ##check input files
+        # check input files
         field_bin = input_file
         field_dat = field_bin.replace('.bin', '.dat')
         mesh_bin = input_file.replace('field', 'mesh')
@@ -450,7 +450,7 @@ class NextsimModel(Model):
             if not os.path.exists(file):
                 raise RuntimeError("input file is missing: "+file)
 
-        ##build command to run the model
+        # build command to run the model
         model_exe = os.path.join(self.nextsim_dir, 'model', 'bin', 'nextsim.exec')
         log_file = os.path.join(run_dir, 'run.log')
         self.c.run_job("touch "+log_file)
@@ -460,26 +460,26 @@ class NextsimModel(Model):
         shell_cmd += f"export NEXTSIM_DATA_DIR={os.path.join(run_dir,'data')}; "
         shell_cmd += f"JOB_EXECUTE {model_exe} --config-files=config/nextsim.cfg >& run.log"
 
-        ##give it several tries, each time decreasing time step
+        # give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.5]:
-            ##check output, if success skip further tries
+            # check output, if success skip further tries
             with open(log_file, 'rt') as f:
                 if 'Simulation done' in f.read():
                     break
 
             self.timestep *= dt_ratio
 
-            ##this creates nextsim.cfg.in in run_dir/config
-            ##somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
+            # this creates nextsim.cfg.in in run_dir/config
+            # somehow the new version nextsim doesnt like nextsim.cfg to appear in run_dir
             config_dir = os.path.join(run_dir, 'config')
             self.c.fs.make_dir(config_dir)
             namelist(self, time, forecast_period, config_dir)
 
-       ##run the model and wait for results
+       # run the model and wait for results
             self.c.run_job(shell_cmd, job_name='nextsim.run', run_dir=run_dir,
                            nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                            walltime=self.walltime, **kwargs)
 
-        ##checkout output files
+        # checkout output files
         watch_files([output_file])
 

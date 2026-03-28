@@ -213,7 +213,7 @@ transform_def:
   decompose_obs: False
 
 diag:
-##convert seaice conc output to nc files for ICECAP diagnostics
+# convert seaice conc output to nc files for ICECAP diagnostics
 - method: 'misc.convert_output'
   config_file:
   grid_def:

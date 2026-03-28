@@ -1,9 +1,9 @@
-##from nextsim-tools/pynextsim
+# from nextsim-tools/pynextsim
 
 import numpy as np
 from matplotlib.path import Path
 
-##projection used in msh files
+# projection used in msh files
 from pyproj import Proj
 proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
@@ -235,7 +235,7 @@ def lonlat_to_xyz(lon, lat):
     y = r * np.sin(rlon)
     return x, y, z
 
-###functions to handle msh files
+# #functions to handle msh files
 def read_mshfile(filename):
     info = {}
     with open(filename, 'r') as f:

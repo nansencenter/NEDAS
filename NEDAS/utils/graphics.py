@@ -67,16 +67,16 @@ def add_colorbar(fig, ax, cmap, vmin, vmax, nlevels=10, fontsize=12, units=None)
 
     norm = BoundaryNorm(bounds, ncolors=256, extend='both')
 
-    ##adjust the main plot ax to make room for colorbar
+    # adjust the main plot ax to make room for colorbar
     left, bottom, width, height = ax.get_position().bounds
     ax.set_position([left, bottom, width, height])
 
-    ##add colorbar ax to the right
-    ##TODO: adjustable wfac and option to add colorbar to bottom?
+    # add colorbar ax to the right
+    # TODO: adjustable wfac and option to add colorbar to bottom?
     cax = fig.add_axes([left+width*1.05, bottom+height*0.15, width*0.03, height*0.7])
     cax.tick_params(labelsize=fontsize)
 
-    ##draw the colorbar
+    # draw the colorbar
     cbar = fig.colorbar(cm.ScalarMappable(cmap=cmap, norm=norm), cax=cax, ticks=bounds)
     if units is not None:
         cbar.ax.set_title(units, fontsize=fontsize, loc='left', pad=25)
@@ -128,15 +128,15 @@ def draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, 
         linecolor (str or tuple): Color of the reference vector.
         ref_units (str, optional): Unit label to be shown, default is ''.
     """
-    ##draw a box
+    # draw a box
     xb = [xr-L*1.3, xr-L*1.3, xr+L*1.3, xr+L*1.3, xr-L*1.3]
     yb = [yr+L/2, yr-L, yr-L, yr+L/2, yr+L/2]
     ax.fill(xb, yb, color=refcolor, zorder=6)
     ax.plot(xb, yb, color='k', zorder=6)
-    ##draw the reference vector
+    # draw the reference vector
     ax.plot([xr-L/2, xr+L/2], [yr, yr], color=linecolor, zorder=8)
     ax.fill(*arrowhead_xy(xr+L/2, xr-L/2, yr, yr, hw, hl), color=linecolor, zorder=8)
-    ##add unit string annotation below the vector
+    # add unit string annotation below the vector
     ax.text(xr, yr-L/2, f"{V} {ref_units}", color=linecolor, ha='center', va='center', zorder=8)
 
 def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
@@ -156,7 +156,7 @@ def draw_line(ax, data, linecolor, linewidth, linestyle, zorder):
     xy = data['xy']
     parts = data['parts']
     for i in range(len(xy)):
-        for j in range(len(parts[i])-1): ##plot separate segments if multi-parts
+        for j in range(len(parts[i])-1): # plot separate segments if multi-parts
             ax.plot(*zip(*xy[i][parts[i][j]:parts[i][j+1]]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
         ax.plot(*zip(*xy[i][parts[i][-1]:]), color=linecolor, linewidth=linewidth, linestyle=linestyle, zorder=zorder)
 
@@ -176,6 +176,6 @@ def draw_patch(ax, data, color, zorder):
     parts = data['parts']
     for i in range(len(xy)):
         code = [Path.LINETO] * len(xy[i])
-        for j in parts[i]:  ##make discontinuous patch if multi-parts
+        for j in parts[i]:  # make discontinuous patch if multi-parts
             code[j] = Path.MOVETO
         ax.add_patch(PathPatch(Path(xy[i], code), facecolor=color, edgecolor=color, linewidth=0.1, zorder=zorder))

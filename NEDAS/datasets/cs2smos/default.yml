@@ -3,7 +3,7 @@ obs_file_dt: 24
 obs_days: 7
 use_dataset_uncertainty: False
 
-##osisaf grid parameters
+# osisaf grid parameters
 proj: "+proj=laea +lon_0=0 +datum=WGS84 +ellps=WGS84 +lat_0=90.0"
 xstart: -5387500.
 xend: 5388000.

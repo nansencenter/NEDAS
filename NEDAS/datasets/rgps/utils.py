@@ -7,8 +7,8 @@ from scipy.io import loadmat
 def get_data_traj_pairs(file_name, d0_out, d1_out, dt_tol=2):
     """ Get rgps trajectory pairs x,y,t defined on rgps_proj, in km,day units"""
 
-    ##several records, each contain pairs of points:
-    ##x0,y0,t0 at time and x1,y1,t1 at time+dt
+    # several records, each contain pairs of points:
+    # x0,y0,t0 at time and x1,y1,t1 at time+dt
 
     pairs = []
     for stream in loadmat(file_name)['out'][0]:
@@ -23,7 +23,7 @@ def get_data_traj_pairs(file_name, d0_out, d1_out, dt_tol=2):
         xyd = ([],[],[],[],[],[])
         for x, y, d in zip(traj_x, traj_y, traj_d):
             if d[0] > d1_out or d[-1] < d0_out:
-                continue  ##the target time is not in this traj
+                continue  # the target time is not in this traj
             dt0 = np.abs(d0_out - d)
             i0 = np.argmin(dt0)
             if dt0[i0] > dt_tol:
@@ -37,13 +37,13 @@ def get_data_traj_pairs(file_name, d0_out, d1_out, dt_tol=2):
 
         xyd = [np.array(i) for i in xyd]
 
-        ##round time to days and select unique points in the pair
+        # round time to days and select unique points in the pair
         rd = np.vstack([[np.round((d - d0_out).total_seconds()/3600) for d in dd] for dd in [xyd[2], xyd[5]]])
         rdu = np.unique(rd, axis=1)
 
         for rdu0, rdu1 in rdu.T:
             ind = np.logical_and(rd[0]==rdu0, rd[1]==rdu1)
-            if len(xyd[0][ind]) < 3:  ##discard if too few points to form a mesh
+            if len(xyd[0][ind]) < 3:  # discard if too few points to form a mesh
                 continue
             pairs.append([i[ind] for i in xyd])
 
@@ -57,22 +57,22 @@ def get_triangulation(x, y):
 
     tri = Triangulation(x, y)
 
-    ##vertex coordinates
+    # vertex coordinates
     xt, yt = [i[tri.triangles].T for i in (x, y)]
 
-    ##side lengths
+    # side lengths
     tri_x = np.diff(np.vstack([xt, xt[0]]), axis=0)
     tri_y = np.diff(np.vstack([yt, yt[0]]), axis=0)
     tri_s = np.hypot(tri_x, tri_y)
 
-    ##perimeter
+    # perimeter
     tri_p = np.sum(tri_s, axis=0)
 
-    ##area
+    # area
     s = tri_p / 2
     tri_a = np.sqrt(s * (s-tri_s[0]) * (s-tri_s[1]) * (s-tri_s[2]))
 
-    ##mask off some triangles that don't belong to the mesh
+    # mask off some triangles that don't belong to the mesh
     tri_mask = np.logical_or(tri_a>300, tri_p>50, tri_a/tri_p<1.5)
 
     setattr(tri, 'p', tri_p)

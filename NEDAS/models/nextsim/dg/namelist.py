@@ -4,7 +4,7 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.models.nextsim.dg import restart, forcing
 
 def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwargs):
-    ens_mem_id:int = kwargs['member'] + 1  ##TODO: member could be None for deterministic runs
+    ens_mem_id:int = kwargs['member'] + 1  # TODO: member could be None for deterministic runs
     time = kwargs['time']
     forecast_period = kwargs['forecast_period']
     next_time = time + forecast_period * dt1h
@@ -14,7 +14,7 @@ def make_namelist(file_options:dict, model_config_file:str, ens_dir='.', **kwarg
     model_config.optionxform = str  #type: ignore
     model_config.read(model_config_file)
 
-    ##change the restart file name
+    # change the restart file name
     file_options_restart = file_options['restart']
     fname_restart:str = restart.get_restart_filename(file_options_restart, ens_mem_id, time)
     model_config['model']['init_file'] = os.path.basename(fname_restart)

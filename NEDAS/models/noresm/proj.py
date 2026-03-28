@@ -51,7 +51,7 @@ def tri_area(a, b, c):
     s = 0.5 * (a + b + c)
     d = s * (s-a) * (s-b) * (s-c)
     if d < 0:
-        return 0  ##the triangle is not well defined
+        return 0  # the triangle is not well defined
     else:
         return np.sqrt(d)
 
@@ -63,7 +63,7 @@ def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
     while min_d > 0:
         i_c, j_c = ipiv, jpiv
 
-        ##search in the 4 neighbors
+        # search in the 4 neighbors
         for n in range(4):
             j_n, i_n = neighbors[:, n, jpiv, ipiv]
             d = spherdist(glon[j_n, i_n], glat[j_n, i_n], lon, lat)
@@ -71,7 +71,7 @@ def pivotp(glon, glat, neighbors, lon, lat, ipiv=0, jpiv=0):
                 ipiv, jpiv = i_n, j_n
                 min_d = d
 
-        ##stop if no progress are made
+        # stop if no progress are made
         if ipiv==i_c and jpiv==j_c:
             break
     return ipiv, jpiv
@@ -90,14 +90,14 @@ def find_grid_index(glon, glat, gx, gy, neighbors, lon, lat, ipiv, jpiv):
     pt_se = neighbors[0, 3, *pt_e], neighbors[1, 3, *pt_e]
     pt_sw = neighbors[0, 3, *pt_w], neighbors[1, 3, *pt_w]
 
-    ##find which triangle (lon,lat) falls in
-    ##  pt_nw --- pt_n ----- pt_ne
-    ##     | .  3  .   2   .  \
-    ##     | 4  .   .  .   1   \
-    ##   pt_w...... pt......... pt_e
-    ##     | 5   .   .   .   8   \
-    ##     |  .   6   .  7    .   \
-    ##  pt_sw ----- pt_s -------- pt_se
+    # find which triangle (lon,lat) falls in
+    #   pt_nw --- pt_n ----- pt_ne
+    #      | .  3  .   2   .  \
+    #      | 4  .   .  .   1   \
+    #    pt_w...... pt......... pt_e
+    #      | 5   .   .   .   8   \
+    #      |  .   6   .  7    .   \
+    #   pt_sw ----- pt_s -------- pt_se
 
     pt_lst   = [[pt_e, pt_ne], [pt_ne, pt_n], [pt_n, pt_nw], [pt_nw, pt_w], [pt_w, pt_sw], [pt_sw, pt_s], [pt_s, pt_se], [pt_se, pt_e]]
     xoff_lst = [[   1,     1], [    1,    0], [   0,    -1], [   -1,   -1], [  -1,    -1], [   -1,    0], [   0,     1], [    1,    1]]
@@ -122,18 +122,18 @@ def find_grid_index(glon, glat, gx, gy, neighbors, lon, lat, ipiv, jpiv):
         A2 = tri_area(s2, d1, d3)
         A3 = tri_area(s3, d1, d2)
         Atot = tri_area(s1, s2, s3)
-        if Atot == 0:  ##the triangle is not well defined
+        if Atot == 0:  # the triangle is not well defined
             continue
 
-        ##find barycentric coordinates
+        # find barycentric coordinates
         b1 = A1 / Atot
         b2 = A2 / Atot
         b3 = A3 / Atot
         sum_b = b1 + b2 + b3
-        if np.abs(sum_b - 1) > 1e-3:   ##point falls outside this triangle
+        if np.abs(sum_b - 1) > 1e-3:   # point falls outside this triangle
             continue
 
-        ##the output is weighted average of x,y of triangle vertices
+        # the output is weighted average of x,y of triangle vertices
         x1, y1 = pt[1], pt[0]
         x2, y2 = x1+xoff2, y1+yoff2
         x3, y3 = x1+xoff3, y1+yoff3
@@ -159,16 +159,16 @@ def xy2lonlat(glon, glat, gx, gy, neighbors, x, y):
     ny, nx = glon.shape
     glon_, glat_ = np.zeros((ny+2, nx+2)), np.zeros((ny+2, nx+2))
     glat_[1:-1, 1:-1] = glat
-    glat_[1:-1, 0] = glat[:, -1]  ##cyclic west boundary
-    glat_[1:-1, -1] = glat[:, 0]  ##cyclic east boundary
-    glat_[-1, :] = glat_[-2, ::-1]  ##north boundary
-    glat_[0, :] = -80.2851  ##south boundary, add another latitude band
-                            ##better: extrapolated from lat[1:5,:]
+    glat_[1:-1, 0] = glat[:, -1]  # cyclic west boundary
+    glat_[1:-1, -1] = glat[:, 0]  # cyclic east boundary
+    glat_[-1, :] = glat_[-2, ::-1]  # north boundary
+    glat_[0, :] = -80.2851  # south boundary, add another latitude band
+                            # better: extrapolated from lat[1:5,:]
     glon_[1:-1, 1:-1] = glon
-    glon_[1:-1, 0] = glon[:, -1]  ##cyclic west boundary
-    glon_[1:-1, -1] = glon[:, 0]  ##cyclic east boundary
-    glon_[-1, :] = glon_[-2, ::-1]  ##north boundary
-    glon_[0, :] = glon_[1, :]   ##south boundary, add another latitude band
+    glon_[1:-1, 0] = glon[:, -1]  # cyclic west boundary
+    glon_[1:-1, -1] = glon[:, 0]  # cyclic east boundary
+    glon_[-1, :] = glon_[-2, ::-1]  # north boundary
+    glon_[0, :] = glon_[1, :]   # south boundary, add another latitude band
 
     gx_, gy_ = np.meshgrid(np.arange(-1, nx+1), np.arange(-1, ny+1))
     sx, sy = lonlat2sxy(glon_, glat_)
@@ -178,45 +178,45 @@ def xy2lonlat(glon, glat, gx, gy, neighbors, x, y):
     lon, lat = sxy2lonlat(xy2sx(x, y), xy2sy(x, y))
     return lon, lat
 
-    ##get 1d coordinates in x,y directions
+    # get 1d coordinates in x,y directions
     # ny, nx = gx.shape
 
-    ##check if x,y is inside the grid
-    ##allowed range is -1 to nx (extended 1 grid point to both sides)
+    # check if x,y is inside the grid
+    # allowed range is -1 to nx (extended 1 grid point to both sides)
     # if x>=-1 and x<=nx and y>=0 and y<=ny:
 
     #     i, j = int(np.floor(x)), int(np.floor(y))
 
-    #     ##get the four vertices
+    #     # get the four vertices
     #     if i<0 and j<0:
     #         j2,i2 = j+1,i+1
-    #         j1,i1 = neighbors[:,3,j2,i2]  ##point to the south
-    #         j3,i3 = neighbors[:,2,j2,i2]  ##point to the west
-    #         j0,i0 = neighbors[:,2,j1,i1]  ##point to the south-west
+    #         j1,i1 = neighbors[:,3,j2,i2]  # point to the south
+    #         j3,i3 = neighbors[:,2,j2,i2]  # point to the west
+    #         j0,i0 = neighbors[:,2,j1,i1]  # point to the south-west
 
     #     elif i<0 and j>=0:
     #         j1,i1 = j,i+1
-    #         j0,i0 = neighbors[:,2,j1,i1]  ##point to the west
-    #         j2,i2 = neighbors[:,1,j1,i1]  ##point to the north
-    #         j3,i3 = neighbors[:,1,j0,i0]  ##point to the north-west
+    #         j0,i0 = neighbors[:,2,j1,i1]  # point to the west
+    #         j2,i2 = neighbors[:,1,j1,i1]  # point to the north
+    #         j3,i3 = neighbors[:,1,j0,i0]  # point to the north-west
 
     #     elif i>=0 and j<0:
     #         j3,i3 = j+1,i
-    #         j0,i0 = neighbors[:,3,j3,i3]  ##point to the south
-    #         j2,i2 = neighbors[:,0,j3,i3]  ##point to the east
-    #         j1,i1 = neighbors[:,0,j0,i0]  ##point to the south-east
+    #         j0,i0 = neighbors[:,3,j3,i3]  # point to the south
+    #         j2,i2 = neighbors[:,0,j3,i3]  # point to the east
+    #         j1,i1 = neighbors[:,0,j0,i0]  # point to the south-east
 
     #     else:
     #         j0,i0 = j,i
-    #         j1,i1 = neighbors[:,0,j0,i0]  ##point to the east
-    #         j3,i3 = neighbors[:,1,j0,i0]  ##point to the north
-    #         j2,i2 = neighbors[:,1,j1,i1]  ##point to the north-east
+    #         j1,i1 = neighbors[:,0,j0,i0]  # point to the east
+    #         j3,i3 = neighbors[:,1,j0,i0]  # point to the north
+    #         j2,i2 = neighbors[:,1,j1,i1]  # point to the north-east
 
-    #     ##internal coordinates for interpolation weights
+    #     # internal coordinates for interpolation weights
     #     u, v = x - i, y - j
     #     w = np.array([(1-u)*(1-v), u*(1-v), (1-u)*v, u*v])
 
-    #     ##lon,lat at vertices, convert to stere proj, interp, convert back
+    #     # lon,lat at vertices, convert to stere proj, interp, convert back
     #     lon_pt = np.array([glon[j0,i0], glon[j1,i1], glon[j2,i2], glon[j3,i3]])
     #     lat_pt = np.array([glat[j0,i0], glat[j1,i1], glat[j2,i2], glat[j3,i3]])
     #     sx_pt, sy_pt = lonlat2sxy(lon_pt, lat_pt)

@@ -126,7 +126,7 @@ class FileSystem:
 
     def link_file(self, src: str, dst: str) -> None:
             """
-            Tries to create a symbolic link. If the filesystem doesn't support it 
+            Tries to create a symbolic link. If the filesystem doesn't support it
             (like exFAT), falls back to a file copy.
             """
             # Ensure the source exists before trying anything

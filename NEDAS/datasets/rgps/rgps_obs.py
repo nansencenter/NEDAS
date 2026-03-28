@@ -22,7 +22,7 @@ class RgpsObs(Dataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##variable dictionary for RGPS naming convention
+        # variable dictionary for RGPS naming convention
         self.variables = {
             'seaice_drift': VarDesc(name='null', dtype='float', is_vector=True, dt=24, levels=np.array([0]), z_units='m', units='km/day'),
             'seaice_deform_shear': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='1/day'),
@@ -30,12 +30,12 @@ class RgpsObs(Dataset):
             'seaice_deform_vort': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='1/day'),
         }
 
-        ##RGPS trajectory data (x,y) is in NorthPolarStereo projection:
+        # RGPS trajectory data (x,y) is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
 
         self.obs_operator = {}
-        ##TODO the get_traj_pairs functions sometimes fail, near the tree.query part, returns wrong index?
-        ## for now use the model.diag_variables for deform variables instead
+        # TODO the get_traj_pairs functions sometimes fail, near the tree.query part, returns wrong index?
+        #  for now use the model.diag_variables for deform variables instead
         #    'seaice_drift': self.get_seaice_drift,
         #    'seaice_deform_shear': self.get_seaice_deform_shear,
         #    'seaice_deform_div': self.get_seaice_deform_div,
@@ -84,13 +84,13 @@ class RgpsObs(Dataset):
         d0_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
         d1_out = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
 
-        ##target grid for obs_seq
+        # target grid for obs_seq
         grid = kwargs['grid']
 
-        ##note: x,y are obs location on grid.proj (in meters)
-        ##      x0,y0,x1,y1 are position on rgps_proj (in kilometers),
-        ##      triangles: velocity is defined on nodes and deform on elements
-        ##      record: trajectory id, we process one record at a time
+        # note: x,y are obs location on grid.proj (in meters)
+        #       x0,y0,x1,y1 are position on rgps_proj (in kilometers),
+        #       triangles: velocity is defined on nodes and deform on elements
+        #       record: trajectory id, we process one record at a time
         obs_seq = {'obs':[], 'err_std':[], 't':[], 'z':[], 'y':[], 'x':[],
                    'x0':[], 'y0':[], 'triangles':[], 'record':[], 'index':[]}
 
@@ -102,16 +102,16 @@ class RgpsObs(Dataset):
                 tri = get_triangulation(x0, y0)
                 u, v = get_velocity(x0, y0, t0, x1, y1, t1)
 
-                ##convert x0,y0 from rgps_proj to grid.proj in meters
+                # convert x0,y0 from rgps_proj to grid.proj in meters
                 x, y = grid.proj(*self.proj(x0*1000, y0*1000, inverse=True))
 
                 if obs_name == 'seaice_drift':
                     for p in range(len(x)):
-                        ##quality check
+                        # quality check
                         if np.hypot(u[p], v[p]) > self.DRIFT_MAX or np.isnan(u[p]) or np.isnan(v[p]):
                             continue
 
-                        ##add the obs to sequence
+                        # add the obs to sequence
                         obs_seq['obs'].append([u[p], v[p]])
                         obs_seq['err_std'].append(self.DRIFT_ERR_STD)
                         obs_seq['t'].append(t0[p])
@@ -137,14 +137,14 @@ class RgpsObs(Dataset):
                         raise ValueError(f"unknown obs_name {obs_name}")
 
                     for p in range(len(x_elem)):
-                        ##quality check
+                        # quality check
                         tri_mask = getattr(tri, 'mask')
                         if tri_mask[p]:
                             continue
                         if np.abs(obs_values[p]) > self.DEFORM_MAX or np.isnan(obs_values[p]):
                             continue
 
-                        ##add the obs to sequence
+                        # add the obs to sequence
                         obs_seq['obs'].append(obs_values[p])
                         obs_seq['err_std'].append(self.DEFORM_ERR_STD)
                         obs_seq['t'].append(t_elem[p])
@@ -154,14 +154,14 @@ class RgpsObs(Dataset):
                         obs_seq['record'].append(rec)
                         obs_seq['index'].append(p)
 
-                ##save raw data for state_to_obs to use
+                # save raw data for state_to_obs to use
                 obs_seq['x0'].append(x0)
                 obs_seq['y0'].append(y0)
                 obs_seq['triangles'].append(tri.triangles)
                 rec += 1
 
-        ##convert from list to np.array
-        ##raw data are kept in list format
+        # convert from list to np.array
+        # raw data are kept in list format
         obs_seq_arr = {}
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
             obs_seq_arr[key] = np.array(obs_seq[key])
@@ -169,20 +169,20 @@ class RgpsObs(Dataset):
         if self.variables[obs_name].is_vector:
             obs_seq_arr['obs'] = obs_seq_arr['obs'].T
 
-        ##superob to target grid, coarsen and keep the valid grid points
-        ##make a mesh grid for the obs points
+        # superob to target grid, coarsen and keep the valid grid points
+        # make a mesh grid for the obs points
         obs_x, obs_y = obs_seq['x'], obs_seq['y']
         obs_grid = IrregularGrid(grid.proj, obs_x, obs_y)
-        ##remove unwanted triangles in the mesh
+        # remove unwanted triangles in the mesh
         tri_a = getattr(obs_grid.tri, 'a')
         tri_p = getattr(obs_grid.tri, 'p')
         tri_ratio = getattr(obs_grid.tri, 'ratio')
         msk = np.logical_or(tri_a > 2e8, tri_p > 1e5, tri_ratio < 0.3)
         obs_grid = IrregularGrid(grid.proj, obs_x, obs_y, triangles=obs_grid.tri.triangles[~msk,:])
-        ##convert to target grid with coarse graining (superobing)
+        # convert to target grid with coarse graining (superobing)
         obs_grid.set_destination_grid(grid)
         obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name].is_vector, coarse_grain=True)
-        ##overwrite the obs info with superobs
+        # overwrite the obs info with superobs
         if self.variables[obs_name].is_vector:
             msk = np.isnan(obs_on_grid[0,...])
             obs_seq_arr['obs'] = np.array([obs_on_grid[0,~msk].flatten(), obs_on_grid[1,~msk].flatten()])
@@ -191,7 +191,7 @@ class RgpsObs(Dataset):
             obs_seq_arr['obs'] = obs_on_grid[~msk].flatten()
         obs_seq_arr['x'] = grid.x[~msk].flatten()
         obs_seq_arr['y'] = grid.y[~msk].flatten()
-        ##other parameters
+        # other parameters
         for key in ('z', 't', 'err_std'):
             obs_seq_arr[key] = np.full(obs_seq_arr['x'].size, obs_seq_arr[key][0])
 
@@ -200,7 +200,7 @@ class RgpsObs(Dataset):
     def get_model_files(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
-        ##start and end time of the trajectories
+        # start and end time of the trajectories
         t0 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
         t1 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
 
@@ -213,7 +213,7 @@ class RgpsObs(Dataset):
         t_list = []
         search = os.path.join(kwargs['path'], '..', '..', '*', kwargs['model_src'], mstr, 'mesh*.bin')
         for result in glob.glob(search):
-            if '00Z' not in result:  ##discard files without time string
+            if '00Z' not in result:  # discard files without time string
                 continue
             tstr = result.split('.')[-2].split('_')[-1]
             if 'post_regrid' in result:
@@ -233,10 +233,10 @@ class RgpsObs(Dataset):
         """get nextsim simulated trajectory pairs, corresponding to rgps"""
         model = kwargs['model']
 
-        ##rgps start positions on rgps_proj, in km units
+        # rgps start positions on rgps_proj, in km units
         x0, y0 = kwargs['x0'], kwargs['y0']
 
-        ##make a copy of start position to be updated to final position
+        # make a copy of start position to be updated to final position
         nrec = len(x0)
         x, y, i, dx, dy = [], [], [], [], []
         for r in range(nrec):
@@ -246,7 +246,7 @@ class RgpsObs(Dataset):
             dx.append(np.zeros(x0[r].shape))
             dy.append(np.zeros(x0[r].shape))
 
-        ##time for the start/end position
+        # time for the start/end position
         t0 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_min']
         t1 = kwargs['time'] + timedelta(hours=1) * kwargs['obs_window_max']
 
@@ -255,24 +255,24 @@ class RgpsObs(Dataset):
         for n in range(len(file_list)):
             fname = file_list[n]
 
-            ##get model mesh points in native proj, in meters
+            # get model mesh points in native proj, in meters
             model.read_grid(meshfile=fname, **kwargs)
             mx = model.grid.x
             my = model.grid.y
-            ##convert to rgps_proj, in km units
+            # convert to rgps_proj, in km units
             x_, y_ = self.proj(*model.grid.proj(mx, my, inverse=True))
 
             if n==0 or 'post_regrid' in fname:
-                ##build kdtree for spatial search if model mesh changed
+                # build kdtree for spatial search if model mesh changed
                 tree = KDTree(np.vstack([x_, y_]).T)
 
-                ##search for traj position in mesh
+                # search for traj position in mesh
                 for r in range(nrec):
                     d, i[r] = tree.query(np.vstack([x[r], y[r]]).T)
                     dx[r], dy[r] = x[r] - x_[i[r]], y[r] - y_[i[r]]
 
             if 'post_regrid' not in fname:
-                ##move to next position
+                # move to next position
                 for r in range(nrec):
                     x[r], y[r] = x_[i[r]] + dx[r], y_[i[r]] + dy[r]
 
@@ -295,8 +295,8 @@ class RgpsObs(Dataset):
 
         rec = 0
         for x0, y0, t0, x1, y1, t1 in pairs:
-            rind = np.where(r==rec)  ##indices in xo for record rec
-            ind = i[rind]            ##indices in x0 that forms the record rec part of xo
+            rind = np.where(r==rec)  # indices in xo for record rec
+            ind = i[rind]            # indices in x0 that forms the record rec part of xo
             obs_value = compute_func(x0, y0, t0, x1, y1, t1)
 
             if self.variables[obs_name].is_vector:

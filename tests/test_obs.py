@@ -87,7 +87,7 @@ class TestVerticalInterp(unittest.TestCase):
         f = np.ones(self.nobs) * self.fz[i]
         z = np.ones(self.nobs) * self.z[i]  # dz = 2.0 - 1.0 = 1.0. z_f = 1.0 + 0.5 = 1.5
 
-        # Range is [0.5, 1.5). Midpoint is 1.0. 
+        # Range is [0.5, 1.5). Midpoint is 1.0.
         # At obs_z=1.0, value should be 15.0 (avg of 10 and 20)
         seq_out, fp, zp, dzp = self.c.obs.vertical_interp(
             self.seq.copy(), self.levels[i], self.levels, f, fp, z, zp, dzp, self.obs_z

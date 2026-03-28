@@ -150,22 +150,22 @@ class Config:
         """
         Check the number of processors for parallelization
         """
-        ##nproc is the total number of processpors
-        ##if not defined, set to 1 (serial program) by default
+        # nproc is the total number of processpors
+        # if not defined, set to 1 (serial program) by default
         if 'nproc' not in config_dict or config_dict['nproc'] is None:
             config_dict['nproc'] = 1
 
-        ##In parallel schemes, the communicator is divided into mem/rec groups
-        ##nproc_mem and nproc_rec are the number of groups in each direction
-        ##set default values if they are not defined
+        # In parallel schemes, the communicator is divided into mem/rec groups
+        # nproc_mem and nproc_rec are the number of groups in each direction
+        # set default values if they are not defined
         if 'nproc_mem' not in config_dict or config_dict['nproc_mem'] is None:
             config_dict['nproc_mem'] = config_dict['nproc']
-        ##check if division works
+        # check if division works
         if config_dict['nproc'] % config_dict['nproc_mem'] != 0:
             raise ValueError(f"nproc={config_dict['nproc']} is not evenly divided by nproc_mem={config_dict['nproc_mem']}")
         config_dict['nproc_rec'] = int(config_dict['nproc']/config_dict['nproc_mem'])
 
-        ##nproc_util (optional) is nproc to use for utility functions
+        # nproc_util (optional) is nproc to use for utility functions
         if 'nproc_util' not in config_dict or config_dict['nproc_util'] is None:
             config_dict['nproc_util'] = config_dict['nproc']
 

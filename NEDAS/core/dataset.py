@@ -22,7 +22,7 @@ class Dataset(ABC):
                   **kwargs) -> None:
         # prepare context
         if context is not None:
-            assert isinstance(context, Context)
+            assert isinstance(context, Context), f"{context} is not a Context object"
             self._c = context
         else:
             self._c = Context()  # use default context if not specified
@@ -49,7 +49,7 @@ class Dataset(ABC):
         """
         Parse the input kwargs to pinpoint a specific file/variable...
         """
-        ##args to pinpoint a certain observatino record, used by read_obs, etc.
+        # args to pinpoint a certain observatino record, used by read_obs, etc.
         if 'path' not in kwargs:
             kwargs['path'] = self.dataset_dir
 
@@ -63,7 +63,7 @@ class Dataset(ABC):
             assert isinstance(kwargs['time'], datetime), "kwargs 'time' is not a datetime object"
 
         if 'units' not in kwargs:
-            kwargs['units'] = self.variables[kwargs['name']].units   ##TODO: potential key error here if variables is not defined.
+            kwargs['units'] = self.variables[kwargs['name']].units   # TODO: potential key error here if variables is not defined.
 
         # other args, set default values if not specified
         # model (Model): model class instance
@@ -76,7 +76,7 @@ class Dataset(ABC):
                 kwargs[key] = None
         # nobs (int): number of observations
         # obs_window_min (int)
-        # obs_window_max (int)  ##TODO: maybe setting them both to 0 is incorrect? need to iterate from min to max...
+        # obs_window_max (int)  # TODO: maybe setting them both to 0 is incorrect? need to iterate from min to max...
         for key in ['nobs', 'obs_window_min', 'obs_window_max']:
             if key not in kwargs:
                 kwargs[key] = 0

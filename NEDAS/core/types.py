@@ -15,7 +15,7 @@ class VarDesc:
     is_vector: bool                # if the variable is a vector quantity
     dtype: str = 'float'           # data type for this variable
     dt: float = 1                  # restart intervals in hours
-    levels: Levels = field(default_factory=lambda: [0])  # vertical level indices 
+    levels: Levels = field(default_factory=lambda: [0])  # vertical level indices
     units: Unit = 1                # physical units (default is nondimensional)
     z_units: Unit = 1              # units for vertical coordinates
     def asdict(self) -> dict:
@@ -55,7 +55,7 @@ class FieldRecord:
 class ErrorModel:
     """
     Parameters defining an error model
-    
+
     Attributes:
         type (str): type of error distribution
         std (float): error standard deviation, in variable units

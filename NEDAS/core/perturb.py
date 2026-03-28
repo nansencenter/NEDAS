@@ -21,11 +21,11 @@ class PerturbField:
     def __init__(self, **kwargs) -> None:
         # get seed, if not specified get a random seed from system entropy
         seed = kwargs.get('seed', int.from_bytes(os.urandom(4), 'little'))
-        assert isinstance(seed, int)
+        assert isinstance(seed, int), f"seed {seed} invalid"
         # set the random seed
         np.random.seed(seed)
 
-        self.grid = kwargs.get('grid', None)
+        self.grid = kwargs['grid']
 
         self.perturb_methods = {
             'gaussian': self.perturb_random_gaussian,
@@ -37,7 +37,7 @@ class PerturbField:
         self.parse_perturb_opts(**kwargs)
 
     def parse_perturb_opts(self, **kwargs) -> None:
-        ##perturb['type'] string format:
+        # perturb['type'] string format:
         #main option (gaussian/powerlaw/displace) followed by , then additional options separated by ,
         opts = kwargs['type'].split(',')
         self.perturb_type = opts[0]
@@ -53,43 +53,43 @@ class PerturbField:
             if key in kwargs:
                 key_list.append(key)
 
-        ##a list of variables can be specified if running a multivariate perturbation scheme
-        ##rectify variable and parameter to be lists for further processing
+        # a list of variables can be specified if running a multivariate perturbation scheme
+        # rectify variable and parameter to be lists for further processing
         if not isinstance(kwargs['variable'], list):
             kwargs['variable'] = [kwargs['variable']]
             for key in key_list:
                 kwargs[key] = [kwargs[key]]
         variable_list = kwargs['variable']
-        nv = len(variable_list)  ##number of variables
+        nv = len(variable_list)  # number of variables
 
-        ##ensure again that parameters are rectified to lists 
+        # ensure again that parameters are rectified to lists
         for key in key_list:
             if not isinstance(kwargs[key], list):
                 kwargs[key] = [kwargs[key]]
 
-            ##check for mismatch in list length    
+            # check for mismatch in list length
             if len(kwargs[key]) != nv:
                 raise ValueError(f"perturb option: {key} has {len(kwargs[key])} entries, but {nv} variables are specified")
 
-        ##get perturbation parameters for each variable from kwargs
+        # get perturbation parameters for each variable from kwargs
         self.params = {}
         for v in range(nv):
             vname = variable_list[v]
             self.params[vname] = {}
-            ##in multiscale approach, a list of parameters can be specified for a variable;
-            ##one separate perturbation will be generated for each, then they will be added together
+            # in multiscale approach, a list of parameters can be specified for a variable;
+            # one separate perturbation will be generated for each, then they will be added together
             if isinstance(kwargs[key_list[0]][v], list):
                 nscale = len(kwargs[key_list[0]][v])
             else:
                 nscale = 1
-                for key in key_list:  ##make a list even if only one value for the key
+                for key in key_list:  # make a list even if only one value for the key
                     kwargs[key][v] = [kwargs[key][v]]
             self.params[vname]['nscale'] = nscale
-            ##check if all keys are lists with same len
+            # check if all keys are lists with same len
             for key in key_list[1:]:
                 if len(kwargs[key][v]) != nscale:
                     raise ValueError(f"perturb option: {key} has different number of entries from {key_list[0]}, check config")
-            ##assign the parameters
+            # assign the parameters
             for key in key_list:
                 self.params[vname][key] = kwargs[key][v]
 
@@ -126,9 +126,9 @@ class PerturbField:
                 perturb[vname] = prev_perturb[vname]
                 continue
 
-            ##loop over scale s and generate perturbation
+            # loop over scale s and generate perturbation
             for s in range(ns):
-                ##draw a random field for each 2d field component in fields
+                # draw a random field for each 2d field component in fields
                 for ind in np.ndindex(fld.shape[:-2]):
                     perturb[vname][(s,)+ind] = self.perturb_methods[self.perturb_type](rec, s)
 
@@ -150,13 +150,13 @@ class PerturbField:
                     fields[vname] = spatial_operation.warp(self.grid, fields[vname], perturb[vname][s,0,...], perturb[vname][s,1,...])
                 else:
                     if 'exp' in self.other_opts:
-                        ##add lognormal perturbations
+                        # add lognormal perturbations
                         fields[vname] *= np.exp(perturb[vname][s,...] - 0.5*rec['amp'][s]**4)
                     else:
-                        ##just add the gaussian perturbations
+                        # just add the gaussian perturbations
                         fields[vname] += perturb[vname][s,...]
 
-            ##respect value bounds after perturbing
+            # respect value bounds after perturbing
             if 'bounds' in kwargs:
                 vmin, vmax = kwargs['bounds']
                 fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
@@ -210,14 +210,14 @@ class PerturbField:
 
 class Perturbation:
     """
-    Perturbation top-level manager 
+    Perturbation top-level manager
     """
     nfld: int = 0
     task_list: dict[int, list[dict]] = {}
     perturb: dict[str, Any] = {}
 
     def __init__(self, c: Context):
-        ##distribute perturbation items among MPI ranks
+        # distribute perturbation items among MPI ranks
         self.task_list = parallel.bcast_by_root(c.comm)(self.distribute_perturb_tasks)(c)
 
         # go through the opts to count how many fields will be perturbed (for showing progress)
@@ -232,7 +232,7 @@ class Perturbation:
         return task_list
 
     def count_num_fields(self, c: Context):
-        ##first go through the fields to count how many (for showing progress)
+        # first go through the fields to count how many (for showing progress)
         for rec in self.task_list[c.pid]:
             model_name = rec['model_src']
             model = c.models[model_name]
@@ -254,7 +254,7 @@ class Perturbation:
         fld_id = 0
         for rec in self.task_list[c.pid]:
             p = PerturbField(**rec, grid=c.grid)
-            model = c.models[rec['model_src']]  ##model class object
+            model = c.models[rec['model_src']]  # model class object
             member = rec['member']
             variable_list = ensure_list(rec['variable'])
 
@@ -288,7 +288,7 @@ class Perturbation:
 
     def prepare_perturb_dir(self, c):
         """ Prepare and clear the directory where perturbation data will be stored (offline mode) """
-        assert c.config.io_mode == 'offline'
+        assert c.config.io_mode == 'offline', f"prepare_perturb_dir only needed in offline io mode"
         # clean up perturb files in current cycle dir
         for rec in c.config.perturb:
             path = c.fs.forecast_dir(c.time, rec['model_src'])
@@ -324,7 +324,7 @@ class Perturbation:
         model = c.models[rec['model_src']]
 
         # set up grids
-        vname =variable_list[0]  ##note: all variables in the list shall have same dt and k levels
+        vname =variable_list[0]  # note: all variables in the list shall have same dt and k levels
         c.io.call_method(c, 'prior', model.read_grid, name=vname, time=t, k=k, **rec)
         model.grid.set_destination_grid(c.grid)
         c.grid.set_destination_grid(model.grid)
@@ -332,9 +332,9 @@ class Perturbation:
         # collect model variable fields
         fields = {}
         for vname in variable_list:
-            ##read variable from model state
+            # read variable from model state
             fld = c.io.call_method(c, 'prior', model.read_var, name=vname, time=t, k=k, **rec)
-            ##convert to analysis grid
+            # convert to analysis grid
             fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
         return fields
 
@@ -343,12 +343,12 @@ class Perturbation:
         model = c.models[rec['model_src']]
 
         if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
-            ##use model internal method to apply displacement perturbations directly
+            # use model internal method to apply displacement perturbations directly
             displace_method = getattr(model, 'displace')
             c.io.call_method(c, 'prior', displace_method, self.perturb, time=t, k=k, **rec)
         else:
-            ##convert from analysis grid to model grid, and
-            ##write the perturbed variables back to model state files
+            # convert from analysis grid to model grid, and
+            # write the perturbed variables back to model state files
             for vname in variable_list:
                 fld = c.grid.convert(fields[vname], is_vector=model.variables[vname].is_vector)
                 c.io.call_method(c, 'prior', model.write_var, fld, name=vname, time=t, k=k, **rec)

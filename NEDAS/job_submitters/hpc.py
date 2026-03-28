@@ -144,7 +144,7 @@ class HPCJobSubmitter(JobSubmitter):
         p = subprocess.Popen(commands, shell=True, text=True, bufsize=1)
         p.wait()
 
-        ##handle error
+        # handle error
         if p.returncode != 0:
             print(f"JobSubmitter: job '{self.job_name}' exited with error")
             sys.exit(1)

@@ -24,7 +24,7 @@ def thickness_upper_limit(seaice_conc: np.ndarray, target_variable: typing.Liter
 def hi_cate(ncat, kcatb=0, kitd=1):
     """
     Defines ice thickness category boundaries based on the given scheme.
-    
+
     Parameters:
         ncat (int): Number of ice thickness categories.
         kcatb (int): Determines the categorization scheme.
@@ -109,7 +109,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     vsnon_f = nc_read_var(prior_ice_file, 'vsnon')
     qsnon_f = nc_read_var(prior_ice_file, 'qsno001')
 
-    ##bound aicen between 0,1
+    # bound aicen between 0,1
     aicen_f = np.maximum(np.minimum(aicen_f, 1), 0)
 
     aicen = aicen_f.copy()
@@ -121,7 +121,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     aicen_f[np.where(np.logical_or(aicen_f <= aice_thresh, fice_f <= fice_thresh))] = 0.0
     fice_f = np.sum(aicen_f, axis=0)
 
-    ##adjust for aicen, rescaled by analyzed fice
+    # adjust for aicen, rescaled by analyzed fice
     ind = np.where(fice_f > fice_thresh)
     for k in range(ncat):
         aicen[k,...][ind] *= fice[ind] / fice_f[ind]
@@ -147,14 +147,14 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     ficem[ind] = 0.0
     fice_f[ind] = 0.0
 
-    ##adjust vicen
+    # adjust vicen
     ind = np.where(fice_f > fice_thresh)
     for k in range(ncat):
         ind1 = np.where(np.logical_and(aicen_f[k,...][ind] > 0, aicen[k,...][ind] > 0))
         vicen[k,...][ind][ind1] *= aicen[k,...][ind][ind1] / aicen_f[k,...][ind][ind1]
         #vsnon[k,...][ind][ind1] *= aicen[k,...][ind][ind1] / aicen_f[k,...][ind][ind1]
 
-    ##when ice pack area assimilating hice
+    # when ice pack area assimilating hice
     ind1 = np.where(ficem[ind] > 0.75)
     sum_vice = np.sum(vicen, axis=0)[ind][ind1]
     Vtemp = ficem[ind][ind1] * (hice[ind][ind1]*hice_impact + sum_vice*(1-hice_impact)) / sum_vice
@@ -164,7 +164,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
         ind2 = np.where(aicen[k,...][ind][ind1] <= 0)
         vicen[k,...][ind][ind1][ind2] = 0.0
 
-    ##bound check again
+    # bound check again
     for k in range(ncat):
         ind2 = np.where(aicen[k,...][ind][ind1] > 0)
         vicen_min = aicen[k,...][ind][ind1][ind2] * bkcat[k]
@@ -187,7 +187,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
         aicen[k,...][ind] = 0.0
     ficem[ind] = 0.0
 
-    ##replace the variables in posterior ice restart file
+    # replace the variables in posterior ice restart file
     ny, nx = fice.shape
     dims2 = {'nj':ny, 'ni':nx}
     dims3 = {'ncat':5, 'nj':ny, 'ni':nx}
@@ -195,7 +195,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     nc_write_var(post_ice_file, dims3, 'vicen', vicen, dtype='float64')
     nc_write_var(post_ice_file, dims3, 'vsnon', vsnon, dtype='float64')
 
-    ##other affected 2D variables
+    # other affected 2D variables
     ind = np.where(ficem <= 0)
     varlist_2d = ['uvel', 'vvel', 'strocnxT', 'strocnyT', 'frz_onset', 'iceumask']
     for i in range(4):
@@ -207,7 +207,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
         var[ind] = 0.0
         nc_write_var(post_ice_file, dims2, vname, var, dtype='float64')
 
-    ##other affected 3D variables
+    # other affected 3D variables
     varlist_3d = ['iage', 'FY', 'alvl', 'vlvl', 'apnd', 'hpnd', 'ipnd', 'dhs', 'ffrac', 'Tsfcn']
     for i in range(7):
         varlist_3d.append(f'sice{i+1:03}')

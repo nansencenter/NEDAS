@@ -148,7 +148,7 @@ class Grid:
     """
     def __new__(cls, proj, x, y, regular=True, bounds=None, cyclic_dim=None, pole_dim=None, pole_index=None,
                 distance_type='cartesian', triangles=None, neighbors=None, dst_grid=None):
-        ##TODO: add 1D grid initialization
+        # TODO: add 1D grid initialization
         if regular:
             return RegularGrid(proj, x, y, bounds, cyclic_dim, distance_type,
                                pole_dim, pole_index, neighbors, dst_grid)
@@ -181,7 +181,7 @@ class Grid:
         ycoord = np.arange(ystart, yend, dx)
         x, y = np.meshgrid(xcoord, ycoord)
         if centered:
-            x += 0.5*dx  ##move coords to center of grid box
+            x += 0.5*dx  # move coords to center of grid box
             y += 0.5*dx
         return RegularGrid(proj, x, y, **kwargs)
 

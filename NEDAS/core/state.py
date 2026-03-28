@@ -8,21 +8,21 @@ from .state_info import StateInfo
 class State:
     """
     The State class manages the state variables for the assimilation system.
-    
+
     The analysis is performed on a regular grid.
-    
+
     The entire state has dimensions: member, variable, time,  z,  y,  x
     indexed by:                      mem_id,        v,    t,  k,  j,  i
     with size:                         nens,       nv,   nt, nz, ny, nx
 
     To parallelize workload, we group the dimensions into 3 indices:
-    
+
     mem_id indexes the ensemble members
-    
+
     rec_id indexes the uniq 2D fields with (v, t, k), since nz and nt may vary
     for different variables, we stack these dimensions in the 'record'
     dimension with size nrec
-    
+
     par_id indexes the spatial partitions, which are subset of the 2D grid
     given by (ist, ied, di, jst, jed, dj), for a complete field fld[j,i]
     the processor with par_id stores fld[ist:ied:di, jst:jed:dj] locally.
@@ -41,7 +41,7 @@ class State:
     par_list: dict[ProcIDMem, list[PartitionID]] = {}
     fields_prior: FieldEns = {}   # will be created by self.prepare_state()
     fields_z: FieldEns = {}
-    state_prior: StateEns = {}    # will be created by self.transpose_to_ensemble_complete() 
+    state_prior: StateEns = {}    # will be created by self.transpose_to_ensemble_complete()
     state_z: StateEns = {}
     state_post: StateEns = {}     # will be created by assimilator.assimilate()
     fields_post: FieldEns = {}    # will be created by self.transpose_to_field_complete()
@@ -55,7 +55,7 @@ class State:
         """
         Distribute rec_id across processors
         """
-        ##list rec_id as tasks
+        # list rec_id as tasks
         rec_list_full = [i for i in self.info.fields.keys()]
         rec_size = np.array([2 if r.is_vector else 1 for i,r in self.info.fields.items()])
         rec_list = distribute_tasks(c.comm_rec, rec_list_full, rec_size)
@@ -91,11 +91,11 @@ class State:
         """
         pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.rec_list.items() if len(lst)>0][0]
-        ##pid_show has some workload, it will print progress message
+        # pid_show has some workload, it will print progress message
         c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
 
-        ##process the fields, each proc gets its own workload as a subset of
-        ##mem_id,rec_id; all pid goes through their own task list simultaneously
+        # process the fields, each proc gets its own workload as a subset of
+        # mem_id,rec_id; all pid goes through their own task list simultaneously
         nm = len(c.mem_list[c.pid_mem])
         nr = len(self.rec_list[c.pid_rec])
         c.total_tasks = nm*nr
@@ -116,14 +116,14 @@ class State:
                 else:
                     fld[c.grid.mask] = np.nan
 
-                ##misc. transform can be added here
+                # misc. transform can be added here
                 for transform_func in c.transform_funcs:
                     fld = transform_func.forward_state(c, rec, fld)
-                ##save field to dict
+                # save field to dict
                 self.fields_prior[mem_id, rec_id] = fld
 
-                ##read z_coords for the field
-                ##only need to generate the uniq z coords, store in bank
+                # read z_coords for the field
+                # only need to generate the uniq z coords, store in bank
                 model_z = c.io.call_method(c, 'prior', model.z_coords, member=mem_id, **rec.asdict())
                 z = model.grid.convert(model_z, is_vector=False, method='linear', coarse_grain=True)
                 if rec.is_vector:
@@ -132,10 +132,10 @@ class State:
                     self.fields_z[mem_id, rec_id] = z
         c.comm.Barrier()
 
-        ##additonal output of debugging
+        # additonal output of debugging
         if c.debug:
             c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
-            ##TODO: data is (mem, rec) -> ndarray, but savez needs str keys
+            # TODO: data is (mem, rec) -> ndarray, but savez needs str keys
 
     def collect_scalar_variables(self, c):
         pass
@@ -166,7 +166,7 @@ class State:
                 c.debug_message = f"saving field: mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
                 c.current_task = m*nr+r
 
-                ##get the field record for output
+                # get the field record for output
                 fields = getattr(self, f"fields_{tag}")
                 fld = fields[mem_id, rec_id]
                 c.io.write_field(fld, c, tag, rec_id, mem_id)
@@ -191,11 +191,11 @@ class State:
             c.debug_message = f"saving mean field '{rec.name:20}' {rec.time} k={rec.k}"
             c.current_task = r
 
-            ##initialize a zero field with right dimensions for rec_id
+            # initialize a zero field with right dimensions for rec_id
             fld_shape = (2,)+self.info.shape if rec.is_vector else self.info.shape
             sum_fld_pid = np.zeros(fld_shape)
 
-            ##sum over all fields locally stored on pid
+            # sum over all fields locally stored on pid
             for mem_id in c.mem_list[c.pid_mem]:
                 sum_fld_pid += fields[mem_id, rec_id]
 
@@ -224,9 +224,9 @@ class State:
         fld_chk = {}
         for par_id in self.par_list[dst_pid]:
             if len(c.grid.x.shape) == 2:
-                ##slice for this par_id
+                # slice for this par_id
                 istart,iend,di,jstart,jend,dj = self.partitions[par_id]
-                ##save the unmasked points in slice to fld_chk for this par_id
+                # save the unmasked points in slice to fld_chk for this par_id
                 mask_chk = c.grid.mask[jstart:jend:dj, istart:iend:di]
                 if is_vector:
                     fld_chk[par_id] = fld[:, jstart:jend:dj, istart:iend:di][:, ~mask_chk]
@@ -272,14 +272,14 @@ class State:
         c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
-            ##all pid goes through their own mem_list simultaneously
+            # all pid goes through their own mem_list simultaneously
             mem_list_own = c.mem_list[c.pid_mem]
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]+1:03} rec{rec_id}" if m < len(mem_list_own) else "waiting"
                 c.debug_message = f"transposing field: {status}"
                 c.current_task = r*nm_max+m
 
-                ##prepare the fld for sending if not at the end of mem_list
+                # prepare the fld for sending if not at the end of mem_list
                 fld = None
                 mem_id = None
                 rec = None
@@ -288,38 +288,38 @@ class State:
                     rec = self.info.fields[rec_id]
                     fld = fields[mem_id, rec_id].copy()
 
-                ## - for each source pid_mem (src_pid) with fields[mem_id, rec_id],
-                ##   send chunk of fld to destination pid_mem (dst_pid) with its partition in par_list
-                ## - every pid needs to send/recv to/from every pid, so we use cyclic
-                ##   coreography here to prevent deadlock
+                #  - for each source pid_mem (src_pid) with fields[mem_id, rec_id],
+                #    send chunk of fld to destination pid_mem (dst_pid) with its partition in par_list
+                #  - every pid needs to send/recv to/from every pid, so we use cyclic
+                #    coreography here to prevent deadlock
 
-                ## 1) receive fld_chk from src_pid, for src_pid<pid first
+                #  1) receive fld_chk from src_pid, for src_pid<pid first
                 for src_pid in range(0, c.pid_mem):
                     if m < len(c.mem_list[src_pid]):
                         src_mem_id = c.mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
 
-                ## 2) send my fld chunk to a list of dst_pid, send to dst_pid>=pid first
-                ##    because they wait to receive before able to send their own stuff;
-                ##    when finished with dst_pid>=pid, cycle back to send to dst_pid<pid,
-                ##    i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
+                #  2) send my fld chunk to a list of dst_pid, send to dst_pid>=pid first
+                #     because they wait to receive before able to send their own stuff;
+                #     when finished with dst_pid>=pid, cycle back to send to dst_pid<pid,
+                #     i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
                 if m < len(c.mem_list[c.pid_mem]):
-                    assert isinstance(rec, FieldRecord)
+                    assert isinstance(rec, FieldRecord), f"{rec} is not a FieldRecord"
                     for dst_pid in np.mod(np.arange(c.config.nproc_mem)+c.pid_mem, c.config.nproc_mem):
                         fld_chk = self.pack_field_chunk(c, fld, rec.is_vector, dst_pid)
                         if dst_pid == c.pid_mem:
-                            ##same pid, so just write to state
+                            # same pid, so just write to state
                             state[mem_id, rec_id] = fld_chk
                         else:
-                            ##send fld_chk to dst_pid's state
+                            # send fld_chk to dst_pid's state
                             c.comm_mem.send(fld_chk, dest=dst_pid, tag=m)
 
-                ## 3) finish receiving fld_chk from src_pid, for src_pid>pid now
+                #  3) finish receiving fld_chk from src_pid, for src_pid>pid now
                 for src_pid in range(c.pid_mem+1, c.config.nproc_mem):
                     if m < len(c.mem_list[src_pid]):
                         src_mem_id = c.mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
-        c.comm.Barrier()    
+        c.comm.Barrier()
         return state
 
     def transpose_to_field_complete(self, c: Context, state: StateEns) -> FieldEns:
@@ -335,13 +335,13 @@ class State:
         """
         fields = {}
 
-        ##all pid goes through their own task list simultaneously
+        # all pid goes through their own task list simultaneously
         nr = len(self.rec_list[c.pid_rec])
         nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
         c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
-            ##all pid goes through their own mem_list simultaneously
+            # all pid goes through their own mem_list simultaneously
             mem_list_own = c.mem_list[c.pid_mem]
 
             for m in range(nm_max):
@@ -349,7 +349,7 @@ class State:
                 c.debug_message = f"transposing field: {status}"
                 c.current_task = r*nm_max+m
 
-                ##prepare an empty fld for receiving if not at the end of mem_list
+                # prepare an empty fld for receiving if not at the end of mem_list
                 mem_id = None
                 fld = None
                 if m < len(c.mem_list[c.pid_mem]):
@@ -361,39 +361,39 @@ class State:
                         fld = np.full(c.grid.x.shape, np.nan)
                     fields[mem_id, rec_id] = fld
 
-                ##this is just the reverse of transpose_field_to_state
-                ## we take the exact steps, but swap send and recv operations here
-                ##
-                ## 1) send my fld_chk to dst_pid, for dst_pid<pid first
+                # this is just the reverse of transpose_field_to_state
+                #  we take the exact steps, but swap send and recv operations here
+                #
+                #  1) send my fld_chk to dst_pid, for dst_pid<pid first
                 for dst_pid in range(0, c.pid_mem):
                     if m < len(c.mem_list[dst_pid]):
                         dst_mem_id = c.mem_list[dst_pid][m]
                         c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
-                        del state[dst_mem_id, rec_id]   ##free up memory
+                        del state[dst_mem_id, rec_id]   # free up memory
 
-                ## 2) receive fld_chk from a list of src_pid, from src_pid>=pid first
-                ##    because they wait to send stuff before able to receive themselves,
-                ##    cycle back to receive from src_pid<pid then.
+                #  2) receive fld_chk from a list of src_pid, from src_pid>=pid first
+                #     because they wait to send stuff before able to receive themselves,
+                #     cycle back to receive from src_pid<pid then.
                 if m < len(c.mem_list[c.pid_mem]):
                     assert mem_id is not None
                     assert fld is not None
                     for src_pid in np.mod(np.arange(c.config.nproc_mem)+c.pid_mem, c.config.nproc_mem):
                         if src_pid == c.pid_mem:
-                            ##same pid, so just copy fld_chk from state
+                            # same pid, so just copy fld_chk from state
                             fld_chk = state[mem_id, rec_id].copy()
                         else:
-                            ##receive fld_chk from src_pid's state
+                            # receive fld_chk from src_pid's state
                             fld_chk = c.comm_mem.recv(source=src_pid, tag=m)
 
-                        ##unpack the fld_chk to form a complete field
+                        # unpack the fld_chk to form a complete field
                         self.unpack_field_chunk(c, fld, fld_chk, src_pid)
 
-                ## 3) finish sending fld_chk to dst_pid, for dst_pid>pid now
+                #  3) finish sending fld_chk to dst_pid, for dst_pid>pid now
                 for dst_pid in range(c.pid_mem+1, c.config.nproc_mem):
                     if m < len(c.mem_list[dst_pid]):
                         dst_mem_id = c.mem_list[dst_pid][m]
                         c.comm_mem.send(state[dst_mem_id, rec_id], dest=dst_pid, tag=m)
-                        del state[dst_mem_id, rec_id]   ##free up memory
+                        del state[dst_mem_id, rec_id]   # free up memory
         c.comm.Barrier()
         return fields
 
@@ -401,8 +401,8 @@ class State:
         """pack state dict into arrays to be more easily handled by jitted funcs"""
         data = {}
 
-        ##x,y coordinates for local state variables on pid
-        if len(c.grid.x.shape) == 2:  ##regular grid
+        # x,y coordinates for local state variables on pid
+        if len(c.grid.x.shape) == 2:  # regular grid
             ist,ied,di,jst,jed,dj = self.partitions[par_id]
             msk = c.grid.mask[jst:jed:dj, ist:ied:di]
             data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
@@ -435,7 +435,7 @@ class State:
             data['err_type'][n] = self.info.err_types.index(rec.err_type)
             data['var_id'][n] = self.info.variables.index(rec.name)
             for m in range(c.nens):
-                data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  ##ens mean z
+                data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  # ens mean z
                 data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
 
         return data

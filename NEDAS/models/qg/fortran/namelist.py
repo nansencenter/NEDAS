@@ -1,7 +1,7 @@
 import os
 
 def value_str(value):
-    ##convert values to string in namelist
+    # convert values to string in namelist
     if isinstance(value, bool):
         if value:
             vstr = 'T'
@@ -36,7 +36,7 @@ def namelist(conf_dict, time, forecast_period, psi_init_type, member=0, dt_ratio
     else:
         initialize_energy = True
 
-    ##start building the namelist content
+    # start building the namelist content
     nmlstr = " &run_params\n"
     nmlstr += " kmax = "+value_str(conf_dict['kmax'])+"\n"
     nmlstr += " nz = "+value_str(conf_dict['nz'])+"\n"
@@ -81,7 +81,7 @@ def namelist(conf_dict, time, forecast_period, psi_init_type, member=0, dt_ratio
     nmlstr += " diag2_step = "+value_str(total_counts)+"\n"
     nmlstr += " /"
 
-    ##write the namelist to input.nml file
+    # write the namelist to input.nml file
     with open(os.path.join(run_dir, 'input.nml'), 'wt') as f:
         f.write(nmlstr)
 

@@ -15,25 +15,25 @@ class SerialAssimilator(Assimilator):
         """
         if len(c.grid.x.shape) == 2:
             ny, nx = c.grid.x.shape
-            ##the domain is divided into tiles, each is formed by nproc_mem elements
-            ##each element is stored on a different pid_mem
-            ##for each pid, its loc points cover the entire domain with some spacing
+            # the domain is divided into tiles, each is formed by nproc_mem elements
+            # each element is stored on a different pid_mem
+            # for each pid, its loc points cover the entire domain with some spacing
 
-            ##list of possible factoring of nproc_mem = nx_intv * ny_intv
-            ##pick the last factoring that is most 'square', so that the interval
-            ##is relatively even in both directions for each pid
+            # list of possible factoring of nproc_mem = nx_intv * ny_intv
+            # pick the last factoring that is most 'square', so that the interval
+            # is relatively even in both directions for each pid
             nx_intv, ny_intv = [(i, int(c.config.nproc_mem / i))
                                 for i in range(1, int(np.ceil(np.sqrt(c.config.nproc_mem))) + 1)
                                 if c.config.nproc_mem % i == 0][-1]
 
-            ##a list of (ist, ied, di, jst, jed, dj) for slicing
-            ##note: we have nproc_mem entries in the list
+            # a list of (ist, ied, di, jst, jed, dj) for slicing
+            # note: we have nproc_mem entries in the list
             partitions = [(i, nx, nx_intv, j, ny, ny_intv)
                         for j in range(ny_intv) for i in range(nx_intv) ]
 
         else:
             npoints = c.grid.x.size
-            ##just divide the list of points into nproc_mem parts, each part spanning the entire domain
+            # just divide the list of points into nproc_mem parts, each part spanning the entire domain
             nparts = c.config.nproc_mem
             partitions = [np.arange(i, npoints, nparts) for i in np.arange(nparts)]
 
@@ -45,13 +45,13 @@ class SerialAssimilator(Assimilator):
             full_inds = np.arange(c.obs.obs_seq[obs_rec_id]['obs'].shape[-1])
             obs_inds_pid[obs_rec_id] = {}
 
-            ##locality doesn't matter, we just divide obs_rec into nproc_mem parts
+            # locality doesn't matter, we just divide obs_rec into nproc_mem parts
             inds = distribute_tasks(c.comm_mem, full_inds)
             for par_id in range(c.config.nproc_mem):
                 obs_inds_pid[obs_rec_id][par_id] = inds[par_id]
 
-        ##now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
-        ##gather all obs_rec_id from different pid_rec to form the complete obs_inds dict
+        # now each pid_rec has figured out obs_inds for its own list of obs_rec_ids, we
+        # gather all obs_rec_id from different pid_rec to form the complete obs_inds dict
         obs_inds = {}
         for entry in c.comm_rec.allgather(obs_inds_pid):
             for obs_rec_id, data in entry.items():
@@ -60,7 +60,7 @@ class SerialAssimilator(Assimilator):
         return obs_inds
 
     def distribute_partitions(self, c: Context):
-        ##just assign each partition to each pid, pid==par_id
+        # just assign each partition to each pid, pid==par_id
         par_list = {p:[p] for p in range(c.config.nproc_mem)}
         return par_list
 
@@ -83,7 +83,7 @@ class SerialAssimilator(Assimilator):
         obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
         obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c)
 
-        ##go through the entire obs list, indexed by p, one scalar obs at a time
+        # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
         for p in range(len(obs_list)):
             obs_rec_id, v, owner_pid, i = obs_list[p]
@@ -91,16 +91,16 @@ class SerialAssimilator(Assimilator):
             c.debug_message = f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}"
             c.current_task = p
 
-            ##1. if the pid owns this obs, broadcast it to all pid
+            # 1. if the pid owns this obs, broadcast it to all pid
             if c.pid_mem == owner_pid:
-                ##collect obs info
+                # collect obs info
                 obs_p = {}
                 obs_p['prior'] = obs_data['obs_prior'][:, i]
                 for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
                     obs_p[key] = obs_data[key][i]
                 for key in ('hroi', 'vroi', 'troi', 'impact_on_state'):
                     obs_p[key] = obs_data[key][obs_rec_id]
-                ##mark this obs as used
+                # mark this obs as used
                 obs_data['used'][i] = True
 
             else:
@@ -110,10 +110,10 @@ class SerialAssimilator(Assimilator):
             if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['obs']):
                 continue
 
-            ##compute obs-space increment
+            # compute obs-space increment
             obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
 
-            ##2. all pid update their own locally stored state:
+            # 2. all pid update their own locally stored state:
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
@@ -122,7 +122,7 @@ class SerialAssimilator(Assimilator):
                             obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                             c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
 
-            ##3. all pid update their own locally stored obs:
+            # 3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
             obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
             obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])

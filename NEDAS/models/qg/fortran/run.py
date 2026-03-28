@@ -1,13 +1,13 @@
-##demo of how to run the qg model in standalone mode
+# demo of how to run the qg model in standalone mode
 from datetime import datetime
 from NEDAS.models.qg.fortran import QGFortranModel
 
 def main():
-    ##run the model by
-    ##python models/qg/run.py -c models/qg/default.yml
+    # run the model by
+    # python models/qg/run.py -c models/qg/default.yml
 
-    ##model config variables are listed in default.yml
-    ##settings can also be changed in model_param
+    # model config variables are listed in default.yml
+    # settings can also be changed in model_param
     model_param = {
         'kmax': 127,
         'psi_init_type': 'spectral_m',

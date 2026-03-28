@@ -26,7 +26,7 @@ def get_task_list(c: Context, **kwargs) -> list:
     c.state = State(c)
     c.obs = Obs(c)
 
-    ##observation time steps within window
+    # observation time steps within window
     obs_window_min = kwargs.get('obs_window_min', 0)
     obs_window_max = kwargs.get('obs_window_max', 0)
     obs_dt = ensure_list(kwargs['obs_dt'])
@@ -35,15 +35,15 @@ def get_task_list(c: Context, **kwargs) -> list:
 
     tasks = []
     for i, vname in enumerate(variables):
-        ##check if obs rec is defined in obs.info
+        # check if obs rec is defined in obs.info
         obs_rec_query = [id for id,r in c.obs.info.records.items() if r.name==vname and r.dataset_src==dataset_src[i]]
         assert len(obs_rec_query)>0, f"cannot find obs record for '{vname}' from dataset '{dataset_src[i]}'"
         obs_rec_id = obs_rec_query[0]
 
-        ##time steps for this obs
+        # time steps for this obs
         obs_ts = c.time + np.arange(obs_window_min, obs_window_max, obs_dt[i]) * dt1h
 
-        ##vertical levels for this obs
+        # vertical levels for this obs
         levels = np.arange(obs_kmin[i], obs_kmax[i]+1)
 
         for k in levels:
@@ -86,20 +86,20 @@ def run(c: Context, **kwargs) -> None:
     if c.debug:
         print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
 
-    ##if the viewer html file does not exist, generate it
+    # if the viewer html file does not exist, generate it
     viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, figsize, **kwargs)
 
-    ##plot the variables defined in kwargs, save to figfile
+    # plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{obs_rec['dataset_src']}_{obs_rec['name']}_k{k}_{t:%Y%m%dT%H%M%S}_{t+dt*dt1h:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
-    ##read the obs data from debug data
+    # read the obs data from debug data
     analysis_dir = c.fs.analysis_dir(c.time, c.iter)
     obs_seq = np.load(os.path.join(analysis_dir, f'obs_seq.rec{obs_rec_id}.npy'), allow_pickle=True).item()
     obs_prior_seq = np.load(os.path.join(analysis_dir, f'obs_prior_seq.rec{obs_rec_id}.mem{member:03}.npy'), allow_pickle=True)
 
-    ##filter for the obs within time and vertical level range
+    # filter for the obs within time and vertical level range
     tmask = (obs_seq['t'] > t) & (obs_seq['t'] <= t+dt*dt1h)
     obs_z = obs_seq['z']
     obs_x = obs_seq['x']
@@ -114,10 +114,10 @@ def run(c: Context, **kwargs) -> None:
         zmask = (obs_z > zk1) & (obs_z <= zk)
     ind = np.where(tmask & zmask)[0]
 
-    ##plot the observations as scattered data over c.grid
+    # plot the observations as scattered data over c.grid
     try:
         fig, ax = plt.subplots(1, 2, figsize=figsize)
-        assert isinstance(c.grid, Grid2DBase)
+        assert isinstance(c.grid, Grid2DBase), f"{c.grid} is not a 2D Grid"
         if obs_rec['is_vector']:
             obs_u = obs_seq['obs'][0,...][ind]
             obs_v = obs_seq['obs'][1,...][ind]
@@ -202,6 +202,6 @@ def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
     html_page = html_page.replace("IMAGE_WIDTH", f"{figsize[0]*60}")
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
-    ##write the html page to file
+    # write the html page to file
     with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

@@ -1,5 +1,5 @@
-###adapted from NERSC-HYCOM-CICE/pythonlibs/abfile
-##Module for doing IO on files used by hycom
+# #adapted from NERSC-HYCOM-CICE/pythonlibs/abfile
+# Module for doing IO on files used by hycom
 import numpy
 import struct
 import sys
@@ -18,7 +18,7 @@ class BFileError(Exception) :
     pass
 
 class AFile :
-    """ Class for doing binary input/output on hycom .a files. Normally used by 
+    """ Class for doing binary input/output on hycom .a files. Normally used by
     ABFile* classes, but can be called by itself to read a .a-file """
     huge = 2.0**100
     def __init__(self,idm,jdm,filename,action,mask=False,real4=True,endian="big") :
@@ -60,7 +60,7 @@ class AFile :
     def writerecord(self,h,mask=None,record=None) :
         """ Write one record to file.
 
-        Arguments:    
+        Arguments:
           h      : data field to write. Must conform to shape (self._jdm, self._idm)
           mask  : where mask is set to True, h is set to spval. Ignored if masking not set in class
 
@@ -120,7 +120,7 @@ class AFile :
     def read_record(self,record) :
         self.seekrecord(record)
 
-        ##1) Use struct
+        # 1) Use struct
         #if self._real4 :
         #    raw = self._filea.read(self.n2drec*4)
         #    fmt =  "%s%df"%(self._endian_structfmt,self.n2drec)
@@ -170,7 +170,7 @@ class AFile :
         return self._jdm
 
 class ABFile:
-    """ Class for doing input/output on pairs of hycom .a and .b files. Base class, 
+    """ Class for doing input/output on pairs of hycom .a and .b files. Base class,
     not meant to be used directly """
     _filename: str
     _fields: dict
@@ -277,8 +277,8 @@ class ABFile:
     def check_minmax(cls,w,mydict) :
 #      if (abs(hmina(k)-hminb).gt.abs(hminb)*1.e-4 .or.
 #                                &             abs(hmaxa(k)-hmaxb).gt.abs(hmaxb)*1.e-4      ) then
-        testmin = numpy.abs(w.min()-mydict["min"]) > numpy.abs(mydict["min"])*1.e-4 
-        testmax = numpy.abs(w.max()-mydict["max"]) > numpy.abs(mydict["max"])*1.e-4 
+        testmin = numpy.abs(w.min()-mydict["min"]) > numpy.abs(mydict["min"])*1.e-4
+        testmax = numpy.abs(w.max()-mydict["max"]) > numpy.abs(mydict["max"])*1.e-4
         if testmin or testmax :
             msg="File a b values inconsistent: Field %s at %d, .a min/max: %12.6g %12.6g  .a min/max: %12.6g  %12.6g " %(
                 mydict["field"],mydict["k"],w.min(),w.max(),mydict["min"],mydict["max"])
@@ -338,7 +338,7 @@ class ABFileBathy(ABFile) :
             i+=1
             line=self.readline().strip()
 
-    def write_field(self,field,mask) : 
+    def write_field(self,field,mask) :
         self._open_filea_if_necessary(field)
         assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask,record=None)
@@ -353,7 +353,7 @@ class ABFileBathy(ABFile) :
                 record=i
         if record  is not None :
             assert self._filea is not None
-            w = self._filea.read_record(record) 
+            w = self._filea.read_record(record)
         else :
             raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
@@ -514,7 +514,7 @@ class ABFileGrid(ABFile) :
                 record=i
         if record  is not None :
             assert self._filea is not None
-            w = self._filea.read_record(record) 
+            w = self._filea.read_record(record)
         else :
             raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
@@ -552,7 +552,7 @@ class ABFileArchv(ABFile) :
         self._cline2=cline2
         self._cline3=cline3
         self._iversn=iversn
-        self._iexpt =iexpt 
+        self._iexpt =iexpt
         self._yrflag=yrflag
 
         super(ABFileArchv,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
@@ -563,7 +563,7 @@ class ABFileArchv(ABFile) :
                 raise BFileError("idm and jdm must be set before opening filea")
             self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
         elif self._action == "w" :
-            ## Need to test if idm, jdm, etc is set at this stage
+            #  Need to test if idm, jdm, etc is set at this stage
             #raise NotImplementedError,"ABFileArchv writing not implemented"
             pass
 
@@ -777,13 +777,13 @@ class ABFileForcing(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
-        ##tolerance for max dist is 1 day
+        # tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
             raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         assert self._filea is not None
-        w = self._filea.read_record(i) 
+        w = self._filea.read_record(i)
         #print w
         return w#,dt
 
@@ -850,8 +850,8 @@ class ABFileRestart(ABFile) :
             else :
                 raise BFileError("ABFile opened as read, but idm and jdm not provided")
         elif self._action == "w" :
-##            # Need to test if idm, jdm, etc is set at this stage
-##            raise NotImplementedError,"ABFileRestart writing not implemented
+#             # Need to test if idm, jdm, etc is set at this stage
+#             raise NotImplementedError,"ABFileRestart writing not implemented
             pass
 
     def read_header(self) :
@@ -895,10 +895,10 @@ class ABFileRestart(ABFile) :
 
     def write_bfile_info(self) :
         self._fileb.seek(0)
-        ##header
+        # header
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(self._iexpt,self._iversn,self._yrflag,self._sigver))
         self._fileb.write("RESTART2: nstep,dtime,thbase = %12d%19.10f%24.13f\n"%(self._nstep,self._dtime,self._thbase))
-        ##field info
+        # field info
         for i in range(len(self._fields)):
             fieldname = self._fields[i]["field"]
             k = self._fields[i]["k"]
@@ -954,8 +954,8 @@ class ABFileRestart(ABFile) :
 #  ~~ for loop for variables
 #      new_abfile.write_field(field,None,fieldname,k,t)  # None stands for mask
 #  new_abfile.close()
-##YY: the above is suitable for writing a new file from scratch (copy and paste)
-##overwrite_field will be good for rewriting only a field in existing files
+# YY: the above is suitable for writing a new file from scratch (copy and paste)
+# overwrite_field will be good for rewriting only a field in existing files
 
     def write_header(self,iexpt,iversn,yrflag,sigver,nstep,dtime,thbase) :
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(iexpt,iversn,yrflag,sigver))
@@ -1053,7 +1053,7 @@ class ABFileRelax(ABFile) :
                 record=i
         if record  is not None :
             assert self._filea is not None
-            w = self._filea.read_record(record) 
+            w = self._filea.read_record(record)
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
         else :
             raise RuntimeError(f"cannot find field {fieldname} at level {level} month {month} in file {self.basename}")
@@ -1134,13 +1134,13 @@ class ABFileRelaxZ(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
-        ##tolerance for max dist is 1 day
+        # tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
             raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
         assert self._filea is not None
-        w = self._filea.read_record(i) 
+        w = self._filea.read_record(i)
         #print w
         return w#,dt
 
@@ -1190,7 +1190,7 @@ def write_diag_nc(datadict,fname="hycom_grid.nc") :
         print("Unable to import netCDF4 module - will not write diag to %s"%fname)
         return
     tmp = datadict["plon"]
-    ## Create netcdf file with all  stages for analysis
+    #  Create netcdf file with all  stages for analysis
     ncid = netCDF4.Dataset(fname,"w")
     ncid.createDimension("idm",tmp.shape[1])
     ncid.createDimension("jdm",tmp.shape[0])

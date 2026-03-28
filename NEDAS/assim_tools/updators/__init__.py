@@ -31,10 +31,10 @@ def get_updator(c: Context) -> Updator:
     if updator_type not in registry:
         raise NotImplementedError(f"updator type '{updator_type}' is not implemented")
 
-    ##TODO: last scale component doesn't need alignment, find a better general logic
+    # TODO: last scale component doesn't need alignment, find a better general logic
     assert c.config.niter is not None
     if c.iter == c.config.niter-1:
-        updator_type = 'additive' 
+        updator_type = 'additive'
     module = importlib.import_module('NEDAS.assim_tools.updators.'+updator_type)
     UpdatorClass = getattr(module, registry[updator_type])
 

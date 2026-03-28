@@ -7,7 +7,7 @@ from NEDAS.models.topaz.confmap import ConformalMapping
 def get_topaz_grid(grid_info_file) -> RegularGrid:
     proj = ConformalMapping.init_from_file(grid_info_file)
 
-    ##the coordinates in topaz model native grid
+    # the coordinates in topaz model native grid
     ii, jj = np.meshgrid(np.arange(proj._ires), np.arange(proj._jres))
     x = ii * proj._dx
     y = jj * proj._dy
@@ -19,11 +19,11 @@ def get_depth(depthfile, grid):
     depth = f.read_field('depth')
     f.close()
 
-    d = -depth.data  ##depth is negative for ocean variables
-    
+    d = -depth.data  # depth is negative for ocean variables
+
     mask = np.asarray(depth.mask, bool)
     d[mask] = np.nan
-    
+
     return d, mask
 
 def get_mean_ssh(meansshfile, grid):
@@ -31,21 +31,21 @@ def get_mean_ssh(meansshfile, grid):
         f.seek(4)
         data = f.read(8 * grid.nx * grid.ny)
         data = struct.unpack('>'+'d'*grid.nx*grid.ny, data)
-    
+
         meanssh = np.array(data).reshape(grid.ny, grid.nx)
-    
+
     return meanssh
 
-##some variables will need (de)staggering in topaz grid:
-##---                *--*--*
-##---                |  |  |
-##--- stencil:       u--p--*
-##---                |  |  |
-##---                q--v--*
-##these two functions are uniq to topaz
+# some variables will need (de)staggering in topaz grid:
+# ---                *--*--*
+# ---                |  |  |
+# --- stencil:       u--p--*
+# ---                |  |  |
+# ---                q--v--*
+# these two functions are uniq to topaz
 
 def stagger(dat, vtype):
-    ##stagger u,v for C-grid configuration
+    # stagger u,v for C-grid configuration
     dat_stag = dat.copy()
     if vtype == 'u':
         dat_stag[:, 1:] = 0.5*(dat[:, :-1] + dat[:, 1:])
@@ -56,7 +56,7 @@ def stagger(dat, vtype):
     return dat_stag
 
 def destagger(dat_stag, vtype):
-    ##destagger u,v from C-grid
+    # destagger u,v from C-grid
     dat = dat_stag.copy()
     if vtype == 'u':
         dat[:, :-1] = 0.5*(dat_stag[:, :-1] + dat_stag[:, 1:])

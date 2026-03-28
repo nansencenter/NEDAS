@@ -13,7 +13,7 @@ registry = {
 def get_transform_funcs(c: Context) -> list[Transform]:
     if c.config.transform_def is None:
         c.config.transform_def = {'type':'identity'}
-    
+
     transform_funcs = []
     for transform_func_def in ensure_list(c.config.transform_def):
 
@@ -23,7 +23,7 @@ def get_transform_funcs(c: Context) -> list[Transform]:
 
         if transform_func_type not in registry.keys():
             raise NotImplementedError(f"Transform function type '{transform_func_type}' is not implemented.")
-        
+
         module = importlib.import_module('NEDAS.assim_tools.transforms.'+transform_func_type)
         TransformClass = getattr(module, registry[transform_func_type])
         transform_func = TransformClass(c, **transform_func_def)

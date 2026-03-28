@@ -27,7 +27,7 @@ def get_localization_funcs(c: Context) -> dict:
 def get_localization_func_component(localization_types):
     localization_types = localization_types.lower().split(',')
 
-    ##distance-based localization schemes
+    # distance-based localization schemes
     if 'gaspari_cohn' in localization_types:
         from .distance_based import gaspari_cohn_func as local_func
     elif 'step' in localization_types:
@@ -35,11 +35,11 @@ def get_localization_func_component(localization_types):
     elif 'exponential' in localization_types:
         from .distance_based import exponential_func as local_func
 
-    # ##correlation based localization schemes
+    # # correlation based localization schemes
     # elif 'SER' in localization_types:
     #     from NEDAS.assim_tools.localization.SER import CorrelationBasedLocalization as Localization
     # elif 'NICE' in localization_types:
-    #     from NEDAS.assim_tools.localization.NICE import 
+    #     from NEDAS.assim_tools.localization.NICE import
     else:
         raise ValueError(f"Unknown localization type {type}")
     return local_func

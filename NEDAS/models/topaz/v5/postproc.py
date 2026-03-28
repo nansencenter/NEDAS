@@ -4,7 +4,7 @@ from NEDAS.utils.njit import njit
 @njit
 def adjust_dp(dp, depth, onem):
     """
-    Adjusts the pressure layers (dp) to ensure no negative values 
+    Adjusts the pressure layers (dp) to ensure no negative values
     and recalculates layer thickness based on depth constraints.
 
     Parameters:

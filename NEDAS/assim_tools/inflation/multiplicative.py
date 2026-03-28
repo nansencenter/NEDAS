@@ -58,21 +58,21 @@ class MultiplicativeInflation(Inflation):
         if c.debug:
             c.print_1p(f'>>> inflating {flag} ensemble with multiplicative coef={self.coef}\n')
 
-        ##process the fields, each processor goes through its own subset of
-        ##mem_id,rec_id simultaneously
+        # process the fields, each processor goes through its own subset of
+        # mem_id,rec_id simultaneously
         nm = len(c.mem_list[c.pid_mem])
         nr = len(c.state.rec_list[c.pid_rec])
         c.total_tasks = nm * nr
         for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
 
-            ##read the mean field with rec_id
+            # read the mean field with rec_id
             #c.io.read_field()
             fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
             for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
                 c.debug_message = f"inflating mem{mem_id+1:03}"
                 c.current_task = m*nr+r
 
-                ##inflate the ensemble perturbations by coef
+                # inflate the ensemble perturbations by coef
                 fields[mem_id, rec_id] = self.coef*(fields[mem_id, rec_id] - fields_mean) + fields_mean
 
         c.comm.Barrier()

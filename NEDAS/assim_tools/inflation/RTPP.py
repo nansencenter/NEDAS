@@ -47,13 +47,13 @@ class RTPPInflation(Inflation):
         if c.debug:
             c.print_1p(f'relaxing to prior ensemble perturbations with coef={self.coef}\n')
 
-        ##process the fields, each processor goes through its own subset of
-        ##mem_id,rec_id simultaneously
+        # process the fields, each processor goes through its own subset of
+        # mem_id,rec_id simultaneously
         nm = len(c.mem_list[c.pid_mem])
         nr = len(c.state.rec_list[c.pid_rec])
         c.total_tasks = nm*nr
         for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
-            ##read the mean field with rec_id
+            # read the mean field with rec_id
             fld_prior_mean = c.io.read_field(c, 'prior_mean', rec_id, mem_id=0)
             fld_post_mean = c.io.read_field(c, 'post_mean', rec_id, mem_id=0)
 
@@ -61,7 +61,7 @@ class RTPPInflation(Inflation):
                 c.debug_message = f"relax_to_prior_perturb mem{mem_id+1:03}"
                 c.current_task = m*nr+r
 
-                ##inflate the ensemble perturbations by relaxing to prior perturbations
+                # inflate the ensemble perturbations by relaxing to prior perturbations
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 fld_post = fld_post_mean + self.coef*(fld_prior - fld_prior_mean) + (1.-self.coef)*(fld_post - fld_post_mean)

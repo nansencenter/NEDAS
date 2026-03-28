@@ -47,20 +47,20 @@ class Inflation(ABC):
     def obs_space_stats(self, c: Context):
         """observation-space statistics"""
         stats = {'total_nobs': 0,
-                 'omb2': 0.0,  ##obs-minus-background differences squared
+                 'omb2': 0.0,  # obs-minus-background differences squared
                  'omaamb': 0.0,
-                 'amb2': 0.0,  ##analysis-minus-background diff squared
-                 'varo': 0.0,  ##obs err variance
-                 'varb': 0.0,  ##obs_prior (background) ensemble variances
-                 'vara': 0.0,  ##obs_post (analysis) ensemble variances
+                 'amb2': 0.0,  # analysis-minus-background diff squared
+                 'varo': 0.0,  # obs err variance
+                 'varb': 0.0,  # obs_prior (background) ensemble variances
+                 'vara': 0.0,  # obs_post (analysis) ensemble variances
                 }
 
-        ##go through each obs record
+        # go through each obs record
         for r, obs_rec_id in enumerate(c.obs.obs_rec_list[c.pid_rec]):
             obs_rec = c.obs.info.records[obs_rec_id]
             nobs = obs_rec.nobs
 
-            ##1. get ensemble mean obs_prior:
+            # 1. get ensemble mean obs_prior:
             if obs_rec.is_vector:
                 nv = 2
                 shape = (nv, nobs)
@@ -68,25 +68,25 @@ class Inflation(ABC):
                 nv = 1
                 shape = (nobs,)
 
-            ##sum over all obs_prior_seq locally stored on pid
+            # sum over all obs_prior_seq locally stored on pid
             sum_obs_prior_pid = np.zeros(shape)
             for mem_id in c.mem_list[c.pid_mem]:
                 sum_obs_prior_pid += c.obs.obs_prior[mem_id, obs_rec_id]
-            ##sum over all obs_prior_seq on differnet pids to get the total sum
+            # sum over all obs_prior_seq on differnet pids to get the total sum
             sum_obs_prior = c.comm_mem.allreduce(sum_obs_prior_pid)
             mean_obs_prior = sum_obs_prior / c.nens
             mean_obs_post = None
 
             if c.obs.obs_post:
-                ##sum over all obs_prior_seq locally stored on pid
+                # sum over all obs_prior_seq locally stored on pid
                 sum_obs_post_pid = np.zeros(shape)
                 for mem_id in c.mem_list[c.pid_mem]:
                     sum_obs_post_pid += c.obs.obs_post[mem_id, obs_rec_id]
-                ##sum over all obs_prior_seq on differnet pids to get the total sum
+                # sum over all obs_prior_seq on differnet pids to get the total sum
                 sum_obs_post = c.comm_mem.allreduce(sum_obs_post_pid)
                 mean_obs_post = sum_obs_post / c.nens
 
-            ##2. get ensemble spread obs_prior:
+            # 2. get ensemble spread obs_prior:
             pert2_obs_prior_pid = np.zeros(shape)
             for mem_id in c.mem_list[c.pid_mem]:
                 pert2_obs_prior_pid += (c.obs.obs_prior[mem_id, obs_rec_id] - mean_obs_prior)**2

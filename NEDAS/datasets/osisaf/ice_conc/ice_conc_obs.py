@@ -101,7 +101,7 @@ class OsisafSeaIceConcObs(Dataset):
 
         for fname in self.filename(**kwargs):
 
-            ##read the data file
+            # read the data file
             f = netCDF4.Dataset(fname)
 
             lat = f['lat'][...].data.flatten()
@@ -117,7 +117,7 @@ class OsisafSeaIceConcObs(Dataset):
                 if 'total_uncertainty' in f.variables:
                     obs_err = f['total_uncertainty'][n,...].data.flatten()
                 else:
-                    obs_err = 0.3 * np.ones(obs.shape)  ##default conc err 0.3
+                    obs_err = 0.3 * np.ones(obs.shape)  # default conc err 0.3
 
                 for p in range(obs.size):
                     if qc_flag[p] < 0 or qc_flag[p] > 10:
@@ -131,14 +131,14 @@ class OsisafSeaIceConcObs(Dataset):
                     if mask_[p] > 0:
                         continue
 
-                    obs_value = obs[p] * 0.01   ##convert percent to 0-1
+                    obs_value = obs[p] * 0.01   # convert percent to 0-1
 
-                    #obs_err_var = (obs_err[p]*0.01)**2  ##uncertainty from dataset
-                    #obs_err_var = 0.01 + (0.5 - np.abs(0.5-obs_value))**2  ##adaptive error used in topaz
+                    #obs_err_var = (obs_err[p]*0.01)**2  # uncertainty from dataset
+                    #obs_err_var = 0.01 + (0.5 - np.abs(0.5-obs_value))**2  # adaptive error used in topaz
                     #obs_err_std = np.sqrt(obs_err_var)
-                    obs_err_std = kwargs['err']['std']  ##use fixed error from config
+                    obs_err_std = kwargs['err']['std']  # use fixed error from config
 
-                    ##assignn to obs_seq
+                    # assignn to obs_seq
                     obs_seq['obs'].append(obs_value)
                     obs_seq['err_std'].append(obs_err_std)
                     obs_seq['t'].append(t)

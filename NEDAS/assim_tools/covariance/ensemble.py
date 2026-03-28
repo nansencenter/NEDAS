@@ -33,13 +33,13 @@ def ensemble_covariance(state_ens, obs_ens):
     nens_obs = obs_ens.shape[0]
     if nens != nens_obs:
         raise ValueError('Ensemble sizes of state and observation must be equal')
-    
+
     # compute variance of state variables
     state_variance = np.zeros(state_ens.shape[1:])
     for m in range(nens):
         state_variance += state_ens[m,...]**2
     state_variance /= nens-1
-    
+
     # compute variance of observation variables
     obs_variance = np.zeros(obs_ens.shape[1:])
     for m in range(nens):
@@ -55,7 +55,7 @@ def ensemble_covariance(state_ens, obs_ens):
 
     # correlation between state and observation variables
     corr = cov / np.sqrt(np.outer(state_variance, obs_variance).reshape(new_shape))
-    
+
     return state_variance, obs_variance, corr
 
 #def static_covariance(lookup, h_dist, v_dist, t_dist, ):

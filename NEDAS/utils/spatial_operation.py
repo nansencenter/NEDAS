@@ -15,16 +15,16 @@ def gradx(fld, dx, cyclic_dim=None):
     """
     fld_gradx = np.zeros(fld.shape)
     if cyclic_dim is not None and 'x' in cyclic_dim:
-        ##centered difference of the neighboring grid points
-        fld_gradx[..., :-1] = fld[..., 1:]  ##right neighbor
+        # centered difference of the neighboring grid points
+        fld_gradx[..., :-1] = fld[..., 1:]  # right neighbor
         fld_gradx[..., -1]  = fld[..., 0]
-        fld_gradx[..., 1:] -= fld[..., :-1] ##left neighbor
+        fld_gradx[..., 1:] -= fld[..., :-1] # left neighbor
         fld_gradx[..., 0]  -= fld[..., -1]
         fld_gradx /= 2.*dx
     else:
-        ##centered difference for the middle part
+        # centered difference for the middle part
         fld_gradx[..., 1:-1] = (fld[..., 2:] - fld[..., :-2]) / 2.0
-        ##one-sided difference for the left,right edge points
+        # one-sided difference for the left,right edge points
         fld_gradx[..., 0] = (fld[..., 1] - fld[..., 0])
         fld_gradx[..., -1] = (fld[..., -1] - fld[..., -2])
         fld_gradx /= dx
@@ -35,16 +35,16 @@ def grady(fld, dy, cyclic_dim=None):
     """gradient of input fld in y direction, similar to gradx"""
     fld_grady = np.zeros(fld.shape)
     if cyclic_dim is not None and 'y' in cyclic_dim:
-        ##centered difference of the neighboring grid points
+        # centered difference of the neighboring grid points
         fld_grady[..., :-1, :] = fld[..., 1:, :]
         fld_grady[..., -1, :]  = fld[..., 0, :]
         fld_grady[..., 1:, :] -= fld[..., :-1, :]
         fld_grady[..., 0, :]  -= fld[..., -1, :]
         fld_grady /= 2.*dy
     else:
-        ##centered difference for the middle part
+        # centered difference for the middle part
         fld_grady[..., 1:-1, :] = (fld[..., 2:, :] - fld[..., :-2, :]) / 2.0
-        ##one-sided difference for the left,right edge points
+        # one-sided difference for the left,right edge points
         fld_grady[..., 0, :] = (fld[..., 1, :] - fld[..., 0, :])
         fld_grady[..., -1, :] = (fld[..., -1, :] - fld[..., -2, :])
         fld_grady /= dy
@@ -108,7 +108,7 @@ def refine(grid, mask, fld, nlevel):
     if nlevel == 0:
         return grid, fld
     grid1 = grid.change_resolution_level(-nlevel)
-    grid1.mask = mask  ##don't know how to sharpen mask, need to provide high-res mask from input args
+    grid1.mask = mask  # don't know how to sharpen mask, need to provide high-res mask from input args
     grid.set_destination_grid(grid1)
     fld1 = np.zeros(fld.shape[:-2]+(grid1.ny, grid1.nx))
     for ind in np.ndindex(fld.shape[:-2]):
@@ -119,8 +119,8 @@ def refine(grid, mask, fld, nlevel):
         fld1[ind] = fld_linear
     return grid1, fld1
 
-##some original coarsen/sharpen functions working for 2**n grid points
-def coarsen_mask(mask, lev1, lev2):  ##only subsample no smoothing, avoid mask growing
+# some original coarsen/sharpen functions working for 2**n grid points
+def coarsen_mask(mask, lev1, lev2):  # only subsample no smoothing, avoid mask growing
     if lev1 < lev2:
         for k in range(lev1, lev2):
             ni, nj = mask.shape[-2:]

@@ -1,8 +1,8 @@
-###Utility function for handling qgmodel fields
+# #Utility function for handling qgmodel fields
 import numpy as np
 from numpy.fft import fft2, ifft2, fftshift, ifftshift
 
-##file i/o
+# file i/o
 def read_data_bin(filename, kmax, nz, k, r=0):
     nkx = 2*kmax+1
     nky = kmax+1
@@ -17,7 +17,7 @@ def read_data_bin(filename, kmax, nz, k, r=0):
 
 
 def write_data_bin(filename, fieldk, kmax, nz, k, r=0):
-    ##note: filename should exists before calling this to write content to it
+    # note: filename should exists before calling this to write content to it
     nkx = 2*kmax+1
     nky = kmax+1
     assert fieldk.shape == (nkx, nky), 'input fieldk shape mismatch with kmax'
@@ -29,7 +29,7 @@ def write_data_bin(filename, fieldk, kmax, nz, k, r=0):
             f.write(fieldk[:, i].imag.tobytes())
 
 
-##conversion between physical and spectral spaces
+# conversion between physical and spectral spaces
 def fullspec(hfield):
     nkx, nky = hfield.shape
     kmax = nky-1
@@ -68,7 +68,7 @@ def grid2spec(field):
     return fieldk
 
 
-##conversion between variables in spectral space
+# conversion between variables in spectral space
 def get_wn(psik):
     nkx, nky = psik.shape
     kmax = nky-1

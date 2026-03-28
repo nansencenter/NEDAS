@@ -19,12 +19,12 @@ class Cs2SmosObs(Dataset):
     obs_file_dt: int
     obs_days: int
     use_dataset_uncertainty: bool
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self.variables = {
-            'seaice_thick': VarDesc(name='analysis_sea_ice_thickness', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='m'), 
+            'seaice_thick': VarDesc(name='analysis_sea_ice_thickness', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='m'),
             'seaice_conc': VarDesc(name='sea_ice_concentration', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=100),
             'seaice_type': VarDesc(name='sea_ice_type', dtype='int', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=1),
         }
@@ -102,12 +102,12 @@ class Cs2SmosObs(Dataset):
         mask = kwargs['mask']
         name = kwargs['name']
         native_name = self.variables[name].name
-        assert isinstance(native_name, str)
+        assert isinstance(native_name, str), f"{native_name} is invalid name"
 
         obs_seq = {'obs':[], 't':[], 'z':[], 'y':[], 'x':[], 'err_std':[], }
 
         flist = self.filename(**kwargs)
-        ##CS2SMOS data is only available during winter (defined by self.season_start/end*)
+        # CS2SMOS data is only available during winter (defined by self.season_start/end*)
         #if filename returns empty list, then just return an empty obs_seq
         if len(flist) == 0:
             obs_seq_arr = {}
@@ -143,7 +143,7 @@ class Cs2SmosObs(Dataset):
                     obs_value = obs[p]
 
                     if self.use_dataset_uncertainty:
-                        obs_err_std = obs_err[p]  ##use uncertainty from dataset
+                        obs_err_std = obs_err[p]  # use uncertainty from dataset
                     else:
                         obs_err_std = kwargs['err']['std']
 

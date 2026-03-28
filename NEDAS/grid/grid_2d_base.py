@@ -381,7 +381,7 @@ class Grid2DBase(ABC):
                 If False (default) the input fld is a scalar field,
                 otherwise the input fld is a vector field.
             method (str, optional):
-                Interpolation method, 'linear' (default) or 'nearest' 
+                Interpolation method, 'linear' (default) or 'nearest'
             coarse_grain (bool, optional):
                 If True, the coarse-graining will be applied using self.coarsen(). The default is False.
 
@@ -421,7 +421,7 @@ class Grid2DBase(ABC):
     def distance(self, ref_x, x, ref_y, y, p=2, type='cartesian'):
         """
         Compute distance for points (x,y) to the reference point
-        
+
         Args:
             ref_x, ref_y (float):
                 reference point x,y coordinates
@@ -431,7 +431,7 @@ class Grid2DBase(ABC):
                 Minkowski p-norm order, default is 2
             type (str, optional):
                 distance type, 'cartesian' (default) or 'spherical'
-        
+
         Returns:
             Distances between x,y and the reference point ref_x, ref_y.
         """
@@ -728,8 +728,8 @@ class Grid2DBase(ABC):
         dv = (vmax - vmin) / nlevels
 
         if is_vector:
-            assert fld.shape[0] == 2
-            assert fld.shape[1:] == x.shape
+            assert fld.shape[0] == 2, f"vector field should have first dim==2"
+            assert fld.shape[1:] == x.shape, f"vector field shape does not match with grid"
             V = vmax
             L = 0.05 * self.Lx
             hl, hw = 0.3 * L, 0.15 * L

@@ -20,7 +20,7 @@ class Comm:
     >>> from mpi4py import MPI
     >>> comm = MPI.COMM_WORLD
 
-    However, when the program is run in 
+    However, when the program is run in
 
     Attributes:
         parallel_io (bool): If netCDF4.Dataset is built with parallel I/O support.
@@ -144,7 +144,7 @@ class Comm:
 
         self.cleanup_file_locks()
 
-        self._comm.Barrier()        
+        self._comm.Barrier()
 
         self._locks = {}
         self._MPI = None
@@ -245,7 +245,7 @@ def distribute_tasks(comm: Comm, tasks: np.ndarray|Sequence, load: np.ndarray|Se
     # assume equal load between tasks if not specified
     if load is None:
         load = np.ones(ntask)
-    
+
     # make sure load has right length
     _load = np.array(load)
     if _load.size != ntask:

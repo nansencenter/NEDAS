@@ -89,7 +89,7 @@ def nc_write_var(filename: str,
             dtype = type(dat).__name__
 
     ndim = len(dim)
-    s = ()  ##slice for each dimension
+    s = ()  # slice for each dimension
     d = 0
     for i, name in enumerate(dim):
         if dim[name] is None:
@@ -117,7 +117,7 @@ def nc_write_var(filename: str,
     else:
         dat = np.dtype(dtype).type(dat)
 
-    group[varname][s] = dat  ##write dat to file
+    group[varname][s] = dat  # write dat to file
 
     if attr is not None:
         for akey in attr:

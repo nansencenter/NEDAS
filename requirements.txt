@@ -7,7 +7,7 @@ netCDF4>=1.6.4
 PyYAML>=6.0.1
 pandas
 xarray
-# pyFFTW>=0.13.1 ##if not available, will use numpy.fft instead
-# numba>=0.57.0  ##optional, recommended for better performance
-# mpi4py>3.1.4   ##optional, but needed if running parallel computation
-# jupyter>1.0.0  ##optional, for notebook users
+# pyFFTW>=0.13.1 # if not available, will use numpy.fft instead
+# numba>=0.57.0  # optional, recommended for better performance
+# mpi4py>3.1.4   # optional, but needed if running parallel computation
+# jupyter>1.0.0  # optional, for notebook users

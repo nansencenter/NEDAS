@@ -25,7 +25,7 @@ class AMSR2Obs(Dataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.channels = ['tb19v', 'tb19h', 'tb37v', 'tb37h']  ##need to be the same order as listed in self.coefficients_file
+        self.channels = ['tb19v', 'tb19h', 'tb37v', 'tb37h']  # need to be the same order as listed in self.coefficients_file
 
         self.variables = {
             'dal': VarDesc(name='dal_SICCI3LF_corrSICCI3LF', dtype='float', is_vector= False, dt=24, levels=np.array([0]), z_units='m', units=100),
@@ -40,7 +40,7 @@ class AMSR2Obs(Dataset):
         for ch in self.channels:
             self.variables[ch] = VarDesc(name=ch, dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units='K')
 
-        ##obs is in NorthPolarStereo projection:
+        # obs is in NorthPolarStereo projection:
         self.proj = pyproj.Proj(self.proj4)
         self.grid = Grid.regular_grid(self.proj, self.xstart, self.xend, self.ystart, self.yend, self.dx)
 
@@ -93,7 +93,7 @@ class AMSR2Obs(Dataset):
         time = kwargs['time']
         obs_name = kwargs['name']
         native_name = self.variables[obs_name].name
-        assert isinstance(native_name, str)
+        assert isinstance(native_name, str), f"{native_name} is invalid name"
         native_units = self.variables[obs_name].units
 
         is_vector = self.variables[obs_name].is_vector
@@ -102,25 +102,25 @@ class AMSR2Obs(Dataset):
         if 'err' in kwargs:
             obs_err_std = kwargs['err']['std']
 
-        ##target grid for obs_seq
+        # target grid for obs_seq
         grid = kwargs['grid']
 
-        ##note: x,y are obs location on grid.proj (in meters)
-        ##      x0,y0,x1,y1 are position on rgps_proj (in kilometers),
-        ##      triangles: velocity is defined on nodes and deform on elements
-        ##      record: trajectory id, we process one record at a time
+        # note: x,y are obs location on grid.proj (in meters)
+        #       x0,y0,x1,y1 are position on rgps_proj (in kilometers),
+        #       triangles: velocity is defined on nodes and deform on elements
+        #       record: trajectory id, we process one record at a time
         obs_seq: dict = {'obs':[], 'err_std':[], 't':[], 'z':[], 'y':[], 'x':[]}
 
         for file in self.filename(**kwargs):
             with netCDF4.Dataset(file, 'r') as f:
-                ##read the tc_amsr-gw1_topaz5-6p25km_*.nc files for the observed tb data
-                ##flip y direction (the files have decreasing y coords)
+                # read the tc_amsr-gw1_topaz5-6p25km_*.nc files for the observed tb data
+                # flip y direction (the files have decreasing y coords)
                 tmp = f[native_name][0,::-1,:]
                 dtime = f['dtime'][0,::-1,:].data
                 dat = tmp.data
                 dat[tmp.mask] = np.nan
 
-            ##convert to target grid
+            # convert to target grid
             self.grid.set_destination_grid(grid)
             dat1 = self.grid.convert(dat, is_vector=is_vector, coarse_grain=True)
             dtime1 = self.grid.convert(dtime, is_vector=False, coarse_grain=True)
@@ -129,7 +129,7 @@ class AMSR2Obs(Dataset):
             mask1 = np.isnan(dat1)
             ones = np.ones(np.sum(~mask1))
 
-            ##build obs sequence
+            # build obs sequence
             obs_seq['obs'].append(dat1[~mask1])
             obs_seq['err_std'].append(ones*obs_err_std)
             obs_seq['t'].append([time + timedelta(seconds=1)*d for d in dtime1[~mask1]])
@@ -137,8 +137,8 @@ class AMSR2Obs(Dataset):
             obs_seq['y'].append(grid.y[~mask1])
             obs_seq['x'].append(grid.x[~mask1])
 
-        ##convert from list to np.array
-        ##raw data are kept in list format
+        # convert from list to np.array
+        # raw data are kept in list format
         for key in ('obs', 'err_std', 't', 'y', 'x', 'z'):
             obs_seq[key] = np.array(obs_seq[key]).flatten()
 
@@ -190,12 +190,12 @@ class AMSR2Obs(Dataset):
         ow_bias = self.ow_bias[channel]
 
         #load atmospheric data
-        ##option 1: for convenience I read the copy from observation files for now
+        # option 1: for convenience I read the copy from observation files for now
         #wind = self.read_obs(**{**kwargs, 'name': 'wind_speed', 'units': 'm/s'})['obs']
         #vapor = self.read_obs(**{**kwargs, 'name': 'water_vapor', 'units': 'g/kg'})['obs']
         #liquid = self.read_obs(**{**kwargs, 'name': 'liquid_water', 'units': 'g/kg'})['obs']
         #airtemp = self.read_obs(**{**kwargs, 'name': 'air_temp', 'units': 'K'})['obs']
-        ##option 2: read from model forcing files
+        # option 2: read from model forcing files
         wind_vector_from_model = model.read_var(**{**kwargs, 'name': 'atmos_surf_velocity', 'units': 'm/s'})
         wind_vector = model.grid.convert(wind_vector_from_model, is_vector=True)
         wind_on_grid = np.hypot(wind_vector[0,...], wind_vector[1,...])
@@ -215,7 +215,7 @@ class AMSR2Obs(Dataset):
         sic_on_grid = model.grid.convert(sic_from_model)
         sic = grid.interp(sic_on_grid, x, y)
 
-        ##these properties come from the observation files
+        # these properties come from the observation files
         dal = self.read_obs(**{**kwargs, 'name': 'dal', 'units': 1})['obs']
         eia = self.read_obs(**{**kwargs, 'name': 'eia', 'units': 'deg'})['obs']
 

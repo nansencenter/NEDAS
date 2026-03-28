@@ -39,7 +39,7 @@ class Model(Generic[GridT], ABC):
                  **kwargs) -> None:
         # prepare context
         if context is not None:
-            assert isinstance(context, Context)
+            assert isinstance(context, Context), f"{context} is not a Context object"
             self._c = context
         else:
             self._c = Context()  # use default context if not specified
@@ -62,9 +62,9 @@ class Model(Generic[GridT], ABC):
         return self._c
 
     def parse_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
-        ##args that pinpoints a certain model state variable
+        # args that pinpoints a certain model state variable
         if 'path' not in kwargs:
-            kwargs['path'] = '.'  ##default path is current dir
+            kwargs['path'] = '.'  # default path is current dir
 
         if 'member' not in kwargs:
             kwargs['member'] = None
@@ -72,7 +72,7 @@ class Model(Generic[GridT], ABC):
             assert kwargs['member'] >= 0, f"member index should be >= 0, got {kwargs['member']}"
 
         if 'name' not in kwargs:
-            kwargs['name'] = list(self.variables.keys())[0]  ##if not specified, use first variable listed
+            kwargs['name'] = list(self.variables.keys())[0]  # if not specified, use first variable listed
         assert kwargs['name'] in self.variables, f"'{kwargs['name']}' is not defined in model variables"
 
         if 'time' not in kwargs:
@@ -82,7 +82,7 @@ class Model(Generic[GridT], ABC):
 
         levels = list(self.variables[kwargs['name']].levels)
         if 'k' not in kwargs:
-            kwargs['k'] = levels[0]  ##set to the first level if not specified
+            kwargs['k'] = levels[0]  # set to the first level if not specified
         assert kwargs['k'] in levels, f"level {kwargs['k']} is not available for variable {kwargs['name']}"
 
         if 'units' not in kwargs:
@@ -169,7 +169,7 @@ class Model(Generic[GridT], ABC):
         Args:
             *args: Arguments
             **kwargs: Keyword arguments
-        
+
         Keyword Args:
             time (datetime): current time when forecast starts
             restart_dir (str): directory where restart files are located
@@ -193,7 +193,7 @@ class Model(Generic[GridT], ABC):
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         """
         Generate initial perturbed model states for ensemble forecasts.
-        
+
         Args:
             nens (int): ensemble size
             **kwargs

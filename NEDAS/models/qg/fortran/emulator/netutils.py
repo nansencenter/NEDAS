@@ -39,7 +39,7 @@ class Att_Res_UNet():
         shape_theta_x = keras.backend.int_shape(theta_x)
 
         phi_g = keras.layers.Conv2D(inter_shape, kernel_size = (1,1), padding = "same")(g)
-        upsample_g = keras.layers.Conv2DTranspose(inter_shape, (3,3), 
+        upsample_g = keras.layers.Conv2DTranspose(inter_shape, (3,3),
                                                      strides = (shape_theta_x[1] // shape_g[1], shape_theta_x[2] // shape_g[2]),
                                                      padding = "same")(phi_g)
 
@@ -89,7 +89,7 @@ class Att_Res_UNet():
             raise ValueError("Invalid pooling type. Must be 'Max' or 'Average'.")
 
         p = keras.layers.Dropout(self.dropout)(p)
-        return(f, p)  
+        return(f, p)
 
     def upsample_block(self, x, conv_features, n_filters, kernel_size = (3,3), strides = 2, padding = "same"):
         gating = self.gating_signal(x, n_filters)
@@ -99,7 +99,7 @@ class Att_Res_UNet():
         up_conv = self.residual_conv_block(up_att, n_filters,kernel_size=kernel_size)
         return(up_conv)
 
-    def make_unet_model(self): 
+    def make_unet_model(self):
         inputs = keras.layers.Input(shape = (*self.patch_dim, self.n_predictors))
         # Encoder (downsample)
         f1, p1 = self.downsample_block(inputs, self.n_filters[0], kernel_size=(7,7))

@@ -104,7 +104,7 @@ class Lorenz96Model(Model[Grid1D]):
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
-        ##create memory dict entry if not yet
+        # create memory dict entry if not yet
         if tag not in self.memory:
             self.memory[tag] = {}
         if name not in self.memory[tag]:

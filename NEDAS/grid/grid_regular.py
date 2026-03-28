@@ -200,7 +200,7 @@ class RegularGrid(Grid2DBase):
         ind = np.where(np.logical_and(in_coords[:,0]<0.5, in_coords[:,1]>=0.5))
         j_near[ind], i_near[ind] = j4[ind], i4[ind]
         nearest = j_near * self.nx + i_near
-        
+
         return inside, indices, vertices, in_coords, nearest
 
     def _fill_pole_void(self, fld):

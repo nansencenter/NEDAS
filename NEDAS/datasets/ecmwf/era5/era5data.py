@@ -15,7 +15,7 @@ class ERA5Data(Dataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##variable dictionary for ERA5 naming convention
+        # variable dictionary for ERA5 naming convention
         level_sfc = np.array([0])
         self.variables = {
             'atmos_surf_velocity': VarDesc(name=('10U', '10V'), dtype='float', is_vector=True, dt=6, levels=level_sfc, z_units='Pa', units='m/s'),
@@ -31,7 +31,7 @@ class ERA5Data(Dataset):
         }
         self.grid = None
 
-    ###format filename
+    # #format filename
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         assert kwargs['time'] is not None, 'please specify time'
@@ -60,7 +60,7 @@ class ERA5Data(Dataset):
             x, y = np.meshgrid(lon, lat)
         self.grid = Grid(Proj('+proj=longlat'), x, y, cyclic_dim='x', pole_dim='y', pole_index=(0,))
 
-    ##find the nearest index in data for the given t
+    # find the nearest index in data for the given t
     def find_time_index(self, time_series, time):
         t_ = (time - datetime(1900,1,1,tzinfo=timezone.utc)) / timedelta(hours=1)
         ind = np.abs(time_series - t_).argmin()
@@ -100,9 +100,9 @@ class ERA5Data(Dataset):
                     dat = f.variables[rec['name']][t_index, ...]
                     var = dat.data
                     var[dat.mask] = np.nan
-            ##convert units if necessary
+            # convert units if necessary
             if rec['name'] in ('TP', 'STRD', 'SSRD'):
-                ##need to convert the fluxes to per second units (they are per 6 hours in the dataset)
+                # need to convert the fluxes to per second units (they are per 6 hours in the dataset)
                 var /= 3600. * 6
 
         var = units_convert(rec['units'], kwargs['units'], var)

@@ -30,7 +30,7 @@ class QGFortranModel(Model):
         self.ny, self.nx = n, n
         x, y = np.meshgrid(np.arange(n), np.arange(n))
         self.grid = Grid(None, x, y, cyclic_dim='xy')
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##no grid points are masked
+        self.grid.mask = np.full(self.grid.x.shape, False)  # no grid points are masked
 
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
@@ -107,7 +107,7 @@ class QGFortranModel(Model):
         else:
             raise ValueError('unknown variable name '+kwargs['name'])
 
-        ##vertical interp between var1 and var2
+        # vertical interp between var1 and var2
         if k1 < self.nz-1:
             return (var1*(k2-k) + var2*(k-k1)) / (k2-k1)
         else:
@@ -150,11 +150,11 @@ class QGFortranModel(Model):
         restart_dir = kwargs['restart_dir']
         restart_file = self.filename(**{**kwargs, 'path':restart_dir})
 
-        ##restart file to be used in this experiment, in work_dir/cycle/...
+        # restart file to be used in this experiment, in work_dir/cycle/...
         input_file = self.filename(**kwargs)
         input_dir = os.path.dirname(input_file)
 
-        ##just cp the prepared files to the work_dir location
+        # just cp the prepared files to the work_dir location
         self.c.fs.make_dir(input_dir)
         self.c.fs.copy_file(restart_file, input_file)
 
@@ -181,34 +181,34 @@ class QGFortranModel(Model):
             psi_init_type = 'read'
             prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
         else:
-            ##this is initial run for spin up
+            # this is initial run for spin up
             psi_init_type = self.psi_init_type
             prep_input_cmd = ''
 
         qg_exe = os.path.join(self.model_code_dir, 'src', 'qg.exe')
 
-        ##build the shell command line
-        shell_cmd = ". "+self.model_env+"; "   ##enter the qg model env
-        shell_cmd += "cd "+run_dir+"; "         ##enter the run dir
-        shell_cmd += "rm -f restart.nml; "      ##clean up before run
-        shell_cmd += prep_input_cmd             ##prepare input file
-        shell_cmd += "JOB_EXECUTE "+qg_exe+" . " ##the qg model exe
-        shell_cmd += "> run.log 2>&1"               ##output to log
+        # build the shell command line
+        shell_cmd = ". "+self.model_env+"; "   # enter the qg model env
+        shell_cmd += "cd "+run_dir+"; "         # enter the run dir
+        shell_cmd += "rm -f restart.nml; "      # clean up before run
+        shell_cmd += prep_input_cmd             # prepare input file
+        shell_cmd += "JOB_EXECUTE "+qg_exe+" . " # the qg model exe
+        shell_cmd += "> run.log 2>&1"               # output to log
 
         log_file = os.path.join(run_dir, 'run.log')
 
-        ##give it several tries, each time decreasing time step
+        # give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
             self.c.run_job(shell_cmd, offset=task_id*self.nproc_per_run, **kwargs)
 
-            ##check output
+            # check output
             with open(log_file, 'rt') as f:
                 if 'Calculation done' in f.read():
                     break
 
-        ##check output
+        # check output
         with open(log_file, 'rt') as f:
             if 'Calculation done' not in f.read():
                 raise RuntimeError('errors in '+log_file)

@@ -90,7 +90,7 @@ def units_convert(units_from, units_to, var):
             },
             "from_base": {
                 "hPa": lambda x: x / 100.,
-                "bar": lambda x: x / 100000., 
+                "bar": lambda x: x / 100000.,
                 "mbar": lambda x: x / 100.,
             },
         },
@@ -125,11 +125,11 @@ def units_convert(units_from, units_to, var):
         elif units_from in to_base and units_to in from_base:
             # Convert to base, then from base to target
             var_base = to_base[units_from](var)
-            return from_base[units_to](var_base)    
+            return from_base[units_to](var_base)
 
     raise ValueError(f"Conversion of unit from '{units_from}' to '{units_to}' not supported.")
 
-##binary file io type conversion
+# binary file io type conversion
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}

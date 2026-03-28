@@ -64,7 +64,7 @@ class Context:
         self.formatter = progress.Formatter()
 
         # initialize the current time pointer
-        # prev_time and next_time properties provide the time for previous/next analysis cycle 
+        # prev_time and next_time properties provide the time for previous/next analysis cycle
         self.time = self.config.time
         # initialize the current iteration
         self.iter = self.config.iter
@@ -97,7 +97,7 @@ class Context:
         """
         Distribute mem_id across processors
         """
-        ##list of mem_id as tasks
+        # list of mem_id as tasks
         mem_list_full = [m for m in range(self.nens)]
         mem_list = parallel.distribute_tasks(self.comm_mem, mem_list_full)
         return mem_list
@@ -150,11 +150,11 @@ class Context:
         Split the communicator into member and record groups, according to :code:`nproc` and :code:`nproc_mem`.
         See :mod:`NEDAS.utils.parallel` module for more details.
         """
-        ##initialize mpi communicator (could be size 1 for serial program)
+        # initialize mpi communicator (could be size 1 for serial program)
         self.comm = parallel.Comm()
         comm_size = self.comm.Get_size()
 
-        self.pid = self.comm.Get_rank()  ##current processor id
+        self.pid = self.comm.Get_rank()  # current processor id
 
         # stop early if mpi environment is not ready (program is not called from mpirun)
         if not self.comm.mpi_ready:
@@ -166,7 +166,7 @@ class Context:
         if comm_size != self.config.nproc:
             raise RuntimeError(f"Config nproc={self.config.nproc} does not match with MPI COMM size={comm_size}.")
 
-        ##split comm so that nproc_mem * nproc_rec == nproc
+        # split comm so that nproc_mem * nproc_rec == nproc
         self.pid_mem = self.pid % self.config.nproc_mem
         self.pid_rec = self.pid // self.config.nproc_mem
         self.comm_mem = self.comm.Split(self.pid_rec, self.pid_mem)
@@ -192,7 +192,7 @@ class Context:
             other_opts = {k: v for k, v in grid_def.items() if k not in known_keys}
             self.grid = grid.Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
 
-            ##mask for invalid grid points (none for now, add option later)
+            # mask for invalid grid points (none for now, add option later)
             self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
             if 'mask' in grid_def and grid_def['mask'] is not None:
                 model_name = grid_def['mask']
@@ -203,7 +203,7 @@ class Context:
                     self.grid.mask = prepare_mask(self.grid)
 
         else:
-            ##get analysis grid from model module
+            # get analysis grid from model module
             model_def = self.config.model_def
             model_name = grid_def['type']
             if model_def is None or model_name not in model_def:

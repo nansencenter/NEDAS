@@ -9,12 +9,12 @@ class GricadJobSubmitter(OARJobSubmitter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##host specific settings
+        # host specific settings
         p = subprocess.run("hostname", capture_output=True, text=True)
         if p.stdout.replace('\n', '').replace(' ', '') in ['dahu-oar3', 'f-dahu']:
-            self.job_submit_node = None  ##don't need ssh for oarsub on compute nodes
+            self.job_submit_node = None  # don't need ssh for oarsub on compute nodes
         else:
-            ##job submit node based on queue type
+            # job submit node based on queue type
             if self.queue == 'devel':
                 self.job_submit_node = 'dahu-oar3'
             else:

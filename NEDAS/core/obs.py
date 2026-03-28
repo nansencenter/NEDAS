@@ -220,7 +220,7 @@ class Obs:
         k   -  -  -  -  v[k],   f   }dz   current layer
             ----------  z[k],   z  --------------------
         k+1 -  -  -  -  v[k+1]
-        
+
         layer thickness of the current level k is denoted as z, for the previous level as zp;
         the variable f are considered layer averages, so they are defined at layer centers.
         """
@@ -230,21 +230,21 @@ class Obs:
         dz = z # layer thickness for the first level
 
         if i == 0:
-            ##the first level: constant f from z0 to dz/2
+            # the first level: constant f from z0 to dz/2
             inds = (obs_z >= np.minimum(0, 0.5*dz)) & (obs_z < np.maximum(0, 0.5*dz))
             seq[..., inds] = f[..., inds]
 
         if i > 0:
-            dz = z - zp  ##layer thickness for level k
+            dz = z - zp  # layer thickness for level k
 
-            ##in between levels: linear interp between fp and f
+            # in between levels: linear interp between fp and f
             assert fp is not None
             assert zp is not None
             assert dzp is not None
             z_fp = zp - 0.5*dzp
             z_f = zp + 0.5*dz
             inds = (obs_z >= np.minimum(z_fp, z_f)) & (obs_z < np.maximum(z_fp, z_f))
-            ##there can be collapsed layers if z_f=z_fp
+            # there can be collapsed layers if z_f=z_fp
             zdiff = z_f - z_fp
             collapsed = (zdiff == 0)
             zdiff = np.where(collapsed, 1, zdiff)
@@ -253,7 +253,7 @@ class Obs:
             seq[..., inds] = fi[..., inds]
 
         if i == len(levels)-1:
-            ##the last level: constant f from z-dz/2 to z
+            # the last level: constant f from z-dz/2 to z
             inds = (obs_z >= np.minimum(z-0.5*dz, z)) & (obs_z <= np.maximum(z-0.5*dz, z))
             seq[..., inds] = f[..., inds]
 
@@ -264,7 +264,7 @@ class Obs:
 
     def validate_seq_shape(self, seq: np.ndarray, is_vector: bool) -> None:
         """
-        Validate the shape of an observation sequence. 
+        Validate the shape of an observation sequence.
         Allowed shape: (nobs,) for scalar obs seq; (2, nobs) for vector obs seq.
         """
         if not isinstance(seq, np.ndarray):
@@ -363,35 +363,35 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * c.config.nproc_mem + pid_mem_show
 
-        ##process the obs, each proc gets its own workload as a subset of
-        ##all proc goes through their own task list simultaneously
+        # process the obs, each proc gets its own workload as a subset of
+        # all proc goes through their own task list simultaneously
         nr = len(self.obs_rec_list[c.pid_rec])
         nm = len(mem_list[c.pid_mem])
         c.total_tasks = nr * nm
         for m, mem_id in enumerate(mem_list[c.pid_mem]):
             for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
-                ##this is the obs record to process
+                # this is the obs record to process
                 obs_rec = self.info.records[obs_rec_id]
 
                 c.debug_message = f"obs_prior mem{mem_id+1:03} {obs_rec.name:20}"
                 c.current_task = m*nr+r
 
                 seq = {}
-                ##need the coordinates for transform later
+                # need the coordinates for transform later
                 for key in ['x', 'y', 'z', 't', 'err_std']:
                     seq[key] = self.obs_seq[obs_rec_id][key]
-                ##obtain obs_prior values from model state
+                # obtain obs_prior values from model state
                 seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
 
-                ##misc. transform here
+                # misc. transform here
                 for transform_func in c.transform_funcs:
                     seq = transform_func.forward_obs(c, obs_rec, seq)
 
-                ##collect obs ensemble data to the local memory
+                # collect obs ensemble data to the local memory
                 getattr(self, f"obs_{tag}")[mem_id, obs_rec_id] = seq['obs']
         c.comm.Barrier()
 
-        ##output the obs sequeneces for debugging
+        # output the obs sequeneces for debugging
         if c.debug:
             for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
@@ -399,10 +399,10 @@ class Obs:
                 c.io.save_debug_data(c, file, {f'obs_{tag}':seq})
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
-        ##form the global list of obs (in serial mode the main loop is over this list)
+        # form the global list of obs (in serial mode the main loop is over this list)
         n_obs_rec = len(self.info.records)
 
-        i = {}  ##location in full obs vector on owner pid
+        i = {}  # location in full obs vector on owner pid
         for owner_pid in range(c.config.nproc_mem):
             i[owner_pid] = 0
 
@@ -417,7 +417,7 @@ class Obs:
                         i[owner_pid] += 1
 
         if getattr(c, 'shuffle_obs', False):
-            np.random.shuffle(obs_list)  ##randomize the order of obs (this is optional)
+            np.random.shuffle(obs_list)  # randomize the order of obs (this is optional)
 
         return obs_list
 
@@ -427,7 +427,7 @@ class Obs:
 
         Args:
             c (Context): the runtime context
-            input_obs (ObsSeq): obs_seq from process_all_obs(), dict[obs_rec_id, dict[key, np.array]]     
+            input_obs (ObsSeq): obs_seq from process_all_obs(), dict[obs_rec_id, dict[key, np.array]]
 
         Returns,
             LocalObsSeq: the lobs dict[obs_rec_id, dict[par_id, dict[key, np.array]]], key = 'obs','x','y','z','t'...
@@ -438,16 +438,16 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
-        ##        input_obs -> tmp_obs
-        tmp_obs = {}  ##local obs at intermediate stage
+        # Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
+        #         input_obs -> tmp_obs
+        tmp_obs = {}  # local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
-            ##all pid goes through their own mem_list simultaneously
+            # all pid goes through their own mem_list simultaneously
             for m in range(nm_max):
                 mem_id = None
                 seq = None
@@ -458,29 +458,29 @@ class Obs:
                 c.debug_message = f"transposing obs: {status}"
                 c.current_task = r*nm_max+m
 
-                ##prepare the obs seq for sending if not at the end of mem_list
+                # prepare the obs seq for sending if not at the end of mem_list
                 if m < len(mem_list[c.pid_mem]):
                     mem_id = mem_list[c.pid_mem][m]
-                    if mem_id == 0:  ##this is the obs seq, just let mem_id=0 send it
+                    if mem_id == 0:  # this is the obs seq, just let mem_id=0 send it
                         seq = input_obs[obs_rec_id].copy()
 
-                ##the collective send/recv follows the same idea under state.transpose_field_to_state
-                ##1) receive lobs_seq from src_pid, for src_pid<pid first
+                # the collective send/recv follows the same idea under state.transpose_field_to_state
+                # 1) receive lobs_seq from src_pid, for src_pid<pid first
                 for src_pid in range(0, c.pid_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         if src_mem_id == 0:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
 
-                ##2) send my obs chunk to a list of dst_pid, send to dst_pid>=pid first
-                ##   then cycle back to send to dst_pid<pid. i.e. the dst_pid sequence is
-                ##   [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
+                # 2) send my obs chunk to a list of dst_pid, send to dst_pid>=pid first
+                #    then cycle back to send to dst_pid<pid. i.e. the dst_pid sequence is
+                #    [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
                 if m < len(mem_list[c.pid_mem]):
                     for dst_pid in np.mod(np.arange(nproc_mem)+c.pid_mem, nproc_mem):
                         if mem_id == 0:
-                            ##this is the obs seq with keys 'obs','err_std','x','y','z','t'
-                            ##assemble the lobs_seq dict with same keys but subset obs_inds
-                            ##do this for each par_id to get the full lobs_seq
+                            # this is the obs seq with keys 'obs','err_std','x','y','z','t'
+                            # assemble the lobs_seq dict with same keys but subset obs_inds
+                            # do this for each par_id to get the full lobs_seq
                             lobs_seq = {}
                             for par_id in c.state.par_list[dst_pid]:
                                 lobs_seq[par_id] = {}
@@ -490,13 +490,13 @@ class Obs:
                                     lobs_seq[par_id][key] = seq[key][..., inds]
 
                             if dst_pid == c.pid_mem:
-                                ##pid already stores the lobs_seq, just copy
+                                # pid already stores the lobs_seq, just copy
                                 tmp_obs[obs_rec_id] = lobs_seq
                             else:
-                                ##send lobs_seq to dst_pid's lobs
+                                # send lobs_seq to dst_pid's lobs
                                 c.comm_mem.send(lobs_seq, dest=dst_pid, tag=m)
 
-                ##3) finish receiving lobs_seq from src_pid, for src_pid>pid now
+                # 3) finish receiving lobs_seq from src_pid, for src_pid>pid now
                 for src_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
@@ -504,8 +504,8 @@ class Obs:
                             tmp_obs[obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
         c.comm.Barrier()
 
-        ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
-        ##        tmp_obs -> output_obs
+        # Step 2: collect all obs records (all obs_rec_ids) on pid_rec
+        #         tmp_obs -> output_obs
         output_obs = {}
         for entry in c.comm_rec.allgather(tmp_obs):
             for key, data in entry.items():
@@ -540,20 +540,20 @@ class Obs:
 
         # c.print_1p('transpose obs prior ensemble to local obs priors\n')
 
-        ##Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
-        ##        input_obs -> tmp_obs
-        tmp_obs = {}  ##local obs at intermediate stage
+        # Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
+        #         input_obs -> tmp_obs
+        tmp_obs = {}  # local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
         nm_max = np.max([len(lst) for p,lst in mem_list.items()])
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
-            ##all pid goes through their own mem_list simultaneously
+            # all pid goes through their own mem_list simultaneously
             for m in range(nm_max):
                 mem_id = None
                 seq = None
-                ##prepare the obs seq for sending if not at the end of mem_list
+                # prepare the obs seq for sending if not at the end of mem_list
                 if m < len(mem_list[c.pid_mem]):
                     mem_id = mem_list[c.pid_mem][m]
                     seq = input_obs[mem_id, obs_rec_id].copy()
@@ -562,20 +562,20 @@ class Obs:
                 c.debug_message = f"transposing obs: {status}"
                 c.current_task = r*nm_max+m
 
-                ##the collective send/recv follows the same idea under state.transpose_field_to_state
-                ##1) receive lobs_seq from src_pid, for src_pid<pid first
+                # the collective send/recv follows the same idea under state.transpose_field_to_state
+                # 1) receive lobs_seq from src_pid, for src_pid<pid first
                 for src_pid in range(0, c.pid_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
                         tmp_obs[src_mem_id, obs_rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
 
-                ##2) send my obs chunk to a list of dst_pid, send to dst_pid>=pid first
-                ##   then cycle back to send to dst_pid<pid. i.e. the dst_pid sequence is
-                ##   [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
+                # 2) send my obs chunk to a list of dst_pid, send to dst_pid>=pid first
+                #    then cycle back to send to dst_pid<pid. i.e. the dst_pid sequence is
+                #    [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
                 if m < len(mem_list[c.pid_mem]):
                     for dst_pid in np.mod(np.arange(nproc_mem)+c.pid_mem, nproc_mem):
-                        ##this is the obs prior seq for mem_id, obs_rec_id
-                        ##for each par_id, assemble the subset lobs_seq using obs_inds
+                        # this is the obs prior seq for mem_id, obs_rec_id
+                        # for each par_id, assemble the subset lobs_seq using obs_inds
                         lobs_seq = {}
                         for par_id in c.state.par_list[dst_pid]:
                             inds = self.obs_inds[obs_rec_id][par_id]
@@ -583,13 +583,13 @@ class Obs:
                             lobs_seq[par_id] = seq[..., inds]
 
                         if dst_pid == c.pid_mem:
-                            ##pid already stores the lobs_seq, just copy
+                            # pid already stores the lobs_seq, just copy
                             tmp_obs[mem_id, obs_rec_id] = lobs_seq
                         else:
-                            ##send lobs_seq to dst_pid
+                            # send lobs_seq to dst_pid
                             c.comm_mem.send(lobs_seq, dest=dst_pid, tag=m)
 
-                ##3) finish receiving lobs_seq from src_pid, for src_pid>pid now
+                # 3) finish receiving lobs_seq from src_pid, for src_pid>pid now
                 for src_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[src_pid]):
                         src_mem_id = mem_list[src_pid][m]
@@ -597,8 +597,8 @@ class Obs:
 
         c.comm.Barrier()
 
-        ##Step 2: collect all obs records (all obs_rec_ids) on pid_rec
-        ##        tmp_obs -> output_obs
+        # Step 2: collect all obs records (all obs_rec_ids) on pid_rec
+        #         tmp_obs -> output_obs
         output_obs = {}
         for entry in c.comm_rec.allgather(tmp_obs):
             for key, data in entry.items():
@@ -633,14 +633,14 @@ class Obs:
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
-            ##all pid goes through their own mem_list simultaneously
+            # all pid goes through their own mem_list simultaneously
             for m in range(nm_max):
                 mem_id = None
                 seq = None
                 if m < len(mem_list[c.pid_mem]):
                     mem_id = mem_list[c.pid_mem][m]
                     rec = self.info.records[obs_rec_id]
-                    ##prepare an empty obs_seq for receiving if not at the end of mem_list
+                    # prepare an empty obs_seq for receiving if not at the end of mem_list
                     if rec.is_vector:
                         seq = np.full((2, rec.nobs), np.nan)
                     else:
@@ -650,29 +650,29 @@ class Obs:
                 c.debug_message = f"transposing obs: {status}"
                 c.current_task = r*nm_max+m
 
-                ##this is just the reverse of transpose_obs_to_lobs
-                ## we take the exact steps, but swap send and recv operations here
-                ##
-                ## 1) send my lobs to dst_pid, for dst_pid<pid first
+                # this is just the reverse of transpose_obs_to_lobs
+                #  we take the exact steps, but swap send and recv operations here
+                #
+                #  1) send my lobs to dst_pid, for dst_pid<pid first
                 for dst_pid in range(0, c.pid_mem):
                     if m < len(mem_list[dst_pid]):
                         dst_mem_id = mem_list[dst_pid][m]
                         c.comm_mem.send(lobs[dst_mem_id, obs_rec_id], dest=dst_pid, tag=m)
 
-                ## 2) receive fld_chk from a list of src_pid, from src_pid>=pid first
-                ##    because they wait to send stuff before able to receive themselves,
-                ##    cycle back to receive from src_pid<pid then.
+                #  2) receive fld_chk from a list of src_pid, from src_pid>=pid first
+                #     because they wait to send stuff before able to receive themselves,
+                #     cycle back to receive from src_pid<pid then.
                 if m < len(mem_list[c.pid_mem]):
                     assert mem_id is not None
                     for src_pid in np.mod(np.arange(nproc_mem)+c.pid_mem, nproc_mem):
                         if src_pid == c.pid_mem:
-                            ##pid already stores the lobs_seq, just copy
+                            # pid already stores the lobs_seq, just copy
                             lobs_seq = lobs[mem_id, obs_rec_id].copy()
                         else:
-                            ##send lobs_seq to dst_pid
+                            # send lobs_seq to dst_pid
                             lobs_seq = c.comm_mem.recv(source=src_pid, tag=m)
 
-                        ##unpack the lobs_seq to form a complete seq
+                        # unpack the lobs_seq to form a complete seq
                         for par_id in c.state.par_list[src_pid]:
                             inds = self.obs_inds[obs_rec_id][par_id]
                             assert seq is not None
@@ -680,7 +680,7 @@ class Obs:
 
                         obs_seq[mem_id, obs_rec_id] = seq
 
-                ## 3) finish sending lobs_seq to dst_pid, for dst_pid>pid now
+                #  3) finish sending lobs_seq to dst_pid, for dst_pid>pid now
                 for dst_pid in range(c.pid_mem+1, nproc_mem):
                     if m < len(mem_list[dst_pid]):
                         dst_mem_id = mem_list[dst_pid][m]
@@ -690,11 +690,11 @@ class Obs:
 
     def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns) -> dict:
         """pack lobs and lobs_prior into arrays for the jitted functions"""
-        n_obs_rec = len(self.info.records)        ##number of obs records
-        n_state_var = len(c.state.info.variables)   ##number of state variable names
+        n_obs_rec = len(self.info.records)        # number of obs records
+        n_state_var = len(c.state.info.variables)   # number of state variable names
 
-        ##filter out obs with nan in obs_prior, valid index stored as subset of local_inds
-        nlobs = 0  ##number of local obs on partition
+        # filter out obs with nan in obs_prior, valid index stored as subset of local_inds
+        nlobs = 0  # number of local obs on partition
         self.valid = {}
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
@@ -734,7 +734,7 @@ class Obs:
             valid = self.valid[obs_rec_id]
             local_inds = self.obs_inds[obs_rec_id][par_id]
             d = len(local_inds[valid])
-            ##append obs and obs prior records to the full array
+            # append obs and obs prior records to the full array
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
                 data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, valid])

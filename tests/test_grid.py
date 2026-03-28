@@ -27,7 +27,7 @@ class TestGrid(unittest.TestCase):
         dx = 1
         grid = Grid.regular_grid(proj, xstart, xend, ystart, yend, dx)
 
-        ##case 1: find one of the grid point
+        # case 1: find one of the grid point
         x, y = 10, 10
         inside, _, vertices, in_coords, nearest = grid.find_index(x, y)
         self.assertTrue(inside[0])
@@ -35,7 +35,7 @@ class TestGrid(unittest.TestCase):
         self.assertTrue((in_coords[0] == np.array([0., 0.])).all())
         self.assertEqual(nearest[0], 1010)
 
-        ##case 2: find a point inside the grid
+        # case 2: find a point inside the grid
         x, y = 10.8, 10.2
         inside, _, vertices, in_coords, nearest = grid.find_index(x, y)
         self.assertTrue(inside[0])
@@ -44,7 +44,7 @@ class TestGrid(unittest.TestCase):
         self.assertAlmostEqual(in_coords[0,1], 0.2)
         self.assertEqual(nearest[0], 1011)
 
-        ##case 3: find a point outside the grid
+        # case 3: find a point outside the grid
         x, y = -1, -1
         inside, _, _, _, _ = grid.find_index(x, y)
         self.assertFalse(inside[0])
@@ -54,7 +54,7 @@ class TestGrid(unittest.TestCase):
         x, y = np.meshgrid(np.arange(10), np.arange(10))
         grid = Grid(proj, x.flatten(), y.flatten(), regular=False)
 
-        ##case 1: find a point inside the irregular mesh
+        # case 1: find a point inside the irregular mesh
         x, y = 1.2, 2.7
         inside, _, vertices, in_coords, nearest = grid.find_index(x, y)
         self.assertTrue(inside[0])
@@ -70,7 +70,7 @@ class TestGrid(unittest.TestCase):
         dx = 1
         grid = Grid.regular_grid(proj, xstart, xend, ystart, yend, dx, cyclic_dim='xy')
 
-        ##a point outside grid boundary will still be found "inside"
+        # a point outside grid boundary will still be found "inside"
         x, y = -1, -1
         inside, _, vertices, in_coords, nearest = grid.find_index(x, y)
         self.assertTrue(inside[0])
@@ -79,20 +79,20 @@ class TestGrid(unittest.TestCase):
         self.assertEqual(nearest[0], 9999)
 
     def test_pole_dim(self):
-        grid1 = Grid.regular_grid(Proj('+proj=longlat'), -180, 181, 0, 91, 1, cyclic_dim='x')  ##lon lat grid
-        grid2 = Grid.regular_grid(Proj('+proj=stere +lat_0=90'), -1e6, 1e6, -1e6, 1e6, 1e4, centered=True)  ##polar stereographic grid
+        grid1 = Grid.regular_grid(Proj('+proj=longlat'), -180, 181, 0, 91, 1, cyclic_dim='x')  # lon lat grid
+        grid2 = Grid.regular_grid(Proj('+proj=stere +lat_0=90'), -1e6, 1e6, -1e6, 1e6, 1e4, centered=True)  # polar stereographic grid
 
-        ##a vector field with all zonal winds
+        # a vector field with all zonal winds
         u = np.ones(grid1.x.shape)
         v = np.zeros(grid1.x.shape)
         vfld1 = np.array([u, v])
 
-        ##case 1: pole_dim is not set, there will be nan after rotating vectors
+        # case 1: pole_dim is not set, there will be nan after rotating vectors
         grid1.set_destination_grid(grid2)
         vfld2 = grid1.convert(vfld1, is_vector=True)
         self.assertTrue(np.isnan(vfld2[0, 100, 100]))
 
-        ##case 2: when pole_dim is set, the void will be filled, so nan is gone
+        # case 2: when pole_dim is set, the void will be filled, so nan is gone
         grid1.pole_dim='y'
         grid1.pole_index=[-1,]
         grid1.set_destination_grid(grid2)
@@ -106,7 +106,7 @@ class TestGrid(unittest.TestCase):
         v = np.zeros(grid1.x.shape)
         vfld1 = np.array([u, v])
 
-        ##at domain center, vfld1 is (1, 0), after rotating to grid2, vfld2 should be (0, -1)
+        # at domain center, vfld1 is (1, 0), after rotating to grid2, vfld2 should be (0, -1)
         grid1.set_destination_grid(grid2)
         vfld2 = grid1.convert(vfld1, is_vector=True)
         self.assertAlmostEqual(vfld2[0, 100, 100], 0.0)

@@ -39,7 +39,7 @@ class TopazPrepObs(Dataset):
         dirname = vname
         native_name = vname
         if name == 'seaice_drift':
-            native_name += '?'   ##i=1, 2, 3, 4, 5: 2day drift in km with starting day = current day -i-1
+            native_name += '?'   # i=1, 2, 3, 4, 5: 2day drift in km with starting day = current day -i-1
 
         file_list = []
         if time is not None:
@@ -63,8 +63,8 @@ class TopazPrepObs(Dataset):
         model = kwargs.get('model')
         z = kwargs.get('z')
         if self.vthin:
-            ##check if model.z is available for vertical thinning
-            ##TODO: should use kwargs['z'] instead...
+            # check if model.z is available for vertical thinning
+            # TODO: should use kwargs['z'] instead...
             if model is None or not hasattr(model, 'z') or model.z is None:
                 print("WARNING: topaz.dataset: model.z levels are not provided, setting vthin to False")
                 self.vthin = False
@@ -76,7 +76,7 @@ class TopazPrepObs(Dataset):
         try:
             fname = self.filename(**kwargs)
         except AssertionError:
-            ##just return empty obs_seq if no matching files found
+            # just return empty obs_seq if no matching files found
             obs_seq_arr = {}
             for key in obs_seq.keys():
                 obs_seq_arr[key] = np.array([])
@@ -94,7 +94,7 @@ class TopazPrepObs(Dataset):
             obsType = os.path.basename(file).split('_')[1]
             if obsType[:5] == 'IDRFT':
                 lag_days = int(obsType[5]) + 1
-                t = time - dt1h * 24 * lag_days   ##start time of the drift vectors
+                t = time - dt1h * 24 * lag_days   # start time of the drift vectors
             else:
                 t = time
 
@@ -105,14 +105,14 @@ class TopazPrepObs(Dataset):
                     obs = data[i][0]
                 obs_seq['obs'].append(obs)
                 obs_seq['t'].append(t)
-                obs_seq['z'].append(-data[i][5])  ##depth
+                obs_seq['z'].append(-data[i][5])  # depth
                 lon, lat = data[i][3], data[i][4]
                 x, y = grid.proj(lon, lat)
                 obs_seq['y'].append(y)
                 obs_seq['x'].append(x)
                 obs_seq['err_std'].append(np.sqrt(data[i][1]))
 
-                ##additional info
+                # additional info
                 obs_seq['ipiv'].append(data[i][6])
                 obs_seq['jpiv'].append(data[i][7])
                 obs_seq['ns'].append(data[i][8])
@@ -124,23 +124,23 @@ class TopazPrepObs(Dataset):
                 obs_seq['date'].append(data[i][17])
 
         if self.vthin and name in ['ocean_temp', 'ocean_saln']:
-            ##thin observation profiles vertically by picking those closest to model levels only
+            # thin observation profiles vertically by picking those closest to model levels only
             mask = np.full(len(obs_seq['obs']), False)
-            
+
         obs_seq_arr = {}
         for key in obs_seq.keys():
             obs_seq_arr[key] = np.array(obs_seq[key])
 
         if is_vector:
-            obs_seq_arr['obs'] = obs_seq_arr['obs'].T  ##make vector dimension [2,nobs]
+            obs_seq_arr['obs'] = obs_seq_arr['obs'].T  # make vector dimension [2,nobs]
         return obs_seq_arr
 
     def get_seaice_drift(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        grid = kwargs['grid']  ##output grid
+        grid = kwargs['grid']  # output grid
         path = kwargs['path']
         member = kwargs['member']
-        model = kwargs['model']  ##model object
+        model = kwargs['model']  # model object
         model.grid.set_destination_grid(grid)
 
         start_x = np.array(kwargs['x'])
@@ -150,22 +150,22 @@ class TopazPrepObs(Dataset):
         y = start_y.copy()
         obs_seq = np.zeros((2,)+x.shape)
 
-        ##go through each of the 5 start times
+        # go through each of the 5 start times
         for uniq_start_t in np.unique(start_t):
             ind = np.where(start_t==uniq_start_t)
 
             for day in range(2):
                 t = uniq_start_t + day * dt1h * 24
 
-                ##get daily mean seaice velocity
+                # get daily mean seaice velocity
                 model_vel = model.read_var(path=path, name='seaice_velocity_daily', time=t, member=member, units='km/day')
-                ##convert to grid
+                # convert to grid
                 vel = model.grid.convert(model_vel, is_vector=True)
-                ##get velocity at x, y position
-                u = grid.interp(vel[0,...], x[ind], y[ind])  ##km over 1 day
+                # get velocity at x, y position
+                u = grid.interp(vel[0,...], x[ind], y[ind])  # km over 1 day
                 v = grid.interp(vel[1,...], x[ind], y[ind])
 
-                ##increment the x,y components
+                # increment the x,y components
                 x[ind] += u * 1000.
                 y[ind] += v * 1000.
 

@@ -13,7 +13,7 @@ def get_info(filename):
             ss = lin.split()
             if len(ss) < 2:
                 continue
-            ###get info about the variable record
+            # #get info about the variable record
             v_name = ss[0]
             v_type = ss[1]
             v_len = int(ss[2])
@@ -28,10 +28,10 @@ def get_info(filename):
             v_rec.update({'recno':recno})
             v_rec.update({'pos':pos})
 
-            ##add variable record to the info dict
+            # add variable record to the info dict
             info.update({v_name: v_rec})
 
-            ##position of starting point for f.seek
+            # position of starting point for f.seek
             pos += (4 + v_len *type_size[v_type])
     return info
 
@@ -58,13 +58,13 @@ def write_data(filename, v_name, v_data):
     info = get_info(filename)
     if v_name not in info:
         raise ValueError('variable %s not in %s' %(v_name, filename))
-    ##update info with new v_data
+    # update info with new v_data
     assert v_data.dtype == type_convert[info[v_name]['type']], "input data type mismatch with datfile record"
     assert v_data.size == info[v_name]['len'], f"input data size {v_data.size} mismatch with datfile record {info[v_name]['len']}"
     info[v_name]['min_val'] = np.nanmin(v_data)
     info[v_name]['max_val'] = np.nanmax(v_data)
 
-    ##write the dat file with updated info
+    # write the dat file with updated info
     with open(filename.replace('.bin','.dat'), 'wt') as f:
         for v in info:
             ss = '%s %s %i' %(v, info[v]['type'], info[v]['len'])
@@ -74,7 +74,7 @@ def write_data(filename, v_name, v_data):
                 ss += ' %g %g' %(info[v]['min_val'], info[v]['max_val'])
             f.write(ss+'\n')
 
-    ##write v_data to the bin file
+    # write v_data to the bin file
     with open(filename, 'r+b') as f:
         if len(v_data) != info[v_name]['len']:
             raise ValueError('v_data length does not match length on record')

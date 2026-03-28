@@ -7,7 +7,7 @@ from netCDF4 import Dataset
 from NEDAS.utils.parallel import distribute_tasks, Comm
 
 def read_chunks(filename, chk_list, var_list):
-    ##get the total dimensions for each variable
+    # get the total dimensions for each variable
     var_dims = {}
     chunks = {}
     with Dataset(filename+'_0000', 'r') as f:
@@ -43,7 +43,7 @@ def read_chunks(filename, chk_list, var_list):
             var_dims[vname] = (ni, nj, nk, dim_i, dim_j, dim_k)
             chunks[vname] = {}
 
-    ##each processor read subset of chunks
+    # each processor read subset of chunks
     for chk_id in chk_list:
         with Dataset(filename+f'_{chk_id:04d}', 'r') as f:
             for vname in var_list:
@@ -94,7 +94,7 @@ def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunk
     for v in range(nv_max):
         vname = None
         if v < len(var_list_pid[pid]):
-            ##prepare empty field for receiving chunks
+            # prepare empty field for receiving chunks
             vname = var_list_pid[pid][v]
             ni, nj, nk, _,_,_ = var_dims[vname]
             fields[vname] = np.full((nk, nj, ni), np.nan)
@@ -112,7 +112,7 @@ def transpose_chunks_to_fields(comm, chk_list_pid, var_list_pid, var_dims, chunk
                 else:
                     chks = comm.recv(source=src_pid, tag=v)
 
-                ##unpack chunks into the full field
+                # unpack chunks into the full field
                 for chk_id in chk_list_pid[src_pid]:
                     i1,i2,j1,j2,k1,k2, chk = chks[chk_id]
                     fields[vname][k1:k2, j1:j2, i1:i2] = chk

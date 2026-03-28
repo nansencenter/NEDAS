@@ -86,7 +86,7 @@ class Scheme(ABC):
     def external_call(self, step:str|None=None, **kwargs):
         """
         Run the scheme from an external call.
-        Saving the current context to a temporary config file, then run a subprocess to 
+        Saving the current context to a temporary config file, then run a subprocess to
         """
         script_file = os.path.abspath(inspect.getfile(self.__class__))
 
@@ -183,7 +183,7 @@ class Scheme(ABC):
         # setup an offline scheduler to distribute tasks
         # get number of available workers to initialize the scheduler
         total_nproc = opts.get('total_nproc', self.config.nproc)
-        assert total_nproc > opts['nproc']
+        assert total_nproc > opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
         nworker = total_nproc // opts['nproc']
 
         if opts['nproc']>1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
@@ -203,5 +203,5 @@ class Scheme(ABC):
                 'debug': self.config.debug,
             }
             scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
-        scheduler.start_queue() ##start the job queue
+        scheduler.start_queue() # start the job queue
         scheduler.shutdown()

@@ -62,21 +62,21 @@ def run(c: Context, **kwargs) -> None:
     if c.debug:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
 
-    ##if the viewer html file does not exist, generate it
+    # if the viewer html file does not exist, generate it
     viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, variables, figsize)
 
-    ##plot the variables defined in kwargs, save to figfile
+    # plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
-    ##read the field from bin file in analysis dir
+    # read the field from bin file in analysis dir
     var_prior = c.io.read_field(c, 'prior', rec_id, member)
     var_post = c.io.read_field(c, 'post', rec_id, member)
     incr = var_post - var_prior
 
-    ##plot the field
-    assert isinstance(c.grid, Grid2DBase)
+    # plot the field
+    assert isinstance(c.grid, Grid2DBase), f"{c.grid} is not a 2D Grid"
     try:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         if rec['is_vector']:
@@ -109,7 +109,7 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
 
     c.state = State(c)
 
-    ##replace the placeholder with the list of variables,levels,times,members
+    # replace the placeholder with the list of variables,levels,times,members
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
@@ -138,6 +138,6 @@ def generate_viewer_html(c, plot_dir, variables, figsize) -> None:
     html_page = html_page.replace("IMAGE_WIDTH", f"{figsize[0]*60}")
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
-    ##write the html page to file
+    # write the html page to file
     with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

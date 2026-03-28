@@ -67,7 +67,7 @@ def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
             raise RuntimeError('Currently, we only supports keyword of 1. "time_format",'
                                '2. "time_format"+"i".'
                                'See the example yaml file for more information. '
-                               'Modified the code if you have other requirements.') 
+                               'Modified the code if you have other requirements.')
     return fname
 
 

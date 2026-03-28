@@ -24,7 +24,7 @@ class JobSubmitter(ABC):
                  parallel_mode: ParallelMode='serial',
                  debug: bool=False,
                  **kwargs):
-        ## setting default parameters if not specified in kwargs
+        #  setting default parameters if not specified in kwargs
         self.job_name = job_name
         self.run_dir = run_dir
         self._nproc = nproc

@@ -21,16 +21,16 @@ class ForecastScheme(FilterAnalysisScheme):
                 if self.config.perturb:
                     self.run_step('perturb')
 
-            ##advance model state to next analysis cycle
+            # advance model state to next analysis cycle
             if self.config.run_forecast:
                 self.run_step('ensemble_forecast')
 
-            ##compute diagnostics
+            # compute diagnostics
             if self.config.run_diagnose:
                 if self.config.diag:
                     self.run_step('diagnose')
 
-            ##advance to next cycle
+            # advance to next cycle
             self.c.time = self.c.next_time
 
         self.c.print_1p("ALL FINISHED.\n")

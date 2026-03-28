@@ -95,7 +95,7 @@ class IOBackend(ABC):
     def load_ndarray(self, c: Context, name: str, path: str | None=None) -> np.ndarray | None:
         """
         Load ndarray from saved data
-        
+
         Args:
             c (Context): the runtime context
             name (str): the name of the data

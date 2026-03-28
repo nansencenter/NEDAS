@@ -12,7 +12,7 @@ class OARJobSubmitter(HPCJobSubmitter):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##set up temporary node file
+        # set up temporary node file
         if self.in_job_allocation:
             with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
@@ -37,7 +37,7 @@ class OARJobSubmitter(HPCJobSubmitter):
 
     @property
     def ppn_avail(self):
-        ##TODO: how to obtain this info from OAR system?
+        # TODO: how to obtain this info from OAR system?
         return 32
 
     def update_node_file(self):
@@ -67,18 +67,18 @@ class OARJobSubmitter(HPCJobSubmitter):
 
     def run_job_as_step(self, commands):
         super().run_job_as_step(commands)
-        ##clean up
+        # clean up
         os.remove(self.node_file)
 
     def submit_job_and_monitor(self, commands):
-        ##build the job script
+        # build the job script
         with tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                          dir=self.run_dir,
                                          prefix=self.job_name+'.',
                                          suffix='.sh') as job_script:
             job_script.write("#!/bin/bash\n")
 
-            ##OAR headers
+            # OAR headers
             job_script.write(f"#OAR -n {self.job_name}\n")
             job_script.write(f"#OAR -l /nodes={self.nnode}/core={self.ppn},walltime={seconds_to_timestr(self.walltime)}\n")
             job_script.write(f"#OAR --project {self.project}\n")
@@ -102,7 +102,7 @@ class OARJobSubmitter(HPCJobSubmitter):
         st = os.stat(self.job_script)
         os.chmod(self.job_script, st.st_mode | stat.S_IEXEC)
 
-        ##submit the job script
+        # submit the job script
         submit_cmd = self.job_submit_cmd()
         # YY: use text=True in subprocess.run stead of .decode('utf-8') on stdout later
         p = subprocess.run(submit_cmd, capture_output=True, text=True)
@@ -117,7 +117,7 @@ class OARJobSubmitter(HPCJobSubmitter):
 
         self.get_job_id(p.stdout)
 
-        ##monitor the queue for job completion
+        # monitor the queue for job completion
         if self.use_job_array:
             while True:
                 sleep(self.check_dt)
@@ -149,7 +149,7 @@ class OARJobSubmitter(HPCJobSubmitter):
 
     def job_submit_cmd(self):
         return ["oarsub", "-S", f"{self.job_script}"]
-    
+
     def get_job_id(self, stdout):
         if self.use_job_array:
             self.job_id = int(stdout.replace(' ', '').replace('\n', '').split('OAR_ARRAY_ID=')[-1])

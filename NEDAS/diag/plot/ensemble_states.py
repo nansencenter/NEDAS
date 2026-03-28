@@ -55,15 +55,15 @@ def run(c: Context, **kwargs) -> None:
     if c.debug:
         print(f"PID {c.pid:4} plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}", flush=True)
 
-    ##if the viewer html file does not exist, generate it
+    # if the viewer html file does not exist, generate it
     viewer = os.path.join(plot_dir, 'index.html')
     if not os.path.exists(viewer):
         generate_viewer_html(c, plot_dir, model_src, variables, figsize)
 
-    ##plot the variables defined in kwargs, save to figfile
+    # plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
-    ##read the field from model restart files
+    # read the field from model restart files
     model = c.models[model_src]
     if 'forecast_dir' in kwargs:
         fdir = kwargs['forecast_dir'].format(time=c.time)
@@ -75,7 +75,7 @@ def run(c: Context, **kwargs) -> None:
 
     rec = model.variables[vname]
 
-    ##plot the field
+    # plot the field
     try:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         if rec.is_vector:
@@ -103,7 +103,7 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     with open(os.path.join(os.path.dirname(__file__), 'viewer.html'), 'rt') as f:
         html_page = f.read()
 
-    ##replace the placeholder with the list of variables,levels,times,members
+    # replace the placeholder with the list of variables,levels,times,members
     levels_by_variable = ""
     times_by_variable = ""
     for vname in variables:
@@ -129,6 +129,6 @@ def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
     html_page = html_page.replace("IMAGE_WIDTH", f"{figsize[0]*60}")
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
-    ##write the html page to file
+    # write the html page to file
     with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)

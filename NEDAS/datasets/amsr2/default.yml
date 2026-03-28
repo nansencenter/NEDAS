@@ -2,7 +2,7 @@ dataset_dir: work
 coefficients_file: coefficients_2021_sorted.csv
 ow_bias_file: monthly_means_ow_bias_2021.csv
 
-##grid info
+# grid info
 proj4: "+proj=stere +R=6378273 +k=1 +lat_0=90 +lon_0=-45 +no_defs=None +type=crs +units=m +x_0=0 +y_0=0"
 xstart: -3.6e6
 xend: 3.801e6

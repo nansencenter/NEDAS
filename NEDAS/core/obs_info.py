@@ -30,7 +30,7 @@ class ObsInfo:
         variables = set()
         err_types = set()
 
-        ##loop through variables in obs_def
+        # loop through variables in obs_def
         for vrec in ensure_list(c.config.obs_def):
             vname = vrec['name']
             variables.add(vname)
@@ -58,14 +58,14 @@ class ObsInfo:
 
         Args:
             c (Context): the runtime context object
-            vrec (dict): the observation record defining its properties 
+            vrec (dict): the observation record defining its properties
         """
         vname = vrec['name']
         dataset = c.datasets[vrec['dataset_src']]
         variables = dataset.variables
         assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.dataset.variables'
 
-        ##parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
+        # parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
         impact_on_state = {}
         for state_name in c.state.info.variables:
             impact_on_state[state_name] = 1.0
@@ -73,7 +73,7 @@ class ObsInfo:
             for state_name, impact_fac in vrec['impact_on_state'].items():
                 impact_on_state[state_name] = impact_fac
 
-        ##loop through time steps in obs window
+        # loop through time steps in obs window
         time_steps = c.time + np.array(c.config.obs_time_steps)*dt1h
         rec_id = len(self.records)
         for time in time_steps:
@@ -90,7 +90,7 @@ class ObsInfo:
                 name=vname,
                 dataset_src=vrec['dataset_src'],
                 model_src=vrec['model_src'],
-                nobs=vrec.get('nobs', 0),  ##for synthetic observation use only, real obs will count nobs later in prepare_obs
+                nobs=vrec.get('nobs', 0),  # for synthetic observation use only, real obs will count nobs later in prepare_obs
                 obs_window_min=vrec.get('obs_window_min', dataset.obs_window_min),
                 obs_window_max=vrec.get('obs_window_max', dataset.obs_window_max),
                 dtype=variables[vname].dtype,
@@ -128,7 +128,7 @@ class ObsInfo:
     #         for rec in self.info['obs_seq'].values():
     #             f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['dataset_src'], rec['model_src'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
 
-    # ##read obs_info from the dat file
+    # # read obs_info from the dat file
     # def read_obs_info(self, binfile):
     #     with open(binfile.replace('.bin','.dat'), 'r') as f:
     #         lines = f.readlines()
@@ -136,7 +136,7 @@ class ObsInfo:
     #         ss = lines[0].split()
     #         self.info = {'nobs':int(ss[0]), 'nens':int(ss[1]), 'obs_seq':{}}
 
-    #         ##following lines of obs records
+    #         # following lines of obs records
     #         obs_id = 0
     #         for lin in lines[1:]:
     #             ss = lin.split()

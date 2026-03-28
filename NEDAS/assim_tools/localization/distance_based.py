@@ -17,7 +17,7 @@ def gaspari_cohn_func(dist, roi):
     dist = dist.flatten()
     lfactor = np.zeros(dist.shape)
     r = dist / (roi / 2)
-    r[np.where(r==0)] = 1e-10  ##avoid divide by 0
+    r[np.where(r==0)] = 1e-10  # avoid divide by 0
 
     ind1 = np.where(r<1)
     loc1 = (((-0.25*r + 0.5)*r + 0.625)*r - 5.0/3.0) * r**2 + 1

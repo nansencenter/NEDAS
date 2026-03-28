@@ -27,7 +27,7 @@ def get_task_list(c: Context, **kwargs):
     # overwrite with kwargs
     kwargs = {**kwargs_from_default, **kwargs_from_config_file, **kwargs}
 
-    ##generate task list
+    # generate task list
     tasks = []
     for member in range(c.nens):
         for vname in ensure_list(kwargs['variables']):
@@ -71,7 +71,7 @@ def run(c: Context, **kwargs):
         grid = model.grid
     proj_params = proj2dict(grid.proj)
     x = grid.x[0, :] / 1e5
-    y = grid.y[:, 0] / 1e5  ##convert to 100km units
+    y = grid.y[:, 0] / 1e5  # convert to 100km units
     lon, lat = grid.proj(grid.x, grid.y, inverse=True)
 
     if 'time' in kwargs:
@@ -114,10 +114,10 @@ def run(c: Context, **kwargs):
             fld_ = model.grid.convert(fld, is_vector=is_vector)
             # build dimension records
             dims = {}
-            dims[time_name] = None  ##make time dimension unlimited in nc file
+            dims[time_name] = None  # make time dimension unlimited in nc file
             k_name = kwargs.get('k_name')
             if len(levels) > 1:
-                dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
+                dims[k_name] = None  # add level dimension (unlimited) if there are multiple levels
             dims[y_name] = grid.ny
             dims[x_name] = grid.nx
             # output the variable

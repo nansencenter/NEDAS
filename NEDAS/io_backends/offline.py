@@ -29,10 +29,10 @@ class OfflineIO(IOBackend):
     def prepare_fields_storage(self, c: Context, tag: str):
         binfile = self.binfile_name(c, tag)
         if c.pid == 0:
-            ##create the .bin file
+            # create the .bin file
             with open(binfile, 'wb') as f:
                 pass
-            ##write state_info to the accompanying .dat file
+            # write state_info to the accompanying .dat file
             c.state.info.write_to_file(binfile)
         c.comm.Barrier()
 
@@ -41,13 +41,13 @@ class OfflineIO(IOBackend):
         Read a field from cache or binary file
         """
         self.validate_tag(tag)
-        ##check if it is available in cache
+        # check if it is available in cache
         if hasattr(c.state, f"fields_{tag}"):
             if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem]:
                 fields = getattr(c.state, f"fields_{tag}")
                 return fields[mem_id, rec_id]
 
-        ##otherwise, read it from binfile
+        # otherwise, read it from binfile
         rec = c.state.info.fields[rec_id]
         nv = 2 if rec.is_vector else 1
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape

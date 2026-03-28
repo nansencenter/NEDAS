@@ -71,8 +71,8 @@ class Topaz5Model(Model[RegularGrid]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        levels = np.arange(self.kdm) + 1  ##ocean levels, from top to bottom, k=1..kdm
-        level_sfc = np.array([0])    ##some variables are only defined on surface level k=0
+        levels = np.arange(self.kdm) + 1  # ocean levels, from top to bottom, k=1..kdm
+        level_sfc = np.array([0])    # some variables are only defined on surface level k=0
 
         self.restart_variables = {
             'ocean_velocity':    VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
@@ -99,7 +99,7 @@ class Topaz5Model(Model[RegularGrid]):
 
         self.iced_variables = {
             'seaice_velocity': VarDesc(name=('uvel', 'vvel'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
-        } ##TODO: the _ncat logic needs to change throughout
+        } # TODO: the _ncat logic needs to change throughout
         for n in range(self.ncat):
             self.iced_variables[f"seaice_conc_cat{n}"] = VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units)
             self.iced_variables[f"seaice_volume_cat{n}"] = VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
@@ -142,8 +142,8 @@ class Topaz5Model(Model[RegularGrid]):
             'ocean_surf_height': self.get_ocean_surf_height,
             'ocean_surf_height_anomaly': self.get_ocean_surf_height_anomaly,
             'ocean_surf_temp': self.get_ocean_surf_temp,
-            'seaice_conc': self.get_seaice_conc, 
-            'seaice_thick': self.get_seaice_thick, 
+            'seaice_conc': self.get_seaice_conc,
+            'seaice_thick': self.get_seaice_thick,
             'snow_thick': self.get_snow_thick,
         }
 
@@ -176,7 +176,7 @@ class Topaz5Model(Model[RegularGrid]):
         else:
             mstr = ''
 
-        ##filename for each model component
+        # filename for each model component
         if kwargs['name'] in self.restart_variables:
             tstr = kwargs['time'].strftime('%Y_%j_%H_%M%S')
             file = 'restart.'+tstr+mstr+'.a'
@@ -195,7 +195,7 @@ class Topaz5Model(Model[RegularGrid]):
             return os.path.join(kwargs['path'], file)
 
         elif kwargs['name'] in self.archive_variables:
-            tstr = kwargs['time'].strftime('%Y_%j_??')  ##archive variables are daily means
+            tstr = kwargs['time'].strftime('%Y_%j_??')  # archive variables are daily means
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
         elif kwargs['name'] in self.diag_variables:
@@ -213,8 +213,8 @@ class Topaz5Model(Model[RegularGrid]):
         if len(files) > 0:
             return files[0]
 
-        ##if no corresponding files found under the given path
-        ##try to find two layers above for the other cycle time
+        # if no corresponding files found under the given path
+        # try to find two layers above for the other cycle time
         dirs = path.split(os.sep)
         if dirs[-1] == 'topaz.v5' and len(dirs[-2])==12:
             root = os.sep.join(dirs[:-2])
@@ -239,7 +239,7 @@ class Topaz5Model(Model[RegularGrid]):
         name = kwargs['name']
         rec = self.variables[name].asdict()
 
-        ##get the variable from restart files
+        # get the variable from restart files
         if name in self.restart_variables:
             f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
             if rec['is_vector']:
@@ -252,7 +252,7 @@ class Topaz5Model(Model[RegularGrid]):
 
         elif name in self.iced_variables:
             if rec['is_vector']:
-                if name[-5:] == '_ncat':  ##ncat variable
+                if name[-5:] == '_ncat':  # ncat variable
                     var1 = nc_read_var(fname, rec['name'][0])[kwargs['k'],...]
                     var2 = nc_read_var(fname, rec['name'][1])[kwargs['k'],...]
                 else:
@@ -260,7 +260,7 @@ class Topaz5Model(Model[RegularGrid]):
                     var2 = nc_read_var(fname, rec['name'][1])
                 var = np.array([var1, var2])
             else:
-                if name[-5:] == '_ncat':  ##ncat variable
+                if name[-5:] == '_ncat':  # ncat variable
                     var = nc_read_var(fname, rec['name'])[kwargs['k'],...]
                 else:
                     var = nc_read_var(fname, rec['name'])
@@ -291,8 +291,8 @@ class Topaz5Model(Model[RegularGrid]):
                 f.close()
 
         elif name in self.diag_variables:
-            ## if the npy file exists, one could just read it to get the variable.
-            ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
+            #  if the npy file exists, one could just read it to get the variable.
+            #  but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
             if not os.path.exists(fname):
                 var = self.operator[name](**kwargs)
                 np.save(fname, var)
@@ -312,7 +312,7 @@ class Topaz5Model(Model[RegularGrid]):
         else:
             raise ValueError(f"read_var: ERROR: unknown variable name '{name}'")
 
-        ##convert units if necessary
+        # convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
@@ -324,12 +324,12 @@ class Topaz5Model(Model[RegularGrid]):
         name = kwargs['name']
         rec = self.variables[name].asdict()
 
-        ##convert back to old units
+        # convert back to old units
         var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.restart_variables:
-            ##open the restart file for over-writing
-            ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
+            # open the restart file for over-writing
+            # the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
             f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
             if rec['is_vector']:
                 for i in range(2):
@@ -339,7 +339,7 @@ class Topaz5Model(Model[RegularGrid]):
             f.close()
 
         elif name in self.iced_variables:
-            is_ncat = (name[-5:] == '_ncat')  ##if name is a multicategory variable (categories indexed by k)
+            is_ncat = (name[-5:] == '_ncat')  # if name is a multicategory variable (categories indexed by k)
             if rec['is_vector']:
                 for i in range(2):
                     if is_ncat:
@@ -398,26 +398,26 @@ class Topaz5Model(Model[RegularGrid]):
         - z: np.array
         The corresponding z field
         """
-        ##some defaults if not set in kwargs
+        # some defaults if not set in kwargs
         if 'k' not in kwargs:
             kwargs['k'] = 0
 
         z = np.zeros((self.jdm, self.idm))
         if kwargs['k'] == 0:
-            ##if level index is 0, this is the surface, so just return zeros
+            # if level index is 0, this is the surface, so just return zeros
             return z
         else:
-            ##get layer thickness and convert to units
+            # get layer thickness and convert to units
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick'].units ##should be Pa
+            rec['units'] = self.variables['ocean_layer_thick'].units # should be Pa
             if self.z_units == 'm':
-                dz = - self.read_var(**rec) / self.ONEM ##in meters, negative relative to surface
+                dz = - self.read_var(**rec) / self.ONEM # in meters, negative relative to surface
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
-            ##use recursive func, get previous layer z and add dz
+            # use recursive func, get previous layer z and add dz
             kwargs['k'] -= 1
             z_prev = self.z_coords(**kwargs)
             return z_prev + dz
@@ -435,7 +435,7 @@ class Topaz5Model(Model[RegularGrid]):
         thkk = f.read_field('thkk', level=0, tlevel=1)
         pbavg = f.read_field('pbavg', level=0, tlevel=1)
 
-        ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  ##valid points to calculate ssh on
+        ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  # valid points to calculate ssh on
 
         levels = list(self.variables['ocean_layer_thick'].levels)
         idm, jdm, kdm = self.grid.nx, self.grid.ny, len(levels)
@@ -493,19 +493,19 @@ class Topaz5Model(Model[RegularGrid]):
         seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
 
-        ##try to read it from iced file
+        # try to read it from iced file
         try:
-            rec['name'] = 'seaice_conc_ncat'  ##can use iceh or iced files
+            rec['name'] = 'seaice_conc_ncat'  # can use iceh or iced files
             rec['units'] = self.variables[rec['name']].units
             for k in range(len(self.variables[rec['name']].levels)):
                 seaice_conc += self.read_var(**{**rec, 'k':k})
         except FileNotFoundError:
-            ##if failed, try to read from iceh file
+            # if failed, try to read from iceh file
             rec['name'] = 'seaice_conc_daily'
             rec['units'] = self.variables[rec['name']].units
             seaice_conc = self.read_var(**rec)
-        
-        seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
+
+        seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  # discard below threadshold
         seaice_conc[self.grid.mask] = np.nan
         return seaice_conc
 
@@ -516,14 +516,14 @@ class Topaz5Model(Model[RegularGrid]):
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined before calling get_seaice_thick")
         seaice_conc = self.get_seaice_conc(**kwargs)
-        
+
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         rec['name'] = 'seaice_volume_ncat'
         rec['units'] = self.variables[rec['name']].units
         for k in range(len(self.variables[rec['name']].levels)):
             seaice_volume += self.read_var(**{**rec, 'k':k})
-        
+
         seaice_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'seaice')
@@ -545,7 +545,7 @@ class Topaz5Model(Model[RegularGrid]):
         rec['units'] = self.variables['snow_volume_ncat'].units
         for k in range(len(self.variables['snow_volume_ncat'].levels)):
             snow_volume += self.read_var(**{**rec, 'k':k})
-        
+
         snow_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'snow')
@@ -565,13 +565,13 @@ class Topaz5Model(Model[RegularGrid]):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-        ##make sure model run directory exists
+        # make sure model run directory exists
         self.c.fs.make_dir(run_dir)
 
-        ##generate namelists, blkdat, ice_in, etc.
+        # generate namelists, blkdat, ice_in, etc.
         namelist(self, time, forecast_period, run_dir)
 
-        ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
+        # copy synoptic forcing fields from a long record in basedir, will be perturbed later
         for varname in self.force_synoptic_names:
             forcing_file = self.forcing_file.format(member=kwargs['member']+1, time=time, name=varname)
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
@@ -579,7 +579,7 @@ class Topaz5Model(Model[RegularGrid]):
                 f = ABFileForcing(forcing_file, 'r')
             except FileNotFoundError:
                 #print(f"WARNING: {forcing_file} not found, skipping...")
-                if varname in ['tcwv', 'tclw']:  ##these two variables are optional
+                if varname in ['tcwv', 'tclw']:  # these two variables are optional
                     continue
                 else:
                     raise FileNotFoundError(f"preprocess: ERROR: forcing file {forcing_file} not found")
@@ -595,12 +595,12 @@ class Topaz5Model(Model[RegularGrid]):
             f.close()
             fo.close()
 
-        ##link necessary files for model run
+        # link necessary files for model run
         shell_cmd = f"cd {run_dir}; "
-        ##partition setting
+        # partition setting
         partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
         shell_cmd += f"ln -fs {partit_file} patch.input; "
-        ##topo files
+        # topo files
         for ext in ['.a', '.b']:
             file = os.path.join(self.basedir, 'topo', 'regional.grid'+ext)
             shell_cmd += f"ln -fs {file} .; "
@@ -610,11 +610,11 @@ class Topaz5Model(Model[RegularGrid]):
         shell_cmd += f"ln -fs {file} cice_kmt.nc; "
         file = os.path.join(self.basedir, 'topo', 'cice_grid.nc')
         shell_cmd += f"ln -fs {file} .; "
-        ##nest files
+        # nest files
         nest_dir = os.path.join(self.basedir, 'nest', self.E)
         shell_cmd += f"ln -fs {nest_dir} nest; "
-        ##TODO: there is extra logic in nhc_root/bin/expt_preprocess.sh to be added here
-        ##relax files
+        # TODO: there is extra logic in nhc_root/bin/expt_preprocess.sh to be added here
+        # relax files
         for ext in ['.a', '.b']:
             for varname in ['intf', 'saln', 'temp']:
                 file = os.path.join(self.basedir, 'relax', self.E, 'relax_'+varname[:3]+ext)
@@ -622,19 +622,19 @@ class Topaz5Model(Model[RegularGrid]):
             for varname in ['thkdf4', 'veldf4']:
                 file = os.path.join(self.basedir, 'relax', self.E, varname+ext)
                 shell_cmd += f"ln -fs {file} {varname+ext}; "
-        ##other forcing files
+        # other forcing files
         for ext in ['.a', '.b']:
-            ##rivers
+            # rivers
             file = os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.rivers'+ext}; "
-            ##seawifs
+            # seawifs
             file = os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
         self.c.run_job(shell_cmd)
 
-        ##copy restart files from restart_dir
+        # copy restart files from restart_dir
         restart_dir = kwargs['restart_dir']
-        ##job_submit_cmd = kwargs['job_submit_cmd']
+        # job_submit_cmd = kwargs['job_submit_cmd']
         tstr = time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
@@ -719,15 +719,15 @@ class Topaz5Model(Model[RegularGrid]):
 
     def postprocess_native(self, task_id=0, **kwargs):
         """Post processing the restart variables for next forecast"""
-        ## routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
+        #  routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
         kwargs = super().parse_kwargs(kwargs)
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
 
-        ##adjust ocean layer thickness dp
+        # adjust ocean layer thickness dp
         rec = kwargs.copy()
         rec['name'] = 'ocean_layer_thick'
-        rec['units'] = self.variables['ocean_layer_thick'].units ##should be Pa
+        rec['units'] = self.variables['ocean_layer_thick'].units # should be Pa
         levels = list(self.variables['ocean_layer_thick'].levels)
         dp = np.zeros((len(levels), self.grid.ny, self.grid.nx))
         for ilev, k in enumerate(levels):
@@ -736,7 +736,7 @@ class Topaz5Model(Model[RegularGrid]):
         for ilev, k in enumerate(levels):
             self.write_var(dp[ilev,...], **{**rec, 'k':k})
 
-        ##loop over fields in restart file
+        # loop over fields in restart file
         restart_file = self.filename(**{**kwargs, 'name':'ocean_temp'})
         f = ABFileRestart(restart_file, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
         for i, rec in f.fields.items():
@@ -745,7 +745,7 @@ class Topaz5Model(Model[RegularGrid]):
             k = rec['k']
             fld = f.read_field(name, tlevel=tlevel, level=k)
 
-            ##reset variables out of their normal range
+            # reset variables out of their normal range
             if name == 'temp':
                 saln = f.read_field('saln', tlevel=tlevel, level=k)
                 temp_min = -0.057 * saln
@@ -756,13 +756,13 @@ class Topaz5Model(Model[RegularGrid]):
                 fld[np.where(fld > self.MAX_OCEAN_SALN)] = self.MAX_OCEAN_SALN
                 fld[np.where(fld < self.MIN_OCEAN_SALN)] = self.MIN_OCEAN_SALN
             elif name == 'dp':
-                fld = dp[levels.index(k), ...]  ##set dp to the adjusted value
+                fld = dp[levels.index(k), ...]  # set dp to the adjusted value
 
-            ##write the field back
+            # write the field back
             f.overwrite_field(fld, None, name, tlevel=tlevel, level=k)
         f.close()
 
-        ##fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
+        # fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
         restart_dir = kwargs['restart_dir']
         prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_ncat'})
         post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_ncat'})
@@ -772,7 +772,7 @@ class Topaz5Model(Model[RegularGrid]):
         adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.grid.mask,
                              self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
 
-        ##update the diagnostic ice variables
+        # update the diagnostic ice variables
         self.write_var(fice, **{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         self.write_var(hice, **{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
 
@@ -797,12 +797,12 @@ class Topaz5Model(Model[RegularGrid]):
         self.c.run_job("touch "+log_file)
 
         run_success = False
-        ##early exit if the run is already finished
+        # early exit if the run is already finished
         if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
             run_success = True
 
         else:
-            ##check if input file exists
+            # check if input file exists
             input_files = []
             tstr = time.strftime('%Y_%j_%H_%M%S')
             for ext in ['.a', '.b']:
@@ -813,19 +813,19 @@ class Topaz5Model(Model[RegularGrid]):
                 if not os.path.exists(file):
                     raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
-            ##clean up some files from previous runs
+            # clean up some files from previous runs
             self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
             self.c.run_job(f"echo > {log_file}")
 
-            ##build the shell command line
+            # build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
             shell_cmd = ""
             if self.model_env:
-                shell_cmd =  ". "+self.model_env+"; "  ##enter topaz5 env
-            shell_cmd += "cd "+run_dir+"; "             ##enter run directory
+                shell_cmd =  ". "+self.model_env+"; "  # enter topaz5 env
+            shell_cmd += "cd "+run_dir+"; "             # enter run directory
             shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
 
-            ##run the model, give it 3 attempts
+            # run the model, give it 3 attempts
             for i in range(3):
                 try:
                     self.c.run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
@@ -835,13 +835,13 @@ class Topaz5Model(Model[RegularGrid]):
                     print(f"{e}, retrying ({2-i} attempts remain)")
                     self.c.run_job(f"cp {log_file} {log_file}.attempt{i}")
                     continue
-                ##check output
+                # check output
                 if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
                     run_success = True
                     break
         assert run_success, f"model run failed after 3 attempts, check in {run_dir}"
 
-        ##move the output restart files to forecast_dir
+        # move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)

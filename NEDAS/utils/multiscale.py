@@ -18,20 +18,20 @@ def lowpass_response(k2d, k1, k2):
     r[np.where(k2d<k1)] = 1.0
     r[np.where(k2d>k2)] = 0.0
     ind = np.where(np.logical_and(k2d>=k1, k2d<=k2))
-    ##cos-square transition
+    # cos-square transition
     r[ind] = np.cos((k2d[ind] - k1)*(0.5*np.pi/(k2 - k1)))**2
     return r
 
 def get_scale_component_spec_bandpass(grid, fld, character_length, s):
     assert grid.regular, "get_scale_component_spec_bandpass only works for regular grid"
 
-    ##convert length to wavenumber
+    # convert length to wavenumber
     L = max(grid.Lx, grid.Ly)
     character_k = L / np.array(character_length)
 
     nscale = len(character_k)
     if nscale == 1:
-        return fld ##nothing to be done, return the original field
+        return fld # nothing to be done, return the original field
 
     kx, ky = get_wn(fld)
     k2d = np.hypot(kx, ky)
@@ -51,28 +51,28 @@ def convolve(grid, fld, rgrid, response):
     kx, ky = get_wn(rgrid.x)
     ny, nx = rgrid.x.shape
     fld1 = fld.copy()
-    ##go through grid points in the field and perform convolution
+    # go through grid points in the field and perform convolution
     for i in np.ndindex(grid.x.shape):
-        ##shift to the grid point i position
+        # shift to the grid point i position
         r = response * np.exp(-2 * np.pi * complex(0,1) * (kx*grid.x[i] + ky*grid.y[i]) / L)
-        ##convert to physical space
+        # convert to physical space
         kernel = ifft2(r) * nx * ny / grid.x.size
         w = rgrid.convert(kernel)
-        ##perform convolution
+        # perform convolution
         fld1[i] = np.nansum(fld * w)
     return fld1
 
 def get_scale_component_convolve(grid, fld, character_length, s):
-    ##convert length to wavenumber
+    # convert length to wavenumber
     L = max(grid.Lx, grid.Ly)
     character_k = L / np.array(character_length)
 
     nscale = len(character_k)
     if nscale == 1:
-        ##nothing to be done, return the original field
+        # nothing to be done, return the original field
         return fld
 
-    ##make a regular grid for the kernel function
+    # make a regular grid for the kernel function
     rgrid = Grid.regular_grid(grid.proj, grid.xmin, grid.xmax, grid.ymin, grid.ymax, grid.dx)
     rgrid.set_destination_grid(grid)
     kx, ky = get_wn(rgrid.x)
@@ -134,9 +134,9 @@ def get_error_scale_factor(grid, character_length, s):
         response = r2 - r1
 
     for i in np.ndindex(grid.x.shape):
-        ##shift to the grid point i position
+        # shift to the grid point i position
         r = response * np.exp(-2 * np.pi * complex(0,1) * (kx*grid.x[i] + ky*grid.y[i]) / L)
-        ##convert to physical space
+        # convert to physical space
         kernel = ifft2(r) * nx * ny / grid.x.size
         w = rgrid.convert(kernel)
         err_scale_fac[i] = w[i]

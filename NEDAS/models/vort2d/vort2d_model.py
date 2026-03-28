@@ -25,14 +25,14 @@ class Vort2DModel(Model[RegularGrid]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##define the model grid
+        # define the model grid
         ii, jj = np.meshgrid(np.arange(self.nx), np.arange(self.ny))
         x = ii*self.dx
         y = jj*self.dx
         self.grid = RegularGrid(None, x, y, cyclic_dim='xy')
-        self.grid.mask = np.full(self.grid.x.shape, False)  ##no mask
+        self.grid.mask = np.full(self.grid.x.shape, False)  # no mask
 
-        levels = np.array([0])  ##there is no vertical levels
+        levels = np.array([0])  # there is no vertical levels
         self.variables = {
             'velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units='m'),
         }
@@ -180,7 +180,7 @@ class Vort2DModel(Model[RegularGrid]):
             self.run(path=self.truth_dir, time=t, forecast_period=kwargs['forecast_period'])
             t = next_t
             self.c.current_task += 1
-    
+
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         assert self.ens_init_dir is not None
         kwargs = super().parse_kwargs(kwargs)

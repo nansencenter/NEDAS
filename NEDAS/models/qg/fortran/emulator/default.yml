@@ -12,11 +12,11 @@ model_params:
   pooling_type: 'Max'
   dropout: 0.05
 
-kmax: 127  ## max resolved wavenumber; spectral resolution
-nz: 2  ## number of vertical layers
-F: 100  ## f^2*L^2/[(2pi)^2g H_0]
-beta: 16  ## beta_0*L^2/[(2pi)^2 U]
-dt: 0.00025  ## time step
+kmax: 127  #  max resolved wavenumber; spectral resolution
+nz: 2  #  number of vertical layers
+F: 100  #  f^2*L^2/[(2pi)^2g H_0]
+beta: 16  #  beta_0*L^2/[(2pi)^2 U]
+dt: 0.00025  #  time step
 
 nproc_per_run: 1
 nproc_per_util: 1

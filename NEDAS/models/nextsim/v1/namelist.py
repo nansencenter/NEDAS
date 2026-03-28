@@ -1,7 +1,7 @@
 import os
 
 def value_str(value):
-    ##convert values to string in namelist
+    # convert values to string in namelist
     if isinstance(value, bool):
         if value:
             vstr = 'true'
@@ -21,7 +21,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     -forecast_period: period (hour) to run the forecast
     -run_dir: directory where the model runtime files are stored
     """
-    ##start building the namelist content
+    # start building the namelist content
     nmlstr = "[mesh]\n"
     nmlstr += "filename="+value_str(m.msh_filename)+"\n"
     nmlstr += "[setup]\n"
@@ -96,7 +96,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "[debugging]\n"
     nmlstr += "check_fields_fast="+value_str(m.check_fields_fast)+"\n"
 
-    ##write the namelist to nextsim.cfg file
+    # write the namelist to nextsim.cfg file
     with open(os.path.join(run_dir, 'nextsim.cfg'), 'wt') as f:
         f.write(nmlstr)
 

@@ -20,7 +20,7 @@ class Grid1D:
     def __init__(self, x: np.ndarray, bounds=None, regular=True, cyclic=False, distance_type='cartesian', dst_grid=None):
 
         # coordinates and properties of the 2D grid
-        assert len(np.array(x).shape) == 1
+        assert len(np.array(x).shape) == 1, f"wrong shape of x: {x.shape}"
         self.x = x
         self.y = np.zeros(x.size)  # dummy y coords
         self.regular = regular

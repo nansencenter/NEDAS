@@ -18,7 +18,7 @@ def bool_str_fortran(value):
     return vstr
 
 def blkdat(m):
-    ##generate blkdat.input based on model object m
+    # generate blkdat.input based on model object m
     nmlstr =  f"ECWMF forcing; flx-s14w; LWcorr; precip+2mm; SSSrlx; FCT2 tsadvc.; 0-tracer.\n"
     nmlstr += f"Sigma0; GDEM3 init; KPP mixed layer; SeaWiFS mon KPAR; nested in ATLd0.08 2.6;\n"
     nmlstr += f"S-Z(15-11): dp00/f/x/i=3m/1.125/12m/1m; ds=1m/1.125/4m; src_2.2.12;\n"
@@ -220,7 +220,7 @@ def ports(m):
     return nmlstr
 
 def ice_in(m, time, forecast_period):
-    year_init = 1958 ##time.year
+    year_init = 1958 # time.year
     time_init = datetime(year_init, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     if time.tzinfo is None:
         time = time.replace(tzinfo=timezone.utc)
@@ -228,7 +228,7 @@ def ice_in(m, time, forecast_period):
     istep0 = int(np.floor(sec0 / m.cice_dt)) - 1
     npt = int(np.floor(forecast_period * 3600 / m.cice_dt)) + 1
 
-    ##namelist input for cice model "ice_in"
+    # namelist input for cice model "ice_in"
     nmlstr  = f"&setup_nml\n"
     nmlstr += f"    days_per_year = 365\n"
     nmlstr += f"    use_leap_years = .true.\n"

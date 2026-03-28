@@ -4,19 +4,19 @@ import subprocess
 import time
 
 def print_with_cache(msg: str) -> None:
-    ##previous message is cached so that new message is displayed only
-    ##when it's different from the previous one (avoid redundant output)
+    # previous message is cached so that new message is displayed only
+    # when it's different from the previous one (avoid redundant output)
     if not hasattr(print_with_cache, 'prev_msg'):
         setattr(print_with_cache, 'prev_msg', '')
 
-    ##only show at most nmsg messages
+    # only show at most nmsg messages
     if msg != getattr(print_with_cache, 'prev_msg', None):
         print(msg, flush=True, end="")
         setattr(print_with_cache, 'prev_msg', msg)
 
 def watch_files(files, timeout=1000, check_dt=1):
-    ##wait for file in files to appear, check every check_dt seconds
-    ##if timeout seconds passed but still file not found, raise error
+    # wait for file in files to appear, check every check_dt seconds
+    # if timeout seconds passed but still file not found, raise error
     if isinstance(files, list):
         file_list = files
     else:
@@ -30,10 +30,10 @@ def watch_files(files, timeout=1000, check_dt=1):
             raise RuntimeError(f"watch_files: timed out waiting for files {file_list}")
 
 def watch_log(logfile: str, keyword: str, timeout: int=1000, check_dt: int=1) -> None:
-    ##wait for keyword to appear in a logfile (indicating success in completion)
-    ##check every check_dt seconds
-    ##if logfile size grows (some active output is happening), reset the timer
-    ##if timeout is reached, raise error
+    # wait for keyword to appear in a logfile (indicating success in completion)
+    # check every check_dt seconds
+    # if logfile size grows (some active output is happening), reset the timer
+    # if timeout is reached, raise error
     elapsed_t = 0
     n0 = count_lines_in_file(logfile)
     while not find_keyword_in_file(logfile, keyword):
@@ -96,7 +96,7 @@ class Formatter:
     @property
     def error(self):
         return f"{self.red}ERROR{self.reset} ❌"
-    
+
     @property
     def pipe(self):
         assert self.tabspace > 1
@@ -147,7 +147,7 @@ class Formatter:
         width = self.progress_bar_width
         progress = (task_id + 1) / ntask if ntask > 0 else 1.0
         filled_width = int(progress * width)
-        
+
         bar = f"{self.yellow}{'━' * filled_width}{self.reset}{self.dim}{'─' * (width - filled_width)}{self.reset}"
         return f"[{bar}] {100*progress:3.0f}%"
 

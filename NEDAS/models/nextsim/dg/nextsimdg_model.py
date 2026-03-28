@@ -87,7 +87,7 @@ class NextsimDGModel(Model[RegularGrid]):
         time = kwargs['time']
         assert time is not None, 'nextsim.dg.filename: time needs to be specified, wildcard searching is not implemented.'
 
-        name = kwargs['name']  ##name of the variable
+        name = kwargs['name']  # name of the variable
         if name in self.native_variables:
             fname = restart.get_restart_filename(self.files['restart'], ens_mem_id, time)
 
@@ -103,17 +103,17 @@ class NextsimDGModel(Model[RegularGrid]):
         else:
             raise ValueError(f"variable {name} is not defined for nextsimdg model.")
 
-        ##fname is given by the format defined in config file
-        ##the source file is copied to path (cycle directory) in preprocess
-        ##this filename function will return the copy, not the original location defined by fname
+        # fname is given by the format defined in config file
+        # the source file is copied to path (cycle directory) in preprocess
+        # this filename function will return the copy, not the original location defined by fname
         return os.path.join(kwargs['path'], ens_mem_dir, os.path.basename(fname))
 
     def read_grid(self, **kwargs):
-        ## the nextsim dg grid is fixed, no need to update the grid at runtime
+        #  the nextsim dg grid is fixed, no need to update the grid at runtime
         pass
 
     def read_mask(self):
-        ## the nextsim dg grid is fixed, no need to update the mask at runtime
+        #  the nextsim dg grid is fixed, no need to update the mask at runtime
         if os.path.exists(self.mask_file):
             mask = nc_read_var(self.mask_file, 'data/mask')[:]
             return (mask==0)
@@ -143,8 +143,8 @@ class NextsimDGModel(Model[RegularGrid]):
                     var = nc_read_var(fname, rec['name'])
 
         elif name in self.diag_variables:
-            ## if the npy file exists, one could just read it to get the variable.
-            ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
+            #  if the npy file exists, one could just read it to get the variable.
+            #  but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
             if not os.path.exists(fname):
                 var = self.operator[name](**kwargs)
                 np.save(fname, var)
@@ -379,7 +379,7 @@ class NextsimDGModel(Model[RegularGrid]):
         cice = nc_read_var(restartfile, 'data/cice')
         hice = nc_read_var(restartfile, 'data/hice')
 
-        ##limit the cice between 0-1, and hice>0, before running the next forecast
+        # limit the cice between 0-1, and hice>0, before running the next forecast
         cice = dgLimit.limit_max(cice, 1.0)
         cice = dgLimit.limit_min(cice, 0.0)
         hice = dgLimit.limit_min(hice, 0.0)
@@ -416,7 +416,7 @@ class NextsimDGModel(Model[RegularGrid]):
         self.c.fs.make_dir(run_dir)
         namelist.make_namelist(self.files, self.model_config_file, run_dir, **kwargs)
 
-        ##build shell commands for running the model
+        # build shell commands for running the model
         shell_cmd = ""
         if self.model_env:
             shell_cmd += f". {self.model_env}; "
@@ -425,7 +425,7 @@ class NextsimDGModel(Model[RegularGrid]):
 
         self.c.run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
-        ##check if the restart file at next_time is produced
+        # check if the restart file at next_time is produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
         fname_out = os.path.join(run_dir, os.path.basename(fname_restart))
         if not os.path.exists(fname_out):
@@ -448,11 +448,11 @@ class NextsimDGModel(Model[RegularGrid]):
             self.c.fs.make_dir(ens_dir)
 
             kwargs['member'] = member
-            ##this creates run_dir/ens_??/nextsim.cfg
+            # this creates run_dir/ens_??/nextsim.cfg
             namelist.make_namelist(self.files, self.model_config_file,
                                    ens_dir, **kwargs)
 
-        ##build shell commands for running the model using job array
+        # build shell commands for running the model using job array
         shell_cmd = "echo starting the script...; "
         shell_cmd += f". {self.model_env}; "
         shell_cmd += f"cd {run_dir}; "
@@ -470,7 +470,7 @@ class NextsimDGModel(Model[RegularGrid]):
 
         self.c.run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
 
-        ##check if the restart files at next_time are produced
+        # check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
         for member in range(nens):
             ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
@@ -480,6 +480,6 @@ class NextsimDGModel(Model[RegularGrid]):
 
     def generate_truth(self, *args, **kwargs) -> None:
         return super().generate_truth(*args, **kwargs)
-    
+
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         return super().generate_init_ensemble(*args, **kwargs)

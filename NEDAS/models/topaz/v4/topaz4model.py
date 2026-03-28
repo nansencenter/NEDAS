@@ -48,7 +48,7 @@ class Topaz4Model(Model[RegularGrid]):
             'ocean_mixl_depth': VarDesc(name='dpmixl', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='Pa', z_units=self.z_units),
         }
 
-        ##model grid
+        # model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
 
@@ -58,7 +58,7 @@ class Topaz4Model(Model[RegularGrid]):
         f.close()
         self.depth = -depth.data
         self.grid.mask = np.asarray(depth.mask, dtype=bool)
-        
+
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
@@ -99,11 +99,11 @@ class Topaz4Model(Model[RegularGrid]):
         name = kwargs['name']
         rec = self.variables[name].asdict()
 
-        ##open the restart file for over-writing
-        ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
+        # open the restart file for over-writing
+        # the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
         f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny)
 
-        ##convert units back if necessary
+        # convert units back if necessary
         var = units_convert(kwargs['units'], rec['units'], var)
 
         if rec['is_vector']:
@@ -123,7 +123,7 @@ class Topaz4Model(Model[RegularGrid]):
 
     @lru_cache(maxsize=3)
     def _z_coords_cached(self, kwargs_tuple):
-        ##not checked for correctness yet
+        # not checked for correctness yet
         kwargs = dict(kwargs_tuple)
         if 'k' not in kwargs:
             kwargs['k'] = 0
@@ -181,10 +181,10 @@ class Topaz4Model(Model[RegularGrid]):
         kwargs_out = {**kwargs, 'time':next_time}
         output_file = self.filename(**kwargs_out)
 
-        ##create namelist config files
+        # create namelist config files
         namelist(self, time, forecast_period, run_dir)
 
-        ##link files
+        # link files
         partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
         os.system("cp "+partit_file+" patch.input")
 
@@ -194,7 +194,7 @@ class Topaz4Model(Model[RegularGrid]):
             os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'tbaric'+ext)+" tbaric"+ext)
         os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
 
-        ##TODO: switches for other forcing options
+        # TODO: switches for other forcing options
         forcing_path = None
         if self.forcing_frc == 'era5':
             forcing_path = self.era5_path
@@ -221,12 +221,12 @@ class Topaz4Model(Model[RegularGrid]):
         model_src = os.path.join(self.basedir, 'setup.src')
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
 
-        ##build the shell command line
-        shell_cmd =  ". "+model_src+"; "   ##enter topaz v4 env
-        shell_cmd += "cd "+run_dir+"; "          ##enter run directory
+        # build the shell command line
+        shell_cmd =  ". "+model_src+"; "   # enter topaz v4 env
+        shell_cmd += "cd "+run_dir+"; "          # enter run directory
         shell_cmd += f"JOB_EXECUTE {model_exe} {kwargs['member']+1} >& run.log"
 
-        for tr in range(2):  ##number of tries
+        for tr in range(2):  # number of tries
             with open(log_file, 'rt') as f:
                 if '(normal)' in f.read():
                     break

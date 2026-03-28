@@ -12,7 +12,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
 
     next_time = time + forecast_period * dt1h
 
-    ###wps namelist.wps
+    # #wps namelist.wps
     """
     nmlstr = "&share\n"
     nmlstr += "wrf_core = 'ARW',"
@@ -64,28 +64,28 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "&metgrid
     nmlstr += "fg_name         = 'FILE'
     nmlstr += "constants_name  = './TAVGSFC'
-    nmlstr += "io_form_metgrid = 2, 
+    nmlstr += "io_form_metgrid = 2,
     nmlstr += "opt_output_from_metgrid_path = './',
     nmlstr += "opt_metgrid_tbl_path         = 'metgrid/',
     nmlstr += "process_only_bdy = 5,
     nmlstr += "/
 
     nmlstr += "&mod_levs
-    nmlstr += "press_pa = 201300 , 200100 , 100000 , 
+    nmlstr += "press_pa = 201300 , 200100 , 100000 ,
     nmlstr += "/\n\n"
 
     with open(os.path.join(run_dir, 'namelist.wps'), 'wt') as f:
         f.write(nmlstr)
 
 
-    ##wrf namelist.input
+    # wrf namelist.input
     nmlstr = f"&time_control\n"
     nmlstr += f"run_days         = {int(forecast_period/24)},\n"
     nmlstr += f"run_hours        = {int(forecast_period%24)},\n"
     nmlstr += f"run_minutes      = {int(np.round(forecast_period - int(forecast_period)))},\n"
     nmlstr += f"run_seconds      = 0,\n"
     nmlstr += f"start_year       = 2019, 2019,
-    nmlstr += f"start_month      = 09,   09, 
+    nmlstr += f"start_month      = 09,   09,
     nmlstr += f"start_day        = 04,   04,
     nmlstr += f"start_hour       = 12,   12,
     nmlstr += f"end_year         = 2019, 2019,
@@ -150,7 +150,7 @@ def namelist(m, time, forecast_period, run_dir='.'):
     nmlstr += "/
 
     nmlstr += "&dynamics
-    nmlstr += "hybrid_opt                          = 2, 
+    nmlstr += "hybrid_opt                          = 2,
     nmlstr += "w_damping                           = 0,
     nmlstr += "diff_opt                            = 2,      2,
     nmlstr += "km_opt                              = 4,      4,

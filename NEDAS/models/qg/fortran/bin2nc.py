@@ -7,9 +7,9 @@ from NEDAS.utils.conversion import t2s, s2t, dt1h
 from NEDAS.utils.netcdf_lib import nc_write_var
 
 def main():
-    model_name = sys.argv[1] ##'qg'
-    nens = int(sys.argv[2]) ##20
-    tstr = sys.argv[3]  ##'202301021200'
+    model_name = sys.argv[1] # 'qg'
+    nens = int(sys.argv[2]) # 20
+    tstr = sys.argv[3]  # '202301021200'
 
     mem_list = np.arange(nens)
     model = QGFortranModel()

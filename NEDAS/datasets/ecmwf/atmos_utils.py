@@ -88,10 +88,10 @@ def strd_efimova_jacobs(tair,e,cc) :
    e_mbar = e * 0.01
 
    # Clear sky downwelling longwave flux from Eimova(1961)
-   strd = _stefanb * tair**4 * (0.746+0.0066*e_mbar) 
+   strd = _stefanb * tair**4 * (0.746+0.0066*e_mbar)
 
    # Cloud correction by Jacobs(1978)
-   strd = strd * (1. + 0.26 * cc) 
+   strd = strd * (1. + 0.26 * cc)
 
    return strd
 
@@ -102,11 +102,11 @@ def strd_maykut_jacobs(tair,e,cc) :
    # Below formula assumes pressure in mBar
    e_mbar = e * 0.01
 
-   # Clear sky downwelling longwave flux from Maykut and Church (1973). 
+   # Clear sky downwelling longwave flux from Maykut and Church (1973).
    strd = _stefanb * tair**4 * 0.7855
 
    # Cloud correction by Jacobs(1978)
-   strd = strd * (1. + 0.26 * cc) 
+   strd = strd * (1. + 0.26 * cc)
 
    return strd
 
@@ -184,7 +184,7 @@ def  relhumid(sva,svd,msl) :
    #    sva: saturatn vapour press at air temp [K]
    #    svd: saturatn vapour press at dew pt temp [K]
    #    msl: pressure at mean sea level [Pa]
-   # Output: 
+   # Output:
    #   relhumid: Relative Humidity
 
    # We use the Tetens formula:
@@ -244,19 +244,19 @@ def qsw0(qswtime,daysinyear,cc,plat,plon) :
    radian=rad
 #c
 #c --- -------------------------------------------------------------------
-#c --- compute 24 hrs mean solar radiation at the marine surface layer 
+#c --- compute 24 hrs mean solar radiation at the marine surface layer
 #c --- -------------------------------------------------------------------
 #C --- KAL: TODO - adhere to hycom time setup
    day=numpy.mod(qswtime,daysinyear)    #0 < day < 364
    day=numpy.floor(day)
 #c
-   dangle=pi2*day/float(daysinyear)   #day-number-angle, in radians 
+   dangle=pi2*day/float(daysinyear)   #day-number-angle, in radians
    if day<0. or day>daysinyear+1 :
       print('qsw0: Error in day for day angle')
       print('Day angle is ',day,daysinyear,qswtime)
       raise NameError("test")
-      
-# --- compute astronomic quantities -- 
+
+# --- compute astronomic quantities --
    decli=.006918+.070257*numpy.sin(dangle)   -.399912*numpy.cos(dangle)      \
                 +.000907*numpy.sin(2.*dangle)-.006758*numpy.cos(2.*dangle)   \
                 +.001480*numpy.sin(3.*dangle)-.002697*numpy.cos(3.*dangle)
@@ -269,7 +269,7 @@ def qsw0(qswtime,daysinyear,cc,plat,plon) :
    sin2=numpy.sin(plat*radian)*numpy.sin(decli)
    cos2=numpy.cos(plat*radian)*numpy.cos(decli)
 #
-# --- split each day into ifrac parts, and compute the solar radiance for 
+# --- split each day into ifrac parts, and compute the solar radiance for
 # --- each part. by assuming symmetry of the irradiance about noon, it
 # --- is sufficient to compute the irradiance for the first 12 hrs of
 # --- the (24 hrs) day (mean for the first 12 hrs equals then the mean
@@ -289,13 +289,13 @@ def qsw0(qswtime,daysinyear,cc,plat,plon) :
       srad =s0*sundv*cosz                  #extraterrestrial radiation
 #
 #         sdir=srad*0.7**(1./(cosz+eepsil))    #direct radiation component
-#         sdir=srad * exp(-0.356674943938732447/(cosz+eepsil))         
-# ---    KAL prevent underflow - .7^100 = 3x10^-16 
+#         sdir=srad * exp(-0.356674943938732447/(cosz+eepsil))
+# ---    KAL prevent underflow - .7^100 = 3x10^-16
       sdir=srad*0.7**(numpy.minimum(100.,1./(cosz+eepsil)))    #direct radiation component
 #
       sdif=((1.-absh2o)*srad-sdir)*.5               #diffusive radiation component
       altdeg=numpy.maximum(0.,numpy.arcsin(numpy.minimum(1.0,sin2+cos2)))*deg #solar noon altitude in degrees
-      cfac=(1.-0.62*cc+0.0019*altdeg)               #cloudiness correction 
+      cfac=(1.-0.62*cc+0.0019*altdeg)               #cloudiness correction
       ssurf=(sdir+sdif)*cfac
       stot=stot+ssurf
 
@@ -304,7 +304,7 @@ def qsw0(qswtime,daysinyear,cc,plat,plon) :
    radfl0=stot*fraci               #24-hrs mean shortw rad in w/m^2
 #
 # --  Original formula was wrong ...
-#     !cawdir(i,j)=1.-numpy.maximum(0.15,0.05/(scosz+0.15)) 
+#     !cawdir(i,j)=1.-numpy.maximum(0.15,0.05/(scosz+0.15))
 #     !cawdir(i,j)=1.-numpy.maximum(0.03,0.05/(scosz+0.15))  !Correction   - Mats
    cawdir=1.-numpy.minimum(0.15,0.05/(scosz+0.15))   #Correction 2 - KAL
 #     enddo

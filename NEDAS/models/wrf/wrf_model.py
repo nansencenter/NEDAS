@@ -29,11 +29,11 @@ class WRFModel(Model[RegularGrid]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##derived default values
+        # derived default values
         self.ref_x = self.e_we[0] / 2
         self.ref_y = self.e_sn[0] / 2
 
-        levels = np.arange(1, self.e_vert[0]+1, 1)  ##use domain 1 setting for z levels
+        levels = np.arange(1, self.e_vert[0]+1, 1)  # use domain 1 setting for z levels
         level_sfc = np.array([0])
         self.variables = {
             'atmos_velocity': VarDesc(name=('u_1', 'v_1'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
@@ -66,8 +66,8 @@ class WRFModel(Model[RegularGrid]):
         else:
             raise ValueError(f'unknown map_proj type {self.map_proj}')
 
-        ##staggering here?
-        ##again, use domain 1 settings for grid
+        # staggering here?
+        # again, use domain 1 settings for grid
         x_coords = (np.arange(self.e_we[0]) - self.ref_x) * self.dx
         y_coords = (np.arange(self.e_sn[0]) - self.ref_y) * self.dy
         x, y = np.meshgrid(x_coords, y_coords)
@@ -106,10 +106,10 @@ class WRFModel(Model[RegularGrid]):
 
         log_file = 'rsl.error.0000'
 
-        ##collect restart variables from bin and write to wrfrst
+        # collect restart variables from bin and write to wrfrst
 
-        ##build the run command
-        shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
+        # build the run command
+        shell_cmd = ". "+wrf_src+"; "   # enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
         self.c.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
@@ -118,5 +118,5 @@ class WRFModel(Model[RegularGrid]):
 
         # "SUCCESS COMPLETE" in log_file
 
-        ##wrfrst at nexttime collect to bin file
+        # wrfrst at nexttime collect to bin file
 

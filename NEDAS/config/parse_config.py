@@ -23,15 +23,15 @@ def convert_notation(data):
     elif isinstance(data, list):
         return [convert_notation(element) for element in data]
     elif isinstance(data, str):
-        ## Match scientific notation pattern and convert to float
+        #  Match scientific notation pattern and convert to float
         if re.match(r'^-?\d+(\.\d*)?[eE]-?\d+$', data):
             return float(data)
-        ## convert "inf" to numpy.inf
+        #  convert "inf" to numpy.inf
         elif data.lower() == "inf":
             return numpy.inf
         elif data.lower() == "-inf":
             return -numpy.inf
-        ## convert string to bool
+        #  convert string to bool
         elif data.lower() in ['y', 'yes', 'on', 't', 'true', '.true.']:
             return True
         elif data.lower() in ['n', 'no', 'off', 'f', 'false', '.false.']:
@@ -89,16 +89,16 @@ def parse_config(code_dir: str='.', config_file: str|None=None, parse_args: bool
             if isinstance(loaded_config, dict):
                 config_dict = loaded_config
 
-    ##optionally, a config file can be specified at runtime
-    ##through the config_file argument, build a parser for this
+    # optionally, a config file can be specified at runtime
+    # through the config_file argument, build a parser for this
     parser = argparse.ArgumentParser(description='Parse configuration', add_help=False)
     parser.add_argument('-c', '--config_file')
     parser.add_argument('-h', '--help', action='store_true')
 
-    ##parse --config_file and --help first
+    # parse --config_file and --help first
     args, remaining_args = parser.parse_known_args(input_args) # type: ignore
 
-    ##update config_dict if new config_file is provided
+    # update config_dict if new config_file is provided
     if config_file is not None:
         with open(config_file, 'r') as f:
             loaded_config = yaml.safe_load(f)
@@ -114,11 +114,11 @@ def parse_config(code_dir: str='.', config_file: str|None=None, parse_args: bool
     if not isinstance(config_dict, dict):
         config_dict = {}
 
-    ##append new config variables defined in kwargs
+    # append new config variables defined in kwargs
     config_dict = {**config_dict, **kwargs}
 
-    ##continue building the parser with additional arguments to update
-    ##individual config variables in config_dict
+    # continue building the parser with additional arguments to update
+    # individual config variables in config_dict
     parser = argparse.ArgumentParser()
 
     for key, value in config_dict.items():
@@ -126,18 +126,18 @@ def parse_config(code_dir: str='.', config_file: str|None=None, parse_args: bool
         value = convert_notation(value)
         key_rec['default'] = value
         if value is not None:
-            ##bool variable type needs special treatment for parsing runtime input string
+            # bool variable type needs special treatment for parsing runtime input string
             if isinstance(value, bool):
                 key_rec['type'] = lambda x: bool(str2bool(x))
             else:
                 key_rec['type'] = type(value)
-            ##help message shows the default value and type for this argument
+            # help message shows the default value and type for this argument
             key_rec['help'] = f"type: {type(value).__name__}, default: {value}".replace('%','%%')
 
-        ##add the argument to parser
+        # add the argument to parser
         parser.add_argument('--'+key, **key_rec)
 
-    ##show help message
+    # show help message
     if args.help:
         print(f"""
 Default configuration variables are defined in 'default.yml' in the code directory.
@@ -149,8 +149,8 @@ Furthermore, you can also overwrite some configuration variables by specifying t
         parser.print_help()
         exit()
 
-    ##run the parser to get the config namespace object
+    # run the parser to get the config namespace object
     config, remaining_args = parser.parse_known_args(remaining_args)
 
-    ##return the dict with config variables
+    # return the dict with config variables
     return vars(config)

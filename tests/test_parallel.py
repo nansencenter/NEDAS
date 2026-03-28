@@ -1,4 +1,4 @@
-##check if your mpi environment is correctly setup
+# check if your mpi environment is correctly setup
 import numpy as np
 import unittest
 from NEDAS.utils.parallel import Comm, distribute_tasks
@@ -58,12 +58,12 @@ class TestParallel(unittest.TestCase):
             self.assertTrue((np.array(gather_data) == np.arange(self.nproc)).all())
 
     def test_distribute_tasks_case1(self):
-        ##case1: one task per self.pid
+        # case1: one task per self.pid
         task_list = distribute_tasks(self.comm, np.arange(self.nproc))
         self.assertEqual(task_list[self.pid][0], self.pid)
 
     def test_distribute_tasks_case2(self):
-        ##case2: more tasks than self.nproc
+        # case2: more tasks than self.nproc
         ntasks = 10*self.nproc
         task_list = distribute_tasks(self.comm, np.arange(ntasks))
         full_task_list = []
@@ -73,7 +73,7 @@ class TestParallel(unittest.TestCase):
         self.assertTrue((np.array(full_task_list) == np.arange(ntasks)).all())
 
     def test_distribute_tasks_case3(self):
-        ##case3: fewer tasks than self.nproc
+        # case3: fewer tasks than self.nproc
         ntasks = np.max(1, self.nproc//10)
         task_list = distribute_tasks(self.comm, np.arange(ntasks))
         full_task_list = []
@@ -83,7 +83,7 @@ class TestParallel(unittest.TestCase):
         self.assertTrue((np.array(full_task_list) == np.arange(ntasks)).all())
 
     def test_distribute_tasks_case4(self):
-        ##case4: uneven workload for 100 tasks
+        # case4: uneven workload for 100 tasks
         ntasks = 100
         workload = np.random.randint(1, 10, ntasks)
         task_list = distribute_tasks(self.comm, np.arange(ntasks), workload)
