@@ -1,6 +1,12 @@
+try:
+    from ._version import version as __version__
+except ImportError:
+    from importlib.metadata import version, PackageNotFoundError
+    try:
+        __version__ = version("NEDAS")
+    except PackageNotFoundError:
+        __version__ = "unknown"
 
-__version__ = "1.2.0"
+from .schemes import get_scheme
 
-from . import utils, grid, config, core, datasets, models, assim_tools, schemes
-
-__all__ = ['utils', 'grid', 'config', 'core', 'datasets', 'models', 'assim_tools', 'schemes']
+__all__ = ['get_scheme', '__version__']

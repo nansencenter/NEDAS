@@ -1,16 +1,16 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=42", "setuptools-scm>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "NEDAS"
-version = "1.1.0"
+dynamic = ["version"]
 authors = [
   {name="Yue Ying", email="yue.ying@nersc.no"},
 ]
-description = ""
+description = "Next-generation Ensemble Data Assimilation System"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: BSD License",
@@ -44,4 +44,5 @@ Homepage = "https://github.com/nansencenter/NEDAS"
 [tool.setuptools.packages.find]
 where = ["."]
 
-
+[tool.setuptools_scm]
+write_to = "NEDAS/_version.py"
