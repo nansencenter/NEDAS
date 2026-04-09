@@ -6,6 +6,7 @@ from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
 from pyproj import Proj
+from NEDAS import __version__
 from NEDAS.utils import parallel, progress
 from NEDAS.config import Config
 from NEDAS import grid, models, datasets, assim_tools, io_backends, job_submitters
@@ -23,12 +24,7 @@ class Context:
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
     pid_show: int
-    formatter: progress.Formatter
-    elapsed_time: float
-    call_stack: list[dict[str, Any]]
-    _current_task: int = 0
-    _total_tasks: int = 0
-    _debug_message: str = ''
+    progress: progress.Progress
     fs: FileSystem
     io: IOBackend
     jsub: JobSubmitter
@@ -57,11 +53,8 @@ class Context:
         else:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
-        self.call_stack = []
-        if self.config.call_stack:
-            self.call_stack = self.config.call_stack
         self.debug = self.config.debug
-        self.formatter = progress.Formatter()
+        self.progress = progress.Progress(self.debug, self.config.call_stack, self.config.call_stack_max_level)
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle
@@ -245,50 +238,34 @@ class Context:
             self.datasets[dataset_name] = DatasetClass(context=self, **(kwargs or {}))
 
     @property
-    def current_func(self):
-        if self.call_stack:
-            return self.call_stack[-1]['name']
-        return ''
-
-    @property
     def total_tasks(self):
-        return self._total_tasks
+        return self.progress.current_func['total_tasks']
 
     @total_tasks.setter
     def total_tasks(self, value: int):
-        self._total_tasks = value
-        if self.debug:
-            self.print_1p(f"total tasks: {self._total_tasks}\n")
+        self.progress.current_func['total_tasks'] = value
+        self.progress.debug_message = f"total tasks: {value}\n"
 
     @property
     def current_task(self):
-        return self._current_task
+        return self.progress.current_func['current_task']
 
     @current_task.setter
     def current_task(self, value: int):
-        self._current_task = value
-        self.show_progress()
+        self.progress.current_func['current_task'] = value
+        self.print_1p(self.progress.status_line)
 
     @property
     def debug_message(self):
-        return self._debug_message
+        return self.progress.debug_message
 
     @debug_message.setter
-    def debug_message(self, value: str):
-        self._debug_message = value
+    def debug_message(self, message: str):
+        self.progress.debug_message = message
+        # show the debug message with PID info.
+        # this uses the print since all PID ranks shall print its own message
         if self.debug:
-            print(f"PID {self.pid:4}: {self._debug_message}", flush=True)
-
-    @property
-    def print_1p(self):
-        """
-        Customized print function for showing runtime message.
-
-        Only the processor with ID = self.pid_show will show the message,
-        this avoids the redundancy if all processors are showing the same message.
-        """
-        decorator = parallel.by_rank(self.comm, self.pid_show)
-        return decorator(progress.print_with_cache)
+            print(f"PID {self.pid:4}: {message}", flush=True)
 
     def timer(self, func: Callable):
         """
@@ -304,7 +281,7 @@ class Context:
                 return func(*args, **kwargs)
             finally:
                 t1 = time.time()
-                self.elapsed_time = t1 - t0
+                self.progress.elapsed_time = t1 - t0
         return wrapper
 
     def logger(self, func_name: str):
@@ -315,85 +292,37 @@ class Context:
             @wraps(func)
             def wrapper(*args, **kwargs):
                 try:
-                    self.call_stack_push(func_name)
+                    self.progress.call_stack_push(func_name)
+                    # run the func with timer decorator to get elapsed_time
                     return self.timer(func)(*args, **kwargs)
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as e:
+                    self.progress.raise_error()
+                    raise e
                 finally:
-                    self.call_stack_pop()
+                    self.progress.call_stack_pop()
             return wrapper
         return decorator
 
-    def call_stack_push(self, func_name: str):
-        lv = len(self.call_stack)
-        self.call_stack.append({'name':func_name, 'level':lv, 'substeps':0})
-        if self.debug:
-            self.print_1p(f"ENTERING '{func_name}'\n")
-        else:
-            if self.call_stack[lv-1]['substeps'] == 0:
-                self.print_1p('\n')
-            indent = self._indent()
-            self.print_1p(f"\033[2m{indent}\033[0m{func_name}: ")
-        if lv > 0:
-            self.call_stack[lv-1]['substeps'] += 1
-
-    def call_stack_pop(self):
-        flag = self.formatter.done
-        if self.debug:
-            self.print_1p(f"{flag}\n")
-        else:
-            timer_msg = f"{self.elapsed_time:7.2f}s" if self.config.timer else ""
-            pop = (self.call_stack[-1]['substeps']>0)
-            indent = self._indent(pop)
-            if pop:
-                self.print_1p(f"\033[2m{indent}\033[0m{flag} {timer_msg}\n")
-            else:
-                self.print_1p(f"\r\033[K{self.status} {flag} {timer_msg}\n")
-        self.call_stack.pop()
-        if len(self.call_stack)==1:
-            self.print_1p("\033[2m│\033[0m\n")
-
-    def _indent(self, pop=False):
-        nlv = len(self.call_stack)
-        indent = ''
-        for lv in range(nlv-2):
-            indent += '│   '
-        if nlv > 1:
-            if pop:
-                indent += '│   '
-            else:
-                indent += '├── '
-        return indent
-
     @property
-    def status(self) -> str:
-        anchor = 50
-        indent = self._indent()
-        name_len = len(self.current_func) + len(indent)
-        ndots = anchor - name_len if name_len < anchor else 2
-        dot_string = f"\033[2m{'─'*ndots}\033[0m"
-        stat_str = f"\r\033[2m{indent}\033[0m{self.current_func} {dot_string}"
-        return stat_str
+    def print_1p(self):
+        """
+        Customized print function for showing runtime message.
+
+        Only the processor with PID = self.pid_show will show the message,
+        this avoids the redundancy if all processors are showing the same message.
+        """
+        decorator = parallel.by_rank(self.comm, self.pid_show)
+        return decorator(progress.print_with_cache)
 
     def show_greeting(self) -> None:
         greeting_msg = f"""
-░░█▀█░█▀▀░█▀▄░█▀█░█▀▀░░
-░░█░█░█▀▀░█░█░█▀█░▀▀█░░
-░░▀░▀░▀▀▀░▀▀░░▀░▀░▀▀▀░░
-
+█▄  █ █▀▀▀ █▀▀▄ ▄▀▀▄ ▄▀▀▀
+█ ▀▄█ █▀▀  █  █ █▄▄█ ▀▀▀█
+▀   ▀ ▀▀▀▀ ▀▀▀  ▀  ▀ ▀▀▀  version {__version__}
 """
         self.print_1p(greeting_msg)
-
-    def show_progress(self) -> None:
-        """
-        Show progress
-
-        If debug=True, print self.debug_message with flush=True
-        Otherwise, show a progress bar, indicating current task/total_ntask percentage.
-        """
-        if self.debug:
-            return
-        pbar = self.formatter.progress_bar(self.current_task, self.total_tasks)
-        if self.formatter.tty:
-            self.print_1p(f"{self.status} {self.formatter.running} {pbar}")
 
     def show_summary(self) -> None:
         summary_text = self.config.summary()

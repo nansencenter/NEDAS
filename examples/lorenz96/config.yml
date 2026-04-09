@@ -1,4 +1,4 @@
-work_dir: work
+work_dir: /Users/yueng/scratch/lorenz96
 
 python_env:
 
@@ -14,6 +14,7 @@ run_postproc: True
 run_diagnose: True
 debug: False
 timer: True
+call_stack_max_level: 2
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-30T00:00:00Z

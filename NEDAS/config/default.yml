@@ -31,9 +31,13 @@ run_forecast: True  # if true, run the ensemble forecast step
 run_analysis: True  # if true, run the analysis step
 run_postproc: True  # if true, run the postprocessing step
 run_diagnose: True  # if true, run the diagnose scripts
-debug: False        # if true, output debug data/message
-timer: True         # if true, output information on function runtime
 step:               # current step in scheme (given in runtime context)
+
+# some runtime logging options
+call_stack:           # call stack (given at runtime)
+call_stack_max_level: # max call stack level to output, if None all levels will be shown
+debug: False          # if true, output debug data/message
+timer: True           # if true, output information on function runtime
 
 # time control of the experiment
 time_start: 2001-01-01T00:00:00Z # start time of the experiment

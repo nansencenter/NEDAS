@@ -31,6 +31,7 @@ class Config:
     pid_rec: int
     pid_show: int  # avail in context
     call_stack: list[dict]|None = None
+    call_stack_max_level: int|None = None
     nens: int
     run_preproc: bool
     run_forecast: bool
