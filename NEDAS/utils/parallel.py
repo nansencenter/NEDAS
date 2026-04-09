@@ -2,7 +2,7 @@ import os
 from functools import wraps
 from typing import TypeVar, Callable, ParamSpec, Sequence
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, process
 import threading
 import traceback
 import numpy as np
@@ -325,7 +325,7 @@ class OfflineScheduler:
         and move the finished jobs to completed_jobs
         """
         self.c.total_tasks = self.njob + 1
-        while len(self.completed_jobs) < self.njob:
+        while self.queue_open and len(self.completed_jobs) < self.njob:
 
             # assign pending job to available workers
             while self.available_workers and self.pending_jobs and self.queue_open:
@@ -334,9 +334,12 @@ class OfflineScheduler:
                 info = self.jobs[name]
                 info['worker_id'] = worker_id
                 info['start_time'] = time.time()
-                info['future'] = self.executor.submit(info['job'], *info['args'], worker_id=worker_id, **info['kwargs'])
-                self.running_jobs.append(name)
-                self.c.debug_message = f"Scheduler: Job {name} started by worker {worker_id}"
+                try:
+                    info['future'] = self.executor.submit(info['job'], *info['args'], worker_id=worker_id, **info['kwargs'])
+                    self.running_jobs.append(name)
+                    self.c.debug_message = f"Scheduler: Job {name} started by worker {worker_id}"
+                except (process.BrokenProcessPool, RuntimeError):
+                    return
 
             # if there are completed jobs, free up their workers
             names = [name for name in self.running_jobs if self.jobs[name]['future'].done()]
@@ -377,15 +380,21 @@ class OfflineScheduler:
         """
         try:
             monitor_thread = threading.Thread(target=self.monitor_job_queue)
+            monitor_thread.daemon = True
             monitor_thread.start()
             monitor_thread.join()
-        except KeyboardInterrupt:
+        finally:
             self.queue_open = False
-            # kill running jobs
             self.shutdown()
 
     def shutdown(self):
+        # determine if we need to kill workers immediately
+        force_kill = (len(self.error_jobs) > 0)
+
+        # kill the executor
+        self.executor.shutdown(wait=not force_kill, cancel_futures=force_kill)
+
+        # raise errors within jobs if there are any
         if self.error_jobs:
             error_details = "\n".join([f"ERROR: Job {job}: {error}" for job, error in self.error_jobs.items()])
             raise RuntimeError(f'Scheduler: there are jobs with errors:\n{error_details}')
-        self.executor.shutdown(wait=True)
