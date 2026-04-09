@@ -1,9 +1,10 @@
+from math import log
 import os
 import subprocess
 import tempfile
 from time import sleep
 from NEDAS.utils.conversion import seconds_to_timestr
-from NEDAS.utils.progress import find_keyword_in_file, count_lines_in_file
+from NEDAS.utils.progress import find_keyword_in_file
 from .hpc import HPCJobSubmitter
 
 class SLURMJobSubmitter(HPCJobSubmitter):
@@ -103,6 +104,8 @@ class SLURMJobSubmitter(HPCJobSubmitter):
             raise RuntimeError(f"Failed to submit job: {p.stderr}")
         self.job_id = int(p.stdout.split()[-1])
 
+        self.log_file = log_file.replace('%j', str(self.job_id))
+
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' submitted with ID {self.job_id} to SLURM scheduler", flush=True)
 
@@ -122,7 +125,7 @@ class SLURMJobSubmitter(HPCJobSubmitter):
 
         else:
             elapsed_time = 0
-            n0 = 0
+            file_pointer = 0
             while True:
                 sleep(self.check_dt)
                 p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}'], capture_output=True, text=True)
@@ -138,18 +141,25 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                     continue
 
                 # if self.log_file is specified
-                # monitor it, if it becomes stagnant, kill the job and raise error
                 if self.log_file is None:
                     continue
+
                 elapsed_time += self.check_dt
-                n1 = count_lines_in_file(self.log_file)
-                if n1 > n0:
-                    elapsed_time = 0
-                    n0 = n1
+
+                # open log file and seek to the last position
+                with open(self.log_file, 'r') as f:
+                    f.seek(file_pointer)
+                    new_content = f.read()
+
+                    if new_content:
+                        print(new_content, end='', flush=True)  # stream the new content to tty
+                        file_pointer = f.tell()  # update file pointer to the new position
+                        elapsed_time = 0         # reset elapsed time since we have new log output
+
+                # kill the job if log file remain stagnant for too long
                 if elapsed_time > self.stagnant_log_timeout:
                     subprocess.run(['scancel', str(self.job_id)])
-                    print(self.job_name, 'stagnant', elapsed_time)
-                    raise RuntimeError(f"job {self.job_name} killed: {self.log_file} remain stagnent for {self.stagnant_log_timeout} seconds")
+                    raise RuntimeError(f"job {self.job_name} killed: {self.log_file} stagnent for {elapsed_time} seconds")
 
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' finished", flush=True)
