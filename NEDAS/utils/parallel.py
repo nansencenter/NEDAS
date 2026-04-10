@@ -1,4 +1,6 @@
 import os
+import signal
+import sys
 from functools import wraps
 from typing import TypeVar, Callable, ParamSpec, Sequence
 import time
@@ -303,6 +305,16 @@ class OfflineScheduler:
         self.error_jobs = {}
         self.njob = 0
         self.c = c
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, self._handle_external_signal)
+
+    def _handle_external_signal(self, signum, frame):
+        """ The 'trap' handler. This runs when the OS sends kill signal. """
+        msg = f"Scheduler: received external signal {signum}, Cleaning up..."
+        print(msg)
+        self.queue_open = False
+        self.shutdown()
+        sys.exit(signum+128) # match the linux exit code convention
 
     def submit_job(self, name: str, job: Callable, *args, **kwargs) -> None:
         """
@@ -389,10 +401,16 @@ class OfflineScheduler:
 
     def shutdown(self):
         # determine if we need to kill workers immediately
-        force_kill = (len(self.error_jobs) > 0)
+        force_kill = (len(self.error_jobs) > 0) 
 
-        # kill the executor
+        # shutdown the process pool workers
         self.executor.shutdown(wait=not force_kill, cancel_futures=force_kill)
+
+        if force_kill:
+            try:
+                os.killpg(os.getpgrp(), signal.SIGKILL)
+            except Exception:
+                pass
 
         # raise errors within jobs if there are any
         if self.error_jobs:
