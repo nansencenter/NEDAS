@@ -383,8 +383,10 @@ class OfflineScheduler:
 
             # log the progress info and let context handle the messaging
             self.c.current_task = len(self.completed_jobs)
+            self.c.message = f"jobs: {len(self.completed_jobs)}/{self.njob} done, {len(self.running_jobs)} running"
 
             time.sleep(self.check_dt)
+        self.c.message = f"all {self.njob} jobs done"
 
     def start_queue(self):
         """

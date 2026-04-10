@@ -1,8 +1,9 @@
 import os
-import sys
 import subprocess
 import time
-from typing import Any, Callable
+from typing import Any
+
+from numpy.random import f
 
 def print_with_cache(msg: str) -> None:
     # previous message is cached so that new message is displayed only
@@ -65,23 +66,31 @@ def count_lines_in_file(file: str) -> int:
     return n
 
 class Formatter:
-    def __init__(self, anchor=50, tabspace=4, progress_bar_width=10) -> None:
+    """
+    Formatter of the progress display.
+
+    Args:
+        interactive (bool, optional): Whether the output is interactive (supports ansi escape code). Defaults to True.
+        anchor (int, optional): Characters to anchor the left part of status line. Defaults to 50.
+        tabspace (int, optional): Number of spaces for one call stack level indentation. Defaults to 4.
+        progress_bar_width (int, optional): Width of the progress bar in characters. Defaults to 10.
+    """
+    def __init__(self, interactive: bool=True, anchor=50, tabspace=4, progress_bar_width=10) -> None:
+        self.interactive = interactive
+
         # some visual parameters
         self.anchor = anchor
         self.tabspace = tabspace
         self.progress_bar_width = progress_bar_width
 
-        # check if runtime output is redirected to a file
-        self.tty = os.isatty(sys.stdout.fileno())
-
         # ANSI Escape sequences
-        self.reset = "\033[0m" if self.tty else ''
-        self.dim = "\033[2m" if self.tty else ''
-        self.red = "\033[1;31m" if self.tty else ''
-        self.green = "\033[1;32m" if self.tty else ''
-        self.yellow = "\033[1;33m" if self.tty else ''
-        self.blue = "\033[1;34m" if self.tty else ''
-        self.clear_line = "\r\033[K" if self.tty else '\n'
+        self.reset = "\033[0m" if self.interactive else ''
+        self.dim = "\033[2m" if self.interactive else ''
+        self.red = "\033[1;31m" if self.interactive else ''
+        self.green = "\033[1;32m" if self.interactive else ''
+        self.yellow = "\033[1;33m" if self.interactive else ''
+        self.blue = "\033[1;34m" if self.interactive else ''
+        self.clear_line = "\r\033[K" if self.interactive else '\n'
 
         self.stat_flag = {
             'waiting': f"🕒 {self.blue}WAITING{self.reset}",
@@ -95,19 +104,37 @@ class Formatter:
         self.branch = f"├{'─'*(self.tabspace-2)} "
         self.padder = '─'
 
-    def dimmer(self, text):
-        return f"{self.dim}{text}{self.reset}"
-
     def indent(self, level: int, pop: bool=True) -> str:
-        indent_str = ""
-        if level > 1:
-            indent_str += self.pipe*(level-2)
-        indent_str += self.pipe if pop else self.branch
-        return indent_str
-        # raw_len = (level - 1) * self.tabspace + len(name) + 1
-        # num_padding = max(2, self.anchor - raw_len)
+        """
+        Generate the indent string to form call stack tree structure in log.
 
-        # return f"{self.dim}{indent_str}{self.reset}{name} {self.dim}{self.padder*num_padding}{self.reset} "
+        Args:
+            level (int): The current call stack level.
+            pop (bool): Whether this indent is for a pop operation.
+
+        Returns:
+            str: The indent string
+        """
+        if level <= 1:
+            return ""
+        indent_str = self.pipe*(level-2)
+        indent_str += self.pipe if pop else self.branch
+        return f"{self.dim}{indent_str}{self.reset}"
+
+    def padding(self, level: int, name: str) -> str:
+        """
+        Generate the padding string to align the status line.
+
+        Args:
+            level (int): The current call stack level.
+            name (str): The name of the current function or task.
+
+        Returns:
+            str: The padding string
+        """
+        name_len = len(name) + (level-1)*self.tabspace
+        n = self.anchor - name_len if name_len < self.anchor else 2
+        return f"{self.dim}{self.padder*n}{self.reset}"
 
     def progress_bar(self, task_id: int, ntask: int) -> str:
         """
@@ -116,7 +143,6 @@ class Formatter:
         Args:
             task_id (int): Current task index, from 0 to ntask-1
             ntask (int): Total number of tasks
-            width (int): The length of the progress bar (number of characters)
 
         Returns:
             str: The progress bar msg to be shown.
@@ -131,48 +157,48 @@ class Formatter:
         return f"[{bar}] {100*progress:3.0f}%"
 
 class Progress:
+    """
+    Progress tracker and displayer. Used by Context.logger to show runtime progress.
+    """
+    interactive: bool
     debug: bool
-    debug_message: str = ''
     call_stack: list[dict[str, Any]]
     call_stack_max_level: int|None
     formatter: Formatter
 
-    def __init__(self, debug: bool=False,
+    def __init__(self, interactive: bool=True,
+                 debug: bool=False,
                  call_stack: list[dict]|None=None,
-                 call_stack_max_level: int|None=None) -> None:
+                 call_stack_max_level: int|None=None,
+                 anchor: int=50,
+                 tabspace: int=4,
+                 progress_bar_width: int=10) -> None:
+        self.interactive = interactive
         self.debug = debug
         self.call_stack = []
         if call_stack:
             self.call_stack = call_stack
         self.call_stack_max_level = call_stack_max_level
-        self.formatter = Formatter()
+        self.formatter = Formatter(interactive, anchor, tabspace, progress_bar_width)
+
+    def new_node(self, func_name: str|None=None) -> dict:
+        node = {
+            'name': func_name,
+            'substeps': 0,
+            'status': '',
+            'flag': 'waiting',
+            'current_task': 0,
+            'total_tasks': 1,
+            'message': '',
+            'elapsed_time': None,
+        }
+        return node
 
     @property
     def current_func(self) -> dict:
         if not self.call_stack:
-            node = {
-                'name': '',
-                'substeps': 0,
-                'status_line': '',
-                'flag': 'running',
-                'current_task': None,
-                'total_tasks': None,
-                'message': None,
-                'elapsed_time': None,
-            }
-            return node
+            return self.new_node('')
         return self.call_stack[-1]
-
-    def stat_flag(self, flag: str) -> str:
-        return self.formatter.stat_flag[flag]
-
-    @property
-    def elapsed_time(self) -> float:
-        return self.call_stack[-1]['elapsed_time']
-
-    @elapsed_time.setter
-    def elapsed_time(self, value: float):
-        self.call_stack[-1]['elapsed_time'] = value
 
     @property
     def within_max_level(self) -> bool:
@@ -181,71 +207,68 @@ class Progress:
         return len(self.call_stack) < self.call_stack_max_level
     
     @property
-    def call_stack_level(self) -> int:
+    def level(self) -> int:
         return len(self.call_stack)
 
     def call_stack_push(self, func_name: str):
-        node = {
-            'name': func_name,
-            'substeps': 0,
-            'status_line': '',
-            'flag': 'running',
-            'current_task': None,
-            'total_tasks': None,
-            'message': None,
-            'elapsed_time': None,
-        }
+        node = self.new_node(func_name)
         self.call_stack.append(node)
 
         # if self.call_stack[lv-1]['substeps'] == 0:
         #    # if lv < self.call_stack_max_level:
         #    self.print_1p('\n')
-        indent = self.formatter.indent(self.call_stack_level, False)
-        status_line = f"{indent}{func_name}: "
+        indent = self.formatter.indent(self.level, False)
+        status = f"{indent}{func_name}: "
 
-        if self.call_stack_level > 1:
+        if self.level > 1:
             # mark a substep in the parent node
             self.call_stack[-2]['substeps'] += 1
         
         # update the status line for current node
-        self.call_stack[-1]['status_line'] = status_line
+        #self.call_stack[-1]['status'] = status
 
     def call_stack_pop(self):
-        flag = self.formatter.stat_flag['done']
-        elapsed_time = self.call_stack[-1]['elapsed_time']
-        timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
-        pop = (self.call_stack[-1]['substeps']>0)
-        indent = self.formatter.indent(self.call_stack_level, pop)
-        if pop:
-            self.call_stack[-1]['status_line'] = f"\033[2m{indent}\033[0m{flag} {timer_msg}\n"
-        else:
-            self.call_stack[-1]['status_line'] = f"\r\033[K{self.status_line} {flag} {timer_msg}\n"
-        self.call_stack.pop()
-        if len(self.call_stack)==1:
-            self.call_stack[-1]['status_line'] = self.formatter.dimmer(self.formatter.pipe)+'\n'
+        #flag = self.formatter.stat_flag['done']
+        
+        # if pop:
+        #     self.call_stack[-1]['status'] = f"\033[2m{indent}\033[0m{flag} {timer_msg}\n"
+        # else:
+        #     self.call_stack[-1]['status'] = f"\r\033[K{self.status} {flag} {timer_msg}\n"
 
-    def raise_error(self):
-        self.call_stack[-1]['flag'] = 'error'
+        self.call_stack.pop()
+        # if len(self.call_stack)==1:
+        #     self.call_stack[-1]['status'] = self.formatter.dimmer(self.formatter.pipe)+'\n'
+
+    def update_status(self, flag: str, name: str|None=None) -> str:
+        if name is not None:
+            self.call_stack_push(name)
+
+        self.current_func['flag'] = flag
+        if flag in ['error', 'done']:
+            self.call_stack_pop()
+
+        tmp = self.status
+        return tmp
 
     @property
-    def status_line(self) -> str:
-        anchor = 50
-        indent = self.formatter.indent(len(self.call_stack))
-        name_len = len(self.current_func) + len(indent)
-        ndots = anchor - name_len if name_len < anchor else 2
-        dot_string = self.formatter.dimmer(self.formatter.padder*ndots)
-        stat_str = f"\r"+self.formatter.dimmer(indent)+self.current_func['name']+' '+dot_string
-        return stat_str
+    def status(self) -> str:
+        pop = (self.current_func['substeps']>0)
+        func_name = self.current_func['name']
+        clear = self.formatter.clear_line
+        indent = self.formatter.indent(self.level, pop)
+        padding = self.formatter.padding(self.level, func_name)
 
-    def show_progress(self) -> None:
-        """
-        Show progress
+        stat_flag = self.formatter.stat_flag[self.current_func['flag']]
+        elapsed_time = self.current_func['elapsed_time']
+        timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
 
-        If debug=True, print self.debug_message with flush=True
-        Otherwise, show a progress bar, indicating current task/total_ntask percentage.
-        """
-        if self.debug:
-            return
-        pbar = self.formatter.progress_bar(self.call_stack[-1]['current_task'], self.call_stack[-1]['total_tasks'])
-        
-        # self._print(f"{self.status_line} {self.formatter.stat_flag['running']} {pbar}")
+        if pop:
+            return f"{indent}{stat_flag} {timer_msg}\n"
+        pbar = ''
+        if self.current_func['flag'] == 'running':
+            pbar = self.formatter.progress_bar(self.current_func['current_task'], self.current_func['total_tasks'])
+
+        message = self.current_func['message']
+        end = '\n' if self.current_func['flag'] in ['done', 'error'] else ''
+
+        return f"{clear}{indent}{self.current_func['name']} {padding} {stat_flag} {pbar} {message}{end}"

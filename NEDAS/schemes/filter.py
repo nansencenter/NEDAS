@@ -27,7 +27,7 @@ class FilterAnalysisScheme(Scheme):
     def run_all(self) -> None:
         if self.c.time == self.config.time_start:
             msg = f"PREPARATION"
-            self.c.print_1p(f"\n{msg}\n{'═'*len(msg)}")
+            self.c.print_1p(f"{msg}\n{'═'*len(msg)}\n")
 
             self.run_step('generate_truth')
 

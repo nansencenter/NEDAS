@@ -1,7 +1,9 @@
 from __future__ import annotations
+import os
+import sys
 import copy
 import time
-from typing import get_args, Callable, Any, TYPE_CHECKING
+from typing import get_args, Callable, TYPE_CHECKING
 from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
@@ -19,6 +21,7 @@ class Context:
     """
     Runtime context manages the generation and interaction of dynamic objects in runtime
     """
+    interactive: bool
     debug: bool
     comm: parallel.Comm
     comm_rec: parallel.Comm
@@ -53,8 +56,10 @@ class Context:
         else:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
 
+        # initialize logging
         self.debug = self.config.debug
-        self.progress = progress.Progress(self.debug, self.config.call_stack, self.config.call_stack_max_level)
+        self.interactive = self.check_interactive()
+        self.set_logging()
 
         # initialize the current time pointer
         # prev_time and next_time properties provide the time for previous/next analysis cycle
@@ -85,6 +90,32 @@ class Context:
 
         # more living objects (io, state, obs, other components)
         # will be created by scheme class __init__ and methods at runtime
+
+    def check_interactive(self) -> bool:
+        """
+        If the runtime environment supports interactive output (with ANSI escape code).
+        """
+        # if debug mode is on, disable interactive output
+        # since we need to show a lot of debug messages
+        if self.config.debug:
+            return False
+        # if interactive option is explicitly set in config, use it
+        if self.config.interactive is not None:
+            return self.config.interactive
+        # otherwise, check if a tty is present, if so, should support interactive output.
+        return os.isatty(sys.stdout.fileno())
+    
+    def set_logging(self) -> None:
+        progress_opts = {
+            'interactive': self.interactive,
+            'debug': self.config.debug,
+            'call_stack': self.config.call_stack,
+            'call_stack_max_level': self.config.call_stack_max_level,
+            'anchor': self.config.anchor,
+            'tabspace': self.config.tabspace,
+            'progress_bar_width': self.config.progress_bar_width,
+        }
+        self.progress = progress.Progress(**progress_opts)
 
     def distribute_mem_tasks(self) -> dict[int, list[int]]:
         """
@@ -244,7 +275,7 @@ class Context:
     @total_tasks.setter
     def total_tasks(self, value: int):
         self.progress.current_func['total_tasks'] = value
-        self.progress.debug_message = f"total tasks: {value}\n"
+        self.debug_message = f"total tasks: {value}\n"
 
     @property
     def current_task(self):
@@ -253,26 +284,33 @@ class Context:
     @current_task.setter
     def current_task(self, value: int):
         self.progress.current_func['current_task'] = value
-        self.print_1p(self.progress.status_line)
+        self.print_1p(self.progress.update_status(flag='running'))
+
+    @property
+    def message(self):
+        return ''
+    
+    @message.setter
+    def message(self, msg: str):
+        self.progress.current_func['message'] = msg
 
     @property
     def debug_message(self):
-        return self.progress.debug_message
+        return ''
 
     @debug_message.setter
-    def debug_message(self, message: str):
-        self.progress.debug_message = message
+    def debug_message(self, msg: str):
+        if not self.debug:
+            return
         # show the debug message with PID info.
         # this uses the print since all PID ranks shall print its own message
-        if self.debug:
-            print(f"PID {self.pid:4}: {message}", flush=True)
+        print(f"PID {self.pid:>4}: {msg}", flush=True)
 
     def timer(self, func: Callable):
         """
         Decorator to count the elapsed time for a function at runtime.
         """
         if not self.config.timer:
-            # if the config states timer=False, just return original func
             return func
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -281,26 +319,30 @@ class Context:
                 return func(*args, **kwargs)
             finally:
                 t1 = time.time()
-                self.progress.elapsed_time = t1 - t0
+                self.progress.current_func['elapsed_time'] = t1 - t0
         return wrapper
 
     def logger(self, func_name: str):
         """
-        Decorator to register the func in call stack and show logging messages at func start and end.
+        Decorator to register the func in call stack and show runtime messages.
         """
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
                 try:
                     self.progress.call_stack_push(func_name)
-                    # run the func with timer decorator to get elapsed_time
+                    self.progress.current_func['flag'] = 'waiting'
+                    self.print_1p(self.progress.status)
                     return self.timer(func)(*args, **kwargs)
                 except (KeyboardInterrupt, SystemExit):
                     raise
-                except Exception as e:
-                    self.progress.raise_error()
-                    raise e
+                except Exception:
+                    self.progress.current_func['flag'] = 'error'
+                    self.print_1p(self.progress.status)
+                    raise
                 finally:
+                    self.progress.current_func['flag'] = 'done'
+                    self.print_1p(self.progress.status)
                     self.progress.call_stack_pop()
             return wrapper
         return decorator
@@ -337,9 +379,10 @@ class Context:
         tmp_config = copy.copy(self.config)
 
         # inject runtime state to the temporary config
-        for rt_state in ['time', 'iter', 'call_stack', 'pid_show']:
+        for rt_state in ['time', 'iter', 'pid_show', 'interactive']:
             val = getattr(self, rt_state)
             setattr(tmp_config, rt_state, val)
+        setattr(tmp_config, 'call_stack', self.progress.call_stack)
 
         # save the config to yaml file
         tmp_config.dump_yaml(config_file)

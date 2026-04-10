@@ -1,3 +1,4 @@
+from code import interact
 import os
 import inspect
 from typing import Literal, Any
@@ -5,6 +6,7 @@ import yaml
 import dateutil.parser
 from datetime import datetime, timezone
 import NEDAS
+from NEDAS.utils import progress
 from .parse_config import parse_config
 
 class Config:
@@ -18,10 +20,12 @@ class Config:
         **kwargs: Additional key-value pairs to be passed to parse_config. Can be used to override values in the config file.
     """
     work_dir: str
+    directories: dict[str, str]
     python_env: str|None
     io_mode: Literal['online', 'offline']
     job_submit: dict|None
-    directories: dict[str, str]
+
+    # parallel scheme
     nproc: int
     nproc_mem: int
     nproc_rec: int
@@ -30,17 +34,27 @@ class Config:
     pid_mem: int
     pid_rec: int
     pid_show: int  # avail in context
-    call_stack: list[dict]|None = None
-    call_stack_max_level: int|None = None
+
+    # experiment design parameters
     nens: int
     run_preproc: bool
     run_forecast: bool
     run_analysis: bool
     run_postproc: bool
     run_diagnose: bool
+    step: str|None
+
+    # runtime logging options
+    call_stack: list[dict]|None
+    interactive: bool|None
     debug: bool
     timer: bool
-    step: str|None
+    call_stack_max_level: int|None
+    anchor: int
+    tabspace: int
+    progress_bar_width: int
+
+    # time control
     time: datetime  # avail in context
     time_start: datetime
     time_end: datetime
@@ -52,6 +66,8 @@ class Config:
     obs_time_scale: float
     state_time_steps: list[float]
     state_time_scale: float
+
+    # some definitions
     grid_def: dict
     state_def: dict|None
     model_def: dict|None
@@ -61,6 +77,8 @@ class Config:
     z_coords_from: Literal['mean', 'member']
     interp_method: str
     perturb: dict|None
+
+    # more details in assimilation algorithm
     scheme: str
     niter: int
     iter: int  # avail in context
@@ -208,7 +226,7 @@ class Config:
         # Construct the summary block
         summary_text = f"""
 CONFIGURATION SUMMARY
-{'='*21}
+{'═'*21}
 Directories:
   Work Dir:      {self.work_dir}
   NEDAS Root:    {self.nedas_root}
@@ -246,7 +264,7 @@ Definitions:
 
 Workflow Status:
   Active Steps:  {workflow_str}
-  Debug Mode:    {self.debug} | Timer: {self.timer}
+  Debug Mode:    {self.debug} | Timer: {self.timer} | Interactive: {self.interactive}
 
 """
         return summary_text
