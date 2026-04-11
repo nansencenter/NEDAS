@@ -13,11 +13,11 @@ def main() -> None:
         scheme()
 
     except KeyboardInterrupt:
-        print("\nInterrupted by user. Exiting...")
+        print("\nInterrupted. Exiting...")
         sys.exit(1)
 
     except Exception as e:
-        print(f"\nAn error occurred: {e}")
+        print(f"\nERROR: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':

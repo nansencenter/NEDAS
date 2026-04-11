@@ -51,5 +51,4 @@ class LocalJobSubmitter(JobSubmitter):
 
         # handle error
         if p.returncode != 0:
-            print(f"JobSubmitter: job '{self.job_name}' exited with error")
-            sys.exit(1)
+            raise RuntimeError(f"JobSubmitter: job '{self.job_name}' exited with error")

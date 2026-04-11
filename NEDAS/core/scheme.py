@@ -1,5 +1,6 @@
 import os
 import sys
+import signal
 import tempfile
 import inspect
 from typing import Callable
@@ -22,6 +23,7 @@ class Scheme(ABC):
     use_synthetic_obs: bool = False
     steps_need_mpi: dict[str, bool] = {}
     _context: Context|None = None
+    scheduler: OfflineScheduler|None = None
 
     def __init__(self, config_file: str|None=None,
                  parse_args: bool=False,
@@ -36,6 +38,35 @@ class Scheme(ABC):
         for dataset in self.c.datasets.values():
             if isinstance(dataset, SyntheticObs):
                 self.use_synthetic_obs = True
+
+        self._main_pid = os.getpid()
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, self._handle_exit_signal)
+
+    def _handle_exit_signal(self, signum, frame):
+        """ The 'trap' handler. This runs when the OS sends kill signal. """
+        # only the main process should run the shutdown procedure
+        if os.getpid() != self._main_pid:
+            return
+
+        self.c.print_1p(f"\n{self.__class__.__name__}: Received signal {signum}. Cleaning up...\n")
+
+        # 1. kill the scheduler worker if it exists
+        if self.scheduler:
+            worker_pids = list(self.scheduler.executor._processes.keys())
+            self.c.print_1p(f"OfflineScheduler: Cleaning up worker processes {worker_pids}\n")
+
+            for pid in worker_pids:
+                try:
+                    os.killpg(pid, signal.SIGKILL)
+                except Exception:
+                    pass
+
+        # 2. kill the entire main process group
+        try:
+            os.killpg(0, signal.SIGKILL)
+        except Exception:
+            pass
 
     @property
     def c(self):
@@ -193,7 +224,7 @@ class Scheme(ABC):
 
         # initialize the scheduler
         self.c.debug_message = f"running {task_name} in offline scheduler: nworker={nworker}"
-        scheduler = OfflineScheduler(self.c, nworker, opts.get('walltime'), debug=self.config.debug)
+        self.scheduler = OfflineScheduler(self.c, nworker, opts.get('walltime'), debug=self.config.debug)
 
         # submit jobs
         for mem_id in range(self.c.nens):
@@ -202,6 +233,10 @@ class Scheme(ABC):
                 'member': mem_id,
                 'debug': self.config.debug,
             }
-            scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
-        scheduler.start_queue() # start the job queue
-        scheduler.shutdown()
+            self.scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
+        
+        try:
+            self.scheduler.start_queue()
+        finally:
+            self.scheduler.shutdown()
+            self.scheduler = None

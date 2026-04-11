@@ -164,6 +164,11 @@ class QGFortranModel(Model):
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         task_id = kwargs.get('worker_id', 0)
+        if kwargs['member'] is not None:
+            mstr = '_mem{:04d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        job_name = f"qg_run{mstr}"
 
         self.run_status = 'running'
 
@@ -201,7 +206,7 @@ class QGFortranModel(Model):
         for dt_ratio in [1, 0.6, 0.2]:
             namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
 
-            self.c.run_job(shell_cmd, offset=task_id*self.nproc_per_run, **kwargs)
+            self.c.run_job(shell_cmd, job_name=job_name, offset=task_id*self.nproc_per_run, **kwargs)
 
             # check output
             with open(log_file, 'rt') as f:
