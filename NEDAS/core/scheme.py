@@ -81,7 +81,7 @@ class Scheme(ABC):
         """
         self.c.show_greeting()
 
-        self.c.log_event("INITIALIZING...")
+        self.c.print_1p("\nINITIALIZING...\n")
         self.c.show_summary()
 
         # Environment check:

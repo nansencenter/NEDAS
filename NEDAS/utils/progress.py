@@ -229,12 +229,20 @@ class Progress:
         if not self.call_stack:
             return ''
 
-        stat_flag = self.fmt.stat_flag[self.node['flag']]
+        stat_flag = self.fmt.stat_flag[self.node['flag']]        
         elapsed_time = self.node['elapsed_time']
         timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
         message = self.node['message']
         if message:
             message = f"({message})"
+
+        if not self.interactive:
+            indent = ''
+            if self.node['substeps'] > 0:
+                indent = self.fmt.indent(self.level, branch=False)
+            self.call_stack.pop()
+            result = f"{stat_flag} {timer_msg} {message}"
+            return f"{indent}{result}\n"
 
         if self.node['substeps'] > 0:
             newline = ''
@@ -251,6 +259,7 @@ class Progress:
             padding = self.fmt.padding(self.level, name)
             result = f"{name} {padding} {stat_flag} {timer_msg} {message}"
             addline = ''
+
         self.call_stack.pop()
         return f"{newline}{indent}{result}\n{addline}"
 
@@ -258,6 +267,15 @@ class Progress:
         self.node['flag'] = flag
 
     def update(self) -> str:
+        if not self.interactive:
+            i = self.node['current_task']
+            n = self.node['total_tasks']
+            prev_percent_bin = (100 * (i-1) // n) // 10
+            curr_percent_bin = (100 * i // n) // 10
+            if curr_percent_bin > prev_percent_bin:
+                percent = 10 * curr_percent_bin
+                return f"{percent}%..."
+            return ''
         clear = self.fmt.clear_line
         indent = self.fmt.indent(self.level)
         func_name = self.node['name']
@@ -275,13 +293,8 @@ class Progress:
         """
         Safely injects a global message without breaking the tree.
         """
-        # TODO: not easy to decide if \n should be added
-        # output = ''
-        # # clear the line if in the middle of status update
-        # if self.call_stack and self.node['flag'] in ['running', 'waiting']:
-        #     output += '\n'
-        # output += msg
-        # if self.node['substeps'] > 0:
-        #     output += '\n'
-        # return output
-        return f"\n{msg}\n"
+        indent = self.fmt.indent(self.level+1, branch=False)
+        addline = f"{indent}\n"
+        if self.node['substeps'] == 0:
+            return f"\n{addline}{msg}"
+        return f"{addline}{msg}\n"

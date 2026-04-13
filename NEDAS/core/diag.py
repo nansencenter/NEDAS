@@ -21,8 +21,6 @@ class Diagnostics:
         self.init_file_locks(c)
 
     def __call__(self, c: Context) -> None:
-        c.print_1p(f"Running diagnostics:")
-
         c.total_tasks = len(self.task_list[c.pid])
         for task_id, rec in enumerate(self.task_list[c.pid]):
             c.debug_message = f"running diagnostics '{rec['method']}'"
