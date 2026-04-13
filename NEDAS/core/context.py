@@ -270,21 +270,23 @@ class Context:
 
     @property
     def total_tasks(self):
-        return self.progress.current_func['total_tasks']
+        return self.progress.node['total_tasks']
 
     @total_tasks.setter
     def total_tasks(self, value: int):
-        self.progress.current_func['total_tasks'] = value
+        self.progress.node['total_tasks'] = value
         self.debug_message = f"total tasks: {value}\n"
 
     @property
     def current_task(self):
-        return self.progress.current_func['current_task']
+        return self.progress.node['current_task']
 
     @current_task.setter
     def current_task(self, value: int):
-        self.progress.current_func['current_task'] = value
-        self.print_1p(self.progress.update_status(flag='running'))
+        self.progress.node['current_task'] = value
+        self.progress.flag('running')
+        status = self.progress.update()
+        self.print_1p(status)
 
     @property
     def message(self):
@@ -292,7 +294,7 @@ class Context:
     
     @message.setter
     def message(self, msg: str):
-        self.progress.current_func['message'] = msg
+        self.progress.node['message'] = msg
 
     @property
     def debug_message(self):
@@ -319,7 +321,7 @@ class Context:
                 return func(*args, **kwargs)
             finally:
                 t1 = time.time()
-                self.progress.current_func['elapsed_time'] = t1 - t0
+                self.progress.node['elapsed_time'] = t1 - t0
         return wrapper
 
     def logger(self, func_name: str):
@@ -330,20 +332,25 @@ class Context:
             @wraps(func)
             def wrapper(*args, **kwargs):
                 try:
-                    self.progress.call_stack_push(func_name)
-                    self.progress.current_func['flag'] = 'waiting'
-                    self.print_1p(self.progress.status)
-                    return self.timer(func)(*args, **kwargs)
+                    # register the function in call stack
+                    header = self.progress.push(func_name)
+                    self.print_1p(header)
+                    self.progress.flag('waiting')
+
+                    # execute the function with timer
+                    result = self.timer(func)(*args, **kwargs)
+                    self.progress.flag('done')
+                    return result
+
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception:
-                    self.progress.current_func['flag'] = 'error'
-                    self.print_1p(self.progress.status)
+                    self.progress.flag('error')
                     raise
                 finally:
-                    self.progress.current_func['flag'] = 'done'
-                    self.print_1p(self.progress.status)
-                    self.progress.call_stack_pop()
+                    footer = self.progress.pop()
+                    self.print_1p(footer)
+
             return wrapper
         return decorator
 
@@ -358,10 +365,13 @@ class Context:
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(progress.print_with_cache)
 
+    def log_event(self, msg: str):
+        self.print_1p(self.progress.log(msg))
+        
     def show_greeting(self) -> None:
         greeting_msg = f"""
 █▄  █ █▀▀▀ █▀▀▄ ▄▀▀▄ ▄▀▀▀
-█ ▀▄█ █▀▀  █  █ █▄▄█ ▀▀▀█
+█ ▀▄█ █▀▀  █  █ █▀▀█ ▀▀▀█
 ▀   ▀ ▀▀▀▀ ▀▀▀  ▀  ▀ ▀▀▀  version {__version__}
 """
         self.print_1p(greeting_msg)

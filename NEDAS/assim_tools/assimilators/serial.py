@@ -73,6 +73,7 @@ class SerialAssimilator(Assimilator):
             for each obs the near by state variables are updated one by one.
             so each update is a scalar problem, which is solved in 2 steps: obs_increment, update_ensemble
         """
+        c.message = 'preparing...'
         c.state.state_post = copy.deepcopy(c.state.state_prior)
         c.obs.lobs_post =copy.deepcopy(c.obs.lobs_prior)
 
@@ -89,6 +90,7 @@ class SerialAssimilator(Assimilator):
             obs_rec_id, v, owner_pid, i = obs_list[p]
 
             c.debug_message = f"Processing observation obs_rec_id={obs_rec_id:2}, i={i}"
+            c.message = f"completed {c.current_task}/{c.total_tasks} observations."
             c.current_task = p
 
             # 1. if the pid owns this obs, broadcast it to all pid

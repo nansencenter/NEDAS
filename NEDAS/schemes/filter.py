@@ -26,17 +26,15 @@ class FilterAnalysisScheme(Scheme):
 
     def run_all(self) -> None:
         if self.c.time == self.config.time_start:
-            msg = f"PREPARATION"
-            self.c.print_1p(f"{msg}\n{'═'*len(msg)}\n")
+            self.c.log_event("PREPARING...")
 
             self.run_step('generate_truth')
 
             self.run_step('generate_init_ensemble')
 
-        self.c.print_1p("CYCLING START...\n")
+        self.c.log_event("CYCLING START...")
         while self.c.time < self.config.time_end:
-            msg = f"CURRENT CYCLE: {self.c.time} ➜ {self.c.next_time}"
-            self.c.print_1p(f"{msg}\n{'═'*len(msg)}\n")
+            self.c.log_event(f"CURRENT CYCLE: {self.c.time} ➜ {self.c.next_time}")
 
             if self.check_cycle_complete():
                 continue
@@ -64,7 +62,7 @@ class FilterAnalysisScheme(Scheme):
             # advance to next cycle
             self.c.time = self.c.next_time
 
-        self.c.print_1p("CYCLING COMPLETE.\n")
+        self.c.log_event("CYCLING COMPLETE.")
 
     def generate_truth(self) -> None:
         """
@@ -77,7 +75,7 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             opts = self.get_task_opts(model_name, member=None)
 
-            self.c.logger(f'Generate truth: {model_name}')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
+            self.c.logger(f'Generate {model_name} truth')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
 
     def generate_init_ensemble(self) -> None:
         """
@@ -89,7 +87,7 @@ class FilterAnalysisScheme(Scheme):
                                       total_nproc=self.config.nproc,
                                       nproc=model.nproc_per_run)
 
-            self.c.logger(f'Generate init ensemble: {model_name}')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
+            self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:
         """
@@ -134,7 +132,7 @@ class FilterAnalysisScheme(Scheme):
                                       nproc=model.nproc_per_run,
                                       walltime=model.walltime)
 
-            self.c.logger(f'Ensemble forecast: {model_name}')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
+            self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
 
     def filter(self) -> None:
         """

@@ -131,6 +131,7 @@ class BatchAssimilator(Assimilator):
         batch assimilation solves the matrix version EnKF analysis for each local state,
         the local states in each partition are processed in parallel
         """
+        c.message = 'preparing...'
         c.state.state_post = copy.deepcopy(c.state.state_prior)
         # TODO: obs_prior is not updated to obs_post by the filter
         #c.obs.lobs_post = copy.deepcopy(c.obs.lobs_prior)
@@ -170,6 +171,7 @@ class BatchAssimilator(Assimilator):
             if nlobs == 0:
                 c.debug_message = f"processed partition {par_id:7} (which is empty)"
                 c.current_task += nloc
+                c.message = f"completed {c.current_task}/{c.total_tasks} state variables."
                 continue
 
             # loop through the unmasked grid points in the partition
@@ -196,6 +198,7 @@ class BatchAssimilator(Assimilator):
                 if len(ind1) == 0:
                     c.debug_message = f"processed partition {par_id:7} grid point {loc_id} (all local obs outside hroi)"
                     c.current_task += 1
+                    c.message = f"completed {c.current_task}/{c.total_tasks} state variables."
                     continue # if all obs has no impact on state, just skip to next location
 
                 self.local_analysis(c, loc_id, ind, hlfactor, state_data, obs_data)
@@ -203,6 +206,7 @@ class BatchAssimilator(Assimilator):
                 # add progress message
                 c.debug_message = f"processed partition {par_id:7} grid point {loc_id}"
                 c.current_task += 1
+                c.message = f"completed {c.current_task}/{c.total_tasks} state variables."
 
             c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
             #c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)

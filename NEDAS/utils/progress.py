@@ -3,8 +3,6 @@ import subprocess
 import time
 from typing import Any
 
-from numpy.random import f
-
 def print_with_cache(msg: str) -> None:
     # previous message is cached so that new message is displayed only
     # when it's different from the previous one (avoid redundant output)
@@ -104,13 +102,13 @@ class Formatter:
         self.branch = f"├{'─'*(self.tabspace-2)} "
         self.padder = '─'
 
-    def indent(self, level: int, pop: bool=True) -> str:
+    def indent(self, level: int, branch: bool=True) -> str:
         """
         Generate the indent string to form call stack tree structure in log.
 
         Args:
             level (int): The current call stack level.
-            pop (bool): Whether this indent is for a pop operation.
+            branch (bool): Whether a branch is needed at the end.
 
         Returns:
             str: The indent string
@@ -118,8 +116,8 @@ class Formatter:
         if level <= 1:
             return ""
         indent_str = self.pipe*(level-2)
-        indent_str += self.pipe if pop else self.branch
-        return f"{self.dim}{indent_str}{self.reset}"
+        indent_str += self.branch if branch else self.pipe
+        return self.dimmer(indent_str)
 
     def padding(self, level: int, name: str) -> str:
         """
@@ -134,7 +132,10 @@ class Formatter:
         """
         name_len = len(name) + (level-1)*self.tabspace
         n = self.anchor - name_len if name_len < self.anchor else 2
-        return f"{self.dim}{self.padder*n}{self.reset}"
+        return self.dimmer(self.padder*n)
+
+    def dimmer(self, msg): 
+        return self.dim+msg+self.reset
 
     def progress_bar(self, task_id: int, ntask: int) -> str:
         """
@@ -179,7 +180,7 @@ class Progress:
         if call_stack:
             self.call_stack = call_stack
         self.call_stack_max_level = call_stack_max_level
-        self.formatter = Formatter(interactive, anchor, tabspace, progress_bar_width)
+        self.fmt = Formatter(interactive, anchor, tabspace, progress_bar_width)
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {
@@ -195,7 +196,7 @@ class Progress:
         return node
 
     @property
-    def current_func(self) -> dict:
+    def node(self) -> dict:
         if not self.call_stack:
             return self.new_node('')
         return self.call_stack[-1]
@@ -204,71 +205,83 @@ class Progress:
     def within_max_level(self) -> bool:
         if self.call_stack_max_level is None:
             return True
-        return len(self.call_stack) < self.call_stack_max_level
+        return self.level <= self.call_stack_max_level
     
     @property
     def level(self) -> int:
         return len(self.call_stack)
 
-    def call_stack_push(self, func_name: str):
+    def push(self, func_name: str):
+        newline = ''
+        if self.call_stack:
+            parent = self.node
+            if parent['substeps'] == 0:
+                newline = '\n'
+            parent['substeps'] += 1
+
         node = self.new_node(func_name)
         self.call_stack.append(node)
 
-        # if self.call_stack[lv-1]['substeps'] == 0:
-        #    # if lv < self.call_stack_max_level:
-        #    self.print_1p('\n')
-        indent = self.formatter.indent(self.level, False)
-        status = f"{indent}{func_name}: "
+        indent = self.fmt.indent(self.level)
+        return f"{newline}{indent}{func_name}: "
 
-        if self.level > 1:
-            # mark a substep in the parent node
-            self.call_stack[-2]['substeps'] += 1
-        
-        # update the status line for current node
-        #self.call_stack[-1]['status'] = status
+    def pop(self):
+        if not self.call_stack:
+            return ''
 
-    def call_stack_pop(self):
-        #flag = self.formatter.stat_flag['done']
-        
-        # if pop:
-        #     self.call_stack[-1]['status'] = f"\033[2m{indent}\033[0m{flag} {timer_msg}\n"
-        # else:
-        #     self.call_stack[-1]['status'] = f"\r\033[K{self.status} {flag} {timer_msg}\n"
-
-        self.call_stack.pop()
-        # if len(self.call_stack)==1:
-        #     self.call_stack[-1]['status'] = self.formatter.dimmer(self.formatter.pipe)+'\n'
-
-    def update_status(self, flag: str, name: str|None=None) -> str:
-        if name is not None:
-            self.call_stack_push(name)
-
-        self.current_func['flag'] = flag
-        if flag in ['error', 'done']:
-            self.call_stack_pop()
-
-        tmp = self.status
-        return tmp
-
-    @property
-    def status(self) -> str:
-        pop = (self.current_func['substeps']>0)
-        func_name = self.current_func['name']
-        clear = self.formatter.clear_line
-        indent = self.formatter.indent(self.level, pop)
-        padding = self.formatter.padding(self.level, func_name)
-
-        stat_flag = self.formatter.stat_flag[self.current_func['flag']]
-        elapsed_time = self.current_func['elapsed_time']
+        stat_flag = self.fmt.stat_flag[self.node['flag']]
+        elapsed_time = self.node['elapsed_time']
         timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
+        message = self.node['message']
+        if message:
+            message = f"({message})"
 
-        if pop:
-            return f"{indent}{stat_flag} {timer_msg}\n"
+        if self.node['substeps'] > 0:
+            newline = ''
+            indent = self.fmt.indent(self.level, branch=False)
+            result = f"{stat_flag} {timer_msg} {message}"
+            if self.within_max_level:
+                addline = f'{indent}\n'
+            else:
+                addline = ''
+        else:
+            newline = self.fmt.clear_line
+            indent = self.fmt.indent(self.level)
+            name = self.node['name']
+            padding = self.fmt.padding(self.level, name)
+            result = f"{name} {padding} {stat_flag} {timer_msg} {message}"
+            addline = ''
+        self.call_stack.pop()
+        return f"{newline}{indent}{result}\n{addline}"
+
+    def flag(self, flag: str):
+        self.node['flag'] = flag
+
+    def update(self) -> str:
+        clear = self.fmt.clear_line
+        indent = self.fmt.indent(self.level)
+        func_name = self.node['name']
+        padding = self.fmt.padding(self.level, func_name)
+        stat_flag = self.fmt.stat_flag[self.node['flag']]
         pbar = ''
-        if self.current_func['flag'] == 'running':
-            pbar = self.formatter.progress_bar(self.current_func['current_task'], self.current_func['total_tasks'])
+        if self.node['flag'] == 'running':
+            pbar = self.fmt.progress_bar(self.node['current_task'], self.node['total_tasks'])
+        message = self.node['message']
+        if message:
+            message = f"({message})"
+        return f"{clear}{indent}{self.node['name']} {padding} {stat_flag} {pbar} {message}"
 
-        message = self.current_func['message']
-        end = '\n' if self.current_func['flag'] in ['done', 'error'] else ''
-
-        return f"{clear}{indent}{self.current_func['name']} {padding} {stat_flag} {pbar} {message}{end}"
+    def log(self, msg: str) -> str:
+        """
+        Safely injects a global message without breaking the tree.
+        """
+        # TODO: not easy to decide if \n should be added
+        # output = ''
+        # # clear the line if in the middle of status update
+        # if self.call_stack and self.node['flag'] in ['running', 'waiting']:
+        #     output += '\n'
+        # output += msg
+        # if self.node['substeps'] > 0:
+        #     output += '\n'
+        # return output
+        return f"\n{msg}\n"

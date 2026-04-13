@@ -18,6 +18,7 @@ class MultiplicativeInflation(Inflation):
         c.print_1p(f"varb = {varb}, varo={varo}\n")
         c.print_1p(f"omb2 = {omb2}\n")
         self.coef = np.sqrt((omb2 - varo) / varb)
+        c.message = f"varb = {varb}, varo={varo}; coef = {self.coef}"
 
     def adaptive_post_inflation(self, c):
         """compute posterior inflate coef by obs-space statistics (Desroziers et al. 2005) """
@@ -45,6 +46,7 @@ class MultiplicativeInflation(Inflation):
             c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
         # self.coef = np.sqrt(omaamb/vara)
         self.coef = np.sqrt((omb2-varo-amb2)/vara)
+        c.message = f"varb = {varb}, vara = {vara}, varo={varo}; coef = {self.coef}"
 
     def apply_inflation(self, c, flag):
         if flag not in ['prior', 'post']:
