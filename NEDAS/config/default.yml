@@ -35,7 +35,7 @@ step:               # current step in scheme (given in runtime context)
 
 # some runtime logging options
 call_stack:           # call stack (given at runtime)
-interactive:          # if the output is interactive (allow ansi escape code), if None autodetect.
+interactive: True     # if the output is interactive (allow ansi escape code), if None autodetect.
 debug: False          # if true, output debug data/message
 timer: True           # if true, output information on function runtime
 call_stack_max_level:   # max call stack level to output, if None all levels will be shown
