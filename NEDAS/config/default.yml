@@ -38,7 +38,7 @@ call_stack:           # call stack (given at runtime)
 interactive: True     # if the output is interactive (allow ansi escape code), if None autodetect.
 debug: False          # if true, output debug data/message
 timer: True           # if true, output information on function runtime
-call_stack_max_level:   # max call stack level to output, if None all levels will be shown
+call_stack_max_level: 2 # max call stack level to output, if None all levels will be shown
 anchor: 50              # characters to anchor the left part of status line
 tabspace: 4             # number of spaces for one call stack level indentation
 progress_bar_width: 10  # width of the progress bar in characters

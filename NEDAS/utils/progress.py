@@ -179,14 +179,14 @@ class Progress:
         self.call_stack = []
         if call_stack:
             self.call_stack = call_stack
-        self.call_stack_max_level = call_stack_max_level
+        self.call_stack_max_level = call_stack_max_level # TODO: suppress level>max_level into single line
         self.fmt = Formatter(interactive, anchor, tabspace, progress_bar_width)
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {
             'name': func_name,
             'substeps': 0,
-            'status': '',
+            'header': '',
             'flag': 'waiting',
             'current_task': 0,
             'total_tasks': 1,
@@ -223,71 +223,74 @@ class Progress:
         self.call_stack.append(node)
 
         indent = self.fmt.indent(self.level)
-        return f"{newline}{indent}{func_name}: "
+        self.node['header'] = f"{indent}{func_name}: "
+        return f"{newline}{self.node['header']}"
 
     def pop(self):
         if not self.call_stack:
             return ''
 
-        stat_flag = self.fmt.stat_flag[self.node['flag']]        
-        elapsed_time = self.node['elapsed_time']
+        level = self.level
+        node = self.node
+        within_max_level = self.within_max_level
+        self.call_stack.pop()
+
+        stat_flag = self.fmt.stat_flag[node['flag']]
+        elapsed_time = node['elapsed_time']
         timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
-        message = self.node['message']
-        if message:
-            message = f"({message})"
+        message = f"({node['message']})" if node['message'] else ""
+        indent = ''
+        addline = ''
 
         if not self.interactive:
-            indent = ''
-            if self.node['substeps'] > 0:
-                indent = self.fmt.indent(self.level, branch=False)
-            self.call_stack.pop()
+            if node['substeps'] > 0:
+                indent = self.fmt.indent(level, branch=False)
+                if within_max_level:
+                    addline = f'{indent}\n'
             result = f"{stat_flag} {timer_msg} {message}"
-            return f"{indent}{result}\n"
+            return f"{indent}{result}\n{addline}"
 
-        if self.node['substeps'] > 0:
+        if node['substeps'] > 0:
             newline = ''
-            indent = self.fmt.indent(self.level, branch=False)
+            indent = self.fmt.indent(level, branch=False)
             result = f"{stat_flag} {timer_msg} {message}"
-            if self.within_max_level:
+            if within_max_level:
                 addline = f'{indent}\n'
-            else:
-                addline = ''
         else:
             newline = self.fmt.clear_line
-            indent = self.fmt.indent(self.level)
-            name = self.node['name']
-            padding = self.fmt.padding(self.level, name)
+            indent = self.fmt.indent(level)
+            name = node['name']
+            padding = self.fmt.padding(level, name)
             result = f"{name} {padding} {stat_flag} {timer_msg} {message}"
             addline = ''
-
-        self.call_stack.pop()
         return f"{newline}{indent}{result}\n{addline}"
 
     def flag(self, flag: str):
         self.node['flag'] = flag
 
     def update(self) -> str:
+        node = self.node
+        level = self.level
+        current_task = node['current_task']
+        total_tasks = node['total_tasks']
+
         if not self.interactive:
-            i = self.node['current_task']
-            n = self.node['total_tasks']
-            prev_percent_bin = (100 * (i-1) // n) // 10
-            curr_percent_bin = (100 * i // n) // 10
+            prev_percent_bin = (100 * (current_task-1) // total_tasks) // 10
+            curr_percent_bin = (100 * current_task // total_tasks) // 10
             if curr_percent_bin > prev_percent_bin:
                 percent = 10 * curr_percent_bin
                 return f"{percent}%..."
             return ''
         clear = self.fmt.clear_line
-        indent = self.fmt.indent(self.level)
-        func_name = self.node['name']
-        padding = self.fmt.padding(self.level, func_name)
-        stat_flag = self.fmt.stat_flag[self.node['flag']]
+        indent = self.fmt.indent(level)
+        func_name = node['name']
+        padding = self.fmt.padding(level, func_name)
+        stat_flag = self.fmt.stat_flag[node['flag']]
         pbar = ''
-        if self.node['flag'] == 'running':
-            pbar = self.fmt.progress_bar(self.node['current_task'], self.node['total_tasks'])
-        message = self.node['message']
-        if message:
-            message = f"({message})"
-        return f"{clear}{indent}{self.node['name']} {padding} {stat_flag} {pbar} {message}"
+        if node['flag'] == 'running':
+            pbar = self.fmt.progress_bar(current_task, total_tasks)
+        message = f"({node['message']})" if node['message'] else ""
+        return f"{clear}{indent}{node['name']} {padding} {stat_flag} {pbar} {message}"
 
     def log(self, msg: str) -> str:
         """

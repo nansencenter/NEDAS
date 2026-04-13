@@ -13,6 +13,7 @@ run_forecast: True
 run_analysis: True
 run_diagnose: True
 debug: False
+interactive:
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-02T00:00:00Z
