@@ -312,7 +312,13 @@ class Progress:
         """
         Safely injects a global message without breaking the tree.
         """
-        indent = self.fmt.indent(self.level+1, branch=False)
+        if self.within_max_level(self.level):
+            indent = self.fmt.indent(self.level+1, branch=False)
+        else:
+            if self.call_stack_max_level:
+                indent = self.fmt.indent(self.call_stack_max_level, branch=False)
+            else:
+                indent = ''
         formatted_msg = f"{indent}\n{self.fmt.event_pin}{msg}"
         if self.node['substeps'] == 0:
             if self.node['flag'] == 'running':
