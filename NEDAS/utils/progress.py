@@ -89,7 +89,7 @@ class Formatter:
         self.yellow = "\033[1;33m" if self.interactive else ''
         self.blue = "\033[1;34m" if self.interactive else ''
         self.clear_line = "\r\033[K" if self.interactive else '\n'
-
+        self.event_pin = "📍 "
         self.stat_flag = {
             'waiting': f"🕒 {self.blue}WAITING{self.reset}",
             'running': f"⏳ {self.yellow}RUNNING{self.reset}",
@@ -131,8 +131,8 @@ class Formatter:
             str: The padding string
         """
         name_len = len(name) + (level-1)*self.tabspace
-        n = self.anchor - name_len if name_len < self.anchor else 2
-        return self.dimmer(self.padder*n)
+        n = self.anchor - name_len - 2 if name_len < (self.anchor-2) else 2
+        return self.dimmer(f" {self.padder*n} ")
 
     def dimmer(self, msg): 
         return self.dim+msg+self.reset
@@ -181,6 +181,7 @@ class Progress:
             self.call_stack = call_stack
         self.call_stack_max_level = call_stack_max_level # TODO: suppress level>max_level into single line
         self.fmt = Formatter(interactive, anchor, tabspace, progress_bar_width)
+        self._interrupted = False
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {
@@ -206,98 +207,96 @@ class Progress:
         if self.call_stack_max_level is None:
             return True
         return self.level <= self.call_stack_max_level
-    
+
     @property
     def level(self) -> int:
         return len(self.call_stack)
 
+    def set_flag(self, flag: str):
+        self.node['flag'] = flag
+
+    def _format_line(self, node: dict,
+                     level: int,
+                     include_indent: bool=True,
+                     include_name: bool=True,
+                     include_padding: bool=True,
+                     is_branch: bool=True,
+                     trailer: str="") -> str:
+        """
+        Maintains order: [Indent] [Name] [Padding] [Flag] [Trailer (PBar/Time)] [Message]
+        """
+        indent = self.fmt.indent(level, branch=is_branch) if include_indent else ""
+        name = node['name'] if include_name else ""
+        padding = self.fmt.padding(level, name) if include_padding else ""
+        stat_flag = self.fmt.stat_flag[node['flag']]
+        message = f"({node['message']})" if node['message'] else ""
+        return f"{indent}{name}{padding}{stat_flag} {trailer} {message}".strip()
+
     def push(self, func_name: str):
         newline = ''
         if self.call_stack:
-            parent = self.node
-            if parent['substeps'] == 0:
+            if self.node['substeps'] == 0:
                 newline = '\n'
-            parent['substeps'] += 1
+            self.node['substeps'] += 1
 
         node = self.new_node(func_name)
         self.call_stack.append(node)
 
-        indent = self.fmt.indent(self.level)
-        self.node['header'] = f"{indent}{func_name}: "
+        # Consistency check: use indent from same logic
+        self.node['header'] = f"{self.fmt.indent(self.level)}{func_name}: "
         return f"{newline}{self.node['header']}"
 
     def pop(self):
         if not self.call_stack:
             return ''
-
-        level = self.level
-        node = self.node
+        node, level = self.node, self.level
         within_max_level = self.within_max_level
         self.call_stack.pop()
 
-        stat_flag = self.fmt.stat_flag[node['flag']]
-        elapsed_time = node['elapsed_time']
-        timer_msg = f"{elapsed_time:7.2f}s" if elapsed_time is not None else ""
-        message = f"({node['message']})" if node['message'] else ""
-        indent = ''
-        addline = ''
+        # Handle the vertical branch line for parents
+        addline = f"{self.fmt.indent(level, branch=False)}\n" if (node['substeps'] > 0 and within_max_level) else ""
+
+        # Prepare the 'trailer' (Timer)
+        elapsed = node.get('elapsed_time')
+        timer_msg = f"{elapsed:7.2f}s" if elapsed is not None else ""
 
         if not self.interactive:
-            if node['substeps'] > 0:
-                indent = self.fmt.indent(level, branch=False)
-                if within_max_level:
-                    addline = f'{indent}\n'
-            result = f"{stat_flag} {timer_msg} {message}"
-            return f"{indent}{result}\n{addline}"
+            is_leaf = (node['substeps'] == 0)
+            res = self._format_line(node, level, include_name=False, include_padding=False, include_indent=not is_leaf, is_branch=(node['substeps'] == 0), trailer=timer_msg)
+            return f"{res}\n{addline}"
 
         if node['substeps'] > 0:
-            newline = ''
-            indent = self.fmt.indent(level, branch=False)
-            result = f"{stat_flag} {timer_msg} {message}"
-            if within_max_level:
-                addline = f'{indent}\n'
+            # Parent node: don't clear, don't show name/padding
+            res = self._format_line(node, level, include_name=False, include_padding=False, is_branch=False, trailer=timer_msg)
+            return f"{res}\n{addline}"
         else:
-            newline = self.fmt.clear_line
-            indent = self.fmt.indent(level)
-            name = node['name']
-            padding = self.fmt.padding(level, name)
-            result = f"{name} {padding} {stat_flag} {timer_msg} {message}"
-            addline = ''
-        return f"{newline}{indent}{result}\n{addline}"
-
-    def flag(self, flag: str):
-        self.node['flag'] = flag
+            # Leaf node: clear line, show full name + result
+            res = self._format_line(node, level, include_name=True, is_branch=True, trailer=timer_msg)
+            return f"{self.fmt.clear_line}{res}\n{addline}"
 
     def update(self) -> str:
-        node = self.node
-        level = self.level
-        current_task = node['current_task']
-        total_tasks = node['total_tasks']
+        node, level = self.node, self.level
+        total, current = node['total_tasks'], node['current_task']
 
         if not self.interactive:
-            prev_percent_bin = (100 * (current_task-1) // total_tasks) // 10
-            curr_percent_bin = (100 * current_task // total_tasks) // 10
-            if curr_percent_bin > prev_percent_bin:
-                percent = 10 * curr_percent_bin
-                return f"{percent}%..."
-            return ''
-        clear = self.fmt.clear_line
-        indent = self.fmt.indent(level)
-        func_name = node['name']
-        padding = self.fmt.padding(level, func_name)
-        stat_flag = self.fmt.stat_flag[node['flag']]
-        pbar = ''
-        if node['flag'] == 'running':
-            pbar = self.fmt.progress_bar(current_task, total_tasks)
-        message = f"({node['message']})" if node['message'] else ""
-        return f"{clear}{indent}{node['name']} {padding} {stat_flag} {pbar} {message}"
+            prev_bin = (100 * (current - 1) // total) // 10
+            curr_bin = (100 * current // total) // 10
+            return f"{10 * curr_bin}%..." if curr_bin > prev_bin else ''
+
+        # Prepare the 'trailer' (Progress Bar)
+        pbar = self.fmt.progress_bar(current, total) if node['flag'] == 'running' else ""
+
+        res = self._format_line(node, level, include_name=True, trailer=pbar)
+        return f"{self.fmt.clear_line}{res}"
 
     def log(self, msg: str) -> str:
         """
         Safely injects a global message without breaking the tree.
         """
         indent = self.fmt.indent(self.level+1, branch=False)
-        addline = f"{indent}\n"
+        formatted_msg = f"{indent}\n{self.fmt.event_pin}{msg}"
         if self.node['substeps'] == 0:
-            return f"\n{addline}{msg}"
-        return f"{addline}{msg}\n"
+            if self.node['flag'] == 'running':
+                return f"\n{formatted_msg}\n"
+            return f"\n{formatted_msg}"
+        return f"{formatted_msg}\n"

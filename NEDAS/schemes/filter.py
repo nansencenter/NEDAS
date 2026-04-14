@@ -86,7 +86,6 @@ class FilterAnalysisScheme(Scheme):
             opts = self.get_task_opts(model_name,
                                       total_nproc=self.config.nproc,
                                       nproc=model.nproc_per_run)
-
             self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:

@@ -81,7 +81,7 @@ class Scheme(ABC):
         """
         self.c.show_greeting()
 
-        self.c.print_1p("\nINITIALIZING...\n")
+        self.c.print_1p(f"\nINITIALIZING...\n")
         self.c.show_summary()
 
         # Environment check:
@@ -234,7 +234,7 @@ class Scheme(ABC):
                 'debug': self.config.debug,
             }
             self.scheduler.submit_job(f"{task_name}_mem{mem_id+1:03}", self.c.io.call_method, self.c, tag, func, **job_opts)
-        
+
         try:
             self.scheduler.start_queue()
         finally:

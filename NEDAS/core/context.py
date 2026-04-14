@@ -104,7 +104,7 @@ class Context:
             return self.config.interactive
         # otherwise, check if a tty is present, if so, should support interactive output.
         return os.isatty(sys.stdout.fileno())
-    
+
     def set_logging(self) -> None:
         progress_opts = {
             'interactive': self.interactive,
@@ -284,14 +284,14 @@ class Context:
     @current_task.setter
     def current_task(self, value: int):
         self.progress.node['current_task'] = value
-        self.progress.flag('running')
+        self.progress.set_flag('running')
         status = self.progress.update()
         self.print_1p(status)
 
     @property
     def message(self):
         return ''
-    
+
     @message.setter
     def message(self, msg: str):
         self.progress.node['message'] = msg
@@ -335,17 +335,17 @@ class Context:
                     # register the function in call stack
                     header = self.progress.push(func_name)
                     self.print_1p(header)
-                    self.progress.flag('waiting')
+                    self.progress.set_flag('waiting')
 
                     # execute the function with timer
                     result = self.timer(func)(*args, **kwargs)
-                    self.progress.flag('done')
+                    self.progress.set_flag('done')
                     return result
 
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception:
-                    self.progress.flag('error')
+                    self.progress.set_flag('error')
                     raise
                 finally:
                     footer = self.progress.pop()
@@ -367,7 +367,7 @@ class Context:
 
     def log_event(self, msg: str):
         self.print_1p(self.progress.log(msg))
-        
+
     def show_greeting(self) -> None:
         greeting_msg = f"""
 █▄  █ █▀▀▀ █▀▀▄ ▄▀▀▄ ▄▀▀▀
