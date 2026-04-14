@@ -1,3 +1,4 @@
+from calendar import c
 import os
 import subprocess
 import time
@@ -89,7 +90,7 @@ class Formatter:
         self.yellow = "\033[1;33m" if self.interactive else ''
         self.blue = "\033[1;34m" if self.interactive else ''
         self.clear_line = "\r\033[K" if self.interactive else '\n'
-        self.event_pin = "📍 "
+        self.event_pin = "🚩 "
         self.stat_flag = {
             'waiting': f"🕒 {self.blue}WAITING{self.reset}",
             'running': f"⏳ {self.yellow}RUNNING{self.reset}",
@@ -176,12 +177,16 @@ class Progress:
                  progress_bar_width: int=10) -> None:
         self.interactive = interactive
         self.debug = debug
+
         self.call_stack = []
         if call_stack:
             self.call_stack = call_stack
-        self.call_stack_max_level = call_stack_max_level # TODO: suppress level>max_level into single line
+
+        self.call_stack_max_level = call_stack_max_level
+        if not self.interactive:
+            self.call_stack_max_level = None
+
         self.fmt = Formatter(interactive, anchor, tabspace, progress_bar_width)
-        self._interrupted = False
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {
@@ -202,11 +207,12 @@ class Progress:
             return self.new_node('')
         return self.call_stack[-1]
 
-    @property
-    def within_max_level(self) -> bool:
+    def within_max_level(self, level: int) -> bool:
         if self.call_stack_max_level is None:
             return True
-        return self.level <= self.call_stack_max_level
+        if level <= 2:
+            return True
+        return level <= self.call_stack_max_level
 
     @property
     def level(self) -> int:
@@ -227,30 +233,41 @@ class Progress:
         """
         indent = self.fmt.indent(level, branch=is_branch) if include_indent else ""
         name = node['name'] if include_name else ""
-        padding = self.fmt.padding(level, name) if include_padding else ""
+        if self.within_max_level(level):
+            header = indent+name
+            padding = self.fmt.padding(level, name) if include_padding else ""
+        else:
+            header = node['header']
+            padding = f"... "
         stat_flag = self.fmt.stat_flag[node['flag']]
         message = f"({node['message']})" if node['message'] else ""
-        return f"{indent}{name}{padding}{stat_flag} {trailer} {message}".strip()
+        return f"{header}{padding}{stat_flag} {trailer} {message}".strip()
 
     def push(self, func_name: str):
-        newline = ''
-        if self.call_stack:
-            if self.node['substeps'] == 0:
-                newline = '\n'
-            self.node['substeps'] += 1
-
+        parent = self.node
         node = self.new_node(func_name)
         self.call_stack.append(node)
 
-        # Consistency check: use indent from same logic
-        self.node['header'] = f"{self.fmt.indent(self.level)}{func_name}: "
-        return f"{newline}{self.node['header']}"
+        newline = ''
+        if self.call_stack:
+            if self.within_max_level(self.level):
+                if parent['substeps'] == 0:
+                    newline = '\n'
+                parent['substeps'] += 1
+            else:
+                newline = self.fmt.clear_line
+
+        if self.within_max_level(self.level):
+            self.node['header'] = f"{self.fmt.indent(self.level)}{func_name}"
+            return f"{newline}{self.node['header']}: "
+        self.node['header'] = f"{parent['header']} > {func_name}"
+        return f"{newline}{self.node['header']}: "
 
     def pop(self):
         if not self.call_stack:
             return ''
         node, level = self.node, self.level
-        within_max_level = self.within_max_level
+        within_max_level = self.within_max_level(level)
         self.call_stack.pop()
 
         # Handle the vertical branch line for parents
@@ -272,7 +289,9 @@ class Progress:
         else:
             # Leaf node: clear line, show full name + result
             res = self._format_line(node, level, include_name=True, is_branch=True, trailer=timer_msg)
-            return f"{self.fmt.clear_line}{res}\n{addline}"
+            if within_max_level:
+                res += f"\n{addline}"
+            return f"{self.fmt.clear_line}{res}"
 
     def update(self) -> str:
         node, level = self.node, self.level
