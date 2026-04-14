@@ -1,4 +1,4 @@
-work_dir: /Users/yueng/scratch/lorenz96
+work_dir: lorenz96
 
 python_env:
 
@@ -18,7 +18,7 @@ call_stack_max_level: 2
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-30T00:00:00Z
-time_analysis_start: 2001-01-02T00:00:00Z
+time_analysis_start: 2001-01-03T00:00:00Z
 time_analysis_end: 2001-01-28T00:00:00Z
 cycle_period: 6
 time:
