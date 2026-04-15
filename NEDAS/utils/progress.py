@@ -1,5 +1,7 @@
-from calendar import c
+import re
 import os
+import sys
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -76,32 +78,72 @@ class Formatter:
     """
     def __init__(self, interactive: bool=True, anchor=50, tabspace=4, progress_bar_width=10) -> None:
         self.interactive = interactive
+        self.is_notebook = 'ipykernel' in sys.modules
 
         # some visual parameters
+        self.max_seen_width = 0
         self.anchor = anchor
         self.tabspace = tabspace
         self.progress_bar_width = progress_bar_width
 
         # ANSI Escape sequences
         self.reset = "\033[0m" if self.interactive else ''
-        self.dim = "\033[2m" if self.interactive else ''
+        self.dim = "\033[38;5;244m" if self.interactive else ''
         self.red = "\033[1;31m" if self.interactive else ''
         self.green = "\033[1;32m" if self.interactive else ''
         self.yellow = "\033[1;33m" if self.interactive else ''
         self.blue = "\033[1;34m" if self.interactive else ''
         self.clear_line = "\r\033[K" if self.interactive else '\n'
-        self.event_pin = "🚩 "
+        self.event_pin = "◈ "
         self.stat_flag = {
-            'waiting': f"🕒 {self.blue}WAITING{self.reset}",
-            'running': f"⏳ {self.yellow}RUNNING{self.reset}",
-            'done': f"✅ {self.green}DONE{self.reset}",
-            'error': f"❌ {self.red}ERROR{self.reset}",
+            'waiting': f"{self.blue}WAITING{self.reset}",
+            'running': f"{self.yellow}RUNNING{self.reset}",
+            'done': f"{self.green}✔ DONE{self.reset}",
+            'error': f"{self.red}✖ ERROR{self.reset}",
         }
 
         assert self.tabspace > 1, "tabspace should be greater than 1 to have visible pipes in indent"
         self.pipe = f"│{' '*(self.tabspace-1)}"
         self.branch = f"├{'─'*(self.tabspace-2)} "
         self.padder = '─'
+
+    def strip_escape_code(self, text: str) -> str:
+        re_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+        clean_text = re_escape.sub('', text).replace('\r', '')
+        return clean_text
+
+    def truncate(self, text: str) -> str:
+        visible_text = self.strip_escape_code(text)
+        visible_len = len(visible_text)
+
+        self.max_seen_width = max(self.max_seen_width, visible_len)
+
+        if self.is_notebook:
+            cols = self.max_seen_width
+        else:
+            cols, _ = shutil.get_terminal_size(fallback=(80,24))
+
+        if visible_len <= cols:
+           padding_needed = cols - visible_len - 1
+           return f"{text}{' '*padding_needed}"
+
+        result = ''
+        count = 0
+        max_visible = cols - 4
+        parts = re.split(r'(\x1b\[[0-9;]*[a-zA-Z])', text)
+        for part in parts:
+            if part.startswith('\x1b'):
+                result += part
+            else:
+                chars_left = max_visible - count
+                if len(part) <= chars_left:
+                    result += part
+                    count += len(part)
+                else:
+                    result += part[:chars_left]
+                    count += chars_left
+                    break
+        return result + "..." + self.reset # Always reset to be safe
 
     def indent(self, level: int, branch: bool=True) -> str:
         """
@@ -241,7 +283,7 @@ class Progress:
             padding = f"... "
         stat_flag = self.fmt.stat_flag[node['flag']]
         message = f"({node['message']})" if node['message'] else ""
-        return f"{header}{padding}{stat_flag} {trailer} {message}".strip()
+        return f"{header}{padding}{stat_flag} {trailer} {message}"
 
     def push(self, func_name: str):
         parent = self.node
@@ -259,9 +301,9 @@ class Progress:
 
         if self.within_max_level(self.level):
             self.node['header'] = f"{self.fmt.indent(self.level)}{func_name}"
-            return f"{newline}{self.node['header']}: "
+            return newline+self.fmt.truncate(f"{self.node['header']}: ")
         self.node['header'] = f"{parent['header']} > {func_name}"
-        return f"{newline}{self.node['header']}: "
+        return newline+self.fmt.truncate(f"{self.node['header']}: ")
 
     def pop(self):
         if not self.call_stack:
@@ -278,17 +320,18 @@ class Progress:
         timer_msg = f"{elapsed:7.2f}s" if elapsed is not None else ""
 
         if not self.interactive:
-            is_leaf = (node['substeps'] == 0)
-            res = self._format_line(node, level, include_name=False, include_padding=False, include_indent=not is_leaf, is_branch=(node['substeps'] == 0), trailer=timer_msg)
-            return f"{res}\n{addline}"
+            is_branch = (node['substeps'] == 0)
+            res = self._format_line(node, level, include_name=False, include_padding=False, include_indent=not is_branch, is_branch=is_branch, trailer=timer_msg)
+            return self.fmt.truncate(res)+f"\n{addline}"
 
         if node['substeps'] > 0:
             # Parent node: don't clear, don't show name/padding
             res = self._format_line(node, level, include_name=False, include_padding=False, is_branch=False, trailer=timer_msg)
-            return f"{res}\n{addline}"
+            return self.fmt.truncate(res)+f"\n{addline}"
         else:
             # Leaf node: clear line, show full name + result
             res = self._format_line(node, level, include_name=True, is_branch=True, trailer=timer_msg)
+            res = self.fmt.truncate(res)
             if within_max_level:
                 res += f"\n{addline}"
             return f"{self.fmt.clear_line}{res}"
@@ -306,6 +349,7 @@ class Progress:
         pbar = self.fmt.progress_bar(current, total) if node['flag'] == 'running' else ""
 
         res = self._format_line(node, level, include_name=True, trailer=pbar)
+        res = self.fmt.truncate(res)
         return f"{self.fmt.clear_line}{res}"
 
     def log(self, msg: str) -> str:

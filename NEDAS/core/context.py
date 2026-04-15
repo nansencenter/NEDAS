@@ -333,8 +333,8 @@ class Context:
             def wrapper(*args, **kwargs):
                 try:
                     # register the function in call stack
-                    header = self.progress.push(func_name)
-                    self.print_1p(header)
+                    status = self.progress.push(func_name)
+                    self.print_1p(status)
                     self.progress.set_flag('waiting')
 
                     # execute the function with timer
@@ -348,8 +348,8 @@ class Context:
                     self.progress.set_flag('error')
                     raise
                 finally:
-                    footer = self.progress.pop()
-                    self.print_1p(footer)
+                    status = self.progress.pop()
+                    self.print_1p(status)
 
             return wrapper
         return decorator
