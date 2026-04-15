@@ -6,7 +6,7 @@ from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc, IOMode
 
-def M_nl(x, F, T, dt):
+def M_nl(x_in, F, T, dt):
     """
     Lorenz 1996 model with 40 variables, nonlinear advance_time function
     Input:
@@ -17,6 +17,7 @@ def M_nl(x, F, T, dt):
     Output:
     -x: np.array, the updated model state after simulation
     """
+    x = x_in.copy()
     for _ in range(int(T/dt)):
         x += ((np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F) * dt
     return x

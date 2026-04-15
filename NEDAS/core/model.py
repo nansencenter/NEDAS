@@ -30,6 +30,7 @@ class Model(Generic[GridT], ABC):
     run_status: str = 'pending'
     restart_dir: str
     forecast_period: int
+    memory: dict
     _c: Context
 
     def __init__(self, context: Context|None=None,
