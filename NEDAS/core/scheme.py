@@ -75,6 +75,11 @@ class Scheme(ABC):
             self._context = Context(self.config)
         return self._context
 
+    @c.setter
+    def c(self, value: Context):
+        """ Allows refreshing the context from subprocess returns """
+        self._context = value
+
     def __call__(self) -> None:
         """
         The entry point that handles the environment check and starts the engine.

@@ -81,7 +81,6 @@ class Formatter:
         self.is_notebook = 'ipykernel' in sys.modules
 
         # some visual parameters
-        self.max_seen_width = 0
         self.anchor = anchor
         self.tabspace = tabspace
         self.progress_bar_width = progress_bar_width
@@ -98,8 +97,8 @@ class Formatter:
         self.stat_flag = {
             'waiting': f"{self.blue}WAITING{self.reset}",
             'running': f"{self.yellow}RUNNING{self.reset}",
-            'done': f"{self.green}✔ DONE{self.reset}",
-            'error': f"{self.red}✖ ERROR{self.reset}",
+            'done': f"{self.green}DONE{self.reset}",
+            'error': f"{self.red}ERROR{self.reset}",
         }
 
         assert self.tabspace > 1, "tabspace should be greater than 1 to have visible pipes in indent"
@@ -116,10 +115,8 @@ class Formatter:
         visible_text = self.strip_escape_code(text)
         visible_len = len(visible_text)
 
-        self.max_seen_width = max(self.max_seen_width, visible_len)
-
         if self.is_notebook:
-            cols = self.max_seen_width
+            cols = 500
         else:
             cols, _ = shutil.get_terminal_size(fallback=(80,24))
 
@@ -290,6 +287,9 @@ class Progress:
         node = self.new_node(func_name)
         self.call_stack.append(node)
 
+        if self.call_stack_max_level and self.call_stack_max_level < 2 and self.level > 1:
+            return ""
+
         newline = ''
         if self.call_stack:
             if self.within_max_level(self.level):
@@ -311,6 +311,9 @@ class Progress:
         node, level = self.node, self.level
         within_max_level = self.within_max_level(level)
         self.call_stack.pop()
+
+        if self.call_stack_max_level and self.call_stack_max_level < 2 and level > 1:
+            return ""
 
         # Handle the vertical branch line for parents
         addline = f"{self.fmt.indent(level, branch=False)}\n" if (node['substeps'] > 0 and within_max_level) else ""
@@ -337,6 +340,9 @@ class Progress:
             return f"{self.fmt.clear_line}{res}"
 
     def update(self) -> str:
+        if self.call_stack_max_level and self.call_stack_max_level < 2:
+            return ""
+
         node, level = self.node, self.level
         total, current = node['total_tasks'], node['current_task']
 
