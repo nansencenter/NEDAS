@@ -61,7 +61,7 @@ List of necessary functions/parameters:
     'err_std' : a list of error standard deviation for each measurement.
 
 
-* `random_network(**kwargs)` generates a random realization of observing network for observation type `name`, it is used in generation of synthetic observations from model nature runs (truth). The function returns `obs_seq` but only the coordinates 't', 'z', 'y', 'x' are needed. The observed values will be generated later by `state_to_obs()` instead for the synthetic observations.
+* `generate_obs_network(**kwargs)` generates a random realization of observing network for observation type `name`, it is used in generation of synthetic observations from model nature runs (truth). The function returns `obs_seq` but only the coordinates 't', 'z', 'y', 'x' are needed. The observed values will be generated later by `state_to_obs()` instead for the synthetic observations.
 
 
 * `obs_operator` is a dictionary with keys `name` each pointing to a dictionary with keys `model` each pointing to a function `get_<name>_from_<model>` defined in the module. The function describes how to compute observation type `name` for model `model` restart files, and it returns the desired `obs_seq`. These observation operators also provide one of means in `state_to_obs()` to compute observation priors during assimilation.

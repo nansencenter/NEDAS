@@ -2,6 +2,7 @@ import numpy as np
 from NEDAS.core import Dataset
 
 class SyntheticObs(Dataset):
+    position: str
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -12,7 +13,7 @@ class SyntheticObs(Dataset):
                 self.variables[vname] = model.variables[vname]
             self.grid = model.grid
 
-    def random_network(self, **kwargs):
+    def generate_obs_network(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:

@@ -21,11 +21,11 @@ class Vort2DObs(SyntheticObs):
             'vortex_size': self.get_vortex_size,
         }
 
-    def random_network(self, **kwargs):
+    def generate_obs_network(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         model = kwargs['model']
-        assert isinstance(model, Vort2DModel), 'random_network: ERROR: model must be an instance of Vort2DModel'
+        assert isinstance(model, Vort2DModel)
         grid = kwargs['grid']
 
         # get truth vortex position, some network is vortex-following

@@ -70,6 +70,7 @@ class FilterAnalysisScheme(Scheme):
         """
         # skip if not using synthetic obs (no need for the truth)
         if not self.use_synthetic_obs:
+            self.c.message = "not using synthetic obs, skipping..."
             return
 
         for model_name, model in self.c.models.items():
@@ -81,7 +82,6 @@ class FilterAnalysisScheme(Scheme):
         """
         Generate initial ensemble.
         """
-        #
         for model_name, model in self.c.models.items():
             opts = self.get_task_opts(model_name,
                                       total_nproc=self.config.nproc,

@@ -93,7 +93,7 @@ covariance_def:
 
 inflation_def:
   type: prior,multiplicative
-  adaptive: True
+  adaptive: False
   coef: 1.0
 
 localization_def:

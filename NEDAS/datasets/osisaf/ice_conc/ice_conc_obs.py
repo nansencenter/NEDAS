@@ -59,7 +59,7 @@ class OsisafSeaIceConcObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def random_network(self, **kwargs):
+    def generate_obs_network(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:

@@ -52,8 +52,8 @@ class TopazPrepObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def random_network(self, **kwargs):
-        raise NotImplementedError('random_network: ERROR: random_network not implemented for topaz dataset')
+    def generate_obs_network(self, **kwargs):
+        raise NotImplementedError('generate_obs_network: ERROR: generate_obs_network not implemented for topaz dataset')
 
     def read_obs(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)

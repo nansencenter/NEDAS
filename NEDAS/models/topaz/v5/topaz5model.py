@@ -859,10 +859,11 @@ class Topaz5Model(Model[RegularGrid]):
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
 
     def generate_truth(self, *args, **kwargs):
+        self.c.message = "not yet implemented, skipping..."
         pass
 
     def generate_init_ensemble(self, *args, **kwargs):
         # TODO: check validity of self.ens_init_dir and restart files within
         # some application may need to skip restart file checks, add an option for that?
+        self.c.message = "not yet implemented, skipping..."
         pass
-

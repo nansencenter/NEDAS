@@ -64,7 +64,7 @@ class Obs:
     def get_ref_z(self, c: Context, model_name: str, time: datetime) -> dict[LevelID, np.ndarray]:
         """
         Get the reference z coords at level k on the analysis grid from a model,
-        to be used in dataset modules for generating random_network or superobing/thinning in read_obs.
+        to be used in dataset modules for generating generate_obs_network or superobing/thinning in read_obs.
 
         Args:
             c (Context): the runtime context
@@ -316,7 +316,7 @@ class Obs:
 
             if isinstance(dataset, SyntheticObs):  #using synthetic observation
                 # generate synthetic obs network
-                seq = dataset.random_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
+                seq = dataset.generate_obs_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
 
                 # compute obs values
                 seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)

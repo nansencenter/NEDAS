@@ -63,7 +63,7 @@ class Cs2SmosObs(Dataset):
                         file_list.append(result)
         return file_list
 
-    def random_network(self, **kwargs):
+    def generate_obs_network(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:
