@@ -4,35 +4,33 @@ from NEDAS.core.inflation import Inflation
 class MultiplicativeInflation(Inflation):
     def adaptive_prior_inflation(self, c):
         """compute prior inflate coef by obs-space statistics (Desroziers et al. 2005)"""
-        if c.debug:
-            c.print_1p(">>> adaptive prior inflation:\n")
+        c.debug_message = "adaptive prior inflation"
         stats = self.obs_space_stats(c)
         if stats['total_nobs'] < 3:
             if c.debug:
-                c.print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
+                c.log_event(f"insufficient nobs to establish statistics, setting inflate_coef=1", flag='warning')
             self.coef = 1.
             return
         varb = stats['varb'] / stats['total_nobs']
         varo = stats['varo'] / stats['total_nobs']
         omb2 = stats['omb2'] / stats['total_nobs']
-        c.print_1p(f"varb = {varb}, varo={varo}\n")
-        c.print_1p(f"omb2 = {omb2}\n")
+        if c.debug:
+            c.log_event(f"varb = {varb}, varo={varo}; omb2 = {omb2}", flag='stats')
         self.coef = np.sqrt((omb2 - varo) / varb)
-        c.message = f"varb = {varb}, varo={varo}; coef = {self.coef}"
+        c.message = f"varb = {varb}, varo={varo}; omb2 = {omb2}; coef = {self.coef}"
 
     def adaptive_post_inflation(self, c):
         """compute posterior inflate coef by obs-space statistics (Desroziers et al. 2005) """
-        if c.debug:
-            c.print_1p(">>> adaptive posterior inflation:\n")
+        c.debug_message = "adaptive posterior inflation"
         stats = self.obs_space_stats(c)
         if stats['total_nobs'] < 3:
             if c.debug:
-                c.print_1p(f"Warning: insufficient nobs to establish statistics, setting inflate_coef=1")
+                c.log_event(f"insufficient nobs to establish statistics, setting inflate_coef=1", flag='warning')
             self.coef = 1.
             return
         if stats['vara'] == 0:
             if c.debug:
-                c.print_1p(f"vara=0 detected, skipping with coef=1 (no inflation)")
+                c.log_event(f"vara=0 detected, skipping with coef=1 (no inflation)", flag='warning')
             self.coef = 1.
             return
         varb = stats['varb'] / stats['total_nobs']
@@ -42,8 +40,7 @@ class MultiplicativeInflation(Inflation):
         omaamb = stats['omaamb'] / stats['total_nobs']
         amb2 = stats['amb2'] / stats['total_nobs']
         if c.debug:
-            c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-            c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
+            c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}", flag='stats')
         # self.coef = np.sqrt(omaamb/vara)
         self.coef = np.sqrt((omb2-varo-amb2)/vara)
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; coef = {self.coef}"
@@ -57,8 +54,7 @@ class MultiplicativeInflation(Inflation):
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
 
-        if c.debug:
-            c.print_1p(f'>>> inflating {flag} ensemble with multiplicative coef={self.coef}\n')
+        c.debug_message = f'inflating {flag} ensemble with multiplicative coef={self.coef}'
 
         # process the fields, each processor goes through its own subset of
         # mem_id,rec_id simultaneously

@@ -298,7 +298,8 @@ class Obs:
                 'err_std' the uncertainties for each measurement
                 there can be other optional keys provided by read_obs() but we don't use them
         """
-        c.debug_message = '>>> read observation sequence from datasets'
+        c.debug_message = 'read observation sequence from datasets'
+        c.progress.set_flag('running')
 
         # get obs_seq from dataset module, each pid_rec gets its own workload as a subset of obs_rec_list
         obs_seq = {}
@@ -330,8 +331,8 @@ class Obs:
 
             self.validate_seq_shape(seq['obs'], obs_rec.is_vector)
 
-            if c.debug and c.pid_mem == 0:
-                print(f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}", flush=True)
+            if c.pid_mem == 0:
+                c.message = f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}"
 
             # misc. transform here
             for transform_func in c.transform_funcs:
@@ -341,7 +342,7 @@ class Obs:
             obs_rec.nobs = seq['obs'].shape[-1]  # update nobs in obs_rec
 
         # output obs sequence for debugging
-        if c.debug and c.pid_mem == 0:
+        if c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
                 c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
 
@@ -538,7 +539,7 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        # c.print_1p('transpose obs prior ensemble to local obs priors\n')
+        c.debug_message = 'transpose obs prior ensemble to local obs priors'
 
         # Step 1: transpose to ensemble-complete by exchanging mem_id, par_id in comm_mem
         #         input_obs -> tmp_obs
@@ -624,8 +625,8 @@ class Obs:
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
         c.pid_show =  pid_rec_show * nproc_mem + pid_mem_show
 
-        # c.print_1p('obs post sequences: ')
-        # c.print_1p('transpose local obs to obs\n')
+        c.debug_message = 'obs post sequences: '
+        c.debug_message = 'transpose local obs to obs'
 
         obs_seq = {}
         nr = len(self.obs_rec_list[c.pid_rec])

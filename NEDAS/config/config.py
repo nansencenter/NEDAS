@@ -226,7 +226,7 @@ class Config:
         # Construct the summary block
         summary_text = f"""
 CONFIGURATION SUMMARY
-{'═'*21}
+{'='*21}
 Directories:
   Work Dir:      {self.work_dir}
   NEDAS Root:    {self.nedas_root}

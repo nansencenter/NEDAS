@@ -34,7 +34,7 @@ class FilterAnalysisScheme(Scheme):
 
         self.c.log_event("CYCLING START...")
         while self.c.time < self.config.time_end:
-            self.c.log_event(f"CURRENT CYCLE: {self.c.time} ➜ {self.c.next_time}")
+            self.c.log_event(f"CURRENT CYCLE: {self.c.time} -> {self.c.next_time}")
 
             if self.check_cycle_complete():
                 continue
@@ -62,7 +62,7 @@ class FilterAnalysisScheme(Scheme):
             # advance to next cycle
             self.c.time = self.c.next_time
 
-        self.c.log_event("CYCLING COMPLETE.")
+        self.c.log_event("CYCLING COMPLETE.", flag='finish')
 
     def generate_truth(self) -> None:
         """
@@ -213,8 +213,7 @@ class FilterAnalysisScheme(Scheme):
             restart_dir = model.ens_init_dir.format(time=self.c.time)
         else:
             restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
-        if self.config.debug:
-            print(f"using restart files in {restart_dir}", flush=True)
+        self.c.debug_message = f"using restart files in {restart_dir}"
         return restart_dir
 
 def main():

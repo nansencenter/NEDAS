@@ -32,7 +32,7 @@ class ForecastScheme(FilterAnalysisScheme):
             # advance to next cycle
             self.c.time = self.c.next_time
 
-        self.c.log_event("ALL FINISHED.")
+        self.c.log_event("ALL FINISHED.", flag='finish')
 
     def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
         opts = {

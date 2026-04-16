@@ -69,12 +69,6 @@ shuffle_obs: False
 interp_method: linear
 
 perturb:
-#- variable: state
-#  model_src: lorenz96
-#  type: 'gaussian'
-#  amp: 0.1
-#  hcorr: 1
-#  tcorr: 0
 
 scheme: filter
 
@@ -98,8 +92,8 @@ covariance_def:
   config_file:
 
 inflation_def:
-  type: post,multiplicative
-  adaptive: False
+  type: prior,multiplicative
+  adaptive: True
   coef: 1.0
 
 localization_def:

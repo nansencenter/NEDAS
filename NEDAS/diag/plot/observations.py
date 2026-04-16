@@ -83,8 +83,7 @@ def run(c: Context, **kwargs) -> None:
     k = kwargs['k']
     t = kwargs['t']
     dt = kwargs['dt']
-    if c.debug:
-        print(f"PID {c.pid:4} plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}", flush=True)
+    c.debug_message = f"plotting observations '{obs_rec['name']:20}' from {obs_rec['dataset_src']} at level {k:3} {t} ~ {t+dt*dt1h}"
 
     # if the viewer html file does not exist, generate it
     viewer = os.path.join(plot_dir, 'index.html')
@@ -159,8 +158,7 @@ def run(c: Context, **kwargs) -> None:
 
 def generate_viewer_html(c, plot_dir, figsize, **kwargs) -> None:
     """Generating a html page to help viewing the ensemble state variables"""
-    if c.debug:
-        print(f"Generating viewer.html page in {plot_dir}")
+    c.debug_message = f"Generating viewer.html page in {plot_dir}"
 
     with open(os.path.join(os.path.dirname(__file__), 'viewer.html'), 'rt') as f:
         html_page = f.read()

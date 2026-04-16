@@ -275,7 +275,7 @@ class Context:
     @total_tasks.setter
     def total_tasks(self, value: int):
         self.progress.node['total_tasks'] = value
-        self.debug_message = f"total tasks: {value}\n"
+        self.debug_message = f"total tasks: {value}"
 
     @property
     def current_task(self):
@@ -365,8 +365,8 @@ class Context:
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(progress.print_with_cache)
 
-    def log_event(self, msg: str):
-        self.print_1p(self.progress.log(msg))
+    def log_event(self, msg: str, flag='info'):
+        self.print_1p(self.progress.log(msg, flag))
 
     def show_greeting(self) -> None:
         greeting_msg = f"""

@@ -10,12 +10,12 @@ class RTPPInflation(Inflation):
         stats = self.obs_space_stats(c)
         if stats['total_nobs'] < 3:
             if c.debug:
-                c.print_1p(f"Warning: insufficient nobs to establish statistics, setting self.coef=0")
+                c.log_event(f"insufficient nobs to establish statistics, setting self.coef=0", flag='warning')
             self.coef = 0.
             return
         if stats['vara'] == 0:
             if c.debug:
-                c.print_1p(f"vara=0 detected, skipping with coef=1 (no inflation)")
+                c.log_event(f"vara=0 detected, skipping with coef=1 (no inflation)", flag='warning')
             self.coef = 0.
             return
         varb = stats['varb'] / stats['total_nobs']
@@ -27,9 +27,7 @@ class RTPPInflation(Inflation):
         beta = np.sqrt(varb/vara)
         lamb = np.sqrt(max(0.0, (omb2-varo-amb2)/vara))
         if c.debug:
-            c.print_1p(f"varb = {varb}, vara = {vara}, varo={varo}\n")
-            c.print_1p(f"omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}\n")
-            c.print_1p(f"beta = {beta}, lambda = {lamb}\n")
+            c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}; beta = {beta}, lambda = {lamb}", flag='stats')
         if beta <= 1:
             self.coef = 0
         else:
@@ -45,7 +43,7 @@ class RTPPInflation(Inflation):
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
 
         if c.debug:
-            c.print_1p(f'relaxing to prior ensemble perturbations with coef={self.coef}\n')
+            c.log_event(f'relaxing to prior ensemble perturbations with coef={self.coef}', flag='info')
 
         # process the fields, each processor goes through its own subset of
         # mem_id,rec_id simultaneously

@@ -108,23 +108,26 @@ class IOBackend(ABC):
 
     def save_debug_data(self, c: Context, name: str, data: dict, path: str | None=None) -> None:
         """
-        Save debug data in npz format
+        Save debug data in npy format
 
         Args:
             c (Context): the runtime context
             name (str): the name of the data
             data (dict): the data
             path (str, optional): system path to save the data to.
+
+        To recover the data, use np.load(file, allow_pickle=True).item()
         """
         if path is None:
             path = c.config.work_dir  # default path
 
-        file = os.path.join(path, f"{name}.npz")
+        file = os.path.join(path, f"{name}.npy")
 
         # make sure directory exists
         c.fs.make_dir(os.path.dirname(file))
 
         # save the data to file
-        np.savez(file, **data)
+        wrapped_data = np.array(data, dtype=object)
+        np.save(file, wrapped_data)
 
-        print(f"saved debug data '{file}'", flush=True)
+        c.debug_message = f"Saved debug data '{file}'"

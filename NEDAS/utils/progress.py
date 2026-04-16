@@ -93,12 +93,17 @@ class Formatter:
         self.yellow = "\033[1;33m" if self.interactive else ''
         self.blue = "\033[1;34m" if self.interactive else ''
         self.clear_line = "\r\033[K" if self.interactive else '\n'
-        self.event_pin = "◈ "
+        self.event_flag = {
+            'info': f"{self.dim}◈{self.reset}",
+            'warning': f"{self.red}!!{self.reset}",
+            'stats': "🔎 ",
+            'finish': "🏁 ",
+        }
         self.stat_flag = {
-            'waiting': f"{self.blue}WAITING{self.reset}",
-            'running': f"{self.yellow}RUNNING{self.reset}",
-            'done': f"{self.green}DONE{self.reset}",
-            'error': f"{self.red}ERROR{self.reset}",
+            'waiting': f"{self.blue}⏰ {self.reset}",
+            'running': f"{self.yellow}⏳ {self.reset}",
+            'done': f"{self.green}✅ {self.reset}",
+            'error': f"{self.red}❌ {self.reset}",
         }
 
         assert self.tabspace > 1, "tabspace should be greater than 1 to have visible pipes in indent"
@@ -174,7 +179,7 @@ class Formatter:
         n = self.anchor - name_len - 2 if name_len < (self.anchor-2) else 2
         return self.dimmer(f" {self.padder*n} ")
 
-    def dimmer(self, msg): 
+    def dimmer(self, msg):
         return self.dim+msg+self.reset
 
     def progress_bar(self, task_id: int, ntask: int) -> str:
@@ -260,6 +265,11 @@ class Progress:
     def set_flag(self, flag: str):
         self.node['flag'] = flag
 
+    def get_timer_msg(self, node):
+        elapsed = node.get('elapsed_time')
+        timer_msg = f"{elapsed:7.2f}s" if elapsed is not None else ""
+        return timer_msg
+
     def _format_line(self, node: dict,
                      level: int,
                      include_indent: bool=True,
@@ -278,7 +288,7 @@ class Progress:
         else:
             header = node['header']
             padding = f"... "
-        stat_flag = self.fmt.stat_flag[node['flag']]
+        stat_flag = self.fmt.stat_flag.get(node['flag'], node['flag'].upper())
         message = f"({node['message']})" if node['message'] else ""
         return f"{header}{padding}{stat_flag} {trailer} {message}"
 
@@ -289,6 +299,8 @@ class Progress:
 
         if self.call_stack_max_level and self.call_stack_max_level < 2 and self.level > 1:
             return ""
+        if self.debug:
+            return f"\nENTERING: {func_name}\n"
 
         newline = ''
         if self.call_stack:
@@ -312,15 +324,16 @@ class Progress:
         within_max_level = self.within_max_level(level)
         self.call_stack.pop()
 
+        timer_msg = self.get_timer_msg(node)
+        stat_flag = self.fmt.stat_flag.get(node['flag'], node['flag'].upper())
+
         if self.call_stack_max_level and self.call_stack_max_level < 2 and level > 1:
             return ""
+        if self.debug:
+            return f"EXITING: {node['name']} {stat_flag} {timer_msg}\n\n"
 
         # Handle the vertical branch line for parents
         addline = f"{self.fmt.indent(level, branch=False)}\n" if (node['substeps'] > 0 and within_max_level) else ""
-
-        # Prepare the 'trailer' (Timer)
-        elapsed = node.get('elapsed_time')
-        timer_msg = f"{elapsed:7.2f}s" if elapsed is not None else ""
 
         if not self.interactive:
             is_branch = (node['substeps'] == 0)
@@ -342,6 +355,8 @@ class Progress:
     def update(self) -> str:
         if self.call_stack_max_level and self.call_stack_max_level < 2:
             return ""
+        if self.debug:
+            return ""
 
         node, level = self.node, self.level
         total, current = node['total_tasks'], node['current_task']
@@ -358,20 +373,24 @@ class Progress:
         res = self.fmt.truncate(res)
         return f"{self.fmt.clear_line}{res}"
 
-    def log(self, msg: str) -> str:
+    def log(self, msg: str, flag: str) -> str:
         """
         Safely injects a global message without breaking the tree.
         """
+        indent = ''
         if self.within_max_level(self.level):
             indent = self.fmt.indent(self.level+1, branch=False)
         else:
             if self.call_stack_max_level:
                 indent = self.fmt.indent(self.call_stack_max_level, branch=False)
-            else:
-                indent = ''
-        formatted_msg = f"{indent}\n{self.fmt.event_pin}{msg}"
+
+        event_pin = self.fmt.event_flag.get(flag, flag.upper()+':')
+
+        if self.debug:
+            return f"{event_pin} {msg}\n"
+
         if self.node['substeps'] == 0:
             if self.node['flag'] == 'running':
-                return f"\n{formatted_msg}\n"
-            return f"\n{formatted_msg}"
-        return f"{formatted_msg}\n"
+                return f"\n{indent}\n{event_pin} {msg}\n"
+            return f"\n{indent}\n{event_pin} {msg}"
+        return f"{indent}\n{event_pin} {msg}\n"

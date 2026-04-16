@@ -88,8 +88,7 @@ def run(c: Context, **kwargs):
     for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h
 
-        if c.debug:
-            print(f"PID {c.pid:4} convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}", flush=True)
+        c.debug_message = f"convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}"
         # read the variable from the model restart file
         rec = model.variables[vname]
         file = kwargs['file'].format(time=time_start, member=member+1)

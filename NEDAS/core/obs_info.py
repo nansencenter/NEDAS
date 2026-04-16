@@ -48,9 +48,8 @@ class ObsInfo:
 
         self.complete_err_cross_corr_matrix()
 
-        if c.debug:
-            print(f"number of unique observation records = {len(self.records)}", flush=True)
-            print(f"observation variables: {self.variables}", flush=True)
+        c.debug_message = f"number of unique observation records = {len(self.records)}"
+        c.debug_message = f"observation variables: {self.variables}"
 
     def add_obs_record(self, c: Context, vrec: dict):
         """
