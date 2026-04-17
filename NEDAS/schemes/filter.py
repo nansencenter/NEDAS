@@ -86,7 +86,7 @@ class FilterAnalysisScheme(Scheme):
             opts = self.get_task_opts(model_name,
                                       total_nproc=self.config.nproc,
                                       nproc=model.nproc_per_run)
-            self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
+            self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:
         """
@@ -106,7 +106,7 @@ class FilterAnalysisScheme(Scheme):
                                       total_nproc=self.config.nproc_util,
                                       nproc=model.nproc_per_util)
 
-            self.c.logger(f'Preprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'prior', f'preproc_{model_name}', model.preprocess, **opts)
+            self.c.logger(f'Preprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'preproc_{model_name}', model.preprocess, **opts)
 
     def postprocess(self) -> None:
         """
@@ -118,7 +118,7 @@ class FilterAnalysisScheme(Scheme):
                                       total_nproc=self.config.nproc_util,
                                       nproc=model.nproc_per_util)
 
-            self.c.logger(f'Postprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'prior', f'postproc_{model_name}', model.postprocess, **opts)
+            self.c.logger(f'Postprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'postproc_{model_name}', model.postprocess, **opts)
 
     def ensemble_forecast(self) -> None:
         """
@@ -131,7 +131,7 @@ class FilterAnalysisScheme(Scheme):
                                       nproc=model.nproc_per_run,
                                       walltime=model.walltime)
 
-            self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'prior', f'forecast_{model_name}', model.run, **opts)
+            self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'forecast_{model_name}', model.run, **opts)
 
     def filter(self) -> None:
         """

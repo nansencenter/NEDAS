@@ -16,6 +16,12 @@ class IOBackend(ABC):
         io_mode (IOMode): 'offline' for file I/O and 'online' for persistent memory I/O
         tags (list[str]): List of names for copies of state/obs data
 
+    IOTags:
+        'current': Mutable buffer for the data, being updated by assimilation and outer-loop iterations
+        'prior': read-only snapshot, also known as background/forecast, kept for O-B statistics.
+        'post': final state after the assimilation, known as the (re)analysis.
+        'truth': truth, as reference state in synthetic OSSE experiments
+        'raw': original information. For obs it is the actual obs
     """
     io_mode: IOMode = 'offline'
     tags: list[str] = list(get_args(IOTag))
@@ -40,7 +46,7 @@ class IOBackend(ABC):
         Args:
             c (Context): the runtime context
             tag (str): which copy of the state to read from
-            rec_id (int): field record id
+            rec_id (int): field record index
             mem_id (int): ensemble member index from 0 to nens-1
 
         Returns:
@@ -57,7 +63,7 @@ class IOBackend(ABC):
             fld (np.ndarray): the 2D field data
             c (Context): the runtime context
             tag (str): which copy of the state to write to
-            rec_id (int): field record object
+            rec_id (int): field record index
             mem_id (int): ensemble member index
         """
         ...

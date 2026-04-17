@@ -95,17 +95,17 @@ class OfflineIO(IOBackend):
         # additional info from input args to form the path prefix
         model_name = kwargs['model_src']
         model = c.models[model_name]
-        if tag in ['prior', 'z']:
+        if tag in ['raw', 'current', 'post', 'z']:
             path = c.fs.forecast_dir(c.time, model_name)
 
-        elif tag == 'post':
+        elif tag == 'prior':
             path = c.fs.forecast_dir(c.prev_time, model_name)
 
         elif tag == 'truth':
             path = model.truth_dir
 
         else:
-            raise ValueError(f"Unknown tag: '{tag}'")
+            raise ValueError(f"tag '{tag}' not supported in io.call_method")
         # make sure path exists
         if path:
             os.makedirs(path, exist_ok=True)  # use shell_utils makedir

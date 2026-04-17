@@ -325,7 +325,7 @@ class Perturbation:
 
         # set up grids
         vname =variable_list[0]  # note: all variables in the list shall have same dt and k levels
-        c.io.call_method(c, 'prior', model.read_grid, name=vname, time=t, k=k, **rec)
+        c.io.call_method(c, 'current', model.read_grid, name=vname, time=t, k=k, **rec)
         model.grid.set_destination_grid(c.grid)
         c.grid.set_destination_grid(model.grid)
 
@@ -333,7 +333,7 @@ class Perturbation:
         fields = {}
         for vname in variable_list:
             # read variable from model state
-            fld = c.io.call_method(c, 'prior', model.read_var, name=vname, time=t, k=k, **rec)
+            fld = c.io.call_method(c, 'current', model.read_var, name=vname, time=t, k=k, **rec)
             # convert to analysis grid
             fields[vname] = model.grid.convert(fld, is_vector=model.variables[vname].is_vector)
         return fields
@@ -345,10 +345,10 @@ class Perturbation:
         if rec['type'].split(',')[0]=='displace' and hasattr(model, 'displace'):
             # use model internal method to apply displacement perturbations directly
             displace_method = getattr(model, 'displace')
-            c.io.call_method(c, 'prior', displace_method, self.perturb, time=t, k=k, **rec)
+            c.io.call_method(c, 'current', displace_method, self.perturb, time=t, k=k, **rec)
         else:
             # convert from analysis grid to model grid, and
             # write the perturbed variables back to model state files
             for vname in variable_list:
                 fld = c.grid.convert(fields[vname], is_vector=model.variables[vname].is_vector)
-                c.io.call_method(c, 'prior', model.write_var, fld, name=vname, time=t, k=k, **rec)
+                c.io.call_method(c, 'current', model.write_var, fld, name=vname, time=t, k=k, **rec)

@@ -71,7 +71,7 @@ class Updator(ABC):
             for rec_id in c.state.rec_list[c.pid_rec]:
                 rec = c.state.info.fields[rec_id].asdict()
                 model = c.models[rec['model_src']]
-                file = c.io.call_method(c, 'prior', getattr(model, 'filename'), member=mem_id, **rec)
+                file = c.io.call_method(c, 'current', getattr(model, 'filename'), member=mem_id, **rec)
                 if file:
                     files.append(file)
         # collect files from all pids

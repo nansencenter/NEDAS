@@ -108,7 +108,7 @@ class State:
 
                 model_name = rec.model_src
                 model = c.models[model_name]
-                model_fld = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec.asdict())
+                model_fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
                 model.grid.set_destination_grid(c.grid)
                 fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
                 if rec.is_vector:
@@ -124,7 +124,7 @@ class State:
 
                 # read z_coords for the field
                 # only need to generate the uniq z coords, store in bank
-                model_z = c.io.call_method(c, 'prior', model.z_coords, member=mem_id, **rec.asdict())
+                model_z = c.io.call_method(c, 'current', model.z_coords, member=mem_id, **rec.asdict())
                 z = model.grid.convert(model_z, is_vector=False, method='linear', coarse_grain=True)
                 if rec.is_vector:
                     self.fields_z[mem_id, rec_id] = np.array([z, z])
@@ -134,7 +134,7 @@ class State:
 
         # additonal output of debugging
         if c.debug:
-            c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior)
+            c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior, path=c.fs.analysis_dir(c.time, c.iter))
 
     def collect_scalar_variables(self, c):
         pass

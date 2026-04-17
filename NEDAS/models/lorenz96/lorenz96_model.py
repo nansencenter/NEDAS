@@ -128,15 +128,26 @@ class Lorenz96Model(Model[Grid1D]):
         return state
 
     def preprocess(self, *args, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
-            kwargs = super().parse_kwargs(kwargs)
             self.c.fs.make_dir(kwargs['path'])
             file1 = self.filename(**{**kwargs, 'path':kwargs['restart_dir']})
             file2 = self.filename(**kwargs)
             self.c.fs.copy_file(file1, file2)
-
+        elif self.io_mode == 'online':
+            # save a copy of the current state (forecast) as prior
+            var = self._read_var_from_memory(**kwargs)
+            self._write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
+ 
     def postprocess(self, *args, **kwargs):
-        pass
+        kwargs = super().parse_kwargs(kwargs)
+        # if offline mode, the current files are just posterior states
+        # do nothing
+        if self.io_mode == 'online':
+            # save a copy of the current state (analysis) as posterior
+            # don't need to copy since current state is no longer updated
+            var = self._read_var_from_memory(**kwargs)
+            self._write_var_to_memory(var, **{**kwargs, 'tag':'post'})
 
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
