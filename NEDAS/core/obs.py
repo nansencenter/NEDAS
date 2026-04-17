@@ -332,7 +332,7 @@ class Obs:
             self.validate_seq_shape(seq['obs'], obs_rec.is_vector)
 
             if c.pid_mem == 0:
-                c.message = f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}"
+                c.debug_message = f"number of '{obs_rec.name}' obs from '{obs_rec.dataset_src}': {seq['obs'].shape[-1]}"
 
             # misc. transform here
             for transform_func in c.transform_funcs:
@@ -341,10 +341,12 @@ class Obs:
             obs_seq[obs_rec_id] = seq
             obs_rec.nobs = seq['obs'].shape[-1]  # update nobs in obs_rec
 
+            dataset.save_obs(seq, **obs_rec.asdict(), member=None, tag='raw')
+
         # output obs sequence for debugging
-        if c.pid_mem == 0:
+        if c.debug and c.pid_mem == 0:
             for obs_rec_id, rec in obs_seq.items():
-                c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec)
+                c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec, path=c.fs.analysis_dir(c.time, c.iter))
 
         return obs_seq
 
@@ -373,6 +375,7 @@ class Obs:
             for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
                 # this is the obs record to process
                 obs_rec = self.info.records[obs_rec_id]
+                dataset = c.datasets[obs_rec.dataset_src]
 
                 c.debug_message = f"obs_prior mem{mem_id+1:03} {obs_rec.name:20}"
                 c.current_task = m*nr+r
@@ -388,6 +391,8 @@ class Obs:
                 for transform_func in c.transform_funcs:
                     seq = transform_func.forward_obs(c, obs_rec, seq)
 
+                dataset.save_obs(seq, **obs_rec.asdict(), member=mem_id, tag=tag)
+
                 # collect obs ensemble data to the local memory
                 getattr(self, f"obs_{tag}")[mem_id, obs_rec_id] = seq['obs']
         c.comm.Barrier()
@@ -397,7 +402,7 @@ class Obs:
             for key, seq in getattr(self, f"obs_{tag}").items():
                 mem_id, obs_rec_id = key
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
-                c.io.save_debug_data(c, file, {f'obs_{tag}':seq})
+                c.io.save_debug_data(c, file, {f'obs_{tag}':seq}, path=c.fs.analysis_dir(c.time, c.iter))
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
         # form the global list of obs (in serial mode the main loop is over this list)

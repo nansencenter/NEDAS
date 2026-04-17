@@ -64,4 +64,3 @@ class SyntheticObs(Dataset):
 
     def read_obs(self, **kwargs):
         raise NotImplementedError("read_obs is not implemented for synthetic observations")
-

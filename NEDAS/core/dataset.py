@@ -14,6 +14,7 @@ class Dataset(ABC):
     """
     variables: dict[VarName, VarDesc] = {}
     obs_operator: dict[VarName, Callable] = {}
+    memory: dict = {}
     _c: Context
 
     def  __init__(self, context: Context|None=None,
@@ -106,3 +107,20 @@ class Dataset(ABC):
             **kwargs
         """
         raise NotImplementedError(f"'generate_obs_network' is not implemented for {self.__class__.__name__}")
+
+    def save_obs(self, seq: dict, **kwargs) -> None:
+        """
+        Save a copy of obs in internal memory
+        """
+        kwargs = self.parse_kwargs(kwargs)
+
+        tag = kwargs['tag']
+        name = kwargs['name']
+        member = kwargs['member']
+        time = kwargs['time']
+
+        if tag not in self.memory:
+            self.memory[tag] = {}
+        if name not in self.memory[tag]:
+            self.memory[tag][name] = {}
+        self.memory[tag][name][member, time] = seq
