@@ -1,6 +1,5 @@
 import re
 import os
-import sys
 import shutil
 import subprocess
 import time
@@ -76,9 +75,9 @@ class Formatter:
         tabspace (int, optional): Number of spaces for one call stack level indentation. Defaults to 4.
         progress_bar_width (int, optional): Width of the progress bar in characters. Defaults to 10.
     """
-    def __init__(self, interactive: bool=True, anchor=50, tabspace=4, progress_bar_width=10) -> None:
+    def __init__(self, interactive: bool=True, cols=80, anchor=50, tabspace=4, progress_bar_width=10) -> None:
         self.interactive = interactive
-        self.is_notebook = 'ipykernel' in sys.modules
+        self.cols = cols
 
         # some visual parameters
         self.anchor = anchor
@@ -94,7 +93,8 @@ class Formatter:
         self.blue = "\033[1;34m" if self.interactive else ''
         self.clear_line = "\r\033[K" if self.interactive else '\n'
         self.event_flag = {
-            'info': f"{self.dim}◈{self.reset}",
+            '': f"{self.dim}◈{self.reset}",
+            'info': f"🔔 ",
             'warning': f"{self.red}!!{self.reset}",
             'stats': "🔎 ",
             'finish': "🏁 ",
@@ -120,18 +120,16 @@ class Formatter:
         visible_text = self.strip_escape_code(text)
         visible_len = len(visible_text)
 
-        if self.is_notebook:
-            cols = 500
-        else:
-            cols, _ = shutil.get_terminal_size(fallback=(80,24))
+        # get real time cols if possible
+        self.cols, _ = shutil.get_terminal_size(fallback=(self.cols,1))
 
-        if visible_len <= cols:
-           padding_needed = cols - visible_len - 1
+        if visible_len <= self.cols:
+           padding_needed = self.cols - visible_len - 1
            return f"{text}{' '*padding_needed}"
 
         result = ''
         count = 0
-        max_visible = cols - 4
+        max_visible = self.cols - 4
         parts = re.split(r'(\x1b\[[0-9;]*[a-zA-Z])', text)
         for part in parts:
             if part.startswith('\x1b'):
@@ -213,6 +211,7 @@ class Progress:
     formatter: Formatter
 
     def __init__(self, interactive: bool=True,
+                 cols: int=80,
                  debug: bool=False,
                  call_stack: list[dict]|None=None,
                  call_stack_max_level: int|None=None,
@@ -230,7 +229,7 @@ class Progress:
         if not self.interactive:
             self.call_stack_max_level = None
 
-        self.fmt = Formatter(interactive, anchor, tabspace, progress_bar_width)
+        self.fmt = Formatter(interactive, cols, anchor, tabspace, progress_bar_width)
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {
@@ -257,6 +256,13 @@ class Progress:
         if level <= 2:
             return True
         return level <= self.call_stack_max_level
+
+    def is_leaf(self, node) -> bool:
+        if node['substeps'] == 0:
+            if self.call_stack_max_level and self.call_stack_max_level < 2:
+                return False
+            return True 
+        return False
 
     @property
     def level(self) -> int:
@@ -340,17 +346,17 @@ class Progress:
             res = self._format_line(node, level, include_name=False, include_padding=False, include_indent=not is_branch, is_branch=is_branch, trailer=timer_msg)
             return self.fmt.truncate(res)+f"\n{addline}"
 
-        if node['substeps'] > 0:
-            # Parent node: don't clear, don't show name/padding
-            res = self._format_line(node, level, include_name=False, include_padding=False, is_branch=False, trailer=timer_msg)
-            return self.fmt.truncate(res)+f"\n{addline}"
-        else:
+        if self.is_leaf(node):
             # Leaf node: clear line, show full name + result
             res = self._format_line(node, level, include_name=True, is_branch=True, trailer=timer_msg)
             res = self.fmt.truncate(res)
             if within_max_level:
                 res += f"\n{addline}"
             return f"{self.fmt.clear_line}{res}"
+        else:
+            # Parent node: don't clear, don't show name/padding
+            res = self._format_line(node, level, include_name=False, include_padding=False, is_branch=False, trailer=timer_msg)
+            return self.fmt.truncate(res)+f"\n{addline}"
 
     def update(self) -> str:
         if self.call_stack_max_level and self.call_stack_max_level < 2:
@@ -389,7 +395,7 @@ class Progress:
         if self.debug:
             return f"{event_pin} {msg}\n"
 
-        if self.node['substeps'] == 0:
+        if self.is_leaf(self.node):
             if self.node['flag'] == 'running':
                 return f"\n{indent}\n{event_pin} {msg}\n"
             return f"\n{indent}\n{event_pin} {msg}"

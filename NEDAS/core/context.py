@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import sys
+import shutil
 import copy
 import time
 from typing import get_args, Callable, TYPE_CHECKING
@@ -105,9 +106,21 @@ class Context:
         # otherwise, check if a tty is present, if so, should support interactive output.
         return os.isatty(sys.stdout.fileno())
 
+    def get_cols(self) -> int:
+        # if cols is explicitly set in config, use it
+        if self.config.cols is not None:
+            return self.config.cols
+        # in jupyter notebook environment, just use a large number
+        if 'ipykernel' in sys.modules:
+            return 800
+        # otherwise, get real time terminal size
+        cols, _ = shutil.get_terminal_size()
+        return cols
+
     def set_logging(self) -> None:
         progress_opts = {
             'interactive': self.interactive,
+            'cols': self.get_cols(),
             'debug': self.config.debug,
             'call_stack': self.config.call_stack,
             'call_stack_max_level': self.config.call_stack_max_level,
@@ -365,7 +378,7 @@ class Context:
         decorator = parallel.by_rank(self.comm, self.pid_show)
         return decorator(progress.print_with_cache)
 
-    def log_event(self, msg: str, flag='info'):
+    def log_event(self, msg: str, flag=''):
         self.print_1p(self.progress.log(msg, flag))
 
     def show_greeting(self) -> None:
@@ -393,6 +406,7 @@ class Context:
             val = getattr(self, rt_state)
             setattr(tmp_config, rt_state, val)
         setattr(tmp_config, 'call_stack', self.progress.call_stack)
+        setattr(tmp_config, 'cols', self.progress.fmt.cols)
 
         # save the config to yaml file
         tmp_config.dump_yaml(config_file)

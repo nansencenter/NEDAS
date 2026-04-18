@@ -49,12 +49,12 @@ class Scheme(ABC):
         if os.getpid() != self._main_pid:
             return
 
-        self.c.log_event(f"{self.__class__.__name__}: Received signal {signum}. Cleaning up...")
+        self.c.log_event(f"{self.__class__.__name__}: Received signal {signum}. Cleaning up...", flag='info')
 
         # 1. kill the scheduler worker if it exists
         if self.scheduler:
             worker_pids = list(self.scheduler.executor._processes.keys())
-            self.c.log_event(f"OfflineScheduler: Cleaning up worker processes {worker_pids}")
+            self.c.log_event(f"OfflineScheduler: Cleaning up worker processes {worker_pids}", flag='info')
 
             for pid in worker_pids:
                 try:
@@ -98,7 +98,7 @@ class Scheme(ABC):
             else:
                 # if not, we will dispatch the whole scheme itself to a job submitter.
                 if self.c.debug:
-                    self.c.log_event(f"run_all: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...")
+                    self.c.log_event(f"run_all: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...", flag='info')
                 self.external_call(step='run_all', parallel_mode='mpi', nproc=self.config.nproc)
 
         # 2. offline mode (manual dispatch per step)
@@ -133,7 +133,7 @@ class Scheme(ABC):
             self.c.dump_config(tmp_config_file.name)
 
             if self.config.debug:
-                self.c.log_event(f"config file: {tmp_config_file.name}")
+                self.c.log_event(f"config file: {tmp_config_file.name}", flag='info')
 
             # build run commands for the ensemble forecast script
             commands = ""
@@ -143,7 +143,7 @@ class Scheme(ABC):
             if step:
                 commands += f" --step {step}"
             if self.config.debug:
-                self.c.log_event(f"running commands: '{commands}'")
+                self.c.log_event(f"running commands: '{commands}'", flag='info')
 
             # build job options
             job_opts = {
@@ -169,7 +169,7 @@ class Scheme(ABC):
         if not self.online_mode and self.steps_need_mpi[step]:
             if self.config.nproc>1 and not self.c.comm.mpi_ready:
                 if self.c.debug:
-                    self.c.log_event(f"{step}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...")
+                    self.c.log_event(f"{step}: config.nproc={self.config.nproc}, elevating to a mpi-enabled environment...", flag='info')
                 self.external_call(step, parallel_mode='mpi', nproc=self.config.nproc)
                 return
 

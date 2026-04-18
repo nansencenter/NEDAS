@@ -50,6 +50,7 @@ class Config:
     debug: bool
     timer: bool
     call_stack_max_level: int|None
+    cols: int
     anchor: int
     tabspace: int
     progress_bar_width: int
