@@ -65,15 +65,14 @@ class Vort2DModel(Model[RegularGrid]):
 
     def _read_var_from_memory(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
+        tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
-        if name not in self.memory:
-            raise RuntimeError(f"vort2d model online state memory not allocated yet.")
         key = (member, time)
-        if key not in self.memory[name]:
-            raise RuntimeError(f"vort2d model online state: {key} not found in memory for {name}")
-        return self.memory[name][key]
+        if key not in self.memory[tag][name]:
+            raise RuntimeError(f"vort2d model online state: {key} not found in memory[{tag}][{name}]")
+        return self.memory[tag][name][key]
 
     def _read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -99,13 +98,16 @@ class Vort2DModel(Model[RegularGrid]):
 
     def _write_var_to_memory(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
+        tag = kwargs['tag']
         name = kwargs['name']
         member = kwargs['member']
         time = kwargs['time']
         #create memory dict entry if not yet
-        if name not in self.memory:
-            self.memory[name] = {}
-        self.memory[name][member, time] = var
+        if tag not in self.memory:
+            self.memory[tag] = {}
+        if name not in self.memory[tag]:
+            self.memory[tag][name] = {}
+        self.memory[tag][name][member, time] = var
 
     def _write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -173,6 +175,7 @@ class Vort2DModel(Model[RegularGrid]):
         self.c.current_task = 0
         while t < self.c.config.time_end:
             opts = {
+                **kwargs,
                 'path': self.truth_dir,
                 'name': 'velocity',
                 'is_vector': True,
@@ -187,7 +190,7 @@ class Vort2DModel(Model[RegularGrid]):
 
             next_t = t + kwargs['forecast_period'] * dt1h
             self.c.debug_message = f"running model, saving output {self.filename(**{**opts, 'time':next_t})}"
-            self.run(path=self.truth_dir, time=t, forecast_period=kwargs['forecast_period'])
+            self.run(**{**kwargs, 'path':self.truth_dir, 'time':t})
             t = next_t
             self.c.current_task += 1
 
@@ -198,11 +201,10 @@ class Vort2DModel(Model[RegularGrid]):
         self.c.fs.make_dir(self.ens_init_dir)
 
         opts = {
+            **kwargs,
             'path': self.ens_init_dir,
             'name': 'velocity',
             'is_vector': True,
-            'time': kwargs['time'],
-            'member': kwargs['member'],
             }
         if debug:
             print(f"generating initial condition for member {kwargs['member']+1}, output to {self.filename(**opts)}")

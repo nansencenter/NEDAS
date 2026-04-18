@@ -1,6 +1,8 @@
-work_dir: /cluster/work/users/yingyue/vort2d
+work_dir: vort2d
 
-python_env: /cluster/home/yingyue/python.src
+python_env:
+
+io_mode: online
 
 job_submit:
   host: local
@@ -19,6 +21,7 @@ time_start: 2001-01-01 00:00:00
 time_end: 2001-01-03 00:00:00
 time_analysis_start: 2001-01-01 03:00:00
 time_analysis_end: 2001-01-02 21:00:00
+time:
 cycle_period: 3
 
 obs_time_steps: [0]
@@ -53,8 +56,6 @@ obs_def:
   hroi: 1.44e5
   vroi: inf
   troi: inf
-
-use_synthetic_obs: True
 
 dataset_def:
   vort2d:
