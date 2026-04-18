@@ -42,7 +42,11 @@ class MultiplicativeInflation(Inflation):
         if c.debug:
             c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}", flag='stats')
         # self.coef = np.sqrt(omaamb/vara)
-        self.coef = np.sqrt((omb2-varo-amb2)/vara)
+        ratio = (omb2-varo-amb2)/vara
+        if ratio < 0:
+            self.coef = 1.0
+            return
+        self.coef = np.sqrt(ratio)
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; coef = {self.coef}"
 
     def apply_inflation(self, c, flag):
