@@ -40,30 +40,3 @@ class OnlineIO(IOBackend):
         kwargs['tag'] = tag
 
         return method(*args, **kwargs)
-
-    def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None = None) -> None:
-        # form the key in the data dict
-        key = name
-        if path is not None:
-            key = f"{path}_{name}"
-
-        # save data to dict
-        self.shared_data[key] = data
-
-    def load_ndarray(self, c: Context, name: str, path: str | None = None) -> np.ndarray | None:
-        # form the key in the data dict
-        key = name
-        if path is not None:
-            key = f"{path}_{name}"
-
-        # read from dict to obtain data
-        if key in self.shared_data:
-            return self.shared_data[key]
-        else:
-            return None
-
-    def output_snapshot(self, c: Context) -> None:
-        """
-        Output a snapshot of data stored in memory to npz files
-        """
-        ...

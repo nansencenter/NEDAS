@@ -214,6 +214,7 @@ class Scheme(ABC):
             self.c.debug_message = f"running {task_name} for mem{mem_id+1:03}"
             self.c.current_task = m
             self.c.io.call_method(self.c, tag, func, **opts)
+        self.c.comm.Barrier()
 
     def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
         # setup an offline scheduler to distribute tasks
@@ -245,3 +246,4 @@ class Scheme(ABC):
         finally:
             self.scheduler.shutdown()
             self.scheduler = None
+            self.c.comm.Barrier()

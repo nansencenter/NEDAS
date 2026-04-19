@@ -316,7 +316,7 @@ class Obs:
 
             if isinstance(dataset, SyntheticObs):  #using synthetic observation
                 # generate synthetic obs network
-                seq = dataset.generate_obs_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
+                seq = dataset.generate_obs_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict(), tag='truth')
 
                 # compute obs values
                 seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
@@ -327,7 +327,7 @@ class Obs:
 
             else:
                 # read dataset files and obtain obs sequence
-                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict())
+                seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict(), tag='raw')
 
             self.validate_seq_shape(seq['obs'], obs_rec.is_vector)
 

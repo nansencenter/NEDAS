@@ -24,6 +24,7 @@ class FilterAnalysisScheme(Scheme):
         'diagnose': True,
     }
 
+
     def run_all(self) -> None:
         if self.c.time == self.config.time_start:
             self.c.log_event("PREPARING...")
@@ -59,6 +60,10 @@ class FilterAnalysisScheme(Scheme):
                 if self.config.diag:
                     self.run_step('diagnose')
 
+            # dump data in memory to checkpoint files
+            if self.c.time > self.c.config.time_start:
+                self.save_checkpoint()
+
             # advance to next cycle
             self.c.time = self.c.next_time
 
@@ -74,9 +79,18 @@ class FilterAnalysisScheme(Scheme):
             return
 
         for model_name, model in self.c.models.items():
-            opts = self.get_task_opts(model_name, member=None)
+            # skip if all truth data are ready
+            # 
+            #    return
 
-            self.c.logger(f'Generate {model_name} truth')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
+            # if not root process can generate the truth
+            if self.c.pid == 0:
+                opts = self.get_task_opts(model_name, member=None)
+                self.c.logger(f'Generate {model_name} truth')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
+
+            # every pid now load the truth to memory
+
+        self.c.comm.Barrier()
 
     def generate_init_ensemble(self) -> None:
         """
@@ -215,6 +229,26 @@ class FilterAnalysisScheme(Scheme):
             restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
         self.c.debug_message = f"using restart files in {restart_dir}"
         return restart_dir
+
+    def save_checkpoint(self) -> None:
+        """
+        Save data in memory to file for future use. Deallocate the memory to save space.
+
+        TODO: called every time step now, can implement a longer interval
+        """
+        time = self.c.prev_time
+        for model_name, model in self.c.models.items():
+            for tag in ['current', 'prior', 'post']:
+                memory = model.memory[tag]
+                for name in memory:
+                    # TODO: gather all member here? or just separate files?
+                    # This convention will need to enforce to model.memory implementation
+                    # for tag=post, only analysis period available
+                    for member in self.c.mem_list[self.c.pid]:
+                        data = memory[name][member, time]
+                        filename = f"{tag}_{name}_mem{member+1:04d}_{time:%Y%m%d%H%M}"
+                        self.c.io.save_ndarray(self.c, filename, data, path=self.c.fs.cycle_dir(time))
+                        # TODO: free up memory
 
 def main():
     # initialize scheme

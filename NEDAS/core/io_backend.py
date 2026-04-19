@@ -84,7 +84,6 @@ class IOBackend(ABC):
         """
         ...
 
-    @abstractmethod
     def save_ndarray(self, c: Context, name: str, data: np.ndarray, path: str | None=None) -> None:
         """
         Save ndarray data
@@ -95,9 +94,17 @@ class IOBackend(ABC):
             data (np.ndarray): the data
             path (str, optional): system path to save the data to.
         """
-        ...
+        if path is None:
+            path = c.config.work_dir  # default path
 
-    @abstractmethod
+        file = os.path.join(path, f"{name}.npy")
+
+        # make sure directory exists
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+
+        # save the data to file
+        np.save(file, data)
+
     def load_ndarray(self, c: Context, name: str, path: str | None=None) -> np.ndarray | None:
         """
         Load ndarray from saved data
@@ -110,7 +117,16 @@ class IOBackend(ABC):
         Returns:
             np.ndarray: the data
         """
-        ...
+        if path is None:
+            path = c.config.work_dir # default path
+
+        file = os.path.join(path, f"{name}.npy")
+
+        # load data from file
+        if os.path.exists(file):
+            return np.load(file)
+        else:
+            return None
 
     def save_debug_data(self, c: Context, name: str, data: dict, path: str | None=None) -> None:
         """
