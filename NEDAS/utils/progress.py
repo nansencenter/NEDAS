@@ -6,12 +6,14 @@ import time
 from typing import Any
 
 def print_with_cache(msg: str) -> None:
+    # return immediately if no message is given
+    if not msg:
+        return
     # previous message is cached so that new message is displayed only
     # when it's different from the previous one (avoid redundant output)
     if not hasattr(print_with_cache, 'prev_msg'):
         setattr(print_with_cache, 'prev_msg', '')
-
-    # only show at most nmsg messages
+    # only show the msg if differenf from the cached one
     if msg != getattr(print_with_cache, 'prev_msg', None):
         print(msg, flush=True, end="")
         setattr(print_with_cache, 'prev_msg', msg)
@@ -379,8 +381,8 @@ class Progress:
 
         # throttle output to remain within a fixed rate
         now = time.time()
-        is_finished = current >= total
-        if not is_finished and (now - self._last_updated) < self.io_interval:
+        is_important = (current == 0) or (current >= total)
+        if not is_important and (now - self._last_updated) < self.io_interval:
             return ""
         self._last_updated = now
 
