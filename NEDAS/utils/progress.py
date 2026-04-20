@@ -75,8 +75,9 @@ class Formatter:
         tabspace (int, optional): Number of spaces for one call stack level indentation. Defaults to 4.
         progress_bar_width (int, optional): Width of the progress bar in characters. Defaults to 10.
     """
-    def __init__(self, interactive: bool=True, cols=80, anchor=50, tabspace=4, progress_bar_width=10) -> None:
+    def __init__(self, interactive: bool=True, is_notebook: bool=False, cols=80, anchor=50, tabspace=4, progress_bar_width=10) -> None:
         self.interactive = interactive
+        self.is_notebook = is_notebook
         self.cols = cols
 
         # some visual parameters
@@ -121,7 +122,11 @@ class Formatter:
         visible_len = len(visible_text)
 
         # get real time cols if possible
-        self.cols, _ = shutil.get_terminal_size(fallback=(self.cols,1))
+        cols_in = self.cols
+        if self.is_notebook:
+            self.cols = 800
+        else:
+            self.cols, _ = shutil.get_terminal_size() #fallback=(self.cols,1))
 
         if visible_len <= self.cols:
            padding_needed = self.cols - visible_len - 1
@@ -211,6 +216,7 @@ class Progress:
     formatter: Formatter
 
     def __init__(self, interactive: bool=True,
+                 is_notebook: bool=False,
                  cols: int=80,
                  debug: bool=False,
                  call_stack: list[dict]|None=None,
@@ -229,7 +235,7 @@ class Progress:
         if not self.interactive:
             self.call_stack_max_level = None
 
-        self.fmt = Formatter(interactive, cols, anchor, tabspace, progress_bar_width)
+        self.fmt = Formatter(interactive, is_notebook, cols, anchor, tabspace, progress_bar_width)
 
     def new_node(self, func_name: str|None=None) -> dict:
         node = {

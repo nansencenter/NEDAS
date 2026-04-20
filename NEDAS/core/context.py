@@ -23,6 +23,7 @@ class Context:
     Runtime context manages the generation and interaction of dynamic objects in runtime
     """
     interactive: bool
+    is_notebook: bool
     debug: bool
     comm: parallel.Comm
     comm_rec: parallel.Comm
@@ -60,6 +61,7 @@ class Context:
         # initialize logging
         self.debug = self.config.debug
         self.interactive = self.check_interactive()
+        self.is_notebook = self.check_notebook()
         self.set_logging()
 
         # initialize the current time pointer
@@ -106,12 +108,20 @@ class Context:
         # otherwise, check if a tty is present, if so, should support interactive output.
         return os.isatty(sys.stdout.fileno())
 
+    def check_notebook(self) -> bool:
+        """
+        If the runtime environment is a jupyter notebook
+        """
+        if self.config.is_notebook is not None:
+            return self.config.is_notebook
+        return "ipykernel" in sys.modules
+
     def get_cols(self) -> int:
         # if cols is explicitly set in config, use it
         if self.config.cols is not None:
             return self.config.cols
         # in jupyter notebook environment, just use a large number
-        if 'ipykernel' in sys.modules:
+        if self.is_notebook:
             return 800
         # otherwise, get real time terminal size
         cols, _ = shutil.get_terminal_size()
@@ -120,6 +130,7 @@ class Context:
     def set_logging(self) -> None:
         progress_opts = {
             'interactive': self.interactive,
+            'is_notebook': self.is_notebook,
             'cols': self.get_cols(),
             'debug': self.config.debug,
             'call_stack': self.config.call_stack,
@@ -402,7 +413,7 @@ class Context:
         tmp_config = copy.copy(self.config)
 
         # inject runtime state to the temporary config
-        for rt_state in ['time', 'iter', 'pid_show', 'interactive']:
+        for rt_state in ['time', 'iter', 'pid_show', 'interactive', 'is_notebook']:
             val = getattr(self, rt_state)
             setattr(tmp_config, rt_state, val)
         setattr(tmp_config, 'call_stack', self.progress.call_stack)

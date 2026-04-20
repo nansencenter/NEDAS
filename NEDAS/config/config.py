@@ -46,9 +46,10 @@ class Config:
 
     # runtime logging options
     call_stack: list[dict]|None
-    interactive: bool|None
     debug: bool
     timer: bool
+    interactive: bool|None
+    is_notebook: bool|None
     call_stack_max_level: int|None
     cols: int
     anchor: int

@@ -10,8 +10,7 @@ directories:
 python_env:
 
 io_mode: offline      # I/O mode: 'online' uses data stored in memory,
-                      #          'offline' uses files stored on disks.
-
+                      #           'offline' uses files stored on disks.
 job_submit:
   host: local           # host machine type, see job_submitters.registry_by_host
   scheduler:            # which scheduler is used on the machine, see job_submitters.registry_by_scheduler
@@ -34,10 +33,11 @@ run_diagnose: True  # if true, run the diagnose scripts
 step:               # current step in scheme (given in runtime context)
 
 # some runtime logging options
-call_stack:           # call stack (given at runtime)
-interactive: True     # if the output is interactive (allow ansi escape code), if None autodetect.
 debug: False          # if true, output debug data/message
 timer: True           # if true, output information on function runtime
+interactive: True     # if the output is interactive (allow ansi escape code), if None autodetect.
+call_stack:           # call stack (given at runtime)
+is_notebook:          # if the env is a jupyter notebook, if None autodetect.
 call_stack_max_level: 2 # max call stack level to output, if None all levels will be shown
 cols:                   # terminal size cols, if None autodetect
 anchor: 50              # characters to anchor the left part of status line
