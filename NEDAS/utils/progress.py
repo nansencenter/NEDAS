@@ -75,7 +75,8 @@ class Formatter:
         tabspace (int, optional): Number of spaces for one call stack level indentation. Defaults to 4.
         progress_bar_width (int, optional): Width of the progress bar in characters. Defaults to 10.
     """
-    def __init__(self, interactive: bool=True, is_notebook: bool=False, cols=80, anchor=50, tabspace=4, progress_bar_width=10) -> None:
+    def __init__(self, interactive: bool=True, is_notebook: bool=False,
+                 cols=80, anchor=50, tabspace=4, progress_bar_width=10) -> None:
         self.interactive = interactive
         self.is_notebook = is_notebook
         self.cols = cols
@@ -222,8 +223,12 @@ class Progress:
                  call_stack_max_level: int|None=None,
                  anchor: int=50,
                  tabspace: int=4,
-                 progress_bar_width: int=10) -> None:
+                 progress_bar_width: int=10,
+                 io_interval: float=0.1) -> None:
         self.interactive = interactive
+        self.io_interval = io_interval
+        self._last_updated = time.time()
+
         self.debug = debug
 
         self.call_stack = []
@@ -371,6 +376,13 @@ class Progress:
 
         node, level = self.node, self.level
         total, current = node['total_tasks'], node['current_task']
+
+        # throttle output to remain within a fixed rate
+        now = time.time()
+        is_finished = current >= total
+        if not is_finished and (now - self._last_updated) < self.io_interval:
+            return ""
+        self._last_updated = now
 
         if not self.interactive:
             prev_bin = (100 * (current - 1) // total) // 10
