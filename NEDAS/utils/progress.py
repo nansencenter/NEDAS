@@ -122,11 +122,10 @@ class Formatter:
         visible_len = len(visible_text)
 
         # get real time cols if possible
-        cols_in = self.cols
         if self.is_notebook:
             self.cols = 800
         else:
-            self.cols, _ = shutil.get_terminal_size() #fallback=(self.cols,1))
+            self.cols, _ = shutil.get_terminal_size(fallback=(self.cols,1))
 
         if visible_len <= self.cols:
            padding_needed = self.cols - visible_len - 1
