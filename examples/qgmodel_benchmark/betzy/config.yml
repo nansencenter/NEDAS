@@ -2,18 +2,27 @@ work_dir: /cluster/work/users/yingyue/qg
 
 python_env: /cluster/home/yingyue/python.src
 
+io_mode: offline
+
 job_submit:
-  host: local
+  host: betzy
+  project: nn2993k
+  queue: devel
   ppn: 128
   parallel_mode: mpi
 
-nproc: 5
+nproc: 128
+nproc_util: 5
 
-nens: 20
+nens: 100
 run_forecast: True
 run_analysis: True
 run_diagnose: True
+
 debug: False
+interactive: True
+cols: 200
+call_stack_max_level:
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-14T00:00:00Z

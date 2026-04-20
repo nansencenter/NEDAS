@@ -34,14 +34,9 @@ class ForecastScheme(FilterAnalysisScheme):
 
         self.c.log_event("ALL FINISHED.", flag='finish')
 
-    def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
-        opts = {
-            'model_src': model_name,
-            'time': self.c.time,
-            'forecast_period': self.config.forecast_period,
-            **(self.config.job_submit or {}),
-            **other_opts,
-        }
+    def get_task_opts(self, step:str, model_name:str, **other_opts) -> dict[str, Any]:
+        opts = super().get_task_opts(step, model_name, **other_opts)
+        opts['forecast_period'] = self.config.forecast_period
         return opts
 
 def main():

@@ -1,5 +1,6 @@
 
 from typing import Any
+from NEDAS.utils import parallel
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
 
 class FilterAnalysisScheme(Scheme):
@@ -23,7 +24,6 @@ class FilterAnalysisScheme(Scheme):
         'ensemble_forecast': False,
         'diagnose': True,
     }
-
 
     def run_all(self) -> None:
         if self.c.time == self.config.time_start:
@@ -84,9 +84,8 @@ class FilterAnalysisScheme(Scheme):
             #    return
 
             # if not root process can generate the truth
-            if self.c.pid == 0:
-                opts = self.get_task_opts(model_name, member=None)
-                self.c.logger(f'Generate {model_name} truth')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
+            opts = self.get_task_opts('generate_truth', model_name, member=None)
+            self.c.logger(f'Generate {model_name} truth')(parallel.by_rank(self.c.comm, 0)(self.c.io.call_method))(self.c, 'truth', model.generate_truth, **opts)
 
             # every pid now load the truth to memory
 
@@ -97,9 +96,7 @@ class FilterAnalysisScheme(Scheme):
         Generate initial ensemble.
         """
         for model_name, model in self.c.models.items():
-            opts = self.get_task_opts(model_name,
-                                      total_nproc=self.config.nproc,
-                                      nproc=model.nproc_per_run)
+            opts = self.get_task_opts('generate_init_ensemble', model_name, nproc=model.nproc_per_run)
             self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
 
     def check_cycle_complete(self) -> bool:
@@ -114,12 +111,7 @@ class FilterAnalysisScheme(Scheme):
         """
         for model_name, model in self.c.models.items():
             self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
-
-            opts = self.get_task_opts(model_name,
-                                      restart_dir=self.get_restart_dir(model_name),
-                                      total_nproc=self.config.nproc_util,
-                                      nproc=model.nproc_per_util)
-
+            opts = self.get_task_opts('preprocess', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_util)
             self.c.logger(f'Preprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'preproc_{model_name}', model.preprocess, **opts)
 
     def postprocess(self) -> None:
@@ -127,11 +119,7 @@ class FilterAnalysisScheme(Scheme):
         Post-processing step after the assimilation and before the next forecast.
         """
         for model_name, model in self.c.models.items():
-            opts = self.get_task_opts(model_name,
-                                      restart_dir=self.get_restart_dir(model_name),
-                                      total_nproc=self.config.nproc_util,
-                                      nproc=model.nproc_per_util)
-
+            opts = self.get_task_opts('postprocess', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_util)
             self.c.logger(f'Postprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'postproc_{model_name}', model.postprocess, **opts)
 
     def ensemble_forecast(self) -> None:
@@ -139,12 +127,7 @@ class FilterAnalysisScheme(Scheme):
         Ensemble forecast step.
         """
         for model_name, model in self.c.models.items():
-            opts = self.get_task_opts(model_name,
-                                      restart_dir=self.get_restart_dir(model_name),
-                                      total_nproc=self.config.nproc,
-                                      nproc=model.nproc_per_run,
-                                      walltime=model.walltime)
-
+            opts = self.get_task_opts('ensemble_forecast', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_run, walltime=model.walltime)
             self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'forecast_{model_name}', model.run, **opts)
 
     def filter(self) -> None:
@@ -188,7 +171,6 @@ class FilterAnalysisScheme(Scheme):
         if self.c.config.perturb is None:
             self.c.print_1p("Config: 'perturb' is not defined. Exiting...\n")
             return
-
         pert = Perturbation(self.c)
         pert(self.c)
 
@@ -204,11 +186,10 @@ class FilterAnalysisScheme(Scheme):
         if self.c.config.diag is None:
             self.c.print_1p("Config: 'diag' is not defined. Exiting...\n")
             return
-
         diag = Diagnostics(self.c)
         diag(self.c)
 
-    def get_task_opts(self, model_name:str, **other_opts) -> dict[str, Any]:
+    def get_task_opts(self, step: str, model_name:str, **other_opts) -> dict[str, Any]:
         """
         Get common kwargs from configuration and return as task options dict
         """
@@ -216,6 +197,7 @@ class FilterAnalysisScheme(Scheme):
             'model_src': model_name,
             'time': self.c.time,
             'forecast_period': self.config.cycle_period,
+            'total_nproc': self.config.nproc if self.steps_need_mpi[step] else self.config.nproc_util,
             **(self.config.job_submit or {}),
             **other_opts,
         }
