@@ -208,9 +208,9 @@ class Config:
         # Format the active flags for the workflow
         workflow = []
         if self.run_preproc: workflow.append("Preprocess")
-        if self.run_forecast: workflow.append("Forecast")
         if self.run_analysis: workflow.append("Analysis")
         if self.run_postproc: workflow.append("Postprocess")
+        if self.run_forecast: workflow.append("Forecast")
         if self.run_diagnose: workflow.append("Diagnose")
         workflow_str = " -> ".join(workflow) if workflow else "None"
 
