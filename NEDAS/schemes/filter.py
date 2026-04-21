@@ -1,6 +1,6 @@
 
 from typing import Any
-from NEDAS.utils import parallel
+from datetime import datetime
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
 
 class FilterAnalysisScheme(Scheme):
@@ -15,8 +15,8 @@ class FilterAnalysisScheme(Scheme):
     """
     steps_need_mpi = {
         'run_all': True,
-        'generate_truth': False,
-        'generate_init_ensemble': False,
+        'prepare_truth': False,
+        'prepare_init_ensemble': False,
         'preprocess': False,
         'perturb': True,
         'filter': True,
@@ -26,14 +26,15 @@ class FilterAnalysisScheme(Scheme):
     }
 
     def run_all(self) -> None:
+        self.c.log_event("PREPARING...")
+        self.run_step('prepare_truth')
         if self.c.time == self.config.time_start:
-            self.c.log_event("PREPARING...")
-
-            self.run_step('generate_truth')
-
-            self.run_step('generate_init_ensemble')
+            self.run_step('prepare_init_ensemble')
+        else:
+            self.load_model_state(self.c.prev_time)
 
         self.c.log_event("CYCLING START...")
+        self.c.time = self.c.config.time
         while self.c.time < self.config.time_end:
             self.c.log_event(f"CURRENT CYCLE: {self.c.time} -> {self.c.next_time}")
 
@@ -62,14 +63,35 @@ class FilterAnalysisScheme(Scheme):
 
             # dump data in memory to checkpoint files
             if self.c.time > self.c.config.time_start:
-                self.save_checkpoint()
+                self.save_model_state(self.c.prev_time)
+                self.save_obs(self.c.prev_time)
 
             # advance to next cycle
             self.c.time = self.c.next_time
 
         self.c.log_event("CYCLING COMPLETE.", flag='finish')
 
-    def generate_truth(self) -> None:
+    def load_model_state(self, time: datetime):
+        for _, model in self.c.models.items():
+            for tag in ['current', 'z']:
+                model.load_memory(tag, time)
+
+    def save_model_state(self, time: datetime):
+        for _, model in self.c.models.items():
+            for tag in ['current', 'prior', 'prior_mean', 'post', 'post_mean', 'z', 'z_mean']:
+                model.save_memory(tag, time)
+
+    def load_obs(self, time:datetime):
+        for _, dataset in self.c.datasets.items():
+            for tag in ['raw']:
+                dataset.load_memory(tag, time)
+
+    def save_obs(self, time:datetime):
+        for _, dataset in self.c.datasets.items():
+            for tag in ['raw', 'prior', 'post']:
+                dataset.save_memory(tag, time)
+
+    def prepare_truth(self) -> None:
         """
         Generate the verifying truth
         """
@@ -79,25 +101,49 @@ class FilterAnalysisScheme(Scheme):
             return
 
         for model_name, model in self.c.models.items():
-            # skip if all truth data are ready
-            # 
-            #    return
+            # if truth data is ready (either loadeable from memory save files, or truth files exists)
+            if self.validate_truth_data(model_name):
+                continue
+            # generate the truth data
+            opts = self.get_task_opts('prepare_truth', model_name, member=None)
+            self.c.logger(f'Generate {model_name} truth')(self.c.io.call_method)(self.c, 'truth', model.generate_truth, **opts)
+            model.save_memory('truth')
 
-            # if not root process can generate the truth
-            opts = self.get_task_opts('generate_truth', model_name, member=None)
-            self.c.logger(f'Generate {model_name} truth')(parallel.by_rank(self.c.comm, 0)(self.c.io.call_method))(self.c, 'truth', model.generate_truth, **opts)
+    def validate_truth_data(self, model_name: str) -> bool:
+        model = self.c.models[model_name]
+        model.load_memory('truth')
+        name = list(model.variables.keys())[0]
+        self.c.time = self.c.config.time_start
+        while self.c.time < self.c.config.time_end:
+            try:
+                self.c.io.call_method(self.c, 'truth', model.read_var, name=name, member=None, time=self.c.time)
+            except Exception:
+                return False
+            self.c.time = self.c.next_time
+        self.c.time = self.c.config.time_start
+        return True
 
-            # every pid now load the truth to memory
-
-        self.c.comm.Barrier()
-
-    def generate_init_ensemble(self) -> None:
+    def prepare_init_ensemble(self) -> None:
         """
         Generate initial ensemble.
         """
         for model_name, model in self.c.models.items():
-            opts = self.get_task_opts('generate_init_ensemble', model_name, nproc=model.nproc_per_run)
+            if self.validate_init_ensemble_data(model_name):
+                continue
+            opts = self.get_task_opts('prepare_init_ensemble', model_name, nproc=model.nproc_per_run)
             self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
+            model.save_memory('current', self.c.config.time_start)
+
+    def validate_init_ensemble_data(self, model_name):
+        model = self.c.models[model_name]
+        model.load_memory('current', self.c.config.time_start)
+        name = list(model.variables.keys())[0]
+        for member in self.c.mem_list[self.c.pid_mem]:
+            try:
+                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start)
+            except Exception:
+                return False
+        return True
 
     def check_cycle_complete(self) -> bool:
         """
@@ -211,26 +257,6 @@ class FilterAnalysisScheme(Scheme):
             restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
         self.c.debug_message = f"using restart files in {restart_dir}"
         return restart_dir
-
-    def save_checkpoint(self) -> None:
-        """
-        Save data in memory to file for future use. Deallocate the memory to save space.
-
-        TODO: called every time step now, can implement a longer interval
-        """
-        time = self.c.prev_time
-        for model_name, model in self.c.models.items():
-            for tag in ['current', 'prior', 'post']:
-                memory = model.memory[tag]
-                for name in memory:
-                    # TODO: gather all member here? or just separate files?
-                    # This convention will need to enforce to model.memory implementation
-                    # for tag=post, only analysis period available
-                    for member in self.c.mem_list[self.c.pid]:
-                        data = memory[name][member, time]
-                        filename = f"{tag}_{name}_mem{member+1:04d}_{time:%Y%m%d%H%M}"
-                        self.c.io.save_ndarray(self.c, filename, data, path=self.c.fs.cycle_dir(time))
-                        # TODO: free up memory
 
 def main():
     # initialize scheme

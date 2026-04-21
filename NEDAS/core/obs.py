@@ -341,7 +341,7 @@ class Obs:
             obs_seq[obs_rec_id] = seq
             obs_rec.nobs = seq['obs'].shape[-1]  # update nobs in obs_rec
 
-            dataset.save_obs(seq, **obs_rec.asdict(), member=None, tag='raw')
+            c.io.call_method(c, 'raw', dataset.write_obs, seq, **obs_rec.asdict(), member=None)
 
         # output obs sequence for debugging
         if c.debug and c.pid_mem == 0:
@@ -391,7 +391,7 @@ class Obs:
                 for transform_func in c.transform_funcs:
                     seq = transform_func.forward_obs(c, obs_rec, seq)
 
-                dataset.save_obs(seq, **obs_rec.asdict(), member=mem_id, tag=tag)
+                c.io.call_method(c, tag, dataset.write_obs, seq, **obs_rec.asdict(), member=mem_id)
 
                 # collect obs ensemble data to the local memory
                 getattr(self, f"obs_{tag}")[mem_id, obs_rec_id] = seq['obs']

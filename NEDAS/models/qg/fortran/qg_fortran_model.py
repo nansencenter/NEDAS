@@ -228,21 +228,7 @@ class QGFortranModel(Model):
         assert self.truth_dir is not None
         kwargs = super().parse_kwargs(kwargs)
         kwargs['member'] = None
-        debug = kwargs.get('debug', False)
         self.c.fs.make_dir(self.truth_dir)
-
-        # check if truth files already exists in model.truth_dir
-        complete = True
-        kwargs['time'] = self.c.config.time_start
-        while kwargs['time'] < self.c.config.time_end:
-            current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
-            if not os.path.exists(os.path.join(self.truth_dir, current_file)):
-                complete = False
-                break
-            kwargs['time'] += kwargs['forecast_period'] * dt1h
-        if complete:
-            self.c.debug_message = f"truth files already exist in {self.truth_dir}, skipping"
-            return
 
         # create the truth files
         self.c.debug_message = f"Creating truth run for qg model in {self.truth_dir}"

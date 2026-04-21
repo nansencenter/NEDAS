@@ -41,30 +41,10 @@ class Lorenz96Model(Model[Grid1D]):
         }
         self.z = {0: np.zeros(self.nx)}
 
-        self.io_methods = {
-            'offline': {
-                'read_var': self._read_var_from_file,
-                'write_var': self._write_var_to_file,
-            },
-            'online': {
-                'read_var': self._read_var_from_memory,
-                'write_var': self._write_var_to_memory,
-            }
-        }
-        if self.io_mode not in self.io_methods.keys():
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
-
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-
-        if kwargs['member'] is not None:
-            mstr = '_mem{:04d}'.format(kwargs['member']+1)
-        else:
-            mstr = ''
-
-        assert kwargs['time'] is not None, 'missing time in kwargs'
-        tstr = kwargs['time'].strftime('%Y%m%d_%H')
-
+        mstr = self.get_mstr(kwargs['member'])
+        tstr = self.get_tstr(kwargs['time'])
         return os.path.join(kwargs['path'], tstr+mstr+'.nc')
 
     def read_grid(self, **kwargs):
@@ -73,21 +53,7 @@ class Lorenz96Model(Model[Grid1D]):
     def read_mask(self, **kwargs):
         pass
 
-    def read_var(self, **kwargs):
-        return self.io_methods[self.io_mode]['read_var'](**kwargs)
-
-    def _read_var_from_memory(self, **kwargs):
-        kwargs = super().parse_kwargs(kwargs)
-        tag = kwargs['tag']
-        name = kwargs['name']
-        member = kwargs['member']
-        time = kwargs['time']
-        key = (member, time)
-        if key not in self.memory[tag][name]:
-            raise KeyError(f'lorenz96 model online state: {key} not found in memory[{tag}][{name}]')
-        return self.memory[tag][name][key]
-
-    def _read_var_from_file(self, **kwargs):
+    def read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
@@ -96,23 +62,7 @@ class Lorenz96Model(Model[Grid1D]):
         var = nc_read_var(fname, var_name)[0, ...]
         return var
 
-    def write_var(self, var, **kwargs):
-        self.io_methods[self.io_mode]['write_var'](var, **kwargs)
-
-    def _write_var_to_memory(self, var, **kwargs):
-        kwargs = super().parse_kwargs(kwargs)
-        tag = kwargs['tag']
-        name = kwargs['name']
-        member = kwargs['member']
-        time = kwargs['time']
-        # create memory dict entry if not yet
-        if tag not in self.memory:
-            self.memory[tag] = {}
-        if name not in self.memory[tag]:
-            self.memory[tag][name] = {}
-        self.memory[tag][name][member, time] = var
-
-    def _write_var_to_file(self, var, **kwargs):
+    def write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
@@ -136,8 +86,8 @@ class Lorenz96Model(Model[Grid1D]):
             self.c.fs.copy_file(file1, file2)
         elif self.io_mode == 'online':
             # save a copy of the current state (forecast) as prior
-            var = self._read_var_from_memory(**kwargs)
-            self._write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
+            var = self.read_var_from_memory(**kwargs)
+            self.write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
  
     def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -146,8 +96,8 @@ class Lorenz96Model(Model[Grid1D]):
         if self.io_mode == 'online':
             # save a copy of the current state (analysis) as posterior
             # don't need to copy since current state is no longer updated
-            var = self._read_var_from_memory(**kwargs)
-            self._write_var_to_memory(var, **{**kwargs, 'tag':'post'})
+            var = self.read_var_from_memory(**kwargs)
+            self.write_var_to_memory(var, **{**kwargs, 'tag':'post'})
 
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)

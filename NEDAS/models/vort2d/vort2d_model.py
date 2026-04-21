@@ -39,14 +39,8 @@ class Vort2DModel(Model[RegularGrid]):
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        if kwargs['member'] is not None:
-            mstr = '_mem{:03d}'.format(kwargs['member']+1)
-        else:
-            mstr = ''
-
-        assert kwargs['time'] is not None, 'missing time in kwargs'
-        tstr = kwargs['time'].strftime('%Y%m%d_%H')
-
+        mstr = self.get_mstr(kwargs['member'])
+        tstr = self.get_tstr(kwargs['time'])
         return os.path.join(kwargs['path'], tstr+mstr+'.nc')
 
     def read_grid(self, **kwargs):
@@ -55,26 +49,7 @@ class Vort2DModel(Model[RegularGrid]):
     def read_mask(self, **kwargs):
         pass
 
-    def read_var(self, **kwargs):
-        if self.io_mode == 'offline':
-            return self._read_var_from_file(**kwargs)
-        elif self.io_mode == 'online':
-            return self._read_var_from_memory(**kwargs)
-        else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
-
-    def _read_var_from_memory(self, **kwargs):
-        kwargs = super().parse_kwargs(kwargs)
-        tag = kwargs['tag']
-        name = kwargs['name']
-        member = kwargs['member']
-        time = kwargs['time']
-        key = (member, time)
-        if key not in self.memory[tag][name]:
-            raise RuntimeError(f"vort2d model online state: {key} not found in memory[{tag}][{name}]")
-        return self.memory[tag][name][key]
-
-    def _read_var_from_file(self, **kwargs):
+    def read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
@@ -88,28 +63,7 @@ class Vort2DModel(Model[RegularGrid]):
             var = nc_read_var(fname, rec['name'], comm=comm)[0, ...]
         return var
 
-    def write_var(self, var, **kwargs):
-        if self.io_mode == 'offline':
-            self._write_var_to_file(var, **kwargs)
-        elif self.io_mode == 'online':
-            self._write_var_to_memory(var, **kwargs)
-        else:
-            raise ValueError(f"Unknown io_mode {self.io_mode}")
-
-    def _write_var_to_memory(self, var, **kwargs):
-        kwargs = super().parse_kwargs(kwargs)
-        tag = kwargs['tag']
-        name = kwargs['name']
-        member = kwargs['member']
-        time = kwargs['time']
-        #create memory dict entry if not yet
-        if tag not in self.memory:
-            self.memory[tag] = {}
-        if name not in self.memory[tag]:
-            self.memory[tag][name] = {}
-        self.memory[tag][name][member, time] = var
-
-    def _write_var_to_file(self, var, **kwargs):
+    def write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
@@ -137,8 +91,8 @@ class Vort2DModel(Model[RegularGrid]):
             self.c.run_job(f"cp -fL {file1} {file2}")
         elif self.io_mode == 'online':
             # save a copy of the current state (forecast) as prior
-            var = self._read_var_from_memory(**kwargs)
-            self._write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
+            var = self.read_var_from_memory(**kwargs)
+            self.write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
  
     def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -147,8 +101,8 @@ class Vort2DModel(Model[RegularGrid]):
         if self.io_mode == 'online':
             # save a copy of the current state (analysis) as posterior
             # don't need to copy since current state is no longer updated
-            var = self._read_var_from_memory(**kwargs)
-            self._write_var_to_memory(var, **{**kwargs, 'tag':'post'})
+            var = self.read_var_from_memory(**kwargs)
+            self.write_var_to_memory(var, **{**kwargs, 'tag':'post'})
 
     def run(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -170,7 +124,6 @@ class Vort2DModel(Model[RegularGrid]):
 
         self.c.total_tasks = int((self.c.config.time_end - self.c.config.time_start) / (dt1h*self.c.config.cycle_period))
 
-        # TODO: add check to skip if already exists
         t = self.c.config.time_start
         self.c.current_task = 0
         while t < self.c.config.time_end:
