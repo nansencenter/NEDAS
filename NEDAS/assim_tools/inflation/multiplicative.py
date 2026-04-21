@@ -27,11 +27,13 @@ class MultiplicativeInflation(Inflation):
             if c.debug:
                 c.log_event(f"insufficient nobs to establish statistics, setting inflate_coef=1", flag='warning')
             self.coef = 1.
+            c.message = "nobs too small, setting coef=1."
             return
         if stats['vara'] == 0:
             if c.debug:
                 c.log_event(f"vara=0 detected, skipping with coef=1 (no inflation)", flag='warning')
             self.coef = 1.
+            c.message = "vara=0 detected, setting coef=1."
             return
         varb = stats['varb'] / stats['total_nobs']
         vara = stats['vara'] / stats['total_nobs']
@@ -45,6 +47,7 @@ class MultiplicativeInflation(Inflation):
         ratio = (omb2-varo-amb2)/vara
         if ratio < 0:
             self.coef = 1.0
+            c.message = f"omb2 = {omb2}, varo={varo}, amb2 = {amb2}; ratio<0, setting coef=1."
             return
         self.coef = np.sqrt(ratio)
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; coef = {self.coef}"

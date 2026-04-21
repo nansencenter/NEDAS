@@ -347,6 +347,10 @@ class Progress:
         within_max_level = self.within_max_level(level)
         self.call_stack.pop()
 
+        if not within_max_level and node['message']:
+            split = ' | ' if self.node['message'] else ''
+            self.node['message'] += split+node['message']
+
         timer_msg = self.get_timer_msg(node)
         stat_flag = self.fmt.stat_flag.get(node['flag'], node['flag'].upper())
 

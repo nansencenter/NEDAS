@@ -36,6 +36,7 @@ class RTPPInflation(Inflation):
             self.coef = 2
         if self.coef < -1:
             self.coef = -1
+        c.message = f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}; beta = {beta}, lambda = {lamb}"
 
     def apply_inflation(self, c: Context, flag: str):
         pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
