@@ -33,6 +33,6 @@ def get_scheme(config: Config|None=None,
     module = importlib.import_module('NEDAS.schemes.'+scheme_name)
     SchemeClass = getattr(module, registry[scheme_name])
 
-    return SchemeClass(config_file=config_file, parse_args=parse_args, **kwargs)
+    return SchemeClass(config=config, config_file=config_file, parse_args=parse_args, **kwargs)
 
 __all__ = ['registry', 'get_scheme']

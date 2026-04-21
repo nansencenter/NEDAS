@@ -25,11 +25,15 @@ class Scheme(ABC):
     _context: Context|None = None
     scheduler: OfflineScheduler|None = None
 
-    def __init__(self, config_file: str|None=None,
+    def __init__(self, config: Config|None=None,
+                 config_file: str|None=None,
                  parse_args: bool=False,
                  **kwargs) -> None:
         # parse configuration and generate context
-        self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
+        if config:
+            self.config = config
+        else:
+            self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
         self.c = Context(self.config)
 
         # check if io mode is online:
