@@ -1,6 +1,7 @@
 import os
+import sys
 from functools import wraps
-from typing import TypeVar, Callable, ParamSpec, Sequence
+from typing import Any, TypeVar, Callable, ParamSpec, Sequence
 import time
 from concurrent.futures import ProcessPoolExecutor, process
 import threading
@@ -105,7 +106,7 @@ class Comm:
                     print(f"Rank {self.Get_rank()}: warning freeing win for {file}: {e}", flush=True)
             self._locks.clear()
         except Exception as e:
-            print(f"Rank {self.Get_rank()}: error cleaning locks: {e}", flush=True)
+            print(f"Rank {self.Get_rank()}: error cleaning locks: {e}", file=sys.stderr, flush=True)
 
     def acquire_file_lock(self, filename):
         if self._MPI is None or isinstance(self._comm, DummyComm):
@@ -165,6 +166,10 @@ class DummyComm:
     def Barrier(self):
         pass
 
+    def Abort(self, code:int):
+        print(f"\nAbort({code}) on rank 0: application called MPI_Abort.")
+        sys.exit(code)
+
     def Split(self, color=0, key=0):
         return self
 
@@ -200,10 +205,13 @@ def by_rank(comm: Comm, rank: int) -> Callable[[Callable[P, T]], Callable[P, T|N
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T|None:
             if comm.Get_rank() == rank:
-                result = func(*args, **kwargs)
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(f"\nPID {rank} raised error: {e}", file=sys.stderr, flush=True)
+                    comm.Abort(1)
             else:
-                result = None
-            return result
+                return None
         return wrapper
     return decorator
 
@@ -215,12 +223,17 @@ def bcast_by_root(comm: Comm) -> Callable[[Callable[P, T]], Callable[P, T]]:
     def decorator(func: Callable[P, T]) -> Callable[P, T]:
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            result: dict[str, Any] = {'return':None, 'error':None}
             if comm.Get_rank() == 0:
-                result = func(*args, **kwargs)
-            else:
-                result = None
+                try:
+                    result['return'] = func(*args, **kwargs)
+                except Exception as e:
+                    print(f"\nPID 0 raised error: {e}", file=sys.stderr)
+                    result['error'] = str(e)
             result = comm.bcast(result, root=0)
-            return result
+            if result['error'] is not None:
+                comm.Abort(1)
+            return result['return']
         return wrapper
     return decorator
 
