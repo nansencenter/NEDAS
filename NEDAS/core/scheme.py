@@ -28,8 +28,9 @@ class Scheme(ABC):
     def __init__(self, config_file: str|None=None,
                  parse_args: bool=False,
                  **kwargs) -> None:
-        # parse configuration
+        # parse configuration and generate context
         self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
+        self.c = Context(self.config)
 
         # check if io mode is online:
         self.online_mode = (self.config.io_mode == 'online')
