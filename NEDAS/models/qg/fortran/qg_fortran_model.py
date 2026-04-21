@@ -234,14 +234,12 @@ class QGFortranModel(Model):
         # check if truth files already exists in model.truth_dir
         complete = True
         kwargs['time'] = self.c.config.time_start
-        ntask = 0
         while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             if not os.path.exists(os.path.join(self.truth_dir, current_file)):
                 complete = False
                 break
             kwargs['time'] += kwargs['forecast_period'] * dt1h
-            ntask += 1
         if complete:
             self.c.debug_message = f"truth files already exist in {self.truth_dir}, skipping"
             return
@@ -255,8 +253,6 @@ class QGFortranModel(Model):
         self.run(**{**kwargs, 'path':run_dir, 'member':0, 'forecast_period':self.spinup_hours})
 
         kwargs['time'] = self.c.config.time_start
-        self.c.total_tasks = ntask
-        self.c.current_task = 0
         while kwargs['time'] < self.c.config.time_end:
             current_file = f"output_{kwargs['time']:%Y%m%d_%H}.bin"
             next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
@@ -264,7 +260,6 @@ class QGFortranModel(Model):
             self.c.debug_message = f"Running the model from condition {current_file} to reach {next_file}"
             self.run(**{**kwargs, 'path':run_dir, 'member':0})
             kwargs['time'] = next_time
-            self.c.current_task += 1
 
         # clean up
         self.c.fs.move_files_to_dir(os.path.join(run_dir, '*', 'output*.bin'), self.truth_dir)
