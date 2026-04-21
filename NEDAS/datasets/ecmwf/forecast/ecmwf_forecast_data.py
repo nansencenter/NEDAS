@@ -141,5 +141,5 @@ class EcmwfForecastData(Dataset):
         vapmix = atmos_utils.vapmix(e, press)
         return vapmix
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         raise NotImplementedError

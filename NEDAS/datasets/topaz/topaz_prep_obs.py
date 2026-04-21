@@ -55,7 +55,7 @@ class TopazPrepObs(Dataset):
     def generate_obs_network(self, **kwargs):
         raise NotImplementedError('generate_obs_network: ERROR: generate_obs_network not implemented for topaz dataset')
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         time = kwargs['time']

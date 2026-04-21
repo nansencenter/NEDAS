@@ -103,8 +103,16 @@ class Dataset(ABC):
         """
         raise NotImplementedError(f"'generate_obs_network' is not implemented for {self.__class__.__name__}")
 
-    @abstractmethod
     def read_obs(self, **kwargs) -> dict[str, np.ndarray]:
+        if self.c.config.io_mode == 'offline':
+            return self.read_obs_from_file(**kwargs)
+        elif self.c.config.io_mode == 'online':
+            return self.read_obs_from_memory(**kwargs)
+        else:
+            raise ValueError(f"Unknown io_mode: {self.c.config.io_mode}")
+
+    @abstractmethod
+    def read_obs_from_file(self, **kwargs) -> dict[str, np.ndarray]:
         """
         Return observation sequence matching the given kwargs
         """
@@ -118,6 +126,21 @@ class Dataset(ABC):
         }
         return obs_seq
 
+    def read_obs_from_memory(self, **kwargs) -> dict[str, np.ndarray]:
+        kwargs = self.parse_kwargs(kwargs)
+        tstr = self.get_tstr(kwargs['time'])
+        tag = kwargs['tag']
+        mstr = self.get_mstr(kwargs['member'])
+        key = tag+mstr
+        name = kwargs['name']
+        if tstr not in self.memory:
+            raise KeyError(f"{self.__class__.__name__}: '{tstr}' not found in memory")
+        if key not in self.memory[tstr]:
+            raise KeyError(f"{self.__class__.__name__}: '{key}' not found in memory['{tstr}']")
+        if name not in self.memory[tstr][key]:
+            raise KeyError(f"{self.__class__.__name__}: '{name}' not found in memory['{tstr}']['{key}']")
+        return self.memory[tstr][key][name]
+
     def write_obs(self, seq: dict, **kwargs) -> None:
         if self.c.config.io_mode == 'offline':
             self.write_obs_to_file(seq, **kwargs)
@@ -127,7 +150,7 @@ class Dataset(ABC):
             raise ValueError(f"Unknown io_mode: {self.c.config.io_mode}")
 
     def write_obs_to_file(self, seq: dict, **kwargs):
-        raise NotImplementedError
+        pass
 
     def write_obs_to_memory(self, seq: dict, **kwargs):
         kwargs = self.parse_kwargs(kwargs)
@@ -144,6 +167,8 @@ class Dataset(ABC):
         self.memory[tstr][key][name] = seq
 
     def save_memory(self, tag: str, time: datetime|None=None, path: str|None=None) -> None:
+        if self.c.config.io_mode == 'offline':
+            return
         if path is None:
             path = self.c.config.work_dir
         times_to_save = [self.get_tstr(time)] if time is not None else self.memory.keys()
@@ -160,6 +185,8 @@ class Dataset(ABC):
                     np.save(savefile, np.array(self.memory[tstr][key][name], dtype=object))
 
     def load_memory(self, tag: str, time: datetime|None=None, path: str|None=None) -> None:
+        if self.c.config.io_mode == 'offline':
+            return
         if path is None:
             path = self.c.config.work_dir
         tstr_pattern = self.get_tstr(time) if time is not None else '????????_????'

@@ -77,7 +77,7 @@ class RgpsObs(Dataset):
 
         return file_list
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         """read obs from rgps dataset"""
         kwargs = super().parse_kwargs(kwargs)
         obs_name = kwargs['name']

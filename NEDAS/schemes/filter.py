@@ -103,6 +103,7 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             # if truth data is ready (either loadeable from memory save files, or truth files exists)
             if self.validate_truth_data(model_name):
+                self.c.message = "all truth data ready"
                 continue
             # generate the truth data
             opts = self.get_task_opts('prepare_truth', model_name, member=None)
@@ -116,7 +117,7 @@ class FilterAnalysisScheme(Scheme):
         self.c.time = self.c.config.time_start
         while self.c.time < self.c.config.time_end:
             try:
-                self.c.io.call_method(self.c, 'truth', model.read_var, name=name, member=None, time=self.c.time)
+                self.c.io.call_method(self.c, 'truth', model.read_var, name=name, member=None, time=self.c.time, model_src=model_name)
             except Exception:
                 return False
             self.c.time = self.c.next_time
@@ -129,6 +130,7 @@ class FilterAnalysisScheme(Scheme):
         """
         for model_name, model in self.c.models.items():
             if self.validate_init_ensemble_data(model_name):
+                self.c.message = "all initial ensemble states ready"
                 continue
             opts = self.get_task_opts('prepare_init_ensemble', model_name, nproc=model.nproc_per_run)
             self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
@@ -140,7 +142,7 @@ class FilterAnalysisScheme(Scheme):
         name = list(model.variables.keys())[0]
         for member in self.c.mem_list[self.c.pid_mem]:
             try:
-                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start)
+                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start, model_src=model_name)
             except Exception:
                 return False
         return True

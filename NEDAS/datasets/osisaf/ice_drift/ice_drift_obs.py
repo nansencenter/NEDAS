@@ -59,7 +59,7 @@ class OsisafSeaIceDriftObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         mask = kwargs['mask']

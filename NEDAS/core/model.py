@@ -183,6 +183,8 @@ class Model(Generic[GridT], ABC):
         self.memory[tstr][key][name] = var
 
     def save_memory(self, tag: str, time: datetime|None=None, path: str|None=None) -> None:
+        if self.io_mode == 'offline':
+            return
         if path is None:
             path = self.c.config.work_dir
         times_to_save = [self.get_tstr(time)] if time is not None else self.memory.keys()
@@ -199,6 +201,8 @@ class Model(Generic[GridT], ABC):
                     np.save(savefile, self.memory[tstr][key][name])
 
     def load_memory(self, tag: str, time: datetime|None=None, path: str|None=None) -> None:
+        if self.io_mode == 'offline':
+            return
         if path is None:
             path = self.c.config.work_dir
         tstr_pattern = self.get_tstr(time) if time is not None else '????????_????'

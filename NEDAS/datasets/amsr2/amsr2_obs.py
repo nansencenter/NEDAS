@@ -87,7 +87,7 @@ class AMSR2Obs(Dataset):
             raise RuntimeError(f'no matching files found: {search}')
         return file_list
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         """read obs from AMSR2 dataset"""
         kwargs = super().parse_kwargs(kwargs)
         time = kwargs['time']

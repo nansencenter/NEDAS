@@ -56,7 +56,7 @@ class ArgoObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         """
         read raw data file, quality check, thinning according to model grid, then output to obs_seq
         kwargs:

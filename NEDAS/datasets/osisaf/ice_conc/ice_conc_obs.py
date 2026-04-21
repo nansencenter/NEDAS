@@ -92,7 +92,7 @@ class OsisafSeaIceConcObs(Dataset):
                 }
         return obs_seq
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         mask = kwargs['mask']
