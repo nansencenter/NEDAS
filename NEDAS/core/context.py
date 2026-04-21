@@ -71,8 +71,7 @@ class Context:
         self.iter = self.config.iter
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
-        self._pid_show_cached = 0
-        self._print_1p_cached = None
+        self._prev_msg = ''
 
         # ensemble size
         self.nens = self.config.nens
@@ -389,13 +388,9 @@ class Context:
         """
         if self.config.quiet or not msg:
             return
-        # check if pid_show changed and need to re-decorate
-        if self._print_1p_cached is None or self.pid_show != self._pid_show_cached:
-            decorator = parallel.by_rank(self.comm, self.pid_show)
-            self._print_1p_cached = decorator(progress.print_with_cache)
-            self._pid_show_cached = self.pid_show
-        # show message
-        self._print_1p_cached(msg)
+        if self.comm.Get_rank() != self.pid_show:
+            return
+        self._prev_msg = progress.print_with_cache(msg, self._prev_msg)
 
     def log_event(self, msg: str, flag=''):
         self.print_1p(self.progress.log(msg, flag))
