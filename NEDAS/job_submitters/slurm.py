@@ -42,7 +42,7 @@ class SLURMJobSubmitter(HPCJobSubmitter):
 
     @property
     def execute_command(self):
-        if self.parallel_mode == 'serial':
+        if self.nproc == 1 or self.parallel_mode == 'serial':
             return ""
         if self.in_job_allocation:
             if self.parallel_mode == 'mpi':
@@ -168,9 +168,9 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         if self.use_job_array:
             for i in range(self.array_size):
                 log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}_{i}.out")
-                if not find_keyword_in_file(log_file, "Job exited normally"):
+                if not find_keyword_in_file(log_file, f"Job {self.job_id} completed"):
                     raise RuntimeError(f"job {self.job_name} failed, check {log_file}")
         else:
             log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}.out")
-            if not find_keyword_in_file(log_file, "Job exited normally"):
+            if not find_keyword_in_file(log_file, f"Job {self.job_id} completed"):
                 raise RuntimeError(f"job {self.job_name} failed, check {log_file}")
