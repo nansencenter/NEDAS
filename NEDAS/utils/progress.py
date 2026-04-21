@@ -330,9 +330,15 @@ class Progress:
 
         if self.within_max_level(self.level):
             self.node['header'] = f"{self.fmt.indent(self.level)}{func_name}"
-            return newline+self.fmt.truncate(f"{self.node['header']}: ")
+            header = f"{self.node['header']}: "
+            if self.interactive:
+                header = self.fmt.truncate(header)
+            return newline+header
         self.node['header'] = f"{parent['header']} > {func_name}"
-        return newline+self.fmt.truncate(f"{self.node['header']}: ")
+        header = f"{self.node['header']}: "
+        if self.interactive:
+            header = self.fmt.truncate(header)
+        return newline+header
 
     def pop(self):
         if not self.call_stack:
@@ -355,7 +361,7 @@ class Progress:
         if not self.interactive:
             is_branch = (node['substeps'] == 0)
             res = self._format_line(node, level, include_name=False, include_padding=False, include_indent=not is_branch, is_branch=is_branch, trailer=timer_msg)
-            return self.fmt.truncate(res)+f"\n{addline}"
+            return res+f"\n{addline}"
 
         if self.is_leaf(node):
             # Leaf node: clear line, show full name + result
@@ -394,7 +400,8 @@ class Progress:
         pbar = self.fmt.progress_bar(current, total) if node['flag'] == 'running' else ""
 
         res = self._format_line(node, level, include_name=True, trailer=pbar)
-        res = self.fmt.truncate(res)
+        if self.interactive:
+            res = self.fmt.truncate(res)
         return f"{self.fmt.clear_line}{res}"
 
     def log(self, msg: str, flag: str) -> str:
