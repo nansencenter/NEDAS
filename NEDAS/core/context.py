@@ -71,6 +71,8 @@ class Context:
         self.iter = self.config.iter
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
+        self._pid_show_cached = 0
+        self._print_1p_cached = None
 
         # ensemble size
         self.nens = self.config.nens
@@ -326,7 +328,7 @@ class Context:
 
     @debug_message.setter
     def debug_message(self, msg: str):
-        if not self.debug:
+        if self.config.quiet or not self.debug:
             return
         # show the debug message with PID info.
         # this uses the print since all PID ranks shall print its own message
@@ -378,16 +380,22 @@ class Context:
             return wrapper
         return decorator
 
-    @property
-    def print_1p(self):
+    def print_1p(self, msg: str):
         """
         Customized print function for showing runtime message.
 
         Only the processor with PID = self.pid_show will show the message,
         this avoids the redundancy if all processors are showing the same message.
         """
-        decorator = parallel.by_rank(self.comm, self.pid_show)
-        return decorator(progress.print_with_cache)
+        if self.config.quiet or not msg:
+            return
+        # check if pid_show changed and need to re-decorate
+        if self._print_1p_cached is None or self.pid_show != self._pid_show_cached:
+            decorator = parallel.by_rank(self.comm, self.pid_show)
+            self._print_1p_cached = decorator(progress.print_with_cache)
+            self._pid_show_cached = self.pid_show
+        # show message
+        self._print_1p_cached(msg)
 
     def log_event(self, msg: str, flag=''):
         self.print_1p(self.progress.log(msg, flag))

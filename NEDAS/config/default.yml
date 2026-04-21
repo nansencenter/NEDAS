@@ -36,6 +36,7 @@ step:               # current step in scheme (given in runtime context)
 debug: False          # if true, output debug data/message
 timer: True           # if true, output information on function runtime
 interactive: True     # if the output is interactive (allow ansi escape code), if None autodetect.
+quiet: False          # quiet mode
 call_stack:           # call stack (given at runtime)
 is_notebook:          # if the env is a jupyter notebook, if None autodetect.
 call_stack_max_level: 2 # max call stack level to output, if None all levels will be shown

@@ -48,6 +48,7 @@ class Config:
     call_stack: list[dict]|None
     debug: bool
     timer: bool
+    quiet: bool
     interactive: bool|None
     is_notebook: bool|None
     call_stack_max_level: int|None
