@@ -208,7 +208,8 @@ def by_rank(comm: Comm, rank: int) -> Callable[[Callable[P, T]], Callable[P, T|N
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    print(f"\nPID {rank} raised error: {e}", file=sys.stderr, flush=True)
+                    tb = traceback.format_exc()
+                    print(f"\nPID {rank} raised {type(e).__name__}: {e}\n{tb}", file=sys.stderr, flush=True)
                     comm.Abort(1)
             else:
                 return None
@@ -228,7 +229,8 @@ def bcast_by_root(comm: Comm) -> Callable[[Callable[P, T]], Callable[P, T]]:
                 try:
                     result['return'] = func(*args, **kwargs)
                 except Exception as e:
-                    print(f"\nPID 0 raised error: {e}", file=sys.stderr)
+                    tb = traceback.format_exc()
+                    print(f"\nPID 0 raised {type(e).__name__}: {e}\n{tb}", file=sys.stderr)
                     result['error'] = str(e)
             result = comm.bcast(result, root=0)
             if result['error'] is not None:
@@ -365,7 +367,7 @@ class OfflineScheduler:
                     self.jobs[name]['future'].result()
                 except Exception as e:
                     tb = traceback.format_exc()
-                    self.c.debug_message = f'Scheduler: Job {name} raised exception: \n{tb}'
+                    self.c.debug_message = f'Scheduler: Job {name} raised {type(e).__name__}: {e}\n{tb}'
                     self.error_jobs[name] = tb
                     #return  # #if exit right away and don't wait for other jobs to finish, uncomment this
                 self.running_jobs.remove(name)
