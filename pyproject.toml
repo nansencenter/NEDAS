@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=42", "setuptools-scm>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "NEDAS"
+dynamic = ["version"]
+authors = [
+  {name="Yue Ying", email="yue.ying@nersc.no"},
+]
+description = "Next-generation Ensemble Data Assimilation System"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "numpy",
+  "scipy",
+  "matplotlib",
+  "pyproj",
+  "pyshp",
+  "netCDF4",
+  "PyYAML",
+]
+
+[project.optional-dependencies]
+all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv", "tensorflow", "torch"]
+mpi = ["mpi4py"]
+jit = ["numba"]
+fftw = ["pyFFTW"]
+grib = ["pygrib"]
+alignment = ["opencv"]
+emulator = ["tensorflow", "torch"]
+
+[project.scripts]
+nedas-run = "NEDAS.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/nansencenter/NEDAS"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools_scm]
+write_to = "NEDAS/_version.py"

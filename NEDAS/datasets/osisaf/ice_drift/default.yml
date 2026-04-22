@@ -1,0 +1,13 @@
+dataset_dir: '/cluster/projects/nn2993k/sim/data/OSISAF_ice_drift'
+
+# osisaf grid parameters
+proj_name: 'nh_polstere'
+proj: '+proj=stere +a=6378273 +b=6356889.44891 +lat_0=90 +lat_ts=70 +lon_0=-45'
+xstart: -3750000.
+xend: 3626000.
+dx: 62500.
+ystart: 5750000.
+yend: -5251000.
+dy: -62500.
+
+obs_file_dt: 24  #time interval (hours) between obs files

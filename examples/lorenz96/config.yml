@@ -1,0 +1,111 @@
+work_dir: lorenz96
+
+python_env:
+
+io_mode: online
+
+nproc: 1
+
+nens: 20
+run_preproc: True
+run_forecast: True
+run_analysis: True
+run_postproc: True
+run_diagnose: True
+debug: False
+timer: True
+call_stack_max_level: 1
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-30T00:00:00Z
+time_analysis_start: 2001-01-01T00:00:00Z
+time_analysis_end: 2001-01-28T00:00:00Z
+cycle_period: 6
+time:
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: lorenz96
+
+state_def:
+- name: state
+  model_src: lorenz96
+  var_type: field
+  err_type: normal
+
+model_def:
+  lorenz96:
+    config_file:
+    nproc_per_run: 1
+    ens_run_strategy: scheduler
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+
+# observation definition (a list of definitions, one for each variable)
+obs_def:
+- name: state
+  dataset_src: synthetic
+  model_src: lorenz96
+  nobs: 10
+  err:
+    type: normal
+    std: 0.1
+  hroi: 5
+  vroi: inf
+  troi: inf
+  impact_on_state:
+
+dataset_def:
+  synthetic:
+    model_src: lorenz96
+    config_file:
+    obs_position: prescribed
+    obs_x: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+    obs_window_min: -6
+    obs_window_max: 0
+
+shuffle_obs: False
+interp_method: linear
+
+perturb:
+
+scheme: filter
+
+niter: 1
+iter:
+resolution_level: [0]
+character_length: [1]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
+assimilator_def:
+  type: ETKF
+  config_file:
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+inflation_def:
+  type: prior,multiplicative
+  adaptive: False
+  coef: 1.0
+
+localization_def:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+
+diag:

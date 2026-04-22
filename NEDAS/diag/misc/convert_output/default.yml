@@ -1,0 +1,23 @@
+variables: ['seaice_conc_daily']
+model_src: 'topaz.v5'
+
+grid_def:
+  proj: '+proj=stere +lat_0=90 +lon_0=-45 +datum=WGS84 +units=m'
+  xmin: -3600000.
+  xmax: 3800001.
+  ymin: -4300000.
+  ymax: 2800001.
+  dx: 6250.
+  centered: False
+
+file: 'output_mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+
+time_name: 'time'
+time_units: 'seconds since 1970-01-01T00:00:00+00:00'
+time_calendar: 'proleptic_gregorian'
+
+k_name: 'depth'
+x_name: 'x'
+y_name: 'y'
+lat_name: 'latitude'
+lon_name: 'longitude'

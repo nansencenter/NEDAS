@@ -1,0 +1,23 @@
+import sys
+from NEDAS import get_scheme
+
+def main() -> None:
+    try:
+        scheme = get_scheme(parse_args=True)
+
+        step = scheme.config.step
+        if step:
+            scheme.run_step(step)
+            return
+
+        scheme()
+
+    except KeyboardInterrupt:
+        print("\nInterrupted. Exiting...")
+        sys.exit(1)
+
+    except Exception as e:
+        raise e
+
+if __name__ == '__main__':
+    main()

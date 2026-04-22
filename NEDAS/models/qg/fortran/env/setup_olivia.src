@@ -1,0 +1,12 @@
+ulimit -s 2000000
+
+# Load the right modules
+module --force purge
+ml load init-NRIS
+ml load NRIS/CPU
+ml load intel/2025b
+ml load impi/2021.16.1-intel-compilers-2025.2.0
+ml load FFTW/3.3.10-GCC-14.3.0
+
+export FFTW_DIR=/cluster/software/NRIS/zen5/software/FFTW/3.3.10-GCC-14.3.0
+export LIBM_DIR=/usr/lib64

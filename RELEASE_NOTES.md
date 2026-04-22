@@ -1,3 +1,18 @@
+# v1.1.0
+    Refactor the code, made available on PyPI.
+
+    Refactor the assim_tools module to use classes for components of the core assimilation algorithm.
+
+    - Available Assimilators: ETKF, TopazDEnKF, EAKF
+
+    - Available Updators: Additive and Alignment
+
+    - Misc. transform funcs: null, scale_bandpass
+
+    Added readthedocs documentation pages.
+
+    Added a few examples of use cases: QG model benchmarking of filter performance
+
 # v1.0.1
 
     Use fully yaml-file-based configuration, no need for linux environment variables anymore.

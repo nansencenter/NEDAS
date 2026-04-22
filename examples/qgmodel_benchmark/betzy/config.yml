@@ -1,0 +1,129 @@
+work_dir: /cluster/work/users/yingyue/qg
+
+python_env: /cluster/home/yingyue/python.src
+
+io_mode: offline
+
+job_submit:
+  host: betzy
+  project: nn2993k
+  queue: devel
+  ppn: 128
+  parallel_mode: mpi
+
+nproc: 128
+nproc_util: 5
+
+nens: 100
+run_forecast: True
+run_analysis: True
+run_diagnose: True
+
+debug: False
+interactive: True
+cols: 200
+call_stack_max_level:
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-14T00:00:00Z
+time_analysis_start: 2001-01-03T00:00:00Z
+time_analysis_end: 2001-01-09T00:00:00Z
+cycle_period: 12
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'qg.fortran'
+
+state_def:
+- name: 'streamfunc'
+  model_src: 'qg.fortran'
+  var_type: 'field'
+  err_type: 'normal'
+
+model_def:
+  qg.fortran:
+    config_file: '{nedas_root}/models/qg/fortran/default.yml'
+    model_env: '{nedas_root}/models/qg/fortran/env/setup_betzy.src'
+    model_code_dir: '{nedas_root}/models/qg/fortran'
+    nproc_per_run: 1
+    nproc_per_util: 1
+    walltime: 1000
+    restart_dt: 24
+    forcing_dt: 24
+    ens_run_strategy: scheduler
+    use_job_array: False
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+
+obs_def:
+- name: 'streamfunc'
+  dataset_src: 'synthetic'
+  model_src: 'qg.fortran'
+  nobs: 3000
+  err:
+    type: 'normal'
+    std: 0.2
+  hroi: 100
+  vroi: 5
+  troi: 24
+
+dataset_def:
+  synthetic:
+    model_src: qg.fortran
+    config_file:
+    obs_window_min: -6
+    obs_window_max: 0
+
+perturb:
+
+# more details in assimilation algorithm
+scheme: filter
+
+niter: 1
+iter:
+resolution_level: [0]
+character_length: [16]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
+assimilator_def:
+  type: ETKF
+  config_file:
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+inflation_def:
+  type: post,multiplicative
+  adaptive: True
+  coef: 1.0
+
+localization_def:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass
+  decompose_obs: False
+
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '{nedas_root}/diag/misc/convert_output/default.yml'
+  model_src: 'qg.fortran'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '{work_dir}/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

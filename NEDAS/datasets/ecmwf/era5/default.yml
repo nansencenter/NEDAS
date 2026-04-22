@@ -1,0 +1,2 @@
+dataset_dir: "/cluster/projects/nn2993k/ERA5"
+dt: 6 # time resolution in hours
