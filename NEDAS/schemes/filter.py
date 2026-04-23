@@ -142,7 +142,7 @@ class FilterAnalysisScheme(Scheme):
         name = list(model.variables.keys())[0]
         for member in self.c.mem_list[self.c.pid_mem]:
             try:
-                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start, model_src=model_name)
+                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start, model_src=model_name, path=model.ens_init_dir)
             except Exception:
                 return False
         return True

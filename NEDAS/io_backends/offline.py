@@ -91,24 +91,26 @@ class OfflineIO(IOBackend):
 
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
-        # form the path in kwargs
-        # additional info from input args to form the path prefix
+
+        # if path is already specified, directly call the method
+        if 'path' in kwargs and kwargs['path'] is not None:
+            return method(*args, **kwargs)
+
+        # otherwise, use additional info from kwargs to form the path
         model_name = kwargs['model_src']
         model = c.models[model_name]
         if tag in ['raw', 'current', 'post', 'z']:
             path = c.fs.forecast_dir(c.time, model_name)
-
         elif tag == 'prior':
             path = c.fs.forecast_dir(c.prev_time, model_name)
-
         elif tag == 'truth':
             path = model.truth_dir
-
         else:
             raise ValueError(f"tag '{tag}' not supported in io.call_method")
+
         # make sure path exists
         if path:
-            os.makedirs(path, exist_ok=True)  # use shell_utils makedir
+            c.fs.make_dir(path)
 
         kwargs['path'] = path
         return method(*args, **kwargs)
