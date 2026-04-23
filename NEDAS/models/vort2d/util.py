@@ -17,6 +17,8 @@ def initial_condition(grid, Vmax, Rmw, Vbg, Vslope, loc_sprd=0):
     Returns:
         np.ndarray: The vector velocity field, shape (2, ny, nx).
     """
+    np.random.seed()
+
     # the vortex is randomly placed in the domain
     center_x = 0.5*(grid.xmin+grid.xmax) + np.random.normal(0, loc_sprd)
     center_y = 0.5*(grid.ymin+grid.ymax) + np.random.normal(0, loc_sprd)
