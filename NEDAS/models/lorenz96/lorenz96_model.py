@@ -41,6 +41,11 @@ class Lorenz96Model(Model[Grid1D]):
         }
         self.z = {0: np.zeros(self.nx)}
 
+        # convention to real time for the nondimensional model
+        # 6 h in meteorological models is representative by t = 0.05
+        # so 120 hours per unit model time
+        self.hours_per_unit_time = 120.
+
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         mstr = self.get_mstr(kwargs['member'])
@@ -88,7 +93,7 @@ class Lorenz96Model(Model[Grid1D]):
             # save a copy of the current state (forecast) as prior
             var = self.read_var_from_memory(**kwargs)
             self.write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
- 
+
     def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         # if offline mode, the current files are just posterior states
@@ -118,7 +123,7 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs['member'] = None
         while kwargs['time'] <= self.c.config.time_end:
             self.write_var(state, **kwargs)
-            state = M_nl(state, self.F, kwargs['forecast_period']/24, self.dt)
+            state = M_nl(state, self.F, kwargs['forecast_period']/self.hours_per_unit_time, self.dt)
             kwargs['time'] += kwargs['forecast_period'] * dt1h
 
     def generate_init_ensemble(self, *args, **kwargs):
