@@ -38,7 +38,7 @@ autodoc_mock_imports = ["tensorflow", "torch", "opencv", "pygrib", "pyfftw", "nu
 
 html_theme = 'sphinx_rtd_theme'
 html_show_sphinx = False
-html_logo = '../imgs/nedas_logo.png'
+html_logo = '../imgs/nedas_logo_banner.png'
 html_theme_options = {
     'logo_only': True,
     'includehidden': False,
