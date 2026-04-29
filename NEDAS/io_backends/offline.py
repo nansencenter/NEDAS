@@ -102,7 +102,10 @@ class OfflineIO(IOBackend):
         if tag in ['raw', 'current', 'post', 'z']:
             path = c.fs.forecast_dir(c.time, model_name)
         elif tag == 'prior':
-            path = c.fs.forecast_dir(c.prev_time, model_name)
+            if kwargs['time'] == c.time:
+                path = c.fs.forecast_dir(c.prev_time, model_name)
+            else:
+                path = c.fs.forecast_dir(c.time, model_name)
         elif tag == 'truth':
             path = model.truth_dir
         else:
