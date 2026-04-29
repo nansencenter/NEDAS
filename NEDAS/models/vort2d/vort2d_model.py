@@ -93,7 +93,7 @@ class Vort2DModel(Model[RegularGrid]):
             # save a copy of the current state (forecast) as prior
             var = self.read_var_from_memory(**kwargs)
             self.write_var_to_memory(var.copy(), **{**kwargs, 'tag':'prior'})
- 
+
     def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         # if offline mode, the current files are just posterior states
@@ -114,8 +114,8 @@ class Vort2DModel(Model[RegularGrid]):
         next_time = kwargs['time'] + forecast_period * dt1h
         while time < next_time:
             time += self.restart_dt * dt1h
-            new_state = advance_time(state, self.dx, self.restart_dt, self.dt, self.gen, self.diss)
-            self.write_var(new_state, **{**kwargs, 'time':time})
+            state = advance_time(state, self.dx, self.restart_dt, self.dt, self.gen, self.diss)
+            self.write_var(state, **{**kwargs, 'time':time})
         self.run_status = 'complete'
 
     def generate_truth(self, *args, **kwargs) -> None:
