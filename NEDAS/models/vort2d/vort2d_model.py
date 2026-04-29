@@ -110,10 +110,12 @@ class Vort2DModel(Model[RegularGrid]):
 
         state = self.read_var(**kwargs)
         forecast_period = kwargs['forecast_period']
+        time = kwargs['time']
         next_time = kwargs['time'] + forecast_period * dt1h
-        next_state = advance_time(state, self.dx, forecast_period, self.dt, self.gen, self.diss)
-        self.write_var(next_state, **{**kwargs, 'time':next_time})
-
+        while time < next_time:
+            time += self.restart_dt * dt1h
+            new_state = advance_time(state, self.dx, self.restart_dt, self.dt, self.gen, self.diss)
+            self.write_var(new_state, **{**kwargs, 'time':time})
         self.run_status = 'complete'
 
     def generate_truth(self, *args, **kwargs) -> None:
