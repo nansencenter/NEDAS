@@ -8,6 +8,7 @@ class SerialAssimilator(Assimilator):
     """
     Subclass for serial assimilation algorithms
     """
+    assim_mode = 'serial'
 
     def init_partitions(self, c: Context) -> list:
         """

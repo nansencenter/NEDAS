@@ -5,6 +5,8 @@ from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
+    assim_mode = 'batch'
+
     def init_partitions(self, c: Context) -> list:
         """
         Generate spatial partitioning of the domain

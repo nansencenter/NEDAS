@@ -8,6 +8,8 @@ from .context import Context
 from .types import ObsRecordID, PartitionID, ProcIDMem
 
 class Assimilator(ABC):
+    assim_mode: str
+
     def __init__(self, c: Context):
         # get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
@@ -41,7 +43,7 @@ class Assimilator(ABC):
         c.logger('Output posterior ensemble members')(c.state.output_state)(c, 'post')
         c.logger('Output posterior ensemble mean')(c.state.output_ens_mean)(c, 'post')
 
-        if not c.obs.obs_post:
+        if self.assim_mode == 'batch':
             # for batch filters the obs_post needs to be computed
             # (TODO: they can be updated along with the state, as an alternative)
             c.logger('Prepare obs from posterior state')(c.obs.prepare_obs_from_state)(c, 'post')
