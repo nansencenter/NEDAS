@@ -4,6 +4,9 @@ from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.core.types import VarDesc
 
 class Vort2DObs(SyntheticObs):
+    network_type: str
+    obs_range: float
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -34,36 +37,28 @@ class Vort2DObs(SyntheticObs):
         i, j = self.vortex_position(velocity[0,...], velocity[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
-        if 'network_type' in kwargs:
-            network_type = kwargs['network_type']
-        else:
-            network_type = 'global'
-
         if name == 'velocity':
-
             nobs = kwargs['nobs']
-            if network_type == 'global':
+            if self.network_type == 'global':
                 if nobs is None:
                     nobs = 1000
                 y = np.random.uniform(grid.ymin, grid.ymax, nobs)
                 x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
-            elif network_type == 'targeted':
+            elif self.network_type == 'targeted':
                 if nobs is None:
                     nobs = 800   # note: number of obs in entire domain
                                  # later only obs within range will be kept
-                obs_range = 180000  # observed range from vortex center, m
                 y = np.random.uniform(grid.ymin, grid.ymax, nobs)
                 x = np.random.uniform(grid.xmin, grid.xmax, nobs)
-
                 dist = np.hypot(x - true_center_x, y - true_center_y)
-                ind = np.where(dist <= obs_range)
+                ind = np.where(dist <= self.obs_range)
                 x = x[ind]
                 y = y[ind]
                 nobs = x.size
 
             else:
-                raise ValueError('unknown network type: '+network_type)
+                raise ValueError('unknown network type: '+self.network_type)
 
             obs_seq = {'obs': np.full(nobs, np.nan),
                     't': np.full(nobs, kwargs['time']),
