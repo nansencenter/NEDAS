@@ -116,6 +116,8 @@ class Vort2DModel(Model[RegularGrid]):
             time += self.restart_dt * dt1h
             state = advance_time(state, self.dx, self.restart_dt, self.dt, self.gen, self.diss)
             self.write_var(state, **{**kwargs, 'time':time})
+            if np.sum(np.isnan(state).astype(int)) > 0:
+                raise RuntimeError(f"{self.__class__.__name__}: NaN detected in model run")
         self.run_status = 'complete'
 
     def generate_truth(self, *args, **kwargs) -> None:

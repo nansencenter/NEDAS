@@ -9,7 +9,7 @@ job_submit:
   ppn: 6
   parallel_mode: mpi
 
-nproc: 4
+nproc: 1
 
 nens: 20
 run_forecast: True
@@ -61,6 +61,8 @@ dataset_def:
   vort2d:
     obs_window_min: -3
     obs_window_max: 0
+    network_type: targeted
+    obs_range: 100000.0
 
 perturb:
 
