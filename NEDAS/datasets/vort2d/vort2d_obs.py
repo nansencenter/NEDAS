@@ -47,15 +47,17 @@ class Vort2DObs(SyntheticObs):
 
             elif self.network_type == 'targeted':
                 if nobs is None:
-                    nobs = 800   # note: number of obs in entire domain
-                                 # later only obs within range will be kept
-                y = np.random.uniform(grid.ymin, grid.ymax, nobs)
-                x = np.random.uniform(grid.xmin, grid.xmax, nobs)
-                dist = np.hypot(x - true_center_x, y - true_center_y)
-                ind = np.where(dist <= self.obs_range)
-                x = x[ind]
-                y = y[ind]
-                nobs = x.size
+                    nobs = 800
+                x, y = [], []
+                while len(x) < nobs:
+                    x1 = np.random.uniform(true_center_x - self.obs_range, true_center_x + self.obs_range)
+                    y1 = np.random.uniform(true_center_y - self.obs_range, true_center_y + self.obs_range)
+                    dist = np.hypot(x1 - true_center_x, y1 - true_center_y)
+                    if dist <= self.obs_range:
+                        x.append(x1)
+                        y.append(y1)
+                x = np.array(x)
+                y = np.array(y)
 
             else:
                 raise ValueError('unknown network type: '+self.network_type)
