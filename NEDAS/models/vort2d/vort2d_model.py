@@ -78,8 +78,10 @@ class Vort2DModel(Model[RegularGrid]):
     def z_coords(self, **kwargs):
         return np.zeros(self.grid.x.shape)
 
-    def generate_initial_condition(self):
-        state = initial_condition(self.grid, self.Vmax, self.Rmw, self.Vbg, self.Vslope, self.loc_sprd)
+    def generate_initial_condition(self, loc_sprd=None):
+        if loc_sprd is None:
+            loc_sprd = self.loc_sprd
+        state = initial_condition(self.grid, self.Vmax, self.Rmw, self.Vbg, self.Vslope, loc_sprd)
         return state
 
     def preprocess(self, **kwargs):
@@ -140,7 +142,9 @@ class Vort2DModel(Model[RegularGrid]):
                 }
 
             if t == self.c.config.time_start:
-                state = self.generate_initial_condition()
+                # for the truth, place the vortex in the center of the domain,
+                # setting loc_sprd to 0
+                state = self.generate_initial_condition(loc_sprd=0)
                 if debug:
                     print(f"generating initial condition {self.filename(**opts)}")
                 self.write_var(state, **opts)
