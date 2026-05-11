@@ -175,7 +175,7 @@ class Obs:
             # we can find its corresponding rec_id and call io.read_field to get it
             rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==kwargs['name'] and r.time==kwargs['time'] and r.k==kwargs['k']]
             if len(rec_id_found) == 0:
-                raise RuntimeError("field '{obs_name}' is defined in state_def but not found in state.info.fields")
+                raise RuntimeError(f"field '{kwargs['name']}' at t={kwargs['time']} k={kwargs['k']} not found in state.info.fields")
             rec_id = rec_id_found[0]
             fld = c.io.read_field(c, tag, rec_id, kwargs['member'])
             zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
