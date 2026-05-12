@@ -31,19 +31,27 @@ class Obs:
     To compare to the observation, obs_prior simulated by the model needs to be
     computed, they have dimension [nens, nlobs], indexed by (mem_id, obs_id)
     """
-    obs_rec_list: dict[ProcIDRec, list[ObsRecordID]] = {}
-    obs_inds: dict = {}            # will be created by assimilator.assign_obs()
-    obs_seq: ObsSeq = {}           # will be created by self.prepare_obs()
-    obs_prior: ObsEns = {}         # will be created by self.prepare_obs_from_state()
-    lobs: LocalObsSeq = {}         # will be created by self.transpose_to_ensemble_complete()
-    lobs_prior: LocalObsEns = {}
-    lobs_post: LocalObsEns = {}    # will be created by assimilator.assimilate()
-    obs_post: ObsEns = {}          # will be created by self.transpose_to_field_complete()
-    data: dict = {}                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
+    obs_rec_list: dict[ProcIDRec, list[ObsRecordID]]
+    obs_inds: dict            # will be created by assimilator.assign_obs()
+    obs_seq: ObsSeq           # will be created by self.prepare_obs()
+    obs_prior: ObsEns         # will be created by self.prepare_obs_from_state()
+    lobs: LocalObsSeq         # will be created by self.transpose_to_ensemble_complete()
+    lobs_prior: LocalObsEns
+    lobs_post: LocalObsEns    # will be created by assimilator.assimilate()
+    obs_post: ObsEns          # will be created by self.transpose_to_field_complete()
+    data: dict                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
 
     def __init__(self, c: Context):
         self.info = bcast_by_root(c.comm)(ObsInfo)(c)
         self.obs_rec_list = bcast_by_root(c.comm)(self.distribute_obs_tasks)(c)
+        self.obs_inds = {}
+        self.obs_seq = {}
+        self.obs_prior = {}
+        self.lobs = {}
+        self.lobs_prior = {}
+        self.lobs_post = {}
+        self.obs_post = {}
+        self.data = {}
 
     def distribute_obs_tasks(self, c: Context):
         """

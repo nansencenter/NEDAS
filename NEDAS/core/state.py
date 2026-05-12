@@ -37,19 +37,28 @@ class State:
     """
     info: StateInfo
     rec_list: dict[ProcIDRec, list[FieldRecordID]]
-    partitions: list = []  # will be created by assimilator.partition_grid()
-    par_list: dict[ProcIDMem, list[PartitionID]] = {}
-    fields_prior: FieldEns = {}   # will be created by self.prepare_state()
-    fields_z: FieldEns = {}
-    state_prior: StateEns = {}    # will be created by self.transpose_to_ensemble_complete()
-    state_z: StateEns = {}
-    state_post: StateEns = {}     # will be created by assimilator.assimilate()
-    fields_post: FieldEns = {}    # will be created by self.transpose_to_field_complete()
-    data = {}                     # will be created by self.pack_state_data(), for use in assmilator.assimilate()
+    partitions: list        # will be created by assimilator.partition_grid()
+    par_list: dict[ProcIDMem, list[PartitionID]]
+    fields_prior: FieldEns  # will be created by self.prepare_state()
+    fields_z: FieldEns
+    state_prior: StateEns   # will be created by self.transpose_to_ensemble_complete()
+    state_z: StateEns
+    state_post: StateEns    # will be created by assimilator.assimilate()
+    fields_post: FieldEns   # will be created by self.transpose_to_field_complete()
+    data: dict              # will be created by self.pack_state_data(), for use in assmilator.assimilate()
 
     def __init__(self, c: Context):
         self.info = bcast_by_root(c.comm)(StateInfo)(c)
         self.rec_list = bcast_by_root(c.comm)(self.distribute_state_tasks)(c)
+        self.partitions = []
+        self.par_list = {}
+        self.fields_prior = {}
+        self.fields_z = {}
+        self.state_prior = {}
+        self.state_z = {}
+        self.state_post = {}
+        self.fields_post = {}
+        self.data = {}
 
     def distribute_state_tasks(self, c: Context) -> dict[int, list[int]]:
         """
