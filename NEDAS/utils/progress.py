@@ -125,7 +125,7 @@ class Formatter:
 
         # get real time cols if possible
         if self.is_notebook:
-            self.cols = 800
+            self.cols = 300
         else:
             self.cols, _ = shutil.get_terminal_size(fallback=(self.cols,1))
 

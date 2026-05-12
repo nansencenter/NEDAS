@@ -26,7 +26,7 @@ def get_cmap(cmap_name: str):
         cmap = colormaps[cmap_name]
     return cmap
 
-def adjust_ax_size(ax, wfac=1., hfac=1.):
+def adjust_ax_size(ax, wfac=1., hfac=1., boff=0.):
     """
     Make plot axes a little smaller on right hand side to make room for colorbar.
 
@@ -37,9 +37,10 @@ def adjust_ax_size(ax, wfac=1., hfac=1.):
         ax (matplotlib.axes.Axes): Matplotlib axes object.
         wfac (float, optional): Ratio to scale the width of the axes. Defaults to 1.
         hfac(float, optional): Ratio to scale the height of the axes. Defaults to 1.
+        boff(float, optional): Bottom offset to leave room for labels. Defaults to 0.
     """
     left, bottom, width, height = ax.get_position().bounds
-    ax.set_position([left, bottom, width*wfac, height*hfac])
+    ax.set_position([left, bottom+boff, width*wfac, height*hfac])
 
 def add_colorbar(fig, ax, cmap, vmin, vmax, nlevels=10, fontsize=12, units=None):
     """
