@@ -131,7 +131,7 @@ def draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, 
     """
     # draw a box
     xb = [xr-L*1.3, xr-L*1.3, xr+L*1.3, xr+L*1.3, xr-L*1.3]
-    yb = [yr+L/2, yr-L, yr-L, yr+L/2, yr+L/2]
+    yb = [yr+L*0.5, yr-L, yr-L, yr+L*0.5, yr+L*0.5]
     ax.fill(xb, yb, color=refcolor, zorder=6)
     ax.plot(xb, yb, color='k', zorder=6)
     # draw the reference vector

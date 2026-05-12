@@ -605,7 +605,7 @@ class Grid2DBase(ABC):
 
     def plot_vectors(self, ax, vec_fld, V=None, L=None, spacing=0.5, num_steps=10,
                      linecolor='k', linewidth=1,
-                     showref=False, ref_xy=(0.9, 0.9), refcolor='w', ref_units='',
+                     showref=False, ref_xy=(0.95, 0.95), refcolor='w', ref_units='',
                      showhead=True, headwidth=0.1, headlength=0.3):
         """
         Plot vector fields (improved version of matplotlib quiver)
@@ -706,12 +706,13 @@ class Grid2DBase(ABC):
 
         # add reference vector
         if showref:
-            xr, yr = ref_xy[0]*self.Lx+self.xmin, ref_xy[1]*self.Ly+self.ymin
+            xr = self.xmin + L*1.3 + ref_xy[0] * (self.Lx - L*2.6)
+            yr = self.ymin + L + ref_xy[1] * (self.Ly - L*1.5)
             draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, ref_units)
 
         self.set_xylim(ax)
 
-    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, x=None, y=None, is_vector=False, **kwargs):
+    def plot_scatter(self, ax, fld, vmin=None, vmax=None, nlevels=20, cmap='viridis', markersize=10, x=None, y=None, L=None, is_vector=False, **kwargs):
         """
         Same as plot_field/vectors, but showing individual scattered points instead
         This is more suitable for plotting observations in space
@@ -725,17 +726,20 @@ class Grid2DBase(ABC):
             vmin = np.nanmin(fld)
         if vmax is None:
             vmax = np.nanmax(fld)
+        if L is None:
+            L = 0.05 * self.Lx
         dv = (vmax - vmin) / nlevels
 
         if is_vector:
             assert fld.shape[0] == 2, f"vector field should have first dim==2"
             assert fld.shape[1:] == x.shape, f"vector field shape does not match with grid"
             V = vmax
-            L = 0.05 * self.Lx
             hl, hw = 0.3 * L, 0.15 * L
-            ref_x, ref_y = 0.9 * self.Lx + self.xmin, 0.9 * self.Ly + self.ymin
             refcolor = kwargs.get('refcolor', 'w')
             ref_units = kwargs.get('units', '')
+            ref_xy = kwargs.get('ref_xy', (0.95, 0.95))
+            xr = self.xmin + L*1.3 + ref_xy[0] * (self.Lx - L*2.6)
+            yr = self.ymin + L + ref_xy[1] * (self.Ly - L*1.5)
             d = fld * L / V
             xtraj, ytraj = np.array([x, x + d[0,...]]), np.array([y, y + d[1,...]])
             linecolor = kwargs.get('linecolor', 'k')
@@ -746,7 +750,7 @@ class Grid2DBase(ABC):
                 if hl < 1.6*dist:
                     ax.fill(*arrowhead_xy(xtraj[1,i], xtraj[0,i], ytraj[1,i], ytraj[0,i], hw, hl), color=linecolor, zorder=5)
             if kwargs.get('showref', True):
-                draw_reference_vector_legend(ax, ref_x, ref_y, V, L, hw, hl, refcolor, linecolor, ref_units)
+                draw_reference_vector_legend(ax, xr, yr, V, L, hw, hl, refcolor, linecolor, ref_units)
 
         else:
             assert fld.shape == x.shape
