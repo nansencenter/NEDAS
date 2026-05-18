@@ -110,7 +110,7 @@ class Lorenz96Model(Model[Grid1D]):
 
         state = self.read_var(**kwargs)
         next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
-        next_state = M_nl(state, self.F, kwargs['forecast_period']/24, self.dt)
+        next_state = M_nl(state, self.F, kwargs['forecast_period']/self.hours_per_unit_time, self.dt)
         self.write_var(next_state, **{**kwargs, 'time':next_time})
 
         self.run_status = 'complete'
