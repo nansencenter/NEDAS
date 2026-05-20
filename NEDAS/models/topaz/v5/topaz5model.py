@@ -99,7 +99,7 @@ class Topaz5Model(Model[RegularGrid]):
 
         self.iced_variables = {
             'seaice_velocity': VarDesc(name=('uvel', 'vvel'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
-        } # TODO: the _ncat logic needs to change throughout
+        }
         for n in range(self.ncat):
             self.iced_variables[f"seaice_conc_cat{n}"] = VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units)
             self.iced_variables[f"seaice_volume_cat{n}"] = VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
@@ -167,6 +167,15 @@ class Topaz5Model(Model[RegularGrid]):
             self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
 
         #TODO: z bank cache can be implemented (similar to grid bank for nextsim)
+
+    def is_ncat(self, name):
+        return (name in self.iced_variables) and (name.split('_')[-1][:3] == 'cat')
+    
+    def get_cat_id(self, name):
+        if self.is_ncat(name):
+            return int(name.split('_')[-1][3:])
+        else:
+            raise ValueError(f"get_cat_id: variable {name} is not a ncat variable")
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -252,16 +261,17 @@ class Topaz5Model(Model[RegularGrid]):
 
         elif name in self.iced_variables:
             if rec['is_vector']:
-                if name[-5:] == '_ncat':  # ncat variable
-                    var1 = nc_read_var(fname, rec['name'][0])[kwargs['k'],...]
-                    var2 = nc_read_var(fname, rec['name'][1])[kwargs['k'],...]
+                if self.is_ncat(name):  # ncat variable
+                    cat_id = self.get_cat_id(name)
+                    var1 = nc_read_var(fname, rec['name'][0])[cat_id,...]
+                    var2 = nc_read_var(fname, rec['name'][1])[cat_id,...]
                 else:
                     var1 = nc_read_var(fname, rec['name'][0])
                     var2 = nc_read_var(fname, rec['name'][1])
                 var = np.array([var1, var2])
             else:
-                if name[-5:] == '_ncat':  # ncat variable
-                    var = nc_read_var(fname, rec['name'])[kwargs['k'],...]
+                if self.is_ncat(name):  # ncat variable
+                    var = nc_read_var(fname, rec['name'])[self.get_cat_id(name),...]
                 else:
                     var = nc_read_var(fname, rec['name'])
 
@@ -339,20 +349,19 @@ class Topaz5Model(Model[RegularGrid]):
             f.close()
 
         elif name in self.iced_variables:
-            is_ncat = (name[-5:] == '_ncat')  # if name is a multicategory variable (categories indexed by k)
             if rec['is_vector']:
                 for i in range(2):
-                    if is_ncat:
+                    if self.is_ncat(name):
                         dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                        recno = {'ncat':kwargs['k']}
+                        recno = {'ncat':self.get_cat_id(name)}
                     else:
                         dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = None
                     nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
             else:
-                if is_ncat:
+                if self.is_ncat(name):
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                    recno = {'ncat':kwargs['k']}
+                    recno = {'ncat':self.get_cat_id(name)}
                 else:
                     dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = None
@@ -495,10 +504,10 @@ class Topaz5Model(Model[RegularGrid]):
 
         # try to read it from iced file
         try:
-            rec['name'] = 'seaice_conc_ncat'  # can use iceh or iced files
-            rec['units'] = self.variables[rec['name']].units
-            for k in range(len(self.variables[rec['name']].levels)):
-                seaice_conc += self.read_var(**{**rec, 'k':k})
+            for cat_id in range(self.ncat):
+                rec['name'] = f'seaice_conc_cat{cat_id}'  # can use iceh or iced files
+                rec['units'] = self.variables[rec['name']].units
+                seaice_conc += self.read_var(**rec)
         except FileNotFoundError:
             # if failed, try to read from iceh file
             rec['name'] = 'seaice_conc_daily'
@@ -519,10 +528,10 @@ class Topaz5Model(Model[RegularGrid]):
 
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'seaice_volume_ncat'
-        rec['units'] = self.variables[rec['name']].units
-        for k in range(len(self.variables[rec['name']].levels)):
-            seaice_volume += self.read_var(**{**rec, 'k':k})
+        for cat_id in range(self.ncat):
+            rec['name'] = f'seaice_volume_cat{cat_id}'
+            rec['units'] = self.variables[rec['name']].units
+            seaice_volume += self.read_var(**rec)
 
         seaice_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
@@ -541,10 +550,10 @@ class Topaz5Model(Model[RegularGrid]):
 
         snow_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'snow_volume_ncat'
-        rec['units'] = self.variables['snow_volume_ncat'].units
-        for k in range(len(self.variables['snow_volume_ncat'].levels)):
-            snow_volume += self.read_var(**{**rec, 'k':k})
+        for cat_id in range(self.ncat):
+            rec['name'] = f'snow_volume_cat{cat_id}'
+            rec['units'] = self.variables[rec['name']].units
+            snow_volume += self.read_var(**rec)
 
         snow_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
@@ -764,8 +773,8 @@ class Topaz5Model(Model[RegularGrid]):
 
         # fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
         restart_dir = kwargs['restart_dir']
-        prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_ncat'})
-        post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_ncat'})
+        prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_cat1'})
+        post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_cat1'})
         fice = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         hice = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         zSin, Tmlt = fix_zsin_profile(self.Nilayer+1, self.saltmax, self.depressT, self.nsal, self.msal)
