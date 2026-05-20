@@ -552,10 +552,10 @@ class Topaz5Model(Model[RegularGrid]):
         snow_thick[ind] = np.minimum(snow_volume[ind] / seaice_conc[ind], upper_limit)
         return snow_thick
 
-    def preprocess(self, task_id=0, **kwargs):
+    def preprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-
-        offset = task_id * self.nproc_per_util
+        # task_id = kwargs.get('worker_id', 0)
+        # offset = task_id * self.nproc_per_util
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
@@ -650,7 +650,7 @@ class Topaz5Model(Model[RegularGrid]):
         self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}", nproc=1)
         self.c.run_job(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}", nproc=1)
 
-    def postprocess(self, task_id=0, **kwargs):
+    def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
@@ -717,7 +717,7 @@ class Topaz5Model(Model[RegularGrid]):
         commands += f"mv {file1} {file2}; "
         self.c.run_job(commands, nproc=1)
 
-    def postprocess_native(self, task_id=0, **kwargs):
+    def postprocess_native(self, *args, **kwargs):
         """Post processing the restart variables for next forecast"""
         #  routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
         kwargs = super().parse_kwargs(kwargs)
@@ -776,10 +776,11 @@ class Topaz5Model(Model[RegularGrid]):
         self.write_var(fice, **{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         self.write_var(hice, **{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
 
-    def run(self, task_id=0, **kwargs):
+    def run(self, *args, **kwargs):
         assert self.ens_run_strategy=='scheduler', f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'"
 
         kwargs = super().parse_kwargs(kwargs)
+        task_id = kwargs.get('worker_id', 0)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -828,9 +829,16 @@ class Topaz5Model(Model[RegularGrid]):
             # run the model, give it 3 attempts
             for i in range(3):
                 try:
-                    self.c.run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                            offset=task_id*self.nproc_per_run, parallel_mode='mpi',
-                            log_file=log_file, **kwargs)
+                    job_opts = {
+                        **kwargs,
+                        'job_name': 'topaz5',
+                        'run_dir': run_dir,
+                        'parallel_mode': 'mpi',
+                        'log_file': log_file,
+                        'nproc': self.nproc,
+                        'offset': task_id * self.nproc_per_run,
+                    }
+                    self.c.run_job(shell_cmd, **job_opts)
                 except RuntimeError as e:
                     print(f"{e}, retrying ({2-i} attempts remain)")
                     self.c.run_job(f"cp {log_file} {log_file}.attempt{i}", nproc=1)
