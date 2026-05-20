@@ -225,13 +225,14 @@ class Scheme(ABC):
         # setup an offline scheduler to distribute tasks
         # get number of available workers to initialize the scheduler
         total_nproc = opts.get('total_nproc', self.config.nproc)
-        assert total_nproc >= opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
-        nworker = total_nproc // opts['nproc']
 
         if opts['nproc']>1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
             # the scheduling is then delegated to HPC's scheduler (each task submitted as a separate job)
             # here, the offline scheduler should just submit all tasks at once
             nworker = self.c.nens
+        else:
+            assert total_nproc >= opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
+            nworker = total_nproc // opts['nproc']
 
         # initialize the scheduler
         self.c.debug_message = f"running {task_name} in offline scheduler: nworker={nworker}"

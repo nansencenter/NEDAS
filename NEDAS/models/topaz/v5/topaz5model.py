@@ -829,8 +829,8 @@ class Topaz5Model(Model[RegularGrid]):
             for i in range(3):
                 try:
                     self.c.run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                            nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                            walltime=self.walltime, log_file=log_file, **kwargs)
+                            offset=task_id*self.nproc_per_run, parallel_mode='mpi',
+                            log_file=log_file, **kwargs)
                 except RuntimeError as e:
                     print(f"{e}, retrying ({2-i} attempts remain)")
                     self.c.run_job(f"cp {log_file} {log_file}.attempt{i}", nproc=1)
