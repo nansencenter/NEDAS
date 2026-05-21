@@ -43,6 +43,7 @@ class Config:
     run_postproc: bool
     run_diagnose: bool
     step: str|None
+    save_checkpoint: bool
 
     # runtime logging options
     call_stack: list[dict]|None

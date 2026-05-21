@@ -280,7 +280,6 @@ class Model(Generic[GridT], ABC):
         """
         raise NotImplementedError(f"'generate_truth' is not implemented for {self.__class__.__name__}")
 
-
     def generate_init_ensemble(self, *args, **kwargs) -> None:
         """
         Generate initial perturbed model states for ensemble forecasts.

@@ -158,7 +158,8 @@ class FilterAnalysisScheme(Scheme):
         Pre-processing step before the assimilation.
         """
         for model_name, model in self.c.models.items():
-            self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
+            if not self.online_mode:
+                self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
             opts = self.get_task_opts('preprocess', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_util)
             self.c.logger(f'Preprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'preproc_{model_name}', model.preprocess, **opts)
 
@@ -167,6 +168,8 @@ class FilterAnalysisScheme(Scheme):
         Post-processing step after the assimilation and before the next forecast.
         """
         for model_name, model in self.c.models.items():
+            if not self.online_mode:
+                self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
             opts = self.get_task_opts('postprocess', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_util)
             self.c.logger(f'Postprocess {model_name}')(self.run_ensemble_tasks)('scheduler', 'current', f'postproc_{model_name}', model.postprocess, **opts)
 
@@ -175,6 +178,8 @@ class FilterAnalysisScheme(Scheme):
         Ensemble forecast step.
         """
         for model_name, model in self.c.models.items():
+            if not self.online_mode:
+                self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
             opts = self.get_task_opts('ensemble_forecast', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_run, walltime=model.walltime)
             self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'forecast_{model_name}', model.run, **opts)
 
@@ -193,7 +198,8 @@ class FilterAnalysisScheme(Scheme):
 
     def filter_iter(self) -> None:
         self.c.update_assim_tools()
-        self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
+        if not self.online_mode:
+            self.c.fs.make_dir(self.c.fs.analysis_dir(self.c.time, self.c.iter))
 
         self.c.state = State(self.c)
         self.c.logger('Prepare prior state')(self.c.state.prepare_state)(self.c)

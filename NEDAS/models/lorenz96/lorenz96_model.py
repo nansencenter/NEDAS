@@ -117,7 +117,8 @@ class Lorenz96Model(Model[Grid1D]):
 
     def generate_truth(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        self.c.fs.make_dir(self.truth_dir)
+        if self.io_mode == 'offline':
+            self.c.fs.make_dir(self.truth_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = self.c.config.time_start
         kwargs['member'] = None
@@ -128,7 +129,8 @@ class Lorenz96Model(Model[Grid1D]):
 
     def generate_init_ensemble(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        self.c.fs.make_dir(self.ens_init_dir)
+        if self.io_mode == 'offline':
+            self.c.fs.make_dir(self.ens_init_dir)
         state = self.generate_initial_condition()
         kwargs['time'] = self.c.config.time_start
         kwargs['path'] = self.ens_init_dir
