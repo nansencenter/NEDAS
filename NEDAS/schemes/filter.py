@@ -1,4 +1,3 @@
-
 from typing import Any
 from datetime import datetime
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
@@ -62,7 +61,7 @@ class FilterAnalysisScheme(Scheme):
                     self.run_step('diagnose')
 
             # dump data in memory to checkpoint files
-            if self.c.time > self.c.config.time_start:
+            if self.c.config.save_checkpoint and self.c.time > self.c.config.time_start:
                 self.save_model_state(self.c.prev_time)
                 self.save_obs(self.c.prev_time)
 
