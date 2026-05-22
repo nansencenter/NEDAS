@@ -1,7 +1,9 @@
 # model nondimensional parameters
-nx: 40  # model dimension
-F: 8    # forcing parameter
-dt: 0.002 # time step
+nx: 40   # model dimension
+F: 8     # forcing parameter
+dt: 0.05 # time step
+
+numeric_opt: rk4
 
 # some dimensional parameters
 restart_dt: 24  # restart interval (hours)

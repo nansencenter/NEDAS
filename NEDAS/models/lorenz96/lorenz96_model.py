@@ -6,28 +6,22 @@ from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc, IOMode
 
-def M_nl(x_in, F, T, dt):
-    """
-    Lorenz 1996 model with 40 variables, nonlinear advance_time function
-    Input:
-    -x: np.array, the model state
-    -F: parameter, default is 8
-    -T: duration of the simulation
-    -dt: model time step
-    Output:
-    -x: np.array, the updated model state after simulation
-    """
-    x = x_in.copy()
-    for _ in range(int(T/dt)):
-        x += ((np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F) * dt
-    return x
-
 class Lorenz96Model(Model[Grid1D]):
+    """
+    Lorenz 1996 model with 40 variables
+
+    Args:
+        nx (int): dimension of the model, default is 40.
+        F (float): forcing parameter, default is 8
+        dt (float): model time step, default is 0.05
+        numeric_opt (str): numeric option, default is 'rk4'
+    """
     io_mode: IOMode = 'online'  # both online and offline supported, default to online
     nx: int
     F: float
     dt: float
     restart_dt: float
+    numeric_opt: str
     memory: dict = {}
 
     def __init__(self, **kwargs):
@@ -41,10 +35,46 @@ class Lorenz96Model(Model[Grid1D]):
         }
         self.z = {0: np.zeros(self.nx)}
 
+        self.run_1step_funcs = {
+            'euler_forward': self.run_1step_euler_forward,
+            'rk4': self.run_1step_rk4,
+        }
+        assert self.numeric_opt in self.run_1step_funcs, f"{self.__class__.__name__}: unknown numerics '{self.numeric_opt}'."
+        self.run_1step = self.run_1step_funcs[self.numeric_opt]
+
         # convention to real time for the nondimensional model
         # 6 h in meteorological models is representative by t = 0.05
         # so 120 hours per unit model time
         self.hours_per_unit_time = 120.
+
+    def dxdt(self, x):
+        return (np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + self.F
+
+    def run_1step_euler_forward(self, x):
+        return x + self.dt * self.dxdt(x)
+
+    def run_1step_rk4(self, x):
+        dx1 = self.dt * self.dxdt(x)
+        dx2 = self.dt * self.dxdt(x + dx1/2.0)
+        dx3 = self.dt * self.dxdt(x + dx2/2.0)
+        dx4 = self.dt * self.dxdt(x + dx3)
+        return x + (dx1 + 2.0*dx2 + 2.0*dx3 + dx4)/6.0
+
+    def advance_time(self, x_in, T):
+        """
+        Nonlinear advance_time function
+
+        Args:
+            x (np.ndarray): the initial condition
+            T (float): duration of the simulation
+
+        Return:
+            np.ndarray: the updated model state after simulation
+        """
+        x = x_in.copy()
+        for _ in range(int(T/self.dt)):
+            x = self.run_1step(x)
+        return x
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -110,7 +140,7 @@ class Lorenz96Model(Model[Grid1D]):
 
         state = self.read_var(**kwargs)
         next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
-        next_state = M_nl(state, self.F, kwargs['forecast_period']/self.hours_per_unit_time, self.dt)
+        next_state = self.advance_time(state, kwargs['forecast_period']/self.hours_per_unit_time)
         self.write_var(next_state, **{**kwargs, 'time':next_time})
 
         self.run_status = 'complete'
@@ -124,7 +154,7 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs['member'] = None
         while kwargs['time'] <= self.c.config.time_end:
             self.write_var(state, **kwargs)
-            state = M_nl(state, self.F, kwargs['forecast_period']/self.hours_per_unit_time, self.dt)
+            state = self.advance_time(state, kwargs['forecast_period']/self.hours_per_unit_time)
             kwargs['time'] += kwargs['forecast_period'] * dt1h
 
     def generate_init_ensemble(self, *args, **kwargs):
