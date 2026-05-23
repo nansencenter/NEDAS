@@ -3,6 +3,7 @@ from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
+    random_rotation: bool
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  # variable id for each field (nfld)
@@ -143,6 +144,10 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor):
     # namely, var_ratio * obs_prior_var / obs_var * dy = G dy
     var_ratio = L @ np.diag(sv**-1) @ Rh
 
+    # TODO: make EVD/SVD an option
+    # eigenvals, V = np.linalg.eigh(var_ratio_inv)
+    # var_ratio = (V / eigenvals) @ V.T
+
     # the gain matrix
     gain = var_ratio @ S.T
 
@@ -151,6 +156,12 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor):
 
     # ---second part of weights: update of ensemble spread
     var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
+    # var_ratio_sqrt = (V / np.sqrt(eigenvals)) @ V.T
+
+    # TODO: apply random rotation
+    # H = np.random.randn(nens, nens)
+    # U_matrix, _ = np.linalg.qr(H)
+    # var_ratio_sqrt = var_ratio_sqrt @ U_matrix
 
     weights += var_ratio_sqrt
 
