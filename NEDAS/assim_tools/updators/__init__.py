@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 registry = {
     'additive': 'AdditiveUpdator',
     'alignment': 'AlignmentUpdator',
-    'alignment_interp': 'AdditiveUpdator',
+    'alignment.interp': 'AlignmentInterpUpdator',
 }
 
 def get_updator(c: Context) -> Updator:
