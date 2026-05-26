@@ -71,6 +71,10 @@ class Lorenz96Model(Model[Grid1D]):
         Return:
             np.ndarray: the updated model state after simulation
         """
+        # check if any state becomes NaN
+        if np.isnan(x_in).any():
+            raise RuntimeError('NaN detected in lorenz96 model state. Aborting...')
+        # run model forward in time to reach duration T:
         x = x_in.copy()
         for _ in range(int(T/self.dt)):
             x = self.run_1step(x)
