@@ -178,7 +178,7 @@ def apply_ensemble_transform(ens_prior, weights):
     for m in range(nens):
         sum_wgts = np.sum(weights[:, m])
         if np.abs(sum_wgts - 1) > 1e-5:
-            print('Warning: sum of weights != 1 detected!')
+            raise RuntimeError('ETKF: sum of weights != 1 detected! Aborting...')
 
     # apply the weights
     for m in range(nens):
