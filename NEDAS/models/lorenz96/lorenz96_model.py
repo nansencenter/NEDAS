@@ -74,6 +74,8 @@ class Lorenz96Model(Model[Grid1D]):
         # check if any state becomes NaN
         if np.isnan(x_in).any():
             raise RuntimeError('NaN detected in lorenz96 model state. Aborting...')
+        if np.isinf(x_in).any():
+            raise RuntimeError('Inf detected in lorenz96 model state. Aborting...')
         # run model forward in time to reach duration T:
         x = x_in.copy()
         for _ in range(int(T/self.dt)):
