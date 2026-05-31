@@ -39,7 +39,7 @@ well before committing resources to full-scale operational implementation.
    :caption: User interfaces
 
    NEDAS.models
-   NEDAS.dataset
+   NEDAS.datasets
    NEDAS.job_submitters
 
 .. toctree::
@@ -47,8 +47,10 @@ well before committing resources to full-scale operational implementation.
    :caption: API documentation
 
    NEDAS.schemes
+   NEDAS.core
    NEDAS.assim_tools
    NEDAS.config
    NEDAS.grid
+   NEDAS.io_backends
    NEDAS.diag
    NEDAS.utils

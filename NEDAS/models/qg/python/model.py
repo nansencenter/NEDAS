@@ -9,7 +9,7 @@ PV equation (spectral):
   dq/dt = J(ψ, q) + β·∂ψ/∂x + (mean-flow terms) + (dissipation) + (forcing)
 
 PV-streamfunction relation:
-  q = -|k|²ψ + S·ψ   (S = tridiagonal stratification operator)
+  q = -\\|k\\|²ψ + S·ψ   (S = tridiagonal stratification operator, \\|k\\| = wavenumber magnitude)
 
 Time integration: leapfrog with Robert (Asselin) filter, adaptive timestep.
 
@@ -21,6 +21,8 @@ Wavenumber grids: shape (nky, nkx)
 
 Usage
 -----
+::
+
     m = QGModel(kmax=63, nz=4, F=50.0, beta=1.5, ...)
     m.initialize()
     for _ in range(1000):
@@ -244,7 +246,7 @@ class QGModel:
     def get_pv(self, psi):
         """Compute PV q from streamfunction ψ (spectral).
 
-        q = -|k|²ψ + S·ψ
+        q = -\\|k\\|²ψ + S·ψ
 
         Translates Fortran Get_pv in qg_run_tools.f90.
         psi : (nz, nky, nkx)  or  (nv, nky, nkx) for surf_buoy

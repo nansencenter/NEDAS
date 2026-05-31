@@ -18,14 +18,16 @@ def pwrspec2d(fld):
     the spherical harmonics instead.
 
     Input:
-    - fld: np.array, [..., ny, nx]
+
+    - fld: np.array, shape (..., ny, nx)
       n-dimensional input field, the last two dimensions are the horizontal directions (y,x)
 
     Returns:
-    - wn: np.array, [nup]
+
+    - wn: np.array, shape (nup,)
       Wavenumber in 2D, int(k2d), nup is the max wavenumber given ny,nx (whichever is larger)
 
-    - pwr: np.array, [..., nup]
+    - pwr: np.array, shape (..., nup)
       The power spectrum, leading dimensions the same as fld but ny,nx replaced by nup.
     """
     ny, nx = fld.shape[-2:]

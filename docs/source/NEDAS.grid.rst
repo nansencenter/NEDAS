@@ -1,43 +1,18 @@
-Grid tools
-==========
+NEDAS.grid package
+==================
 
-NEDAS.grid.grid module
-----------------------
-
-.. automodule:: NEDAS.grid.grid
-   :members:
+.. automodule:: NEDAS.grid
+   :no-index:
    :show-inheritance:
-   :undoc-members:
 
-NEDAS.grid.grid\_base module
-----------------------------
+Submodules
+----------
 
-.. automodule:: NEDAS.grid.grid_base
-   :members:
-   :show-inheritance:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 4
 
-NEDAS.grid.grid\_regular module
--------------------------------
-
-.. automodule:: NEDAS.grid.grid_regular
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.grid.grid\_irregular module
----------------------------------
-
-.. automodule:: NEDAS.grid.grid_irregular
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.grid.grid\_1d module
---------------------------
-
-.. automodule:: NEDAS.grid.grid_1d
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
+   NEDAS.grid.grid
+   NEDAS.grid.grid_1d
+   NEDAS.grid.grid_2d_base
+   NEDAS.grid.grid_irregular
+   NEDAS.grid.grid_regular

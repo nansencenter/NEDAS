@@ -324,11 +324,12 @@ class OfflineScheduler:
 
     def submit_job(self, name: str, job: Callable, *args, **kwargs) -> None:
         """
-        Submit a job to the scheduler, hold info in jobs dict
-        Input:
-        - name (str): is a unique name to identify this job
-        - job (Callable), is_running and kill methods
-        - *args, **kwargs are to be passed into job()
+        Submit a job to the scheduler, hold info in jobs dict.
+
+        Args:
+            name (str): unique name to identify this job
+            job (Callable): callable with is_running and kill methods
+            ``*args``, ``**kwargs``: passed into job()
         """
         self.jobs[name] = {'worker_id':None, 'start_time':None, 'job':job,
                            'args': args, 'kwargs': kwargs, 'future':None }

@@ -31,8 +31,8 @@ class MeshPhysicalName:
         '''
         add a physical name to the output file
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fid : _io.TextIOWrapper
         '''
         fid.write('%i %i "%s"\n' %(
@@ -43,8 +43,8 @@ class MeshElement:
 
     def __init__(self, ident, eltype, tags, node_ids, node_indices):
         """
-        Parameters:
-        -----------
+        Parameters
+        ----------
         ident : int
             element number
         eltype : int
@@ -73,15 +73,15 @@ class MeshElement:
         """
         clist = self.get_coords(xnod,ynod)
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xnod : np.ndarray
             x coords of nodes
         ynod : np.ndarray
             y coords of nodes
 
-        Returns:
-        --------
+        Returns
+        -------
         clist : list
             list of tuples with x,y coords of nodes for the element
         """
@@ -91,8 +91,8 @@ class MeshElement:
         '''
         add the element info to the output file
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fid : _io.TextIOWrapper
         '''
         lst = ['%i %i %i' %(
@@ -108,8 +108,8 @@ class GmshBoundary:
     def __init__(self, exterior, islands=None,
             open_boundaries=None, coastal_boundaries=None):
         """
-        Parameters:
-        -----------
+        Parameters
+        ----------
         exterior : shapely.geometry.Polygon
         islands : list(shapely.geometry.Polygon)
             - internal closed boundaries
@@ -132,8 +132,8 @@ class GmshBoundary:
         """
         Set the x-y range
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xe : numpy.ndarray
             x coords of exterior polygon
         ye : numpy.ndarray
@@ -155,8 +155,8 @@ class GmshBoundary:
         """
         Estimate the mesh resolution
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xe : numpy.ndarray
             x coords of exterior polygon
         ye : numpy.ndarray
@@ -175,14 +175,14 @@ class GmshBoundary:
         """
         Test if coords are inside a polygon
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         poly : shapely.geometry.Polygon
-        coords : numpy.ndarray(float)
-            shape (num_points,2) with x in 1st column and y in 2nd
+        coords : numpy.ndarray
+            shape (num_points, 2) with x in 1st column and y in 2nd
 
-        Returns:
-        --------
+        Returns
+        -------
         inside : numpy.ndarray(bool)
             length is num_points
         """
@@ -194,19 +194,18 @@ class GmshBoundary:
         use matplotlib.path to test if multiple points are contained
         inside the polygon self.exterior_polygon
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         x: numpy.ndarray
             x coordinates to test
         y: numpy.ndarray
             y coordinates to test
 
-        Returns:
-        --------
-        wet : numpy.ndarray(bool)
-            mask of same shape as x and y
-            - element is True/False if corresponding point is inside/outside the mesh
-              (inside external poly but outside island ones)
+        Returns
+        -------
+        wet : numpy.ndarray
+            mask of same shape as x and y; True if the point is inside the mesh
+            (inside external polygon but outside island polygons), False otherwise.
         """
         coords = np.array([x.flatten(), y.flatten()]).T
         # test if inside external polygon

@@ -77,10 +77,10 @@ class IOBackend(ABC):
             c (Context): the runtime context
             tag (str): which copy of the model state to request io from: "prior", "post" or "truth"
             method (Callable): method name
-            *args, **kwargs: will be passed to the method
+            ``*args``, ``**kwargs``: will be passed to the method
 
         Returns:
-            Any: whatever the method(**kwargs) returns
+            Any: whatever the method(``**kwargs``) returns
         """
         ...
 

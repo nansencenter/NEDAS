@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""---------------------------------------------------------------------------
-AMSR Ocean Algorithm; Frank J. Wentz, Thomas Meissner; Remote
+"""AMSR Ocean Algorithm; Frank J. Wentz, Thomas Meissner; Remote
 Sensing Systems; Version 2; November 2; 2000.
+
 Tb=f(V,W,L,Ts,Ti,c_ice)
-V: columnar water vapor [mm]
-W: windspeed over water [m/s]
-L: columnar cloud liquid water [mm]
-Ts: sea surface temperature [K]
-Ti_ansrx: ice effective temperature [K]
-c_ice: ice concentration [0-1]
-e_icex: ice emissivity
--------------------------------------------------------------------------------"""
+
+- V: columnar water vapor [mm]
+- W: windspeed over water [m/s]
+- L: columnar cloud liquid water [mm]
+- Ts: sea surface temperature [K]
+- Ti_ansrx: ice effective temperature [K]
+- c_ice: ice concentration [0-1]
+- e_icex: ice emissivity
+"""
 import numpy as np
 import xarray as xr  #type: ignore
 import cmath
@@ -115,12 +116,14 @@ def calc_epsilon(Ts, channel, freq = None) :
     """
     Calculates the dielectric constant ε of sea water (epsilon)
 
-    :Parameters:
+    Parameters
+    ----------
     Ts : float, numpy array
         Surface temperature
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     epsilon: float or numpy array
         Dielectric constant of sea water
     """
@@ -161,7 +164,8 @@ def calc_ocean_emissivity(W, Ts, theta, channel) :
     """
     Calculates emissivity of sea surface
 
-    :Parameters:
+    Parameters
+    ----------
     W : float, numpy array
         Windspeed over water
     Ts : float, numpy array
@@ -170,7 +174,8 @@ def calc_ocean_emissivity(W, Ts, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     emissivity: float or numpy array
         Sea surface emissivity
     """
@@ -216,7 +221,8 @@ def calc_emissivity(V, L, Ts, Tb, theta, channel) :
     """
     Calculates effective surface emissivity
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     L : float, numpy array
@@ -229,7 +235,8 @@ def calc_emissivity(V, L, Ts, Tb, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     emissivity: float or numpy array
         Effective surface emissivity
     """
@@ -243,7 +250,8 @@ def calc_transmittance(V, L, Ts, TD, theta, channel):
     """
     Calculates athmosphere transmittance
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     L : float, numpy array
@@ -256,7 +264,8 @@ def calc_transmittance(V, L, Ts, TD, theta, channel):
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     tau: float or numpy array
         Athmosphere transmittance
     """
@@ -279,7 +288,8 @@ def calc_down_up_welling(V, L, Ts, theta, channel) :
     """
     Calculates atmosphere up and downwelling temperatures
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     L : float, numpy array
@@ -290,7 +300,8 @@ def calc_down_up_welling(V, L, Ts, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     TD, TBD, TU, TBU, tau : floats or numpy arrays
         TD : Effective downwelling temperature
         TBD : Downwelling brightness temperature
@@ -321,14 +332,16 @@ def calc_omega(W, tau, channel, freq = None) :
     """
     Calculates correction factor for sea surface reflectance
 
-    :Parameters:
+    Parameters
+    ----------
     W : float, numpy array
         Windspeed over water
     tau: float or numpy array
         Athmosphere transmittance
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     omega: float or numpy array
         Correction factor for sea surface reflectance
     """
@@ -355,7 +368,8 @@ def observed_tb(V, W, L, Ts, ice_conc, theta, channel) :
     Calculates brightness temperature as seen by the sensor over sea.
     No correction for wind direction.
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     W : float, numpy array
@@ -370,7 +384,8 @@ def observed_tb(V, W, L, Ts, ice_conc, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     Tb : float or numpy array
         Observed brightness temperature
 
@@ -415,7 +430,8 @@ def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel) :
     Simulates brightness temperature from constant ice and water emissivity values.
     No correction for wind direction.
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     W : float, numpy array
@@ -430,7 +446,8 @@ def simulated_tb_v01(V, W, L, Ts, ice_conc, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     Tb : float or numpy array
         Simulated brightness temperature
     """
@@ -467,7 +484,8 @@ def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel) :
     Simulates brightness temperature from constant ice and computed water emissivity values.
     No correction for wind direction.
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     W : float, numpy array
@@ -482,7 +500,8 @@ def simulated_tb_v02(V, W, L, Ts, ice_conc, theta, channel) :
         Incidence angle
     channel : {'6v', '6h', '10v', '10h', '19v', '19h', '22v', '22h', '37v', '37h', '50v', '50h', '52v', '52h', '90v', '90h'}
 
-    :Returns:
+    Returns
+    -------
     Tb : float or numpy array
         Simulated brightness temperature
 
@@ -517,7 +536,8 @@ def calc_emissivity_plan(x, y, channel, dict_coeffs) :
     Computes emissivity (z) as a plan: z = a1*x + a2*y + c
     Coefficients a1, a2, c have been computed from TPD files with SIC = 1
 
-    :Parameters:
+    Parameters
+    ----------
     x, y : float, numpy array
             input variables of plane with x, y = T2M, DAL
     a1, a2 : float
@@ -525,7 +545,8 @@ def calc_emissivity_plan(x, y, channel, dict_coeffs) :
     c : float
         value of intercept
 
-    :Returns:
+    Returns
+    -------
     z : float or numpy array
         Simulated emissivity
     """
@@ -541,7 +562,8 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
     Simulates brightness temperature from computed ice and water emissivity values.
     No correction for wind direction.
 
-    :Parameters:
+    Parameters
+    ----------
     V : float, numpy array
         Columnar water vapor
     W : float, numpy array
@@ -564,7 +586,8 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
     dict_coeffs : dictionnary, dict_coeffs[channel]['a1'], dict_coeffs[channel]['a2'], dict_coeffs[channel]['c']
                  Coefficients for computation of ice emissivity from DAL and Ts
 
-    :Returns:
+    Returns
+    -------
     Tb : float, numpy array
         Simulated brightness temperature
     """

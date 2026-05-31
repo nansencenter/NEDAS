@@ -80,17 +80,9 @@ def perturb_restart(restart_options:dict, file_options:dict, debug=False) -> Non
         perturbation options under the section of `perturb` from the yaml file
     file_options : dict
         This dictionary is constructed before the function is called.
-        It contains the following keys
-        - fname : str
-            forcing file name.
-            This has to be the file that will be perturbed, e.g. in the ensemble directory.
-            This is usually derived before it is called.
-        - lon_name: str
-            name of the longitude variable in the forcing file.
-            This is obtained from the files/restart section of the model configuration file.
-        - lat_name: str
-            name of the latitude variable in the forcing file
-            This is obtained from the files/restart section of the model configuration file.
+        Keys: fname (str, path to the file to perturb), lon_name (str, longitude
+        variable name from the restart section of the model config),
+        lat_name (str, latitude variable name from the restart section of the model config).
     """
 
     # perturbation arrays

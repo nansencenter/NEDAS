@@ -143,7 +143,7 @@ class SerialAssimilator(Assimilator):
         Compute observation-space analysis increments.
 
         Args:
-            obs_prior (np.ndarray): Observation priors, 1D array of type int size nens
+            obs_prior (np.ndarray): Observation priors, 1-D float array of length nens
             obs (float): The real observation value
             obs_err (float): Observation error std
 
@@ -161,9 +161,9 @@ class SerialAssimilator(Assimilator):
         Update the local state vector with the analysis increments.
 
         Args:
-            state_data (np.ndarray[(nens, nfld, nloc), float]): Local state vector
-            obs_prior (np.ndarray[nens, float]): Observation priors
-            obs_incr (np.ndarray[nens, float]): Analysis increments
+            state_data (np.ndarray): Local state vector, shape (nens, nfld, nloc)
+            obs_prior (np.ndarray): Observation priors, shape (nens,)
+            obs_incr (np.ndarray): Analysis increments, shape (nens,)
 
         """
         pass

@@ -179,7 +179,7 @@ def ran(nx, ny):
 # ---------------------------------------------------------------------------
 
 def ring_integral(f, kxv, kyv, nf):
-    """Integrate field f over rings of constant |k|.
+    """Integrate field f over rings of constant ``|k|`` (wavenumber magnitude).
 
     f    : (..., nky, nkx) or (nky, nkx)
     Returns (..., nf) or (nf,) ring-averaged values.

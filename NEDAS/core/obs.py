@@ -220,14 +220,15 @@ class Obs:
         """
         Interpolate f(k) with z(k) coords vertically to the obs z locations.
 
-        Vertical interp to obs_z, take ocean depth as example:
-        :   -  -  -  -                       :
-            ------------z[k-2] ------------------------
-        k-1 -  -  -  -  f[k-1], fp  }dzp  prevous layer
-            ----------  z[k-1], zp --------------------
-        k   -  -  -  -  v[k],   f   }dz   current layer
-            ----------  z[k],   z  --------------------
-        k+1 -  -  -  -  v[k+1]
+        Vertical interp to obs_z, take ocean depth as example::
+
+            :   -  -  -  -                       :
+                ------------z[k-2] ------------------------
+            k-1 -  -  -  -  f[k-1], fp  }dzp  prevous layer
+                ----------  z[k-1], zp --------------------
+            k   -  -  -  -  v[k],   f   }dz   current layer
+                ----------  z[k],   z  --------------------
+            k+1 -  -  -  -  v[k+1]
 
         layer thickness of the current level k is denoted as z, for the previous level as zp;
         the variable f are considered layer averages, so they are defined at layer centers.

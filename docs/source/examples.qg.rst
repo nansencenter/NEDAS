@@ -44,11 +44,13 @@ To make more detailed changes (such as localization and inflation parameters),
 you can make a copy of the YAML configuration file
 
 .. code-block:: bash
+
    cp /app/config.yml /work/new-config.yml
 
 then edit it externally from ``YOUR_WORK_PATH/new-config.yml`` and run it with
 
 .. code-block:: bash
+
    python -m NEDAS -c /work/new-config.yml
 
 You can also turn on debug mode ``--debug=on`` to have more detailed runtime messages.

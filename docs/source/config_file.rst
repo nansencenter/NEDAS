@@ -44,15 +44,14 @@ Description of entries
 ----------------------
 
 System paths and runtime environment
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 55 25
 
    * - Entry
      - Description
-     - Default
+     - Default (from ``NEDAS/config/default.yml``)
    * - ``work_dir``
      - Working directory for running the analysis scheme.
      - 'work'
@@ -66,99 +65,171 @@ System paths and runtime environment
 
        this script before running the python command.
      - None
-   * - ``job_submit``
-     - Runtime job submitter settings, which are passed to
+   * - ``io_mode``
+     - I/O mode.
 
-       :func:`NEDAS.utils.shell_utils.run_job` as kwargs.
+       ``'online'`` keeps model/dataset data in memory;
+       
+       ``'offline'`` uses files on disk.
+     - 'offline'
+   * - ``job_submit``
+     - Runtime job submitter settings.
+
+       These options are forwarded to the job submitter
+       
+       (see :doc:`NEDAS.job_submitters`).
      - See details in Table 2.
    * - ``nproc``
-     - Number of processors to use for the analysis step.
-     - 10
+     - Total number of processors used when a step is
+     
+       executed under MPI.
+     - 1
    * - ``nproc_mem``
-     - Number of processors in a "member group",
+     - Number of processors in a "member group" when 
+     
+       distributing ensemble members.
 
-       which splits the MPI communicator ``comm`` of size ``nproc``
+       If not set in YAML, the code sets ``nproc_mem = nproc``
+       
+       and computes ``nproc_rec = nproc / nproc_mem``.
 
-       into ``comm_mem`` of size ``nproc_mem``
-
-       If None, no splitting is done.
+       Must evenly divide ``nproc``.
      - None
+     
+       (interpreted as ``nproc``)
    * - ``nproc_util``
-     - Number of processors to use for utility steps,
+     - Number of processors to use for utility steps (preprocess,
+     
+       postprocess, diagnose, etc.).
 
-       such as preproc, postproc, diagnose, etc.
-
-       If None, will use the same as ``nproc``.
+       If not set in YAML, the code uses ``nproc_util = nproc``.
      - None
 
 .. list-table:: Table 1. Breakdown of ``directories`` dictionary
    :header-rows: 1
-   :widths: 20 30 50
 
    * - Key
      - Description
      - Default
    * - ``cycle_dir``
-     - Directory for each
-
-       analysis cycle
-     - '{work_dir}/cycle/{time:%Y%m%d%H%M}'
-   * - ``analysis_dir``
-     - Directory for the
-
-       assimilation step
-     - '{work_dir}/cycle/{time:%Y%m%d%H%M}/analysis'
+     - Directory for each analysis cycle.
+     - | '{work_dir}/cycle/
+       | {time:%Y%m%d%H%M}'
    * - ``forecast_dir``
-     - Directory for the
-
-       ensemble forecast step
-     - '{work_dir}/cycle/{time:%Y%m%d%H%M}/{model_name}'
+     - Directory for the ensemble forecast step.
+     - | '{work_dir}/cycle/
+       | {time:%Y%m%d%H%M}/
+       | {model_name}'
+   * - ``analysis_dir``
+     - Directory for the assimilation step
+     
+       (outer-loop iteration ``iter`` is part of the path).
+     - | '{work_dir}/cycle/
+       | {time:%Y%m%d%H%M}/
+       | analysis/{iter}'
 
 .. list-table:: Table 2. Breakdown of ``job_submit`` dictionary.
    :header-rows: 1
-   :widths: 20 30 50
 
    * - Key
      - Description
      - Examples
    * - ``host``
-     - Host machine name, machine-specific behavior
+     - Host machine type.
 
-       in job scheduling can be defined in the
-
-       corresponding subclass in :doc:`NEDAS.job_submitters`.
-     - None, 'laptop', 'betzy', etc.
-   * - ``project``
-     - Project number for resource allocation
-     - None, 'nn2993k', etc.
-   * - ``queue``
-     - Name of the scheduler queue to submit jobs to
-     - None, 'normal', 'devel', etc.
+       Machine-specific behavior can be defined 
+       
+       in the corresponding subclass
+       
+       in :doc:`NEDAS.job_submitters`.
+     - 'local', 'betzy', ...
    * - ``scheduler``
      - Scheduler type.
+     - None, 'slurm', 'oar', 'pbs', ...
+   * - ``project``
+     - Project number for resource allocation.
+     - None, 'nn2993k', ...
+   * - ``queue``
+     - Name of the scheduler queue to
+     
+       submit jobs to (HPC).
+     - None, 'normal', 'devel', ...
+   * - ``parallel_mode``
+     - Parallelization strategy to request
+     
+       from the job submitter.
+     - 'serial', 'mpi', 'openmp'
 
-       Typically a separate :doc:`NEDAS.job_submitters`
-
-       subclass is defined for each scheduler type.
-     - None, 'slurm', 'oar', 'pbs', etc.
-   * - ``ppn``
-     - Number of available processors
-
-       per compute node
-     - 128
-
-Analysis scheme design parameters
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Runtime logging
+^^^^^^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 40 40
+
+   * - Entry
+     - Description
+     - Default
+   * - ``debug``
+     - If True, show extra debug messages and output intermediate
+     
+       data during runtime.
+     - False
+   * - ``timer``
+     - If True, show elapsed time for major steps in the workflow.
+     - True
+   * - ``interactive``
+     - If True, allow ANSI escape codes (colors, cursor movement)
+     
+       in terminal output.
+
+       If None, auto-detected from the terminal environment.
+     - True
+   * - ``quiet``
+     - If True, suppress most runtime status output.
+     - False
+   * - ``call_stack``
+     - Current call stack context string, set automatically
+     
+       at runtime.
+     - None
+   * - ``call_stack_max_level``
+     - Maximum call stack depth to display in status output.
+
+       If None, all levels are shown.
+     - 2
+   * - ``is_notebook``
+     - If True, adapt output formatting for Jupyter notebooks.
+
+       If None, auto-detected.
+     - None
+   * - ``cols``
+     - Terminal width in characters used for formatting status lines.
+
+       If None, auto-detected from the terminal.
+     - None
+   * - ``anchor``
+     - Number of characters reserved for the left (description)
+     
+       part of status lines.
+     - 50
+   * - ``tabspace``
+     - Number of spaces per call stack level indentation.
+     - 4
+   * - ``progress_bar_width``
+     - Width of the progress bar in characters.
+     - 10
+
+Analysis scheme design parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
 
    * - Key
      - Description
      - Default
    * - ``nens``
-     - Ensemble size
+     - Ensemble size.
      - 20
    * - ``run_preproc``
      - Whether to run the preprocessing step.
@@ -167,41 +238,42 @@ Analysis scheme design parameters
      - Whether to run the ensemble forecast step.
      - True
    * - ``run_analysis``
-     - Whether to run the analysis step.
+     - Whether to run the analysis (assimilation) step.
+     - True
+   * - ``run_postproc``
+     - Whether to run the postprocessing step after assimilation.
      - True
    * - ``run_diagnose``
      - Whether to run the diagnostic tools.
      - True
-   * - ``debug``
-     - If True, show extra debug message and output
-
-       intermediate data during runtime.
+   * - ``save_checkpoint``
+     - If True, save checkpoints of model state and observations
+     
+       between cycles.
      - False
-   * - ``timer``
-     - If True, show elapsed time for each
-
-       major steps in the workflow.
-     - True
    * - ``step``
      - Used by :mod:`NEDAS.schemes.filter`.
 
        If None, will run the entire workflow.
 
-       Otherwise, will only run the specified step
+       Otherwise, will only run the specified step.
 
-       defined in the workflow at ``time``.
-     - None, 'preprocess', 'postprocess',
-
-       'filter', 'perturb', 'diagnose',
-
-       or 'ensemble_forecast'.
+       (Valid step names depend on the scheme; for the filter scheme
+       
+       these include ``run_all``, ``prepare_truth``, 
+       
+       ``prepare_init_ensemble``, ``preprocess``, ``perturb``,
+       
+       ``filter``, ``postprocess``, ``ensemble_forecast``,
+       
+       and ``diagnose``.)
+     - None
 
 Time controls
 ^^^^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
@@ -214,15 +286,21 @@ Time controls
      - 2001-01-30T00:00:00Z
    * - ``time_analysis_start``
      - Time of the first analysis cycle.
+
+       Defaults to ``time_start`` if not set.
      - 2001-01-07T00:00:00Z
    * - ``time_analysis_end``
      - Time of the last analysis cycle.
+
+       Defaults to ``time_end`` if not set.
      - 2001-01-28T00:00:00Z
    * - ``cycle_period``
      - Interval in hours between analysis cycles.
-     - 24
+     - 12
    * - ``time``
-     - Time of the current analysis cycle.
+     - Time of the current analysis cycle,
+     
+       set automatically at runtime.
 
        If None, will start at ``time_start``.
      - None
@@ -250,7 +328,6 @@ The ``grid_def`` entry is a dictionary with the following entries:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 55 25
 
    * - Key
      - Description
@@ -276,7 +353,6 @@ The ``grid_def`` entry is a dictionary with the following entries:
 
 .. list-table:: Table 3. Additional kwargs for custom regular grid generation.
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
@@ -326,7 +402,6 @@ The ``state_def`` entry is a list, each item is a dictionary that defines one mo
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
@@ -342,7 +417,7 @@ The ``state_def`` entry is a list, each item is a dictionary that defines one mo
      - Name of the model this variable comes from.
 
        Should be one of the keys in ``model_def``.
-     - 'qg'
+     - 'qg.fortran'
    * - ``var_type``
      - Variable type.
      - 'field', or 'scalar'
@@ -354,7 +429,6 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
@@ -373,7 +447,8 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
        to setup twin experiments.
      - None,
 
-       'models/qg/default.yml'
+       | '{nedas_root}/models/qg/
+       | fortran/default.yml'
    * - ``model_env``
      - Initialization script for model.
 
@@ -382,8 +457,8 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
        this script before running the model forecast.
      - 'setup.src'
    * - ``model_code_dir``
-     - Path to the model code.
-     - '{nedas_root}/models/qg'
+     - Path to the model code directory.
+     - '{nedas_root}/models/qg/fortran'
    * - ``nproc_per_run``
      - Number of processors to use for a model forecast.
      - 1
@@ -400,7 +475,9 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
      - Model boundary condition interval in hours.
      - 24
    * - ``ens_run_strategy``
-     - Strategy for running tasks involving an ensemble of tasks.
+     - Strategy for running tasks involving
+     
+       an ensemble of tasks.
 
        'scheduler': run each member as a separate job
 
@@ -421,7 +498,9 @@ The ``model_def`` entry is a dictionary, with model_name as keys pointing to a d
    * - ``truth_dir``
      - Directory where the truth files are located.
 
-       If ``use_synthetic_obs`` this is mandatory.
+       This is required when using synthetic observations 
+       
+       that are generated from a truth run.
      - '{work_dir}/truth'
 
 Observation definition
@@ -431,7 +510,6 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
@@ -447,12 +525,12 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
      - Name of the dataset the observation comes from.
 
        Should be one of the keys in ``dataset_def``.
-     - 'qg'
+     - 'synthetic'
    * - ``model_src``
      - Name of the model from which to compute the
 
-       observation priors .
-     - 'qg'
+       observation priors.
+     - 'qg.fortran'
    * - ``nobs``
      - Number of observations.
 
@@ -494,7 +572,6 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
 
 .. list-table:: Table 4. Breakdown of the observation error definition dictionary.
    :header-rows: 1
-   :widths: 20 55 25
 
    * - Key
      - Description
@@ -517,7 +594,7 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
    * - ``cross_corr``
      - Cross-variable correlation in observation error. A dictionary
 
-       {variable_name: corr} listing the correlation between self 
+       {variable_name: corr} listing the correlation between self
 
        and other variable_name. Auto-correlation is always 1,
 
@@ -528,11 +605,17 @@ The ``dataset_def`` entry is a dictionary, with dataset_name as keys pointing to
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
      - Example
+   * - ``model_src``
+     - Name of the model used for computing
+     
+       observation priors for this dataset.
+
+       Should be one of the keys in ``model_def``.
+     - 'qg.fortran'
    * - ``config_file``
      - YAML configuration file for the dataset.
 
@@ -543,215 +626,231 @@ The ``dataset_def`` entry is a dictionary, with dataset_name as keys pointing to
        Additional entries added below will overwrite
 
        the settings in the YAML file.
-     - None,
-
-       'dataset/qg/default.yml'
+     - None
    * - ``dataset_dir``
-     - Path to the dataset files
-     - 'data'
+     - Path to the dataset files.
+
+       (For synthetic observations this can be left empty.)
+     - None
    * - ``obs_window_min``
-     - Start of the observation window,
-
-       hours relative to the analysis time.
-     - -12
+     - Start of the observation window, hours relative to 
+     
+       the analysis time.
+     - -6
    * - ``obs_window_max``
-     - End of the observation window,
-
-       hours relative to the analysis time.
-     - 12
+     - End of the observation window, hours relative to 
+     
+       the analysis time.
+     - 0
 
 Some additional parameters:
 
+Synthetic observations are enabled by using a synthetic dataset in ``obs_def`` (e.g. ``dataset_src: synthetic``)
+and providing a corresponding entry in ``dataset_def``.
+
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
-     - Default
-   * - ``use_synthetic_obs``
-     - Whether to use synthetic observations generated
-
-       from the truth.
-     - True
+     - Default (from ``NEDAS/config/default.yml``)
    * - ``shuffle_obs``
      - Whether to randomize the order of observations.
      - False
    * - ``z_coords_from``
      - Where the reference vertical coordinates come from.
      - 'mean'
+   * - ``interp_method``
+     - Interpolation method used when mapping between grids.
+     - 'linear'
 
 Perturbation
 ^^^^^^^^^^^^
 
-The ``perturb`` entry is a list, each element is a dictionary with kwargs that will be passed to :func:`utils.random_perturb`
-to perform the perturbation.
+The top-level ``perturb`` entry controls the optional perturbation step.
+In the default configuration it is left empty/None (no perturbation).
+
+If enabled, ``perturb`` should be a list of dictionaries. Each dictionary defines a perturbation to apply
+to one ensemble member and one or more variables (see :mod:`NEDAS.core.perturb`).
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
-     - Default
+     - Example
    * - ``variable``
-     - Name of variable to be perturbed.
+     - Variable name (string) or list of variable names 
+     
+       to perturb.
      - 'streamfunc'
    * - ``model_src``
-     - Name of the model the variable comes from.
-     - 'qg'
+     - Model name the variable(s) come from 
+     
+       (a key in ``model_def``).
+     - 'qg.fortran'
    * - ``type``
-     - Type of random perturbation.
+     - Perturbation type string.
 
-       Use ',' to join multiple options
-     - 'gaussian,exp'
+       The first token selects the main method: 
+       
+       ``gaussian``, ``powerlaw``, or ``displace``.
+
+       Additional options can be appended with commas 
+       
+       (e.g. ``gaussian,exp``).
+     - 'gaussian'
    * - ``amp``
-     - Amplitude of the perturbation.
+     - Perturbation amplitude.
      - 0.1
    * - ``hcorr``
-     - Horizontal correlation length of the
-
-       perturbation, in coordinate units
+     - Horizontal correlation length
+     
+       (needed by ``gaussian`` and ``displace``).
      - 15
    * - ``tcorr``
-     - Temporal correlation length of the
+     - Temporal correlation length (hours) used
 
-       perturbation, in hours
+       to correlate perturbations between cycles/time steps.
      - 0
+   * - ``powerlaw``
+     - Power-law exponent
+     
+       (needed by ``powerlaw`` perturbations).
+     - 4
    * - ``bounds``
-     - If set, the perturbed variable will
-
-       remain in the value range.
+     - Optional value bounds ``[vmin, vmax]`` enforced
+     
+       after perturbation.
      - [0, inf]
+   * - ``seed``
+     - Optional random seed.
+     - 1234
 
-If no perturbation is needed, you can also leave ``perturb`` as None.
+If no perturbation is needed, leave ``perturb`` empty/None.
 
 Assimilation method
 ^^^^^^^^^^^^^^^^^^^
 
-The following parameters helps :func:`get_scheme` to locate the right subclass of :class:`Scheme`.
-Currently only 'filter' and 'forecast' schemes are implemented.
-For the specific ``filter_type``, the corresponding :class:`Assimilator` subclass will be chosen to perform the filter step.
+The following parameters help NEDAS locate the correct analysis scheme and assimilation components.
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 35 45
 
    * - Key
      - Description
-     - Example
+     - Default / example
    * - ``scheme``
      - Type of analysis scheme to use.
      - 'filter'
-   * - ``assimilator``
-     - Type of filter
-     - 'ETKF' (for batch mode), 'EAKF' (for serial mode)
+   * - ``assimilator_def``
+     - Assimilator configuration dictionary.
 
-Assimilator-specific parameters are defined in ``assimilator`` dictionary.
+       The assimilator class is chosen by
+       
+       ``assimilator_def.type``.
+     - See below.
+   * - ``updator_def``
+     - Updator configuration dictionary
+     
+       (applies increments to produce posterior state).
 
-.. list-table::
+       Alignment-based updators are selected via 
+       
+       ``updator_def.type`` and further configured
+       
+       through ``updator_def.config_file``.
+     - See ``NEDAS/config/default.yml``
+   * - ``covariance_def``
+     - Covariance configuration dictionary.
+     - See ``NEDAS/config/default.yml``
+
+.. list-table:: Breakdown of ``assimilator_def``.
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
-     - Example
+     - Default
+   * - ``type``
+     - Assimilator type.
+     - 'ETKF'
    * - ``config_file``
-     - YAML configuration file for the assimilator.
+     - Optional YAML configuration file for the assimilator.
 
-       If not specified, will use ``default.yml``
+       If not specified, the assimilator module default is used.
+     - None
 
-       in the corresponding assimilator
-
-       module directory. Additional entries added
-
-       below will overwrite the settings.
-     - None,
-
-       'assimilators/ETKF/default.yml'
-
-Alignment technique configuration is stored in ``alignment`` as a dictionary:
+Covariance inflation parameters are stored in the ``inflation_def`` entry as a dictionary.
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
-
-   * - Key
-     - Description
-     - Example
-   * - ``interp_displace``
-     - If True, use interpolation to find the variables
-
-       on displaced analysis grid.
-
-       If False, displace the grid coordinates directly.
-     - False
-   * - ``variable``
-     - Name of the variable the alignment is based on.
-     - 'streamfunc'
-   * - ``method``
-     - Optical flow method.
-     - 'HS_pyramid'
-   * - ``nlevel``
-     - Number of resolution levels in pyramic approach
-     - 5
-   * - ``smoothness_weight``
-     - Weight in cost function to enforce
-
-       smoothness of displace vector field
-     - 1
-
-Covariance inflation parameters are stored in the ``inflation`` entry as a dictionary.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
      - Example
    * - ``type``
      - Type of inflation (post/prior, multiplicative/RTPP).
-     - 'post,RTPP'
+     - 'post,multiplicative'
    * - ``adaptive``
      - Whether to run an adaptive inflation scheme.
-     - True
+     - False
    * - ``coef``
      - Static inflation coefficient.
      - 1.0
 
 Covariance localization settings are separately defined for the spatial and temporal components.
-The ``localization`` entry is a dictionary with keys ``horizontal``, ``vertical`` and ``temporal``
+The ``localization_def`` entry is a dictionary with keys ``horizontal``, ``vertical`` and ``temporal``
 each pointing to a dictionary that defines its localization function parameters.
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 65 15
 
    * - Key
      - Description
      - Example
    * - ``type``
-     - Type of localization function to use. Distance-based (GC, step, exp)
+     - Type of localization kernel to use.
 
-       or correlation-based (NICE)
-     - 'GC'
-   * - ``config_file``
-     - YAML configuration file for this type of localization.
-     - None,
-       'default.yml'
+       Implemented types include ``gaspari_cohn``,
+       
+       ``step``, and ``exponential``.
+     - 'gaspari_cohn'
+
+State and observation transforms can be configured with the ``transform_def`` entry,
+which is a list of dictionaries each defining one transform to apply
+(see :mod:`NEDAS.assim_tools.transforms`).
+
+.. list-table:: Breakdown of a ``transform_def`` entry.
+   :header-rows: 1
+
+   * - Key
+     - Description
+     - Example
+   * - ``type``
+     - Transform type.
+
+       Built-in types include ``scale_bandpass`` (for multiscale DA)
+       
+       and ``identity``.
+     - 'scale_bandpass'
+   * - ``decompose_obs``
+     - If True, apply the same transform decomposition to 
+     
+       observations as well as state variables.
+     - False
 
 Multiscale approach configuration:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
      - Example
    * - ``niter``
-     - Number of outer-loop iterations, e.g. number of scale components in a multiscale approach.
+     - Number of outer-loop iterations, e.g. number of 
+     
+       scale components in a multiscale approach.
      - 1
    * - ``iter``
      - Current iteration number
@@ -764,10 +863,10 @@ Multiscale approach configuration:
        where ``dx`` is the grid spacing defined in ``grid_def``.
      - [0]
    * - ``character_length``
-     - Characteristic length (in grid coordinate units)
-
-       for each scale (large to small)
-     - [1]
+     - Characteristic length (in grid coordinate units) 
+     
+       for each scale (large to small).
+     - [16]
    * - ``localize_scale_fac``
      - Scale factor for localization distances.
      - [1]
@@ -778,28 +877,41 @@ Multiscale approach configuration:
 Diagnostic methods
 ^^^^^^^^^^^^^^^^^^
 
-The ``diag`` entry is a list, each element is a dictionary defining a diagnostic method to be run.
+The ``diag`` entry is a list. Each element is a dictionary defining a diagnostic method to be run.
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 45 35
 
    * - Key
      - Description
      - Example
    * - ``method``
-     - Name of the diagnostic method
+     - Name of the diagnostic method 
+     
+       (Python module path under ``NEDAS/diag``).
      - 'misc.convert_output'
    * - ``config_file``
-     - YAML configuration file for the method.
+     - Optional YAML configuration file
+     
+       for the method.
 
-       If not specified, will use ``default.yml``
-
-       in the corresponding method module
-
-       directory. Additional entries added
-
-       below will overwrite the settings.
-     - None,
-
-       'diag/misc/convert_output/default.yml'
+       If not specified, the method module
+       
+       default is used.
+     - None
+   * - ``model_src``
+     - Which model the diagnostic is applied to.
+     - 'qg.fortran'
+   * - ``variables``
+     - List of variables to process.
+     - ['streamfunc']
+   * - ``grid_def``
+     - Optional output grid definition; 
+     
+       if omitted, the model grid is used.
+     - None
+   * - ``file``
+     - Output filename format string.
+     - | '{work_dir}/output/
+       | mem{member:03}_
+       | {time:%Y-%m-%dT%H}.nc'

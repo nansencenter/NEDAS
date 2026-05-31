@@ -231,46 +231,19 @@ class NextsimDGModel(Model[RegularGrid]):
         return self.read_var(**{**kwargs, 'name':'seaice_thick_dg', 'k':0, 'units':'m'})
 
     def preprocess(self, task_id:int=0, **kwargs):
-        """Preprocessing method for nextsim.dg
+        """Preprocessing method for nextsim.dg.
+
         Parameters
         ----------
         task_id : int
             task id for parallel execution
-        self.nproc_per_util : int
+        nproc_per_util : int
             number of processors for each task
-        **kwargs : dict
-            keyword arguments for the model configuration
-            Keywords defined when the function is called:
-            - member : int
-                ensemble member id
-            - time : datetime
-                start time of the forecast
-            - time_start: datetime
-                initial time of the forecast cycles
-            - path : str
-                path to the working directory of the ensemble member
-            - forecast_period : int
-                number of hours being forecasted by model
-            - restart_dir : str
-                the saved restart directory from the previous cycle,
-                which is the model run directory from
-                the previous cycle. In the initial cycle, this
-                directory is given as `ens_init_dir` defined in
-                `nextsim.dg`` section of the `model_def` section
-                in nedas config file.
-        These are defined in the `config_file` entry of model_def:nextsim.dg section,
-        and parse_config will bring them in this class as
-            - self.files : dict
-                This section contains the filenames for the restart file.
-                This must have a `restart` key that defines the filename `format`
-                and the strftime `time_format` code of the restart filename.
-                If perturbation is used, this section must also have a `lon_name`
-                and `lat_name` key
-            - self.perturb : dict
-                perturbation options for the initial conditions.
-                See example configuration file for required keys and explanations.
-                This section is not necessary if the model does not use perturbation
-                for the initial conditions or forcings.
+        kwargs : dict
+            Runtime keyword arguments (member, time, time_start, path,
+            forecast_period, restart_dir). Additional class attributes
+            self.files and self.perturb are populated from the
+            model_def nextsim.dg config_file entry by parse_config.
         """
         kwargs = super().parse_kwargs(kwargs)
 

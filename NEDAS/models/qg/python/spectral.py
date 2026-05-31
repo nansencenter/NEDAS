@@ -42,7 +42,7 @@ def setup_spectral_grid(kmax):
 
     Returns a dict with keys:
       kxv, kyv          1-D wavenumber vectors
-      kx_, ky_, ksqd_   2-D wavenumber grids (nky, nkx)
+      ``kx_``, ``ky_``, ``ksqd_``   2-D wavenumber grids (nky, nkx)
       nx, ny, nkx, nky
       kxup, kyup        indices into the nx×ny physical array (positive side)
       kxdn, kydn        indices for the conjugate (negative) side
@@ -160,9 +160,9 @@ def spec2grid_cc(wf, g):
     """Spectral to physical transform with staggered-grid packing.
 
     wf : complex array, shape (..., nky, nkx)
-    Returns complex array shape (..., nx, ny):
-      real part  = physical field on straight grid
-      imag part  = physical field on staggered (half-shifted) grid
+
+    Returns complex array shape (..., nx, ny): real part = physical field on
+    straight grid, imag part = physical field on staggered (half-shifted) grid.
 
     Translates Fortran Spec2grid_cc2/3 from transform_tools.f90.
     """
