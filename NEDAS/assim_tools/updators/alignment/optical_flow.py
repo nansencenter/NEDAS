@@ -28,7 +28,7 @@ class OpticalFlow:
             v *= grid.dy
             return np.array([u, v])
 
-        elif self.method == 'HornSchunk_pyramid':
+        elif self.method == 'HornSchunck_pyramid':
             return optical_flow_HS_pyramid(grid, fld1, fld2, **self.kwargs)
 
         else:

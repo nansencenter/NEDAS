@@ -96,7 +96,6 @@ class Config:
     inflation_def: dict
     localization_def: dict
     transform_def: dict
-    alignment: dict|None
     diag: dict|None
 
     def __init__(self, config_file: str|None=None, parse_args: bool=False, **kwargs):
