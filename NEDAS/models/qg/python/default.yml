@@ -1,0 +1,80 @@
+nproc_per_run: 1
+nproc_per_util: 1
+restart_dt: 24
+output_dt: 24
+
+# Resolution
+kmax: 63       # max resolved wavenumber
+nz: 2          # number of vertical layers
+
+# Fundamental parameters
+F: 100.0       # f²L²/[(2π)²g'H₀]
+Fe: 0.0        # free-surface parameter
+beta: 16.0     # β₀L²/[(2π)²U]
+
+# Time stepping
+adapt_dt: false
+dt: 0.0025
+dt_tune: 1.5
+dt_step: 10    # recalculate adaptive dt every dt_step steps
+robert: 0.01   # Robert-Asselin filter coefficient
+
+# Time scaling: 1 day = tscale nondimensional units
+tscale: 0.1
+
+# Initial condition
+psi_init_type: 'spectral_m'   # spectral_m / spectral_z / read
+e_o: 10.0      # initial total kinetic energy
+k_o: 3         # peak wavenumber
+delk: 5.0      # spectral width
+m_o: 0         # modal peak (0 = barotropic)
+z_o: 0         # level of peak
+spinup_hours: 168
+
+# Stratification
+strat_type: 'linear'
+deltc: 0.1
+surface_bc: 'rigid_lid'   # rigid_lid / surf_buoy / periodic
+
+# Optional explicit layer geometry (null = equal layers / small linear rho increase)
+dz: null
+rho: null
+
+# Mean flow
+ubar_type: 'linear'   # uniform / linear
+delu: 0.1
+uscale: 0.2
+vscale: 0.0
+
+# Topography
+use_topo: false
+topo_type: 'spectral'
+k_o_topo: 10
+del_topo: 3.0
+
+# Markovian stochastic forcing
+use_forcing: false
+norm_forcing: false
+forc_coef: 0.0
+forc_corr: 0.0
+kf_min: 1.0
+kf_max: 3.0
+
+# Spectral filter
+filter_type: 'hyperviscous'   # hyperviscous / exp_cutoff / none
+filter_exp: 8.0
+filt_tune: 1.0
+k_cut: 0.0        # exp_cutoff wavenumber (only used when filter_type=exp_cutoff)
+dealiasing: 'isotropic'
+
+# Dissipation
+bot_drag: 0.5
+top_drag: 0.0
+therm_drag: 0.0
+quad_drag: 0.0
+qd_angle: 0.0
+
+# Miscellaneous
+idum: -7
+linear: false
+use_tracer: false
