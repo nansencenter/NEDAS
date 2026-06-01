@@ -1,6 +1,7 @@
 import os
 import inspect
 from functools import cached_property
+from typing import Optional
 from abc import ABC, abstractmethod
 import numpy as np
 import shapefile

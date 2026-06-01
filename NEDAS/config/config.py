@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 import NEDAS
 from NEDAS.utils import progress
 from .parse_config import parse_config
+from NEDAS.utils import parallel
+from NEDAS.grid import GridType
 
 class Config:
     """
@@ -34,6 +36,8 @@ class Config:
     pid_mem: int
     pid_rec: int
     pid_show: int  # avail in context
+    comm: parallel.Comm
+    grid: GridType
 
     # experiment design parameters
     nens: int
@@ -192,6 +196,69 @@ class Config:
             config_dict['nproc_util'] = config_dict['nproc']
 
         return config_dict
+
+    def set_analysis_grid(self):
+        """
+        Initialize the analysis grid based on the configuration.
+
+        If :code:`grid_def['type']` is 'custom', will create a analysis grid based on provided parameters.
+        If :code:`grid_def['type']` is a model name, will load the grid from the specified model class.
+        """
+        assert isinstance(self.grid_def, dict)
+        if self.grid_def['type'] == 'custom':
+            if 'proj' in self.grid_def and self.grid_def['proj'] is not None:
+                proj = Proj(self.grid_def['proj'])
+            else:
+                proj = None
+            xmin, xmax = self.grid_def['xmin'], self.grid_def['xmax']
+            ymin, ymax = self.grid_def['ymin'], self.grid_def['ymax']
+            dx = self.grid_def['dx']
+            known_keys = {'type', 'proj', 'xmin', 'xmax', 'ymin', 'ymax', 'dx', 'mask'}
+            other_opts = {k: v for k, v in self.grid_def.items() if k not in known_keys}
+            self.grid = NEDAS.grid.Grid.regular_grid(proj, xmin, xmax, ymin, ymax, dx, **other_opts)
+
+            self.grid.mask = np.full((self.grid.ny, self.grid.nx), False, dtype=bool)
+            if 'mask' in self.grid_def and self.grid_def['mask'] is not None:
+                model_name = self.grid_def['mask']
+                Model = NEDAS.models.get_model_class(model_name)
+                model = Model()
+                prepare_mask = getattr(model, 'prepare_mask', None)
+                if prepare_mask is not None:
+                    self.grid.mask = prepare_mask(self.grid)
+
+        else:
+            model_name = self.grid_def['type']
+            kwargs = self.model_def[model_name]
+            Model = NEDAS.models.get_model_class(model_name)
+            model = Model(**kwargs)
+            model_grid = getattr(model, 'grid')
+            if not isinstance(model_grid, GridType.__args__):
+                raise TypeError(f"Model {model_name} does not have a valid grid attribute.")
+            self.grid = model_grid
+
+    def set_models(self):
+        """
+        Initialize model instances based on :code:`model_def[model_name]` settings.
+        Store the model instances in :code:`models[model_name]`.
+        """
+        self.models = {}
+        for model_name, kwargs in self.model_def.items():
+            Model = NEDAS.models.get_model_class(model_name)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            self.models[model_name] = Model(**kwargs)
+
+    def set_datasets(self):
+        """
+        Initialize dataset instances based on :code:`dataset_def[dataset_name]` settings.
+        Store the dataset instances in :code:`datasets[dataset_name]`.
+        """
+        self.datasets = {}
+        for dataset_name, kwargs in self.dataset_def.items():
+            Dataset = NEDAS.datasets.get_dataset_class(dataset_name)
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            self.datasets[dataset_name] = Dataset(grid=self.grid, mask=self.grid.mask, **kwargs)
 
     def dump_yaml(self, config_file: str):
         """

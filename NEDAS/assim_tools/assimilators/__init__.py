@@ -8,6 +8,7 @@ registry = {
     'ETKF': 'ETKFAssimilator',
     'EAKF': 'EAKFAssimilator',
     'TopazDEnKF': 'TopazDEnKFAssimilator',
+    'QCEF': 'QCEFAssimilator',
     #'PDAF': 'PDAFAssimilator',
     #'RHF'
 }

@@ -7,6 +7,7 @@ class TestAnalysisScheme(unittest.TestCase):
     def setUp(self):
         self.c = Context()
 
+
     def test_assimilator_init(self):
         for assimilator_name in registry.keys():
             self.c.config.assimilator_def = {}
