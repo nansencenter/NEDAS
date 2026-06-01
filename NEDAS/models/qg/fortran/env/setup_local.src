@@ -1,0 +1,5 @@
+ulimit -s 2000000
+
+export FFTW_DIR=/usr
+export LIBM_DIR=/usr/lib64
+

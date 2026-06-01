@@ -58,4 +58,4 @@ def copy_time_sliced_nc_file(source_file:str, target_file,
 
 if __name__ == '__main__':
     copy_time_sliced_nc_file('/bettik/yumengch-ext/DATA/25km_NH.TOPAZ4_2010-01-01_2011-01-01.nc',
-                             'test.nc', np.arange(2), time_dimension_name='time', )
+                             'test.nc', np.arange(2), time_varname='time', time=datetime(2010,1,1))

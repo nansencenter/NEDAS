@@ -1,0 +1,136 @@
+from typing import Annotated, Sequence, Literal
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+import numpy as np
+
+# variable description for dataset and model classes
+VarName = Annotated[str, 'variable name']
+LevelID = Annotated[int, 'z level index']
+Levels = Annotated[np.ndarray | Sequence, 'z levels']
+Unit = Annotated[str | float, 'physical unit']
+
+@dataclass
+class VarDesc:
+    name: str | tuple[str, str]    # scalar or vector with two components
+    is_vector: bool                # if the variable is a vector quantity
+    dtype: str = 'float'           # data type for this variable
+    dt: float = 1                  # restart intervals in hours
+    levels: Levels = field(default_factory=lambda: [0])  # vertical level indices
+    units: Unit = 1                # physical units (default is nondimensional)
+    z_units: Unit = 1              # units for vertical coordinates
+    def asdict(self) -> dict:
+        return asdict(self)
+
+@dataclass
+class FieldRecord:
+    """
+    Represents a single 2D slice in the state vector.
+
+    Attributes:
+        name (str): name of the state variable
+        model_src (str): name of the model source module for this variable
+        dtype (str): data type
+        is_vector (bool): if this variable is a vector
+        units (str|float): physical units of this variable
+        err_type (str): type of error model to use for this variable
+        time (datetime): time coordinate for this field
+        dt (float): representative time interval (hours) for this field
+        k (int): vertical z coordinate index for this field
+        pos (int): seek position (number of bytes) for the start of this field in the binary file
+    """
+    name: str
+    model_src: str
+    dtype: str
+    is_vector: bool
+    units: Unit
+    err_type: str
+    time: datetime
+    dt: float
+    k: LevelID
+    pos: int  # Byte offset in the binary file
+    def asdict(self) -> dict:
+        return asdict(self)
+
+@dataclass
+class ErrorModel:
+    """
+    Parameters defining an error model
+
+    Attributes:
+        type (str): type of error distribution
+        std (float): error standard deviation, in variable units
+        hcorr (float): horizontal correlation scale, in grid.x units
+        vcorr (float): vertical correlation scale, in z units
+        tcorr (float): temporal correlation scale, in hours
+        cross_corr (dict[str, float]): cross-variable correlation dictionary
+    """
+    type: str
+    std: float
+    hcorr: float
+    vcorr: float
+    tcorr: float
+    cross_corr: dict[str, float]
+    def asdict(self) -> dict:
+        return asdict(self)
+
+@dataclass
+class ObsRecord:
+    """
+    Represents a single observation record in the full list of observations
+
+    Attributes:
+        name (str): name of the observation record
+        dataset_src (str): name of dataset source module for this observation
+        model_src (str): name of the model source module for this observation
+        nobs (int): number of individual observations in this record
+        obs_window_min (int): offset from analysis time for the start of the observation window (hours)
+        obs_window_max (int): offset from analysis time for the end of the observation window (hours)
+        err (ErrorModel): error model used for this observation
+        dtype (str): data type
+        is_vector (bool): if this variable is a vector
+        units (str): physical units of this observation
+        z_units (str): vertical coordinate units
+        time (datetime): time coordinate for this observation
+        dt (float): representative time interval (hours) for this observation
+    """
+    name: str
+    dataset_src: str
+    model_src: str
+    nobs: int
+    obs_window_min: int
+    obs_window_max: int
+    dtype: str
+    is_vector: bool
+    units: Unit
+    z_units: Unit
+    time: datetime
+    dt: float
+    err: ErrorModel
+    hroi: float
+    vroi: float
+    troi: float
+    impact_on_state: dict
+    def asdict(self) -> dict:
+        return asdict(self)
+
+ProcID = Annotated[int, 'process id in comm']
+ProcIDMem = Annotated[int, 'process id in comm_mem']
+ProcIDRec = Annotated[int, 'process id in comm_rec']
+
+MemID = Annotated[int, 'member id']
+FieldRecordID = Annotated[int, 'field record id']
+ObsRecordID = Annotated[int, 'obs record id']
+PartitionID = Annotated[int, 'partition id']
+#TODO: Partition = Annotated[tuple[int, int, int, int, int, int] | np.typing.NDArray, 'partition: (istart,iend,di,jstart,jend,dj) or just inds array']
+
+FieldEns = Annotated[dict[tuple[MemID, FieldRecordID], np.ndarray], 'field-complete ensemble data']
+StateEns = Annotated[dict[tuple[MemID, FieldRecordID], dict[PartitionID, np.ndarray]], 'state-complete ensemble data']
+ObsSeq = Annotated[dict[ObsRecordID, dict[str, np.ndarray]], 'obs sequence']
+ObsEns = Annotated[dict[tuple[MemID, ObsRecordID], np.ndarray], 'obs ensemble data']
+LocalObsSeq = Annotated[dict[ObsRecordID, dict[PartitionID, dict[str, np.ndarray]]], 'local obs sequence']
+LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.ndarray]], 'local obs ensemble data']
+
+IOMode = Literal['online', 'offline']
+IOTag = Literal['current', 'prior', 'prior_mean', 'post', 'post_mean', 'truth', 'raw', 'z', 'z_mean']
+EnsRunStrategy = Literal['scheduler', 'batch']
+ParallelMode = Literal['serial', 'mpi', 'openmp']

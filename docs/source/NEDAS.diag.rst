@@ -1,10 +1,14 @@
-Diagnostic tools
-================
+NEDAS.diag namespace
+====================
 
-Module contents
----------------
+.. py:module:: NEDAS.diag
 
-.. automodule:: NEDAS.diag
-   :members:
-   :show-inheritance:
-   :undoc-members:
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   NEDAS.diag.metrics
+   NEDAS.diag.misc
+   NEDAS.diag.plot

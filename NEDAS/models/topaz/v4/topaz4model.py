@@ -4,33 +4,51 @@ import subprocess
 from functools import lru_cache
 
 from NEDAS.utils.conversion import units_convert, dt1h
-from NEDAS.utils.shell_utils import run_job
-from NEDAS.models import Model
+from NEDAS.grid import RegularGrid
+from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 from ..abfile import ABFileRestart, ABFileBathy
 from ..model_grid import get_topaz_grid
 from .namelist import namelist
 
-class Topaz4Model(Model):
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+class Topaz4Model(Model[RegularGrid]):
+    io_mode = 'offline'
+    basedir: str
+    R: str
+    T: str
+    E: str
+    V: str
+    X: str
+    onem: float
+    z_units: str
+    restart_dt: int
+    forcing_frc: str
+    era5_path: str
+    priver: int
+    jerlv0: int
+    relax: int
+    nproc: int
+    nproc_per_run: int
+    walltime: int|None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         levels = np.arange(1, 51, 1)
-        level_sfc = np.array([0])
+        levels_sfc = np.array([0])
         self.variables = {
-            'ocean_velocity': {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-            'ocean_temp': {'name':'temp', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-            'ocean_saln': {'name':'saln', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'psu'},
-            'ocean_surf_height': {'name':'msshb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'m'},
-            'ocean_surf_temp': {'name':'sstb', 'dtype':'float', 'is_vector':False, 'levels':[0], 'units':'K'},
-            'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-            'ocean_b_press': {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_mixl_depth': {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'levels':level_sfc, 'units':'Pa'},
-            }
+            'ocean_velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick': VarDesc(name='dp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='K', z_units=self.z_units),
+            'ocean_saln': VarDesc(name='saln', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_surf_height': VarDesc(name='msshb', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_temp': VarDesc(name='sstb', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='K', z_units=self.z_units),
+            'ocean_b_velocity':  VarDesc(name=('ubavg', 'vbavg'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels_sfc, units='m/s', z_units=self.z_units),
+            'ocean_b_press': VarDesc(name='pbavg', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='Pa', z_units=self.z_units),
+            'ocean_mixl_depth': VarDesc(name='dpmixl', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels_sfc, units='Pa', z_units=self.z_units),
+        }
 
-        self.z_units = 'm'
-        
-        ##model grid
+        # model grid
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         self.grid = get_topaz_grid(grid_info_file)
 
@@ -39,10 +57,10 @@ class Topaz4Model(Model):
         depth = f.read_field('depth')
         f.close()
         self.depth = -depth.data
-        self.grid.mask = depth.mask
-        
+        self.grid.mask = np.asarray(depth.mask, dtype=bool)
+
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['member'] is not None:
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
@@ -58,10 +76,10 @@ class Topaz4Model(Model):
         pass
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
         if rec['is_vector']:
@@ -76,16 +94,16 @@ class Topaz4Model(Model):
         return var
 
     def write_var(self, var, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
-        ##open the restart file for over-writing
-        ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
+        # open the restart file for over-writing
+        # the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
         f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny)
 
-        ##convert units back if necessary
+        # convert units back if necessary
         var = units_convert(kwargs['units'], rec['units'], var)
 
         if rec['is_vector']:
@@ -95,48 +113,45 @@ class Topaz4Model(Model):
             f.overwrite_field(var, None, rec['name'], level=kwargs['k'], tlevel=1)
         f.close()
 
+    def z_coords(self, **kwargs) -> np.ndarray:
+        """
+        Calculate vertical coordinates given the 3D model state.
+        Returns:
+            np.ndarray: The corresponding z field.
+        """
+        return self._z_coords_cached(tuple(sorted(kwargs.items())))
+
     @lru_cache(maxsize=3)
-    def z_coords(self, **kwargs):
-        """calculate vertical coordinates given the 3D model state
-        """
-        """
-        Calculate vertical coordinates given the 3D model state
-        Return:
-        - z: np.array
-        The corresponding z field
-        """
-        ##some defaults if not set in kwargs
+    def _z_coords_cached(self, kwargs_tuple):
+        # not checked for correctness yet
+        kwargs = dict(kwargs_tuple)
         if 'k' not in kwargs:
             kwargs['k'] = 0
 
         z = np.zeros(self.grid.x.shape)
 
         if kwargs['k'] == 0:
-            ##if level index is 0, this is the surface, so just return zeros
             return z
-
         else:
-            ##get layer thickness and convert to units
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+            rec['units'] = self.variables['ocean_layer_thick'].units
             if self.z_units == 'm':
-                dz = - self.read_var(**rec) / self.onem ##in meters, negative relative to surface
+                dz = - self.read_var(**rec) / self.onem
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
 
-            ##use recursive func, get previous layer z and add dz
-            kwargs['k'] -= 1
-            z_prev = self.z_coords(**kwargs)
+            rec['k'] -= 1
+            z_prev = self._z_coords_cached(tuple(sorted(rec.items())))
             return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
-        init_file = self.self.filename(**{**kwargs, 'path':self.ens_init_dir})
-        input_file = self.self.filename(**kwargs)
+        init_file = self.filename(**{**kwargs, 'path':self.ens_init_dir})
+        input_file = self.filename(**kwargs)
         os.system("mkdir -p "+os.path.dirname(input_file))
         os.system("cp "+init_file+" "+input_file)
         os.system("cp "+init_file.replace('.a', '.b')+" "+input_file.replace('.a', '.b'))
@@ -145,14 +160,14 @@ class Topaz4Model(Model):
         pass
 
     def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
 
-        input_file = self.self.filename(**kwargs)
+        input_file = self.filename(**kwargs)
         run_dir = os.path.dirname(input_file)
         os.system("mkdir -p "+run_dir)
         os.chdir(run_dir)
@@ -164,12 +179,12 @@ class Topaz4Model(Model):
         next_time = time + forecast_period * dt1h
 
         kwargs_out = {**kwargs, 'time':next_time}
-        output_file = self.self.filename(**kwargs_out)
+        output_file = self.filename(**kwargs_out)
 
-        ##create namelist config files
+        # create namelist config files
         namelist(self, time, forecast_period, run_dir)
 
-        ##link files
+        # link files
         partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
         os.system("cp "+partit_file+" patch.input")
 
@@ -179,11 +194,13 @@ class Topaz4Model(Model):
             os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'tbaric'+ext)+" tbaric"+ext)
         os.system("ln -fs "+os.path.join(self.basedir, 'topo', 'grid.info')+" grid.info")
 
-        ##TODO: switches for other forcing options
+        # TODO: switches for other forcing options
+        forcing_path = None
         if self.forcing_frc == 'era5':
             forcing_path = self.era5_path
         if self.forcing_frc == 'era40':
             pass
+        assert forcing_path is not None
         os.system("ln -fs "+forcing_path+" .")
         os.system("ln -fs "+os.path.join(self.basedir, 'force', 'other', 'iwh_tabulated.dat')+" .")
         for ext in ['.a', '.b']:
@@ -204,18 +221,18 @@ class Topaz4Model(Model):
         model_src = os.path.join(self.basedir, 'setup.src')
         model_exe = os.path.join(self.basedir, f'Build_V{self.V}_X{self.X}', 'hycom')
 
-        ##build the shell command line
-        shell_cmd =  ". "+model_src+"; "   ##enter topaz v4 env
-        shell_cmd += "cd "+run_dir+"; "          ##enter run directory
+        # build the shell command line
+        shell_cmd =  ". "+model_src+"; "   # enter topaz v4 env
+        shell_cmd += "cd "+run_dir+"; "          # enter run directory
         shell_cmd += f"JOB_EXECUTE {model_exe} {kwargs['member']+1} >& run.log"
 
-        for tr in range(2):  ##number of tries
+        for tr in range(2):  # number of tries
             with open(log_file, 'rt') as f:
                 if '(normal)' in f.read():
                     break
             self.run_process = subprocess.Popen(shell_cmd, shell=True)
             self.run_process.wait()
-            run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
+            self.c.run_job(shell_cmd, job_name='topaz4_run', run_dir=run_dir,
                     nproc=self.nproc, offset=task_id*self.nproc_per_run,
                     walltime=self.walltime, **kwargs)
 

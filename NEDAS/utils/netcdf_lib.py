@@ -1,11 +1,11 @@
-from typing import Optional, Dict, Literal
+from typing import Literal, Mapping
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
 
 AccessMode = Literal['r', 'w', 'a', 'r+']
 
-def nc_open(filename: str, mode: AccessMode, comm: Optional[Comm]=None) -> Dataset:
+def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
     """
     Open a netCDF file.
 
@@ -32,7 +32,7 @@ def nc_open(filename: str, mode: AccessMode, comm: Optional[Comm]=None) -> Datas
                 comm.release_file_lock(filename)
                 raise
 
-def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
+def nc_close(filename: str, f: Dataset, comm: Comm|None=None) -> None:
     """
     Close the netCDF file handle.
 
@@ -47,13 +47,13 @@ def nc_close(filename: str, f: Dataset, comm: Optional[Comm]=None) -> None:
         comm.release_file_lock(filename)
 
 def nc_write_var(filename: str,
-                 dim: Dict[str,Optional[int]],
+                 dim: Mapping[str,int|None],
                  varname: str,
                  dat: np.ndarray,
-                 dtype: Optional[str]=None,
-                 recno: Optional[Dict[str,int]]=None,
-                 attr: Optional[Dict]=None,
-                 comm: Optional[Comm]=None) -> None:
+                 dtype: str|None=None,
+                 recno: dict[str,int]|None=None,
+                 attr: dict[str,str]|None=None,
+                 comm: Comm|None=None) -> None:
     """
     Write a variable to a netCDF file.
 
@@ -84,12 +84,12 @@ def nc_write_var(filename: str,
 
     if dtype is None:
         if isinstance(dat, np.ndarray):
-            dtype = dat.dtype
+            dtype = str(dat.dtype)
         else:
-            dtype = type(dat)
+            dtype = type(dat).__name__
 
     ndim = len(dim)
-    s = ()  ##slice for each dimension
+    s = ()  # slice for each dimension
     d = 0
     for i, name in enumerate(dim):
         if dim[name] is None:
@@ -115,9 +115,9 @@ def nc_write_var(filename: str,
     if isinstance(dat, np.ndarray):
         dat = dat.astype(dtype)
     else:
-        dat = dtype(dat)
+        dat = np.dtype(dtype).type(dat)
 
-    group[varname][s] = dat  ##write dat to file
+    group[varname][s] = dat  # write dat to file
 
     if attr is not None:
         for akey in attr:
@@ -125,7 +125,7 @@ def nc_write_var(filename: str,
 
     nc_close(filename, f, comm)
 
-def nc_read_var(filename: str, varname: str, comm: Optional[Comm]=None) -> np.ndarray:
+def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray:
     """
     Read a variable from a netCDF file.
 

@@ -1,5 +1,5 @@
-###adapted from NERSC-HYCOM-CICE/pythonlibs/abfile
-##Module for doing IO on files used by hycom
+# #adapted from NERSC-HYCOM-CICE/pythonlibs/abfile
+# Module for doing IO on files used by hycom
 import numpy
 import struct
 import sys
@@ -18,7 +18,7 @@ class BFileError(Exception) :
     pass
 
 class AFile :
-    """ Class for doing binary input/output on hycom .a files. Normally used by 
+    """ Class for doing binary input/output on hycom .a files. Normally used by
     ABFile* classes, but can be called by itself to read a .a-file """
     huge = 2.0**100
     def __init__(self,idm,jdm,filename,action,mask=False,real4=True,endian="big") :
@@ -60,7 +60,7 @@ class AFile :
     def writerecord(self,h,mask=None,record=None) :
         """ Write one record to file.
 
-        Arguments:    
+        Arguments:
           h      : data field to write. Must conform to shape (self._jdm, self._idm)
           mask  : where mask is set to True, h is set to spval. Ignored if masking not set in class
 
@@ -120,7 +120,7 @@ class AFile :
     def read_record(self,record) :
         self.seekrecord(record)
 
-        ##1) Use struct
+        # 1) Use struct
         #if self._real4 :
         #    raw = self._filea.read(self.n2drec*4)
         #    fmt =  "%s%df"%(self._endian_structfmt,self.n2drec)
@@ -170,8 +170,10 @@ class AFile :
         return self._jdm
 
 class ABFile:
-    """ Class for doing input/output on pairs of hycom .a and .b files. Base class, 
+    """ Class for doing input/output on pairs of hycom .a and .b files. Base class,
     not meant to be used directly """
+    _filename: str
+    _fields: dict
 
     def __init__(self,basename,action,mask=False,real4=True,endian="big") :
         #self._basename=basename
@@ -214,24 +216,24 @@ class ABFile:
     def readline(self) :
         return self._fileb.readline()
 
-    def bminmax(self,*arks,**kwargs) :
-        raise BFileError("bminmax not implemented for this class")
+    def bminmax(self,*arks,**kwargs) -> tuple:
+        raise NotImplementedError("bminmax not implemented for this class")
 
     @property
     def fieldnames(self) :
         return set([elem["field"] for elem in self._fields.values()])
 
-    def write_field(*args,**kwargs) :
-        raise BFileError("write_field not implemented for this class")
+    def write_field(self,*args,**kwargs) -> None:
+        raise NotImplementedError("write_field not implemented for this class")
 
-    def read_field(*args,**kwargs) :
-        raise BFileError("read_field not implemented for this class")
+    def read_field(self,*args,**kwargs):
+        raise NotImplementedError("read_field not implemented for this class")
 
-    def write_header(self,*args,**kwargs) :
-        raise BFileError("write_header not implemented for this class")
+    def write_header(self,*args,**kwargs) -> None:
+        raise NotImplementedError("write_header not implemented for this class")
 
-    def read_header(self,*args,**kwargs) :
-        raise BFileError("read_header not implemented for this class")
+    def read_header(self,*args,**kwargs) -> None:
+        raise NotImplementedError("read_header not implemented for this class")
 
     def _open_filea_if_necessary(self,field) :
         if self._filea is None :
@@ -242,7 +244,8 @@ class ABFile:
             pass
 
     def close(self):
-        self._filea.close()
+        if self._filea:
+            self._filea.close()
         self._fileb.close()
 
     def check_dimensions(self,field) :
@@ -274,8 +277,8 @@ class ABFile:
     def check_minmax(cls,w,mydict) :
 #      if (abs(hmina(k)-hminb).gt.abs(hminb)*1.e-4 .or.
 #                                &             abs(hmaxa(k)-hmaxb).gt.abs(hmaxb)*1.e-4      ) then
-        testmin = numpy.abs(w.min()-mydict["min"]) > numpy.abs(mydict["min"])*1.e-4 
-        testmax = numpy.abs(w.max()-mydict["max"]) > numpy.abs(mydict["max"])*1.e-4 
+        testmin = numpy.abs(w.min()-mydict["min"]) > numpy.abs(mydict["min"])*1.e-4
+        testmax = numpy.abs(w.max()-mydict["max"]) > numpy.abs(mydict["max"])*1.e-4
         if testmin or testmax :
             msg="File a b values inconsistent: Field %s at %d, .a min/max: %12.6g %12.6g  .a min/max: %12.6g  %12.6g " %(
                 mydict["field"],mydict["k"],w.min(),w.max(),mydict["min"],mydict["max"])
@@ -296,13 +299,15 @@ class ABFileBathy(ABFile) :
                 self._jdm=jdm
                 self.read_header()
                 self.read_field_info()
-                self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+                if self._jdm is None or self._idm is None:
+                    raise BFileError("idm and jdm must be set before opening filea")
+                self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
             else :
                 raise BFileError("ABFileBathy opened as read, but idm and jdm not provided")
         else :
             self.write_header()
 
-    def write_header(self) :
+    def write_header(self):
         self._fileb.write("Bathymetry prepared by python modeltools package\n")
         self._fileb.write("\n")
         self._fileb.write("\n")
@@ -333,8 +338,9 @@ class ABFileBathy(ABFile) :
             i+=1
             line=self.readline().strip()
 
-    def write_field(self,field,mask) : 
+    def write_field(self,field,mask) :
         self._open_filea_if_necessary(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask,record=None)
         self._fileb.write("min,max %s =%16.5f%16.5f\n"%("depth",hmin,hmax))
 
@@ -346,7 +352,8 @@ class ABFileBathy(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
-            w = self._filea.read_record(record) 
+            assert self._filea is not None
+            w = self._filea.read_record(record)
         else :
             raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
@@ -357,7 +364,7 @@ class ABFileBathy(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -421,6 +428,7 @@ class ABFileRmu(ABFile) :
             self._firstwrite=False
             self.write_header()
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         fmtstr="%%4s:  min,max =%s %s\n"%(fmt,fmt)
         self._fileb.write(fmtstr%(fieldname,hmin,hmax))
@@ -433,6 +441,7 @@ class ABFileRmu(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
+            assert self._filea is not None
             w = self._filea.read_record(record)
         else :
             raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
@@ -444,7 +453,7 @@ class ABFileRmu(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -462,7 +471,9 @@ class ABFileGrid(ABFile) :
         else :
             self.read_header()
             self.read_field_info()
-            self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+            if self._jdm is None or self._idm is None:
+                raise BFileError("idm and jdm must be set before opening filea")
+            self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
 
     def read_header(self) :
         item,self._idm     = self.scanitem(item="idm",conversion=int)
@@ -502,7 +513,8 @@ class ABFileGrid(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
-            w = self._filea.read_record(record) 
+            assert self._filea is not None
+            w = self._filea.read_record(record)
         else :
             raise RuntimeError(f"cannot find field {fieldname} in file {self.basename}")
         return w
@@ -514,6 +526,7 @@ class ABFileGrid(ABFile) :
             self._firstwrite=False
             self.write_header()
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         fmtstr="%%4s:  min,max =%s %s\n"%(fmt,fmt)
         self._fileb.write(fmtstr%(fieldname,hmin,hmax))
@@ -524,7 +537,7 @@ class ABFileGrid(ABFile) :
             if d["field"] == fieldname :
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -539,16 +552,18 @@ class ABFileArchv(ABFile) :
         self._cline2=cline2
         self._cline3=cline3
         self._iversn=iversn
-        self._iexpt =iexpt 
+        self._iexpt =iexpt
         self._yrflag=yrflag
 
         super(ABFileArchv,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
         if self._action == "r" :
             self.read_header() # Sets internal metadata. Overrides those on input
             self.read_field_info()
-            self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+            if self._jdm is None or self._idm is None:
+                raise BFileError("idm and jdm must be set before opening filea")
+            self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
         elif self._action == "w" :
-            ## Need to test if idm, jdm, etc is set at this stage
+            #  Need to test if idm, jdm, etc is set at this stage
             #raise NotImplementedError,"ABFileArchv writing not implemented"
             pass
 
@@ -592,6 +607,7 @@ class ABFileArchv(ABFile) :
             if d["field"] == fieldname and level == d["k"] :
                 record=i
         if record  is not None :
+            assert self._filea is not None
             r = self._filea.read_record(record)
             w = r.data
             w[r.mask] = numpy.nan
@@ -618,6 +634,7 @@ class ABFileArchv(ABFile) :
             self._firstwrite=False
             self.write_header()
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         fmtstr="%-9s=%11d%11.2f%3d%7.3f%16.7E%16.7E\n"
         self._fileb.write(fmtstr%(fieldname,time_step,model_day,k,dens,hmin,hmax))
@@ -636,7 +653,7 @@ class ABFileArchv(ABFile) :
             if d["field"] == fieldname and d["k"] == k:
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -662,7 +679,9 @@ class ABFileForcing(ABFile) :
         if self._action[0] == "r" :
             self.read_header()
             self.read_field_info()
-            self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+            if self._jdm is None or self._idm is None:
+                raise BFileError("idm and jdm must be set before opening filea")
+            self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
         elif self._action == "w":
             self._idm = idm
             self._jdm = jdm
@@ -716,6 +735,7 @@ class ABFileForcing(ABFile) :
             self._firstwrite=False
             self.write_header()
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         self._fileb.write("%s:dtime1,range = %12.4f%12.4f,%14.6e%14.6e\n"%(fieldname,dtime1,rdtime,hmin,hmax))
 
@@ -725,6 +745,7 @@ class ABFileForcing(ABFile) :
         assert record is not None, f"Do not find dtime1={dtime1} in current file, existing"
         self._open_filea_if_necessary(field)
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field, mask, record=record)
         self._fields[record]["min"] = hmin
         self._fields[record]["max"] = hmax
@@ -756,12 +777,13 @@ class ABFileForcing(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
-        ##tolerance for max dist is 1 day
+        # tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
             raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
-        w = self._filea.read_record(i) 
+        assert self._filea is not None
+        w = self._filea.read_record(i)
         #print w
         return w#,dt
 
@@ -771,7 +793,7 @@ class ABFileForcing(ABFile) :
             if d["field"] == fieldname and d["dtime1"] == dtime1:
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -807,6 +829,7 @@ class ABFileRiver(ABFile) :
     def write_field(self,field,mask,fieldname,month) :
         self._open_filea_if_necessary(field)
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         self._fileb.write(" %s: month,range = %s%14.6E%14.6E\n"%(fieldname,str(month).zfill(2),hmin,hmax))
 
@@ -823,12 +846,12 @@ class ABFileRestart(ABFile) :
                 self._jdm=jdm
                 self.read_header() # Sets internal metadata. Overrides those on input
                 self.read_field_info()
-                self._open_filea_if_necessary(numpy.zeros((self._jdm,self._idm)))
+                self._open_filea_if_necessary(numpy.zeros((int(self._jdm), int(self._idm))))
             else :
                 raise BFileError("ABFile opened as read, but idm and jdm not provided")
         elif self._action == "w" :
-##            # Need to test if idm, jdm, etc is set at this stage
-##            raise NotImplementedError,"ABFileRestart writing not implemented
+#             # Need to test if idm, jdm, etc is set at this stage
+#             raise NotImplementedError,"ABFileRestart writing not implemented
             pass
 
     def read_header(self) :
@@ -839,11 +862,13 @@ class ABFileRestart(ABFile) :
         self._header.append(self.readline())
 
         m=re.match(r"RESTART2: iexpt,iversn,yrflag,sigver[ ]*=[ ]*([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)[ ]+([0-9]+)",self._header[0])
+        assert m is not None
         self._iexpt=int(m.group(1))
         self._iversn=int(m.group(2))
         self._yrflag=int(m.group(3))
         self._sigver=int(m.group(4))
         m2=re.match(r"RESTART2: nstep,dtime,thbase[ ]*=[ ]*([^ ]+)[ ]+([^ ]+)[ ]+([^ ]+)",self._header[1])
+        assert m2 is not None
         self._nstep=int(m2.group(1))
         self._dtime=float(m2.group(2))
         self._thbase=float(m2.group(3))
@@ -870,10 +895,10 @@ class ABFileRestart(ABFile) :
 
     def write_bfile_info(self) :
         self._fileb.seek(0)
-        ##header
+        # header
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(self._iexpt,self._iversn,self._yrflag,self._sigver))
         self._fileb.write("RESTART2: nstep,dtime,thbase = %12d%19.10f%24.13f\n"%(self._nstep,self._dtime,self._thbase))
-        ##field info
+        # field info
         for i in range(len(self._fields)):
             fieldname = self._fields[i]["field"]
             k = self._fields[i]["k"]
@@ -894,6 +919,7 @@ class ABFileRestart(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         record = self.find_record(fieldname, level, tlevel)
         if record  is not None :
+            assert self._filea is not None
             w = self._filea.read_record(record)
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
             fld = w.data
@@ -911,6 +937,7 @@ class ABFileRestart(ABFile) :
         assert record is not None, "Do not find record in current file, existing"
         self._open_filea_if_necessary(field)
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field, mask, record=record)
         self._fields[record]["min"] = hmin
         self._fields[record]["max"] = hmax
@@ -927,8 +954,8 @@ class ABFileRestart(ABFile) :
 #  ~~ for loop for variables
 #      new_abfile.write_field(field,None,fieldname,k,t)  # None stands for mask
 #  new_abfile.close()
-##YY: the above is suitable for writing a new file from scratch (copy and paste)
-##overwrite_field will be good for rewriting only a field in existing files
+# YY: the above is suitable for writing a new file from scratch (copy and paste)
+# overwrite_field will be good for rewriting only a field in existing files
 
     def write_header(self,iexpt,iversn,yrflag,sigver,nstep,dtime,thbase) :
         self._fileb.write("RESTART2: iexpt,iversn,yrflag,sigver = %6d%6d%6d%6d\n"%(iexpt,iversn,yrflag,sigver))
@@ -937,6 +964,7 @@ class ABFileRestart(ABFile) :
     def write_field(self,field,mask,fieldname,k,time,record=None) :
         self._open_filea_if_necessary(field)
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask,record)
         fmtstr="%-8s: layer,tlevel,range = %3d%3d%18.7E%16.7E\n"
         self._fileb.write(fmtstr%(fieldname,k,time,hmin,hmax))
@@ -951,7 +979,7 @@ class ABFileRestart(ABFile) :
             if d["field"] == fieldname and d["k"] == k:
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -1024,7 +1052,8 @@ class ABFileRelax(ABFile) :
             if d["field"] == fieldname and level == d["k"] and d["month"] == month :
                 record=i
         if record  is not None :
-            w = self._filea.read_record(record) 
+            assert self._filea is not None
+            w = self._filea.read_record(record)
             ABFile.check_minmax(w,self._fields[record]) # Always do this check
         else :
             raise RuntimeError(f"cannot find field {fieldname} at level {level} month {month} in file {self.basename}")
@@ -1076,6 +1105,7 @@ class ABFileRelaxZ(ABFile) :
             self._firstwrite=False
             self.write_header()
         self.check_dimensions(field)
+        assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
         self._fileb.write("%s: depth,range = %12.4f %14.6e%14.6e\n"%(fieldname,depth,hmin,hmax))
 
@@ -1104,12 +1134,13 @@ class ABFileRelaxZ(ABFile) :
         """ Read field corresponding to fieldname and level from archive file"""
         elems = [ (k,v["dtime1"]) for k,v in self._fields.items() if v["field"] == field]
         dist = numpy.array([elem[1]-dtime1 for elem in elems])
-        ##tolerance for max dist is 1 day
+        # tolerance for max dist is 1 day
         if numpy.min(numpy.abs(dist)) > 1.0 :
             raise RuntimeError(f"cannot find matching time {dtime1} in file {self.basename}, closest time dist is {dist}.")
         i =numpy.argmin(numpy.abs(dist))
         rec,dt = elems[i]
-        w = self._filea.read_record(i) 
+        assert self._filea is not None
+        w = self._filea.read_record(i)
         #print w
         return w#,dt
 
@@ -1119,7 +1150,7 @@ class ABFileRelaxZ(ABFile) :
             if d["field"] == fieldname and d["depth"] == depth:
                 record=i
         if record  is not None :
-            ret = (self._fields[i]["min"],self._fields[i]["max"])
+            ret = (self._fields[record]["min"],self._fields[record]["max"])
         else :
             ret = (None,None)
         return ret
@@ -1159,7 +1190,7 @@ def write_diag_nc(datadict,fname="hycom_grid.nc") :
         print("Unable to import netCDF4 module - will not write diag to %s"%fname)
         return
     tmp = datadict["plon"]
-    ## Create netcdf file with all  stages for analysis
+    #  Create netcdf file with all  stages for analysis
     ncid = netCDF4.Dataset(fname,"w")
     ncid.createDimension("idm",tmp.shape[1])
     ncid.createDimension("jdm",tmp.shape[0])

@@ -1,3 +1,2 @@
-rfactor: 1
-kfactor: 1
-nlobs_max:
+random_rotation: True
+transform_solver: 'svd'  # 'svd' or 'eigen'

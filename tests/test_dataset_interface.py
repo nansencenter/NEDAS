@@ -1,11 +1,10 @@
 import unittest
-import importlib
-from NEDAS.config import Config
-from NEDAS.datasets import registry, get_dataset_class, Dataset
+from NEDAS.core import Dataset, Context
+from NEDAS.datasets import registry, get_dataset_class
 
 class TestDatasetInterface(unittest.TestCase):
     def test_dataset_class_init(self):
-        c = Config()
+        c = Context()
         for dataset_name in registry.keys():
             DatasetClass = get_dataset_class(dataset_name)
             dataset = DatasetClass(grid=c.grid, mask=c.grid.mask)

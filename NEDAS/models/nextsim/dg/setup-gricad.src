@@ -1,4 +1,4 @@
-##setup environment for nextsimdg on gricad
+# setup environment for nextsimdg on gricad
 . ${HOME}/.bashrc
 . /applis/environments/conda.sh
 conda activate nextsimdg

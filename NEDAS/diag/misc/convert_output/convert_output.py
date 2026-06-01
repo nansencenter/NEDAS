@@ -6,30 +6,35 @@ from pyproj import Proj
 from NEDAS.grid import Grid
 from NEDAS.utils.netcdf_lib import nc_write_var
 from NEDAS.utils.conversion import ensure_list, proj2dict, s2t, dt1h
-from NEDAS.utils.shell_utils import makedir
+from NEDAS.core.context import Context
 
-def get_task_list(c, **kwargs):
+def get_task_list(c: Context, **kwargs):
     """get a list of tasks to be done, as unique kwargs to be passed to run()"""
     # parse kwargs
     # load the default config first
     default_config_file = os.path.join(os.path.dirname(__file__), 'default.yml')
+    kwargs_from_default: dict = {}
     with open(default_config_file, 'r') as f:
-        kwargs_from_default = yaml.safe_load(f)
-    kwargs_from_config_file = {}
+        loaded_default = yaml.safe_load(f)
+        if isinstance(loaded_default, dict):
+            kwargs_from_default = loaded_default
+    kwargs_from_config_file: dict = {}
     if 'config_file' in kwargs and kwargs['config_file'] is not None:
         with open(kwargs['config_file'], 'r') as f:
-            kwargs_from_config_file = yaml.safe_load(f)
+            loaded_config = yaml.safe_load(f)
+            if isinstance(loaded_config, dict):
+                kwargs_from_config_file = loaded_config
     # overwrite with kwargs
     kwargs = {**kwargs_from_default, **kwargs_from_config_file, **kwargs}
 
-    ##generate task list
+    # generate task list
     tasks = []
     for member in range(c.nens):
         for vname in ensure_list(kwargs['variables']):
             tasks.append({**kwargs, 'variable': vname, 'member': member})
     return tasks
 
-def get_file_list(c, **kwargs):
+def get_file_list(c: Context, **kwargs):
     """Return a list of files to be opened for collective i/o"""
     if 'time' in kwargs:
         time_start = s2t(kwargs['time'])
@@ -43,7 +48,7 @@ def get_file_list(c, **kwargs):
             files.append(file)
     return files
 
-def run(c, **kwargs):
+def run(c: Context, **kwargs):
     """
     Run diagnostics: convert model restart variables into netcdf files, given formatting options in kwargs
     """
@@ -66,29 +71,28 @@ def run(c, **kwargs):
         grid = model.grid
     proj_params = proj2dict(grid.proj)
     x = grid.x[0, :] / 1e5
-    y = grid.y[:, 0] / 1e5  ##convert to 100km units
+    y = grid.y[:, 0] / 1e5  # convert to 100km units
     lon, lat = grid.proj(grid.x, grid.y, inverse=True)
 
     if 'time' in kwargs:
         time_start = s2t(kwargs['time'])
     else:
         time_start = c.time
-    dt_hours = kwargs.get("dt_hours", model.output_dt)
-    forecast_hours = kwargs.get("forecast_hours", c.cycle_period)
+    dt_hours = kwargs.get("dt_hours", getattr(model, 'output_dt'))
+    forecast_hours = kwargs.get("forecast_hours", c.config.cycle_period)
     time_units = kwargs.get('time_units', 'seconds since 1970-01-01T00:00:00+00:00')
     time_calendar = kwargs.get('time_calendar', 'standard')
     t_steps = range(0, forecast_hours, dt_hours)
-    path = c.forecast_dir(time_start, model_name)
+    path = c.fs.forecast_dir(time_start, model_name)
 
     for n_step, t_step in enumerate(t_steps):
         t = time_start + t_step * dt1h
 
-        if c.debug:
-            print(f"PID {c.pid:4} convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}", flush=True)
+        c.debug_message = f"convert_output on variable '{vname:20}' for {model_name:10} member {member+1:3} at {t}"
         # read the variable from the model restart file
         rec = model.variables[vname]
         file = kwargs['file'].format(time=time_start, member=member+1)
-        makedir(os.path.dirname(file))
+        c.fs.make_dir(os.path.dirname(file))
 
         lon_name: str = kwargs.get('lon_name', 'lon')
         lat_name: str = kwargs.get('lat_name', 'lat')
@@ -97,8 +101,8 @@ def run(c, **kwargs):
         time_name: str = kwargs.get('time_name', 'time')
         recno = {}
         recno[time_name] = n_step
-        levels = rec['levels']
-        is_vector = rec['is_vector']
+        levels = rec.levels
+        is_vector = rec.is_vector
         for k in levels:
             # read the field from model restart file
             model.read_grid(path=path, name=vname, time=t, member=member, k=k)
@@ -109,10 +113,10 @@ def run(c, **kwargs):
             fld_ = model.grid.convert(fld, is_vector=is_vector)
             # build dimension records
             dims = {}
-            dims[time_name] = None  ##make time dimension unlimited in nc file
+            dims[time_name] = None  # make time dimension unlimited in nc file
             k_name = kwargs.get('k_name')
             if len(levels) > 1:
-                dims[k_name] = None  ##add level dimension (unlimited) if there are multiple levels
+                dims[k_name] = None  # add level dimension (unlimited) if there are multiple levels
             dims[y_name] = grid.ny
             dims[x_name] = grid.nx
             # output the variable
@@ -120,24 +124,25 @@ def run(c, **kwargs):
                 recno[k_name] = list(levels).index(k)
             # variable attr
             attr = {'standard_name':vname,
-                    'units':rec['units'],
+                    'units':rec.units,
                     'grid_mapping': proj_params['projection'],
                     'coordinates': f"{lon_name} {lat_name}",
                     }
             if is_vector:
                 for i in range(2):
-                    if isinstance(rec['name'], tuple):
-                        rec_name = rec['name'][i]
+                    if isinstance(rec.name, tuple):
+                        rec_name = rec.name[i]
                     else:
-                        rec_name = rec['name']+'_'+(x_name, y_name)[i]
+                        rec_name = rec.name+'_'+(x_name, y_name)[i]
                     nc_write_var(file, dims, rec_name, fld_[i,...], recno=recno, attr=attr, comm=c.comm)
             else:
-                nc_write_var(file, dims, rec['name'], fld_, recno=recno, attr=attr, comm=c.comm)
+                assert isinstance(rec.name, str)
+                nc_write_var(file, dims, rec.name, fld_, recno=recno, attr=attr, comm=c.comm)
 
         # output the dimension variables
         time = cftime.date2num(t, units=time_units)
         time_attr = {'long_name': 'forecast time', 'units': time_units, 'calendar': time_calendar}
-        nc_write_var(file, {time_name:None}, time_name, time, dtype=float, recno=recno, attr=time_attr, comm=c.comm)
+        nc_write_var(file, {time_name:None}, time_name, time, dtype='float', recno=recno, attr=time_attr, comm=c.comm)
         nc_write_var(file, {x_name:grid.nx}, x_name, x, attr={'standard_name':'projection_x_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny}, y_name, y, attr={'standard_name':'projection_y_coordinate', 'units':'100 km'}, comm=c.comm)
         nc_write_var(file, {y_name:grid.ny, x_name:grid.nx}, lon_name, lon, attr={'standard_name':'longitude', 'units':'degrees_east'}, comm=c.comm)

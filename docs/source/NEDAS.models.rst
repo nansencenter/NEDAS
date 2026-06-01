@@ -1,26 +1,21 @@
-Models interface
-================
+NEDAS.models package
+====================
 
-To use the NEDAS to perform data assimilation for specific model components,
-
-NEDAS.models.base module
-------------------------
-
-.. automodule:: NEDAS.models.base
+.. automodule:: NEDAS.models
    :members:
    :show-inheritance:
    :undoc-members:
 
-Supported models
-----------------
+Subpackages
+-----------
 
 .. toctree::
    :maxdepth: 4
 
    NEDAS.models.lorenz96
+   NEDAS.models.nextsim
    NEDAS.models.noresm
    NEDAS.models.qg
+   NEDAS.models.topaz
    NEDAS.models.vort2d
    NEDAS.models.wrf
-
-

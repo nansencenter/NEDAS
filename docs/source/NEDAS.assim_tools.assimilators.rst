@@ -1,51 +1,26 @@
-NEDAS.assim\_tools.assimilators
-===============================
+NEDAS.assim\_tools.assimilators package
+=======================================
 
-NEDAS.assim\_tools.assimilators.base module
--------------------------------------------
-
-.. automodule:: NEDAS.assim_tools.assimilators.base
+.. automodule:: NEDAS.assim_tools.assimilators
    :members:
    :show-inheritance:
    :undoc-members:
 
-NEDAS.assim\_tools.assimilators.batch module
---------------------------------------------
+Subpackages
+-----------
 
-.. automodule:: NEDAS.assim_tools.assimilators.batch
-   :members:
-   :show-inheritance:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 4
 
+   NEDAS.assim_tools.assimilators.EAKF
+   NEDAS.assim_tools.assimilators.ETKF
+   NEDAS.assim_tools.assimilators.TopazDEnKF
 
-NEDAS.assim\_tools.assimilators.ETKF module
--------------------------------------------
+Submodules
+----------
 
-.. automodule:: NEDAS.assim_tools.assimilators.ETKF
-   :members:
-   :show-inheritance:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 4
 
-NEDAS.assim\_tools.assimilators.TopazDEnKF module
--------------------------------------------------
-
-.. automodule:: NEDAS.assim_tools.assimilators.TopazDEnKF
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.assim\_tools.assimilators.serial module
----------------------------------------------
-
-.. automodule:: NEDAS.assim_tools.assimilators.serial
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.assim\_tools.assimilators.EAKF module
--------------------------------------------
-
-.. automodule:: NEDAS.assim_tools.assimilators.EAKF
-   :members:
-   :show-inheritance:
-   :undoc-members:
+   NEDAS.assim_tools.assimilators.batch
+   NEDAS.assim_tools.assimilators.serial

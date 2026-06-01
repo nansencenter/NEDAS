@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 project = 'NEDAS'
 copyright = '2025, Yue Ying'
 author = 'Yue Ying'
-release = '1.1.0'
+release = '1.2.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,12 +33,16 @@ autodoc_member_order = 'bysource'
 
 autodoc_mock_imports = ["tensorflow", "torch", "opencv", "pygrib", "pyfftw", "numba", "mpi4py"]
 
+# Suppress duplicate-attribute warnings from Napoleon + autodoc both documenting
+# annotated class attributes (e.g. dataclass fields, ClassVar annotations).
+napoleon_use_ivar = True
+
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
 html_show_sphinx = False
-html_logo = '../imgs/nedas_logo.png'
+html_logo = '../imgs/nedas_logo_banner.png'
 html_theme_options = {
     'logo_only': True,
     'includehidden': False,

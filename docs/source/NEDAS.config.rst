@@ -1,19 +1,15 @@
-Configuration
-=============
+NEDAS.config package
+====================
 
-NEDAS.config.config module
---------------------------
-
-.. automodule:: NEDAS.config.config
-   :members:
+.. automodule:: NEDAS.config
+   :no-index:
    :show-inheritance:
-   :undoc-members:
 
-NEDAS.config.parse\_config module
----------------------------------
+Submodules
+----------
 
-.. automodule:: NEDAS.config.parse_config
-   :members:
-   :show-inheritance:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 4
 
+   NEDAS.config.config
+   NEDAS.config.parse_config

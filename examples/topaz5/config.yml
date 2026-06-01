@@ -6,9 +6,7 @@ job_submit:
   host: betzy
   project: nn2993k
   queue: normal
-  scheduler: slurm
   ppn: 128
-  run_separate_jobs: True
 
 nproc: 512
 nproc_util: 128
@@ -84,7 +82,7 @@ model_def:
     walltime: 3600
     restart_dt: 168
     forcing_dt: 6
-    ens_run_type: scheduler
+    ens_run_strategy: scheduler
     use_job_array: False
     stagnant_log_timeout: 100
     ens_init_dir: '/cluster/work/users/yingyue/26118/FORECAST'
@@ -176,7 +174,7 @@ perturb:
   hcorr: 2.5e5
   tcorr: 48
 
-analysis_scheme: offline_filter
+scheme: filter
 
 niter: 1
 iter:
@@ -198,7 +196,7 @@ covariance_def:
   config_file:
 
 inflation_def:
-  type: posterior,multiplicative
+  type: post,multiplicative
   adaptive: False
   coef: 1.01
 
@@ -215,7 +213,7 @@ transform_def:
   decompose_obs: False
 
 diag:
-##convert seaice conc output to nc files for ICECAP diagnostics
+# convert seaice conc output to nc files for ICECAP diagnostics
 - method: 'misc.convert_output'
   config_file:
   grid_def:

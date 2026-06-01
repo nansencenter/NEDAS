@@ -1,17 +1,23 @@
-from NEDAS.config import Config
-from NEDAS.schemes.get_analysis_scheme import get_analysis_scheme
+import sys
+from NEDAS import get_scheme
 
 def main() -> None:
-    c = Config(parse_args=True)
-    scheme = get_analysis_scheme(c)
+    try:
+        scheme = get_scheme(parse_args=True)
 
-    # prepare files
-    # initial ensemble
-    # truth
+        step = scheme.config.step
+        if step:
+            scheme.run_step(step)
+            return
 
-    # run analysis scheme
-    print("Running NEDAS analysis scheme")
-    scheme(c)
+        scheme()
+
+    except KeyboardInterrupt:
+        print("\nInterrupted. Exiting...")
+        sys.exit(1)
+
+    except Exception as e:
+        raise e
 
 if __name__ == '__main__':
     main()

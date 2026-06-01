@@ -1,24 +1,16 @@
-Analysis schemes
-================
+NEDAS.schemes package
+=====================
 
-NEDAS.schemes.get\_analysis\_scheme module
-------------------------------------------
-
-.. automodule:: NEDAS.schemes.get_analysis_scheme
+.. automodule:: NEDAS.schemes
    :members:
    :show-inheritance:
    :undoc-members:
 
-NEDAS.schemes.base module
--------------------------
-
-.. automodule:: NEDAS.schemes.base
-   :members:
-   :show-inheritance:
-   :undoc-members:
+Submodules
+----------
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Available schemes
+   :maxdepth: 4
 
-   NEDAS.schemes.offline_filter
+   NEDAS.schemes.filter
+   NEDAS.schemes.forecast

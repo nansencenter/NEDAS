@@ -23,7 +23,7 @@ PSI = np.array([
 def limit_min(dg_field, min_value):
     dg_field_limited = dg_field.copy()
 
-    ##step 1: clamp the first coefficient (mean value)
+    # step 1: clamp the first coefficient (mean value)
     dg_field_limited[..., 0] = np.maximum(dg_field_limited[..., 0], min_value)
 
     # step 2: compute values at Gauss nodes

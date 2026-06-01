@@ -1,4 +1,4 @@
-###adapted from NERSC-HYCOM-CICE/pythonlibs/modelgrid
+# #adapted from NERSC-HYCOM-CICE/pythonlibs/modelgrid
 import numpy as np
 from pyproj import Geod
 
@@ -74,7 +74,7 @@ class ConformalMapping:
         self._mu_s=np.arctan2(np.imag(w),np.real(w))
         self._psi_s=2.*np.arctan(abs(w))
 
-        ##grid spacing in meters
+        # grid spacing in meters
         ii, jj = np.meshgrid(np.arange(self._ires), np.arange(self._jres))
         lat, lon = self.gind2ll(ii+1., jj+1.)
         geod = Geod(ellps='sphere')
@@ -208,7 +208,7 @@ class ConformalMapping:
         return lat_n,lon_n
 
     def newtoold(self,lat_n,lon_n) :
-        # this routine performes a conformal mapping of the new to the old 
+        # this routine performes a conformal mapping of the new to the old
         # coordinate system
 
         # transform to spherical coordinates

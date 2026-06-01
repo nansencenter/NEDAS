@@ -6,9 +6,9 @@ ystart: -0.866e6
 yend: 2.021e6
 dx: 24051.8
 
-restart_dt: 24  ##model restart interval (hours)
+restart_dt: 24  # model restart interval (hours)
 
-##physical parameters
+# physical parameters
 dg_comp: 6
 dgstress_comp: 8
 

@@ -1,4 +1,4 @@
-<img src='/docs/imgs/nedas_logo.png' width='250' align='left' style='padding-right:20px'/>
+<img src='/docs/imgs/nedas_logo_banner.png' width='250' align='left' style='padding-right:20px'/>
 
 The Next-generation Ensemble Data Assimilation System (NEDAS) is a lightweight, modular Python platform
 designed for rapid prototyping and testing of data assimilation (DA) algorithms in geophysical models.

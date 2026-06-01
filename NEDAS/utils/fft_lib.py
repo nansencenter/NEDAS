@@ -1,8 +1,8 @@
 import numpy as np
 
 try:
-    ###fft implementation using FFTW
-    import pyfftw
+    # #fft implementation using FFTW
+    import pyfftw  #type: ignore
 
     def fft2(f: np.ndarray) -> np.ndarray:
         """
@@ -16,21 +16,21 @@ try:
         Returns:
             np.ndarray: Output field in spectral space, of complex64 type.
         """
-        ##prepare fftw plan
+        # prepare fftw plan
         a = pyfftw.empty_aligned(f.shape, dtype='float32')
         b = pyfftw.empty_aligned(f.shape[:-1] + (f.shape[-1]//2+1,), dtype='complex64')
         fft_obj = pyfftw.FFTW(a, b, axes=(-2, -1))
 
-        ##perform the fft2, output fh with same shape as f (keep dimension info)
+        # perform the fft2, output fh with same shape as f (keep dimension info)
         fh_ = fft_obj(f)
         fh = np.zeros(f.shape, dtype='complex64')
 
         nup = f.shape[-1]//2+1
 
-        ##top half of the spectrum
+        # top half of the spectrum
         fh[..., 0:nup] = fh_
 
-        ##the bottom half is conj of top half of the spectrum
+        # the bottom half is conj of top half of the spectrum
         if f.shape[-1]%2 == 0:
             fh[..., 0, nup:] = np.conj(fh_[..., 0, nup-2:0:-1])
             fh[..., 1:, nup:] = np.conj(fh_[..., :0:-1, nup-2:0:-1])
@@ -52,24 +52,24 @@ try:
         Returns:
             np.ndarray: Output field in physical space, of float32 type.
         """
-        ##prepare fftw plan
+        # prepare fftw plan
         b = pyfftw.empty_aligned(fh.shape[:-1] + (fh.shape[-1]//2+1,), dtype='complex64')
         a = pyfftw.empty_aligned(fh.shape, dtype='float32')
         fft_obj = pyfftw.FFTW(b, a, axes=(-2, -1), direction='FFTW_BACKWARD')
-        ##perform the ifft2
-        ##TODO: check index
-        ##TODO: normalize?
+        # perform the ifft2
+        # TODO: check index
+        # TODO: normalize?
         f = fft_obj(fh[..., 0:fh.shape[1]//2+1])
         return f
 
 except ImportError:
     #print("Warning: pyFFTW not found in your environment, will use numpy.fft instead.", flush=True)
 
-    def fft2(x):
-        return np.fft.fft2(x)
+    def fft2(f: np.ndarray) -> np.ndarray:
+        return np.fft.fft2(f)
 
-    def ifft2(x):
-        return np.real(np.fft.ifft2(x))
+    def ifft2(fh: np.ndarray) -> np.ndarray:
+        return np.real(np.fft.ifft2(fh))
 
 def fftwn(n):
     """

@@ -2,27 +2,37 @@ import os
 import glob
 import numpy as np
 from datetime import datetime, timedelta, timezone
+import netCDF4
 from NEDAS.utils.conversion import dt1h
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class ArgoObs(Dataset):
+    ONEM: float
+    TEMP_MIN: float
+    TEMP_MAX: float
+    SALN_MIN: float
+    SALN_MAX: float
+    NUM_OBS_PER_LAYER: int
+    OBS_ERR_VAR: dict[str, float]
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.variables = {
-            'ocean_temp':{'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'K'},
-            'ocean_saln':{'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'psu'},
-            }
+            'ocean_temp': VarDesc(name='TEMP', dtype='float', is_vector=False, dt=24, levels=np.array([]), z_units='m', units='K'),
+            'ocean_saln': VarDesc(name='SALN', dtype='float', is_vector=False, dt=24, levels=np.array([]), z_units='m', units='psu'),
+        }
         self.obs_operator = {}
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         path = kwargs['path']
         time = kwargs['time']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
+        search = ''
         if time is None:
             tstr = '????????'
             search = os.path.join(path, tstr+'_?_prof.nc')
@@ -46,7 +56,7 @@ class ArgoObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def read_obs(self, **kwargs):
+    def read_obs_from_file(self, **kwargs):
         """
         read raw data file, quality check, thinning according to model grid, then output to obs_seq
         kwargs:
@@ -56,17 +66,20 @@ class ArgoObs(Dataset):
         -name, time, etc.
         return: obs_seq dict with lists of obs,x,y,z,time
         """
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
-        
-        ##target grid for obs_seq
+
+        # target grid for obs_seq
         grid = kwargs['grid']
         mask = kwargs['mask']
 
         model = kwargs['model']
         assert model is not None, 'read_obs: ERROR: model is required for argo dataset'
         model.grid.set_destination_grid(grid)
-      
+
+        z = kwargs['z']
+        assert z is not None  # TODO: model.z below should be z[k] -> 2d fields
+
         obs_seq = {'obs':[],
                    't':[], 'z':[], 'y':[], 'x':[],
                    'err_std':[],
@@ -74,37 +87,41 @@ class ArgoObs(Dataset):
 
         for fname in self.filename(**kwargs):
 
-            ##read the profiles from nc file
-            f = Dataset(fname)
+            # read the profiles from nc file
+            f = netCDF4.Dataset(fname)
 
             nprof = f.dimensions['N_PROF'].size
             nlev = f.dimensions['N_LEVELS'].size
 
             lat = f['LATITUDE'][0:nprof].data
             lon = f['LONGITUDE'][0:nprof].data
-            x, y = grid.proj(lon, lat)  ##coordinates in grid
+            x, y = grid.proj(lon, lat)  # coordinates in grid
 
             juld = f['JULD'][0:nprof].data
             juld_qc = f['JULD_QC'][0:nprof].data
             pos_qc = f['POSITION_QC'][0:nprof].data
 
-            ##find z coordinate in meters, negative relative to surface
+            # find z coordinate in meters, negative relative to surface
             if 'PRES' in f.variables:
-                z = 0. - f['PRES'][0:nprof, 0:nlev].data * 1e4 / self.ONEM ##decibar to meter
+                z = 0. - f['PRES'][0:nprof, 0:nlev].data * 1e4 / self.ONEM # decibar to meter
                 z_qc = f['PRES_QC'][0:nprof, 0:nlev].data
             elif 'DEPH' in f.variables:
                 z = 0. - f['DEPH'][0:nprof, 0:nlev].data
                 z_qc = f['DEPH_QC'][0:nprof, 0:nlev].data
+            else:
+                raise RuntimeError
 
-            ##model z (zm) at profile location on grid
+            # model z (zm) at profile location on grid
+            zm = None
             if model.z is not None:
                 nz = model.z.shape[0]
                 zm = np.zeros((nprof, nz))
                 for k in range(nz):
                     ztmp = model.grid.convert(model.z[k, ...])
                     zm[:, k] = grid.interp(ztmp, x, y)
+            assert zm is not None
 
-            ##observed variable
+            # observed variable
             if name == 'ocean_temp' and 'TEMP' in f.variables:
                 obs = f['TEMP'][0:nprof, 0:nlev].data
                 obs_qc = f['TEMP_QC'][0:nprof, 0:nlev].data
@@ -114,7 +131,7 @@ class ArgoObs(Dataset):
             else:
                 continue
 
-            ##quality check flags
+            # quality check flags
             flag1 = np.ones(nprof)
             flag2 = np.ones((nprof, nlev))
 
@@ -124,7 +141,7 @@ class ArgoObs(Dataset):
                 if pos_qc[p] not in (b'1', b'2'):
                     flag1[p] = 0
 
-            ##check inside grid
+            # check inside grid
             for p in range(nprof):
                 if x[p]<grid.xmin or x[p]>grid.xmax or y[p]<grid.ymin or y[p]>grid.ymax:
                     flag1[p] = 0
@@ -138,16 +155,16 @@ class ArgoObs(Dataset):
                 if np.sum(flag2[p,:]) == 0:
                     flag1[p] = 0
 
-            ##check if location is unmasked (wet)
+            # check if location is unmasked (wet)
             mask_prof = grid.interp(mask.astype(int), x, y)
             for p in range(nprof):
                 if flag1[p] == 0:
                     continue
-                ##check if profile location is masked in model grid
+                # check if profile location is masked in model grid
                 if mask_prof[p] > 0:
                     flag1[p] = 0
                     continue
-                ##check if z level is deeper than model depth at profile location
+                # check if z level is deeper than model depth at profile location
                 if model.z is not None:
                     for l in range(nlev):
                         if z[p,l] < np.min(zm[p,:]):
@@ -155,7 +172,7 @@ class ArgoObs(Dataset):
                     if np.sum(flag2[p,:]) == 0:
                         flag1[p] = 0
 
-            ##check physical value
+            # check physical value
             for p in range(nprof):
                 if flag1[p] == 0:
                     continue
@@ -171,15 +188,15 @@ class ArgoObs(Dataset):
                             flag1[p] = 0
                             flag2[p,:] = 0
 
-            ##TODO: thinning in horizontal
+            # TODO: thinning in horizontal
 
-            ##thinning in vertical
+            # thinning in vertical
             if self.NUM_OBS_PER_LAYER is not None and model.z is not None:
                 nz = model.z.shape[0]
                 for p in range(nprof):
                     if flag1[p] == 0:
                         continue
-                    ##target z levels to bin profile obs
+                    # target z levels to bin profile obs
                     zt = np.interp(np.arange(0, nz, 1/self.NUM_OBS_PER_LAYER),
                                    np.arange(1, nz+1, 1), zm[p, :])
                     zt = np.sort(zt)
@@ -193,17 +210,17 @@ class ArgoObs(Dataset):
                         else:
                             flag2[p,l] = 0
 
-            ##check convective stability is not implemented here
-            ##  potential_density(temp, saln), find vertical increment from level k to k+1
-            ##  if density difference rho_inc < DENS_DIFF_MIN = -0.02
-            ##  then discard this profile
+            # check convective stability is not implemented here
+            #   potential_density(temp, saln), find vertical increment from level k to k+1
+            #   if density difference rho_inc < DENS_DIFF_MIN = -0.02
+            #   then discard this profile
 
-            ##output data to the obs_seq
+            # output data to the obs_seq
             for p in range(nprof):
                 if flag1[p] == 0:
                     continue
 
-                ##time of the profile given by julian day
+                # time of the profile given by julian day
                 t_prof = datetime(1950,1,1,tzinfo=timezone.utc) + juld[p]*timedelta(days=1)
 
                 for l in range(nlev):
@@ -220,13 +237,8 @@ class ArgoObs(Dataset):
 
             f.close()
 
+        obs_seq_arr = {}
         for key in obs_seq.keys():
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
-        return obs_seq
-
-    def random_network(self, model, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        raise NotImplementedError
-        obs_seq = {}
-        return obs_seq
+        return obs_seq_arr

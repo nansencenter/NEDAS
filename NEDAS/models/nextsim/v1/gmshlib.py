@@ -1,8 +1,9 @@
-##from nextsim-tools/pynextsim
+# from nextsim-tools/pynextsim
 
 import numpy as np
+from matplotlib.path import Path
 
-##projection used in msh files
+# projection used in msh files
 from pyproj import Proj
 proj = Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 
@@ -30,8 +31,8 @@ class MeshPhysicalName:
         '''
         add a physical name to the output file
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fid : _io.TextIOWrapper
         '''
         fid.write('%i %i "%s"\n' %(
@@ -42,8 +43,8 @@ class MeshElement:
 
     def __init__(self, ident, eltype, tags, node_ids, node_indices):
         """
-        Parameters:
-        -----------
+        Parameters
+        ----------
         ident : int
             element number
         eltype : int
@@ -72,15 +73,15 @@ class MeshElement:
         """
         clist = self.get_coords(xnod,ynod)
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xnod : np.ndarray
             x coords of nodes
         ynod : np.ndarray
             y coords of nodes
 
-        Returns:
-        --------
+        Returns
+        -------
         clist : list
             list of tuples with x,y coords of nodes for the element
         """
@@ -90,8 +91,8 @@ class MeshElement:
         '''
         add the element info to the output file
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         fid : _io.TextIOWrapper
         '''
         lst = ['%i %i %i' %(
@@ -107,8 +108,8 @@ class GmshBoundary:
     def __init__(self, exterior, islands=None,
             open_boundaries=None, coastal_boundaries=None):
         """
-        Parameters:
-        -----------
+        Parameters
+        ----------
         exterior : shapely.geometry.Polygon
         islands : list(shapely.geometry.Polygon)
             - internal closed boundaries
@@ -131,8 +132,8 @@ class GmshBoundary:
         """
         Set the x-y range
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xe : numpy.ndarray
             x coords of exterior polygon
         ye : numpy.ndarray
@@ -154,8 +155,8 @@ class GmshBoundary:
         """
         Estimate the mesh resolution
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         xe : numpy.ndarray
             x coords of exterior polygon
         ye : numpy.ndarray
@@ -169,29 +170,48 @@ class GmshBoundary:
         dy = np.diff(ye)
         self.resolution = np.mean(np.hypot(dx, dy))
 
+    @staticmethod
+    def points_in_polygon(poly, coords):
+        """
+        Test if coords are inside a polygon
+
+        Parameters
+        ----------
+        poly : shapely.geometry.Polygon
+        coords : numpy.ndarray
+            shape (num_points, 2) with x in 1st column and y in 2nd
+
+        Returns
+        -------
+        inside : numpy.ndarray(bool)
+            length is num_points
+        """
+        bpath = Path(np.array(poly.exterior.coords))
+        return np.array(bpath.contains_points(coords), dtype=bool)
+
     def iswet(self, x, y):
         """
         use matplotlib.path to test if multiple points are contained
         inside the polygon self.exterior_polygon
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         x: numpy.ndarray
             x coordinates to test
         y: numpy.ndarray
             y coordinates to test
 
-        Returns:
-        --------
-        wet : numpy.ndarray(bool)
-            mask of same shape as x and y
-            - element is True/False if corresponding point is inside/outside the mesh
-              (inside external poly but outside island ones)
+        Returns
+        -------
+        wet : numpy.ndarray
+            mask of same shape as x and y; True if the point is inside the mesh
+            (inside external polygon but outside island polygons), False otherwise.
         """
         coords = np.array([x.flatten(), y.flatten()]).T
         # test if inside external polygon
         mask = self.points_in_polygon(self.exterior_polygon, coords)
         # test not inside island polygons
+        assert self.island_polygons is not None, "island_polygons should be defined in GmshBoundary"
         for p in self.island_polygons:
             mask *= ~self.points_in_polygon(p, coords)
         return mask.reshape(x.shape)
@@ -214,7 +234,7 @@ def lonlat_to_xyz(lon, lat):
     y = r * np.sin(rlon)
     return x, y, z
 
-###functions to handle msh files
+# #functions to handle msh files
 def read_mshfile(filename):
     info = {}
     with open(filename, 'r') as f:

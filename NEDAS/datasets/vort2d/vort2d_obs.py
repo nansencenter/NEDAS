@@ -1,67 +1,66 @@
 import numpy as np
 from NEDAS.models.vort2d import Vort2DModel
-from NEDAS.datasets import Dataset
+from NEDAS.datasets.synthetic import SyntheticObs
+from NEDAS.core.types import VarDesc
 
-class Vort2DObs(Dataset):
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+class Vort2DObs(SyntheticObs):
+    network_type: str
+    obs_range: float
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        restart_dt = 6
         self.variables = {
-            'velocity': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'m/s'},
-            'vortex_position': {'dtype':'float', 'is_vector':True, 'z_units':'m', 'units':'m'},
-            'vortex_intensity': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m/s'},
-            'vortex_size':  {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':'m'},
-            }
+            'velocity': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='m', units='m/s'),
+            'vortex_position': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='m', units='m'),
+            'vortex_intensity': VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='m', units='m/s'),
+            'vortex_size':  VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='m', units='m'),
+        }
 
         self.obs_operator = {
             'vortex_position': self.get_vortex_position,
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
-            }
+        }
 
-    def random_network(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def generate_obs_network(self, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         model = kwargs['model']
-        assert isinstance(model, Vort2DModel), 'random_network: ERROR: model must be an instance of Vort2DModel'
+        assert isinstance(model, Vort2DModel)
         grid = kwargs['grid']
 
-        ##get truth vortex position, some network is vortex-following
+        # get truth vortex position, some network is vortex-following
         velocity = self.get_velocity(**{**kwargs, 'path': model.truth_dir})
-        ##diagnose the vortex position on grid
+        # diagnose the vortex position on grid
         i, j = self.vortex_position(velocity[0,...], velocity[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
-        if 'network_type' in kwargs:
-            network_type = kwargs['network_type']
-        else:
-            network_type = 'global'
-
         if name == 'velocity':
-
             nobs = kwargs['nobs']
-            if network_type == 'global':
+            if self.network_type == 'global':
                 if nobs is None:
                     nobs = 1000
                 y = np.random.uniform(grid.ymin, grid.ymax, nobs)
                 x = np.random.uniform(grid.xmin, grid.xmax, nobs)
 
-            elif network_type == 'targeted':
+            elif self.network_type == 'targeted':
                 if nobs is None:
-                    nobs = 800   ##note: number of obs in entire domain
-                                 ##later only obs within range will be kept
-                obs_range = 180000  ##observed range from vortex center, m
-                y = np.random.uniform(grid.ymin, grid.ymax, nobs)
-                x = np.random.uniform(grid.xmin, grid.xmax, nobs)
-
-                dist = np.hypot(x - true_center_x, y - true_center_y)
-                ind = np.where(dist <= obs_range)
-                x = x[ind]
-                y = y[ind]
-                nobs = x.size
+                    nobs = 800
+                x, y = [], []
+                while len(x) < nobs:
+                    x1 = np.random.uniform(true_center_x - self.obs_range, true_center_x + self.obs_range)
+                    y1 = np.random.uniform(true_center_y - self.obs_range, true_center_y + self.obs_range)
+                    dist = np.hypot(x1 - true_center_x, y1 - true_center_y)
+                    if dist <= self.obs_range:
+                        x.append(x1)
+                        y.append(y1)
+                x = np.array(x)
+                y = np.array(y)
 
             else:
-                raise ValueError('unknown network type: '+network_type)
+                raise ValueError('unknown network type: '+self.network_type)
 
             obs_seq = {'obs': np.full(nobs, np.nan),
                     't': np.full(nobs, kwargs['time']),
@@ -94,17 +93,18 @@ class Vort2DObs(Dataset):
 
         return obs_seq
 
-    ###utility functions for obs diagnostics
+    # #utility functions for obs diagnostics
     def vortex_position(self, u, v):
         ny, nx = u.shape
 
-        ##compute vorticity
+        # compute vorticity
         zeta = (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
 
-        ##search for max vorticity
+        # search for max vorticity
         zmax = -999
         center_x, center_y = -1, -1
         buff = 6
+        center_i, center_j = None, None
         for j in range(buff, ny-buff):
             for i in range(buff, nx-buff):
                 z = np.sum(zeta[j-buff:j+buff, i-buff:i+buff])
@@ -136,7 +136,7 @@ class Vort2DObs(Dataset):
         if np.max(wind_rad)<wind_min or np.where(wind_rad>=wind_min)[0].size==0:
             Rsize = -1
         else:
-            i1 = np.where(wind_rad>=wind_min)[0][-1] ###last point with wind > 35knot
+            i1 = np.where(wind_rad>=wind_min)[0][-1] # #last point with wind > 35knot
             if i1==nr-1:
                 Rsize = i1
             else:
@@ -145,13 +145,13 @@ class Vort2DObs(Dataset):
         return Rsize
 
     def get_velocity(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         model = kwargs['model']
         assert isinstance(model, Vort2DModel), 'get_velocity: ERROR: model must be an instance of Vort2DModel'
         grid = kwargs['grid']
-        ##read the velocity field from truth
+        # read the velocity field from truth
         model_velocity = model.read_var(**{**kwargs, 'name':'velocity'})
-        ##convert velocity to target grid
+        # convert velocity to target grid
         model.grid.set_destination_grid(grid)
         velocity = model.grid.convert(model_velocity, is_vector=True)
         return velocity
@@ -177,6 +177,3 @@ class Vort2DObs(Dataset):
         Rsize = self.vortex_size(velocity[0,...], velocity[1,...], center_i, center_j)
         Rsize = Rsize * dx
         return np.array([Rsize])
-
-    def read_obs(self):
-        raise NotImplementedError("read_obs is not implemented for vort2d, since only using synthetic obs.")

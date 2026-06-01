@@ -1,15 +1,15 @@
 import os
 import glob
-from typing import Optional, Any
 from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 import numpy as np
 
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
-from NEDAS.utils.shell_utils import run_command, run_job, makedir
 from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
-from NEDAS.models import Model
+from NEDAS.grid import RegularGrid
+from NEDAS.core import Model
+from NEDAS.core.types import VarDesc, IOMode
 
 from ..time_format import dayfor
 from ..abfile import ABFileRestart, ABFileArchv, ABFileForcing
@@ -18,13 +18,14 @@ from .namelist import namelist
 from .postproc import adjust_dp, stmt_fns_sigma, stmt_fns_kappaf
 from .cice_utils import thickness_upper_limit, adjust_ice_variables, fix_zsin_profile
 
-class Topaz5Model(Model):
+class Topaz5Model(Model[RegularGrid]):
     """
     TOPAZ5 model class.
     """
+    io_mode: IOMode = 'offline'
     nhc_root: str
     basedir: str
-    model_env: Optional[str]
+    model_env: str|None
     reanalysis_code: str
     V: str
     X: str
@@ -38,9 +39,8 @@ class Topaz5Model(Model):
     nproc_per_run: int
     nproc_per_util: int
     use_job_array: bool
-    walltime: int
+    walltime: int|None
     stagnant_log_timeout: int
-    ens_run_type: str
     meanssh_file: str
     forcing_file: str
     restart_dt: int
@@ -57,6 +57,7 @@ class Topaz5Model(Model):
     MAX_OCEAN_TEMP: float
     MIN_OCEAN_SALN: float
     MAX_OCEAN_SALN: float
+    ncat: int
     Nilayer: int
     saltmax: float
     min_salin: float
@@ -67,72 +68,84 @@ class Topaz5Model(Model):
     fice_thresh: float
     hice_impact: float
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        levels = np.arange(self.kdm) + 1  ##ocean levels, from top to bottom, k=1..kdm
-        level_sfc = np.array([0])    ##some variables are only defined on surface level k=0
-        level_ncat = np.arange(5)   ##some ice variables have 5 categories, treating them as levels also indexed by k
+        levels = np.arange(self.kdm) + 1  # ocean levels, from top to bottom, k=1..kdm
+        level_sfc = np.array([0])    # some variables are only defined on surface level k=0
 
         self.restart_variables = {
-            'ocean_velocity':    {'name':('u', 'v'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick': {'name':'dp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'Pa'},
-            'ocean_temp':        {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'C'},
-            'ocean_saln':        {'name':'saln', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':levels, 'units':'psu'},
-            'ocean_b_velocity':  {'name':('ubavg', 'vbavg'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'ocean_b_press':     {'name':'pbavg', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_mixl_depth':  {'name':'dpmixl', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_bot_press':   {'name':'pbot', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_bot_dense':   {'name':'thkk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
-            'ocean_bot_montg_pot': {'name':'psikk', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'?'},
-            }
+            'ocean_velocity':    VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick': VarDesc(name='dp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp':        VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='C', z_units=self.z_units),
+            'ocean_saln':        VarDesc(name='saln', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_b_velocity':  VarDesc(name=('ubavg', 'vbavg'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'ocean_b_press':     VarDesc(name='pbavg', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_mixl_depth':  VarDesc(name='dpmixl', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_bot_press':   VarDesc(name='pbot', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_bot_dense':   VarDesc(name='thkk', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='?', z_units=self.z_units),
+            'ocean_bot_montg_pot': VarDesc(name='psikk', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='?', z_units=self.z_units),
+        }
 
         self.archive_variables = {
-            'ocean_velocity_daily': {'name':('u-vel.', 'v-vel.'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':levels, 'units':'m/s'},
-            'ocean_layer_thick_daily': {'name':'thknss', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'Pa'},
-            'ocean_temp_daily': {'name':'temp', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'C'},
-            'ocean_saln_daily': {'name':'salin', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':levels, 'units':'psu'},
-            'ocean_mixl_depth_daily': {'name':'mix_dpth', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'Pa'},
-            'ocean_dense_daily': {'name':'dense', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'?'},
-            'ocean_surf_height_daily': {'name':'srfhgt', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            }
+            'ocean_velocity_daily': VarDesc(name=('u-vel.', 'v-vel.'), dtype='float', is_vector=True, dt=self.output_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'ocean_layer_thick_daily': VarDesc(name='thknss', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'ocean_temp_daily': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='C', z_units=self.z_units),
+            'ocean_saln_daily': VarDesc(name='salin', dtype='float', is_vector=False, dt=self.output_dt, levels=levels, units='psu', z_units=self.z_units),
+            'ocean_mixl_depth_daily': VarDesc(name='mix_dpth', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'ocean_dense_daily': VarDesc(name='dense', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='?', z_units=self.z_units),
+            'ocean_surf_height_daily': VarDesc(name='srfhgt', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+        }
 
         self.iced_variables = {
-            'seaice_velocity': {'name':('uvel', 'vvel'), 'dtype':'float', 'is_vector':True, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_ncat':   {'name':'aicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':1},
-            'seaice_volume_ncat':  {'name':'vicen', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
-            'snow_volume_ncat':  {'name':'vsnon', 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_ncat, 'units':'m'},
-            }
+            'seaice_velocity': VarDesc(name=('uvel', 'vvel'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+        }
+        for n in range(self.ncat):
+            self.iced_variables[f"seaice_conc_cat{n}"] = VarDesc(name='aicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units)
+            self.iced_variables[f"seaice_volume_cat{n}"] = VarDesc(name='vicen', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
+            self.iced_variables[f"snow_volume_cat{n}"] = VarDesc(name='vsnon', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units)
+            self.iced_variables[f"seaice_age_cat{n}"] = VarDesc(name='iage', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='days', z_units=self.z_units)
 
         self.iceh_variables = {
-            'seaice_velocity_daily': {'name':('uvel_d', 'vvel_d'), 'dtype':'float', 'is_vector':True, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m/s'},
-            'seaice_conc_daily': {'name':'aice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick_daily': {'name':'hi_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
-            'seaice_surf_temp_daily': {'name':'Tsfc_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_saln_daily': {'name':'sice_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'psu'},
-            'snow_thick_daily': {'name':'hs_d', 'dtype':'float', 'is_vector':False, 'dt':self.output_dt, 'levels':level_sfc, 'units':'m'},
+            'seaice_velocity_daily': VarDesc(name=('uvel_d', 'vvel_d'), dtype='float', is_vector=True, dt=self.output_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'seaice_conc_daily': VarDesc(name='aice_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units=1, z_units=self.z_units),
+            'seaice_thick_daily': VarDesc(name='hi_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'seaice_surf_temp_daily': VarDesc(name='Tsfc_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'seaice_saln_daily': VarDesc(name='sice_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='psu', z_units=self.z_units),
+            'snow_thick_daily': VarDesc(name='hs_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'seaice_age_daily': VarDesc(name='iage_d', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='days', z_units=self.z_units),
             }
 
         self.atmos_forcing_variables = {
-            'atmos_surf_velocity': {'name':('wndewd', 'wndnwd'), 'dtype':'float', 'is_vector':True, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_surf_temp':     {'name':'airtmp', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'C'},
-            'atmos_surf_dewpoint': {'name':'dewpt', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'K'},
-            'atmos_surf_press':    {'name':'mslprs', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'Pa'},
-            'atmos_precip':        {'name':'precip', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_down_longwave': {'name':'radflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
-            'atmos_down_shortwave': {'name':'shwflx', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'W/m2'},
-            'atmos_surf_vapor_mix': {'name':'vapmix', 'dtype':'float', 'is_vector':False, 'dt':self.forcing_dt, 'levels':level_sfc, 'units':'kg/kg'},
+            'atmos_surf_velocity': VarDesc(name=('wndewd', 'wndnwd'), dtype='float', is_vector=True, dt=self.forcing_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_surf_temp':     VarDesc(name='airtmp', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'atmos_surf_dewpoint': VarDesc(name='dewpt', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='K', z_units=self.z_units),
+            'atmos_surf_press':    VarDesc(name='mslprs', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='Pa', z_units=self.z_units),
+            'atmos_precip':        VarDesc(name='precip', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_down_longwave': VarDesc(name='radflx', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='W/m2', z_units=self.z_units),
+            'atmos_down_shortwave': VarDesc(name='shwflx', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='W/m2', z_units=self.z_units),
+            'atmos_surf_vapor_mix': VarDesc(name='vapmix', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/kg', z_units=self.z_units),
+            'atmos_column_vapor': VarDesc(name='tcwv', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/m2', z_units=self.z_units),
+            'atmos_column_liquid': VarDesc(name='tclw', dtype='float', is_vector=False, dt=self.forcing_dt, levels=level_sfc, units='kg/m2', z_units=self.z_units),
             }
-        self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r['name'] if isinstance(r['name'], tuple) else [r['name']])]
+        self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r.name if isinstance(r.name, tuple) else [r.name])]
 
         self.diag_variables = {
-            'ocean_surf_height': {'name':'ssh', 'operator':self.get_ocean_surf_height, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_height_anomaly': {'name':'sla', 'operator':self.get_ocean_surf_height_anomaly, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'ocean_surf_temp': {'name':'sst', 'operator':self.get_ocean_surf_temp, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'C'},
-            'seaice_conc': {'name':'sic', 'operator':self.get_seaice_conc, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':1},
-            'seaice_thick': {'name':'sit', 'operator':self.get_seaice_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
-            'snow_thick': {'name':'snwt', 'operator':self.get_snow_thick, 'dtype':'float', 'is_vector':False, 'dt':self.restart_dt, 'levels':level_sfc, 'units':'m'},
+            'ocean_surf_height': VarDesc(name='ssh', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_height_anomaly': VarDesc(name='sla', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_temp': VarDesc(name='sst', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='C', z_units=self.z_units),
+            'seaice_conc': VarDesc(name='sic', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units),
+            'seaice_thick': VarDesc(name='sit', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'snow_thick': VarDesc(name='snwt', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
             }
+        self.operator = {
+            'ocean_surf_height': self.get_ocean_surf_height,
+            'ocean_surf_height_anomaly': self.get_ocean_surf_height_anomaly,
+            'ocean_surf_temp': self.get_ocean_surf_temp,
+            'seaice_conc': self.get_seaice_conc,
+            'seaice_thick': self.get_seaice_thick,
+            'snow_thick': self.get_snow_thick,
+        }
 
         self.variables = {**self.restart_variables,
                           **self.iced_variables,
@@ -141,28 +154,38 @@ class Topaz5Model(Model):
                           **self.diag_variables,
                           **self.archive_variables}
 
-        self.grid = None
         grid_info_file = os.path.join(self.basedir, 'topo', 'grid.info')
         if self.basedir and os.path.exists(grid_info_file):
             self.grid = get_topaz_grid(grid_info_file)
 
         self.depthfile = os.path.join(self.basedir, 'topo', f'depth_{self.R}_{self.T}.a')
-        if self.grid and self.depthfile and os.path.exists(self.depthfile):
+        if self.depthfile and os.path.exists(self.depthfile):
             self.depth, self.grid.mask = get_depth(self.depthfile, self.grid)
 
         self.meanssh = None
         if self.meanssh_file and os.path.exists(self.meanssh_file):
             self.meanssh = get_mean_ssh(self.meanssh_file, self.grid)
 
+        #TODO: z bank cache can be implemented (similar to grid bank for nextsim)
+
+    def is_ncat(self, name):
+        return (name in self.iced_variables) and (name.split('_')[-1][:3] == 'cat')
+    
+    def get_cat_id(self, name):
+        if self.is_ncat(name):
+            return int(name.split('_')[-1][3:])
+        else:
+            raise ValueError(f"get_cat_id: variable {name} is not a ncat variable")
+
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['member'] is not None:
             mstr = '_mem{:03d}'.format(kwargs['member']+1)
         else:
             mstr = ''
 
-        ##filename for each model component
+        # filename for each model component
         if kwargs['name'] in self.restart_variables:
             tstr = kwargs['time'].strftime('%Y_%j_%H_%M%S')
             file = 'restart.'+tstr+mstr+'.a'
@@ -181,7 +204,7 @@ class Topaz5Model(Model):
             return os.path.join(kwargs['path'], file)
 
         elif kwargs['name'] in self.archive_variables:
-            tstr = kwargs['time'].strftime('%Y_%j_??')  ##archive variables are daily means
+            tstr = kwargs['time'].strftime('%Y_%j_??')  # archive variables are daily means
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
         elif kwargs['name'] in self.diag_variables:
@@ -199,8 +222,8 @@ class Topaz5Model(Model):
         if len(files) > 0:
             return files[0]
 
-        ##if no corresponding files found under the given path
-        ##try to find two layers above for the other cycle time
+        # if no corresponding files found under the given path
+        # try to find two layers above for the other cycle time
         dirs = path.split(os.sep)
         if dirs[-1] == 'topaz.v5' and len(dirs[-2])==12:
             root = os.sep.join(dirs[:-2])
@@ -220,12 +243,12 @@ class Topaz5Model(Model):
     def read_var(self, **kwargs):
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
-        ##get the variable from restart files
+        # get the variable from restart files
         if name in self.restart_variables:
             f = ABFileRestart(fname, 'r', idm=self.grid.nx, jdm=self.grid.ny)
             if rec['is_vector']:
@@ -238,16 +261,17 @@ class Topaz5Model(Model):
 
         elif name in self.iced_variables:
             if rec['is_vector']:
-                if name[-5:] == '_ncat':  ##ncat variable
-                    var1 = nc_read_var(fname, rec['name'][0])[kwargs['k'],...]
-                    var2 = nc_read_var(fname, rec['name'][1])[kwargs['k'],...]
+                if self.is_ncat(name):  # ncat variable
+                    cat_id = self.get_cat_id(name)
+                    var1 = nc_read_var(fname, rec['name'][0])[cat_id,...]
+                    var2 = nc_read_var(fname, rec['name'][1])[cat_id,...]
                 else:
                     var1 = nc_read_var(fname, rec['name'][0])
                     var2 = nc_read_var(fname, rec['name'][1])
                 var = np.array([var1, var2])
             else:
-                if name[-5:] == '_ncat':  ##ncat variable
-                    var = nc_read_var(fname, rec['name'])[kwargs['k'],...]
+                if self.is_ncat(name):  # ncat variable
+                    var = nc_read_var(fname, rec['name'])[self.get_cat_id(name),...]
                 else:
                     var = nc_read_var(fname, rec['name'])
 
@@ -260,6 +284,8 @@ class Topaz5Model(Model):
                 var = nc_read_var(fname, rec['name'])[0, ...]
 
         elif name in self.atmos_forcing_variables:
+            if kwargs['time'].tzinfo is None:
+                kwargs['time'] = kwargs['time'].replace(tzinfo=timezone.utc)
             dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / (24*dt1h)
             if rec['is_vector']:
                 f1 = ABFileForcing(fname+'.'+rec['name'][0], 'r')
@@ -275,10 +301,13 @@ class Topaz5Model(Model):
                 f.close()
 
         elif name in self.diag_variables:
-            ## if the npy file exists, one could just read it to get the variable.
-            ## but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
-            var = rec['operator'](**kwargs)
-            np.save(fname, var)
+            #  if the npy file exists, one could just read it to get the variable.
+            #  but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
+            if not os.path.exists(fname):
+                var = self.operator[name](**kwargs)
+                np.save(fname, var)
+            else:
+                var = np.load(fname)
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -293,24 +322,24 @@ class Topaz5Model(Model):
         else:
             raise ValueError(f"read_var: ERROR: unknown variable name '{name}'")
 
-        ##convert units if necessary
+        # convert units if necessary
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
 
     def write_var(self, var, **kwargs):
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
         name = kwargs['name']
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
-        ##convert back to old units
+        # convert back to old units
         var = units_convert(kwargs['units'], rec['units'], var)
 
         if name in self.restart_variables:
-            ##open the restart file for over-writing
-            ##the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
+            # open the restart file for over-writing
+            # the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
             f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
             if rec['is_vector']:
                 for i in range(2):
@@ -320,26 +349,36 @@ class Topaz5Model(Model):
             f.close()
 
         elif name in self.iced_variables:
-            is_ncat = (name[-5:] == '_ncat')  ##if name is a multicategory variable (categories indexed by k)
             if rec['is_vector']:
                 for i in range(2):
-                    if is_ncat:
+                    if self.is_ncat(name):
                         dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                        recno = {'ncat':kwargs['k']}
+                        recno = {'ncat':self.get_cat_id(name)}
                     else:
                         dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = None
                     nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
             else:
-                if is_ncat:
+                if self.is_ncat(name):
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
-                    recno = {'ncat':kwargs['k']}
+                    recno = {'ncat':self.get_cat_id(name)}
                 else:
                     dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = None
                 nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
 
+        elif name in self.iceh_variables:
+            dims = {'time':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
+            recno = {'time':0}
+            if rec['is_vector']:
+                for i in range(2):
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
+            else:
+                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+
         elif name in self.atmos_forcing_variables:
+            if kwargs['time'].tzinfo is None:
+                kwargs['time'] = kwargs['time'].replace(tzinfo=timezone.utc)
             dtime = (kwargs['time'] - datetime(1900,12,31,tzinfo=timezone.utc)) / timedelta(days=1)
             if rec['is_vector']:
                 for i in range(2):
@@ -354,6 +393,9 @@ class Topaz5Model(Model):
         elif name in self.diag_variables:
             np.save(fname, var)
 
+        else:
+            print(f"WARNING: write_var not implemented for variable {name}, skipping...")
+
     def z_coords(self, **kwargs):
         return self._z_coords_cached(**kwargs)
 
@@ -365,26 +407,26 @@ class Topaz5Model(Model):
         - z: np.array
         The corresponding z field
         """
-        ##some defaults if not set in kwargs
+        # some defaults if not set in kwargs
         if 'k' not in kwargs:
             kwargs['k'] = 0
 
         z = np.zeros((self.jdm, self.idm))
         if kwargs['k'] == 0:
-            ##if level index is 0, this is the surface, so just return zeros
+            # if level index is 0, this is the surface, so just return zeros
             return z
         else:
-            ##get layer thickness and convert to units
+            # get layer thickness and convert to units
             rec = kwargs.copy()
             rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
+            rec['units'] = self.variables['ocean_layer_thick'].units # should be Pa
             if self.z_units == 'm':
-                dz = - self.read_var(**rec) / self.ONEM ##in meters, negative relative to surface
+                dz = - self.read_var(**rec) / self.ONEM # in meters, negative relative to surface
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
-            ##use recursive func, get previous layer z and add dz
+            # use recursive func, get previous layer z and add dz
             kwargs['k'] -= 1
             z_prev = self.z_coords(**kwargs)
             return z_prev + dz
@@ -402,9 +444,9 @@ class Topaz5Model(Model):
         thkk = f.read_field('thkk', level=0, tlevel=1)
         pbavg = f.read_field('pbavg', level=0, tlevel=1)
 
-        ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  ##valid points to calculate ssh on
+        ind = (self.depth < -0.1) & ~(np.isnan(self.depth))  # valid points to calculate ssh on
 
-        levels = list(self.variables['ocean_layer_thick']['levels'])
+        levels = list(self.variables['ocean_layer_thick'].levels)
         idm, jdm, kdm = self.grid.nx, self.grid.ny, len(levels)
         pres = np.zeros((kdm+1, jdm, idm))     # cumulative pressure
         thstar = np.zeros((kdm, jdm, idm))
@@ -459,12 +501,20 @@ class Topaz5Model(Model):
             raise AttributeError("topaz5model: grid not yet defined")
         seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'seaice_conc_ncat'
-        rec['units'] = self.variables['seaice_conc_ncat']['units']
-        for k in range(len(self.variables['seaice_conc_ncat']['levels'])):
-            seaice_conc += self.read_var(**{**rec, 'k':k})
-        
-        seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  ##discard below threadshold
+
+        # try to read it from iced file
+        try:
+            for cat_id in range(self.ncat):
+                rec['name'] = f'seaice_conc_cat{cat_id}'  # can use iceh or iced files
+                rec['units'] = self.variables[rec['name']].units
+                seaice_conc += self.read_var(**rec)
+        except FileNotFoundError:
+            # if failed, try to read from iceh file
+            rec['name'] = 'seaice_conc_daily'
+            rec['units'] = self.variables[rec['name']].units
+            seaice_conc = self.read_var(**rec)
+
+        seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  # discard below threadshold
         seaice_conc[self.grid.mask] = np.nan
         return seaice_conc
 
@@ -475,14 +525,14 @@ class Topaz5Model(Model):
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined before calling get_seaice_thick")
         seaice_conc = self.get_seaice_conc(**kwargs)
-        
+
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'seaice_volume_ncat'
-        rec['units'] = self.variables['seaice_volume_ncat']['units']
-        for k in range(len(self.variables['seaice_volume_ncat']['levels'])):
-            seaice_volume += self.read_var(**{**rec, 'k':k})
-        
+        for cat_id in range(self.ncat):
+            rec['name'] = f'seaice_volume_cat{cat_id}'
+            rec['units'] = self.variables[rec['name']].units
+            seaice_volume += self.read_var(**rec)
+
         seaice_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'seaice')
@@ -500,21 +550,21 @@ class Topaz5Model(Model):
 
         snow_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-        rec['name'] = 'snow_volume_ncat'
-        rec['units'] = self.variables['snow_volume_ncat']['units']
-        for k in range(len(self.variables['snow_volume_ncat']['levels'])):
-            snow_volume += self.read_var(**{**rec, 'k':k})
-        
+        for cat_id in range(self.ncat):
+            rec['name'] = f'snow_volume_cat{cat_id}'
+            rec['units'] = self.variables[rec['name']].units
+            snow_volume += self.read_var(**rec)
+
         snow_thick = np.zeros(self.grid.x.shape)
         ind = np.where(seaice_conc>=self.MIN_SEAICE_CONC)
         upper_limit = thickness_upper_limit(seaice_conc[ind], 'snow')
         snow_thick[ind] = np.minimum(snow_volume[ind] / seaice_conc[ind], upper_limit)
         return snow_thick
 
-    def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-
-        offset = task_id * self.nproc_per_util
+    def preprocess(self, *args, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
+        # task_id = kwargs.get('worker_id', 0)
+        # offset = task_id * self.nproc_per_util
         time = kwargs['time']
         forecast_period = kwargs['forecast_period']
         next_time = time + forecast_period * dt1h
@@ -524,17 +574,24 @@ class Topaz5Model(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-        ##make sure model run directory exists
-        makedir(run_dir)
+        # make sure model run directory exists
+        self.c.fs.make_dir(run_dir)
 
-        ##generate namelists, blkdat, ice_in, etc.
+        # generate namelists, blkdat, ice_in, etc.
         namelist(self, time, forecast_period, run_dir)
 
-        ##copy synoptic forcing fields from a long record in basedir, will be perturbed later
+        # copy synoptic forcing fields from a long record in basedir, will be perturbed later
         for varname in self.force_synoptic_names:
             forcing_file = self.forcing_file.format(member=kwargs['member']+1, time=time, name=varname)
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
-            f = ABFileForcing(forcing_file, 'r')
+            try:
+                f = ABFileForcing(forcing_file, 'r')
+            except FileNotFoundError:
+                #print(f"WARNING: {forcing_file} not found, skipping...")
+                if varname in ['tcwv', 'tclw']:  # these two variables are optional
+                    continue
+                else:
+                    raise FileNotFoundError(f"preprocess: ERROR: forcing file {forcing_file} not found")
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
             t = time
             dt = self.forcing_dt
@@ -547,12 +604,12 @@ class Topaz5Model(Model):
             f.close()
             fo.close()
 
-        ##link necessary files for model run
+        # link necessary files for model run
         shell_cmd = f"cd {run_dir}; "
-        ##partition setting
+        # partition setting
         partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
         shell_cmd += f"ln -fs {partit_file} patch.input; "
-        ##topo files
+        # topo files
         for ext in ['.a', '.b']:
             file = os.path.join(self.basedir, 'topo', 'regional.grid'+ext)
             shell_cmd += f"ln -fs {file} .; "
@@ -562,11 +619,11 @@ class Topaz5Model(Model):
         shell_cmd += f"ln -fs {file} cice_kmt.nc; "
         file = os.path.join(self.basedir, 'topo', 'cice_grid.nc')
         shell_cmd += f"ln -fs {file} .; "
-        ##nest files
+        # nest files
         nest_dir = os.path.join(self.basedir, 'nest', self.E)
         shell_cmd += f"ln -fs {nest_dir} nest; "
-        ##TODO: there is extra logic in nhc_root/bin/expt_preprocess.sh to be added here
-        ##relax files
+        # TODO: there is extra logic in nhc_root/bin/expt_preprocess.sh to be added here
+        # relax files
         for ext in ['.a', '.b']:
             for varname in ['intf', 'saln', 'temp']:
                 file = os.path.join(self.basedir, 'relax', self.E, 'relax_'+varname[:3]+ext)
@@ -574,35 +631,36 @@ class Topaz5Model(Model):
             for varname in ['thkdf4', 'veldf4']:
                 file = os.path.join(self.basedir, 'relax', self.E, varname+ext)
                 shell_cmd += f"ln -fs {file} {varname+ext}; "
-        ##other forcing files
+        # other forcing files
         for ext in ['.a', '.b']:
-            ##rivers
+            # rivers
             file = os.path.join(self.basedir, 'force', 'rivers', self.E, 'rivers'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.rivers'+ext}; "
-            ##seawifs
+            # seawifs
             file = os.path.join(self.basedir, 'force', 'seawifs', 'kpar'+ext)
             shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
-        run_command(shell_cmd)
+        self.c.run_job(shell_cmd, nproc=1)
 
-        ##copy restart files from restart_dir
+        # copy restart files from restart_dir
         restart_dir = kwargs['restart_dir']
-        ##job_submit_cmd = kwargs['job_submit_cmd']
+        # job_submit_cmd = kwargs['job_submit_cmd']
         tstr = time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
             file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
-            run_command(f"cp -fL {file} {file1}")
-            run_command(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}")
-        makedir(os.path.join(run_dir, 'cice'))
+            self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
+            self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}", nproc=1)
+        self.c.fs.make_dir(os.path.join(run_dir, 'cice'))
         tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
         file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
-        run_command(f"cp -fL {file} {file1}")
-        run_command(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}")
-        run_command(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}")
+        # TODO: use runtime file manipulation instead
+        self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
+        self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}", nproc=1)
+        self.c.run_job(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}", nproc=1)
 
-    def postprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def postprocess(self, *args, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
         time = kwargs['time']
@@ -612,7 +670,7 @@ class Topaz5Model(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-        makedir(run_dir)
+        self.c.fs.make_dir(run_dir)
 
         # link files
         commands = ""
@@ -627,7 +685,7 @@ class Topaz5Model(Model):
         file2 = f'ice_forecast{member+1:03}.nc'
         commands += f"ln -fs {file1} {file2}; "
         commands += f"ln -fs {self.reanalysis_code}/FILES/depths{self.idm}x{self.jdm}.uf .; "
-        run_command(commands)
+        self.c.run_job(commands, nproc=1)
 
         # restart2nc on forecast files
         commands = ""
@@ -635,18 +693,20 @@ class Topaz5Model(Model):
             commands += f". {self.model_env}; "
         commands += f"cd {run_dir}; "
         commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc"
-        run_command(commands)
+        self.c.run_job(commands, nproc=1)
 
         # add posterior ice variables in analysis abfile
         for ext in ['.a', '.b']:
             file1 = os.path.join(kwargs['path'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
             file2 = os.path.join(run_dir, f'analysis{member+1:03}{ext}')
-            run_command(f"cp -L {file1} {file2}")
+            self.c.run_job(f"cp -L {file1} {file2}", nproc=1)
         f = ABFileRestart(file2, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
         nfld = len(f.fields.keys())
-        fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
+        # fld = np.load(self.filename(path=kwargs['path'], name='seaice_conc', member=member, time=time))
+        fld = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         f.write_field(fld, None, 'ficem', 0, 1, nfld)
-        fld = np.load(self.filename(path=kwargs['path'], name='seaice_thick', member=member, time=time))
+        # fld = np.load(self.filename(path=kwargs['path'], name='seaice_thick', member=member, time=time))
+        fld = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         f.write_field(fld, None, 'hicem', 0, 1, nfld+1)
         f.close()
 
@@ -664,20 +724,20 @@ class Topaz5Model(Model):
         file1 = os.path.join(run_dir, f'fix_ice_forecast{member+1:03}.nc')
         file2 = os.path.join(kwargs['path'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
         commands += f"mv {file1} {file2}; "
-        run_command(commands)
+        self.c.run_job(commands, nproc=1)
 
-    def postprocess_native(self, task_id=0, **kwargs):
+    def postprocess_native(self, *args, **kwargs):
         """Post processing the restart variables for next forecast"""
-        ## routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
-        kwargs = super().parse_kwargs(**kwargs)
+        #  routines adapted from the EnKF-MPI-TOPAZ/Tools/fixhycom.F90 code
+        kwargs = super().parse_kwargs(kwargs)
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
 
-        ##adjust ocean layer thickness dp
+        # adjust ocean layer thickness dp
         rec = kwargs.copy()
         rec['name'] = 'ocean_layer_thick'
-        rec['units'] = self.variables['ocean_layer_thick']['units'] ##should be Pa
-        levels = list(self.variables['ocean_layer_thick']['levels'])
+        rec['units'] = self.variables['ocean_layer_thick'].units # should be Pa
+        levels = list(self.variables['ocean_layer_thick'].levels)
         dp = np.zeros((len(levels), self.grid.ny, self.grid.nx))
         for ilev, k in enumerate(levels):
             dp[ilev, ...] = self.read_var(**{**rec, 'k':k})
@@ -685,7 +745,7 @@ class Topaz5Model(Model):
         for ilev, k in enumerate(levels):
             self.write_var(dp[ilev,...], **{**rec, 'k':k})
 
-        ##loop over fields in restart file
+        # loop over fields in restart file
         restart_file = self.filename(**{**kwargs, 'name':'ocean_temp'})
         f = ABFileRestart(restart_file, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
         for i, rec in f.fields.items():
@@ -694,7 +754,7 @@ class Topaz5Model(Model):
             k = rec['k']
             fld = f.read_field(name, tlevel=tlevel, level=k)
 
-            ##reset variables out of their normal range
+            # reset variables out of their normal range
             if name == 'temp':
                 saln = f.read_field('saln', tlevel=tlevel, level=k)
                 temp_min = -0.057 * saln
@@ -705,28 +765,31 @@ class Topaz5Model(Model):
                 fld[np.where(fld > self.MAX_OCEAN_SALN)] = self.MAX_OCEAN_SALN
                 fld[np.where(fld < self.MIN_OCEAN_SALN)] = self.MIN_OCEAN_SALN
             elif name == 'dp':
-                fld = dp[levels.index(k), ...]  ##set dp to the adjusted value
+                fld = dp[levels.index(k), ...]  # set dp to the adjusted value
 
-            ##write the field back
+            # write the field back
             f.overwrite_field(fld, None, name, tlevel=tlevel, level=k)
         f.close()
 
-        ##fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
+        # fix sea ice variables, from enkf-topaz/Tools/m_put_mod_fld_nc: fix_cice
         restart_dir = kwargs['restart_dir']
-        prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_ncat'})
-        post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_ncat'})
+        prior_ice_file = self.filename(**{**kwargs, 'path':restart_dir, 'name':'seaice_conc_cat1'})
+        post_ice_file = self.filename(**{**kwargs, 'name':'seaice_conc_cat1'})
         fice = self.read_var(**{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         hice = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         zSin, Tmlt = fix_zsin_profile(self.Nilayer+1, self.saltmax, self.depressT, self.nsal, self.msal)
         adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.grid.mask,
                              self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
 
-        ##update the diagnostic ice variables
+        # update the diagnostic ice variables
         self.write_var(fice, **{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})
         self.write_var(hice, **{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
 
-    def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def run(self, *args, **kwargs):
+        assert self.ens_run_strategy=='scheduler', f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'"
+
+        kwargs = super().parse_kwargs(kwargs)
+        task_id = kwargs.get('worker_id', 0)
         self.run_status = 'running'
 
         time = kwargs['time']
@@ -739,17 +802,17 @@ class Topaz5Model(Model):
         else:
             mstr = ''
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-        makedir(run_dir)
+        self.c.fs.make_dir(run_dir)
         log_file = os.path.join(run_dir, "run.log")
-        run_command("touch "+log_file)
+        self.c.run_job("touch "+log_file, nproc=1)
 
         run_success = False
-        ##early exit if the run is already finished
+        # early exit if the run is already finished
         if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
             run_success = True
 
         else:
-            ##check if input file exists
+            # check if input file exists
             input_files = []
             tstr = time.strftime('%Y_%j_%H_%M%S')
             for ext in ['.a', '.b']:
@@ -760,50 +823,64 @@ class Topaz5Model(Model):
                 if not os.path.exists(file):
                     raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
-            ##clean up some files from previous runs
-            run_command(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out")
-            run_command(f"echo > {log_file}")
+            # clean up some files from previous runs
+            self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out", nproc=1)
+            self.c.run_job(f"echo > {log_file}", nproc=1)
 
-            ##build the shell command line
+            # build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
             shell_cmd = ""
             if self.model_env:
-                shell_cmd =  ". "+self.model_env+"; "  ##enter topaz5 env
-            shell_cmd += "cd "+run_dir+"; "             ##enter run directory
+                shell_cmd =  ". "+self.model_env+"; "  # enter topaz5 env
+            shell_cmd += "cd "+run_dir+"; "             # enter run directory
             shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
 
-            ##run the model, give it 3 attempts
+            # run the model, give it 3 attempts
             for i in range(3):
                 try:
-                    run_job(shell_cmd, job_name='topaz5', run_dir=run_dir,
-                            nproc=self.nproc, offset=task_id*self.nproc_per_run,
-                            walltime=self.walltime, log_file=log_file, **kwargs)
+                    job_opts = {
+                        **kwargs,
+                        'job_name': 'topaz5',
+                        'run_dir': run_dir,
+                        'parallel_mode': 'mpi',
+                        'log_file': log_file,
+                        'nproc': self.nproc,
+                        'offset': task_id * self.nproc_per_run,
+                    }
+                    self.c.run_job(shell_cmd, **job_opts)
                 except RuntimeError as e:
                     print(f"{e}, retrying ({2-i} attempts remain)")
-                    run_command(f"cp {log_file} {log_file}.attempt{i}")
+                    self.c.run_job(f"cp {log_file} {log_file}.attempt{i}", nproc=1)
                     continue
-                ##check output
+                # check output
                 if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
                     run_success = True
                     break
         assert run_success, f"model run failed after 3 attempts, check in {run_dir}"
 
-        ##move the output restart files to forecast_dir
+        # move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, 'restart.'+tstr+ext)
             file2 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
             if os.path.exists(file1):
-                run_command(f"mv {file1} {file2}")
+                self.c.run_job(f"mv {file1} {file2}", nproc=1)
             else:
                 assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
         tstr = f"{next_time:%Y-%m-%d}-{next_time.hour*3600:05}"
         file1 = os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')
         file2 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
         if os.path.exists(file1):
-            run_command(f"mv {file1} {file2}")
+            self.c.run_job(f"mv {file1} {file2}", nproc=1)
         else:
             assert os.path.exists(file2), f"error moving output file {file1} to {file2}"
 
-    def run_batch(self, **kwargs):
-        raise NotImplementedError("topaz5model.run_batch: not implemented, use run() instead")
+    def generate_truth(self, *args, **kwargs):
+        self.c.message = "not yet implemented, skipping..."
+        pass
+
+    def generate_init_ensemble(self, *args, **kwargs):
+        # TODO: check validity of self.ens_init_dir and restart files within
+        # some application may need to skip restart file checks, add an option for that?
+        self.c.message = "not yet implemented, skipping..."
+        pass

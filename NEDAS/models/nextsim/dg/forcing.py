@@ -19,7 +19,7 @@ import numpy as np
 import pyproj # type: ignore
 
 from NEDAS.utils.conversion import t2s
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.models.nextsim.dg.perturb import gen_perturb, apply_perturb, pres_adjusted_wind_perturb, apply_AR1_perturb
 from NEDAS.models.nextsim.dg import slicing_nc
 
@@ -54,14 +54,14 @@ def get_fname_daterange(current_date: datetime, initial_date:str, interval:str, 
     keywords:dict[str, str] = {'y': 'years', 'm': 'months', 'd': 'days'}
     # Initialize start and end dates
     start_date = initial_date_dt
-    end_date = initial_date_dt + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])})
+    end_date = initial_date_dt + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])}) #type: ignore
 
     assert current_date >= start_date, \
         f'Current time {current_date} is earlier than the initial forcing date {initial_date}'
     # Calculate the intervals until the current date is within the range
     while end_date <= current_date:
         start_date = end_date
-        end_date = start_date + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])})
+        end_date = start_date + relativedelta(**{keywords[interval[-1]]: int(interval[:-1])}) #type: ignore
 
     # Format the dates back to strings
     start_date_str = start_date.strftime(forcing_file_date_format)
@@ -197,7 +197,7 @@ def write_var(fname:str, varnames: list[str], data: np.ndarray, itime: int) -> N
                 f.sync()
 
 
-def geostrophic_perturb(fname:str, grid:Grid, options:dict, itime:int, pert:np.ndarray, varname:str) -> None:
+def geostrophic_perturb(fname:str, grid:RegularGrid, options:dict, itime:int, pert:np.ndarray, varname:str) -> None:
     """Perturb the atmosphere wind by the geostrophic balance.
     This applies to horizontal 2D wind fields.
 
@@ -281,10 +281,10 @@ def get_forcing_filename(forcing_file_options:dict, i_ens:int, time:datetime) ->
         try:
             fname = file_format.format(start=forcing_start_date, end=forcing_end_date)
         except KeyError:
-            print ('Currently, we only supports keyword of 1. "start"+"end",'
-                   '2. "start"+"end"+"i".'
-                   'See the example yaml file for more information. '
-                   'Modified the code if you have other requirements.')
+            raise RuntimeError('Currently, we only supports keyword of 1. "start"+"end",'
+                               '2. "start"+"end"+"i".'
+                               'See the example yaml file for more information. '
+                               'Modified the code if you have other requirements.')
     return fname
 
 
@@ -348,10 +348,10 @@ def perturb_forcing(forcing_options:dict, file_options:dict, i_ens: int, time: d
         # get grid object for geometric information
         with thread_lock:
             with netCDF4.Dataset(fname, 'r') as f:
-                grid = Grid(_proj, *_proj(f[file_options_comp['lon_name']],
-                                        f[file_options_comp['lat_name']]
-                                        )
-                            )
+                grid = RegularGrid(_proj, *_proj(f[file_options_comp['lon_name']],
+                                                 f[file_options_comp['lat_name']]
+                                                )
+                                  )
 
         for itime, time_f in enumerate(time_array):
             # get options for perturbing the forcing variables

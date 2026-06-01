@@ -11,6 +11,8 @@ slurm*out
 *.so
 .vscode
 .pytest_cache
+.claude
 docs/build
 *.egg-info
 *.ipynb
+_version.py

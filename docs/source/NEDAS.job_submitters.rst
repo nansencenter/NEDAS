@@ -1,36 +1,20 @@
-Job submitters
-==============
+NEDAS.job\_submitters package
+=============================
 
-NEDAS can be run on various computers, from laptops to high-performance computer clusters.
-
-NEDAS.job\_submitters.get\_job\_submitter module
-------------------------------------------------
-
-.. automodule:: NEDAS.job_submitters.get_job_submitter
-   :members:
+.. automodule:: NEDAS.job_submitters
+   :no-index:
    :show-inheritance:
-   :undoc-members:
 
-NEDAS.job\_submitters.base module
----------------------------------
+Submodules
+----------
 
-.. automodule:: NEDAS.job_submitters.base
-   :members:
-   :show-inheritance:
-   :undoc-members:
+.. toctree::
+   :maxdepth: 4
 
-NEDAS.job\_submitters.oar module
---------------------------------
-
-.. automodule:: NEDAS.job_submitters.oar
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-NEDAS.job\_submitters.slurm module
-----------------------------------
-
-.. automodule:: NEDAS.job_submitters.slurm
-   :members:
-   :show-inheritance:
-   :undoc-members:
+   NEDAS.job_submitters.betzy
+   NEDAS.job_submitters.gricad
+   NEDAS.job_submitters.hpc
+   NEDAS.job_submitters.local
+   NEDAS.job_submitters.macos
+   NEDAS.job_submitters.oar
+   NEDAS.job_submitters.slurm

@@ -5,42 +5,53 @@ from datetime import datetime, timedelta, timezone
 import netCDF4
 import pyproj
 from NEDAS.grid import Grid
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 
 class OsisafSeaIceConcObs(Dataset):
+    source: str
+    proj_name: str
+    proj: str
+    xstart: float
+    xend: float
+    ystart: float
+    yend: float
+    dx: float
+    dy: float
+    obs_file_dt: int
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        self.variables = {'seaice_conc': {'dtype':'float', 'is_vector':False, 'z_units':'m', 'units':1}, }
+        self.variables = {'seaice_conc': VarDesc(name='null', dtype='float', is_vector=False, dt=24, levels=np.array([0]), z_units='m', units=1), }
 
         proj = pyproj.Proj(self.proj)
         x, y = np.meshgrid(np.arange(self.xstart, self.xend, self.dx), np.arange(self.ystart, self.yend, self.dy))
         self.grid = Grid(proj, x, y)
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         path = kwargs['path']
         time = kwargs['time']
         name = kwargs['name']
         obs_window_min = kwargs['obs_window_min']
         obs_window_max = kwargs['obs_window_max']
 
+        search = ''
         if time is None:
-            search = os.path.join(path, '????_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_????????????.nc')
+            search = os.path.join(path, '????', '??', 'ice_conc_'+self.proj_name+'-100_'+self.source+'_????????????.nc')
+            # search = os.path.join(path, '????_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_????????????.nc')
             file_list = glob.glob(search)
-
         else:
             if obs_window_min is not None and obs_window_max is not None:
-                d_range = np.arange(obs_window_min, obs_window_max)
+                d_range = np.arange(obs_window_min, obs_window_max, self.obs_file_dt)
             else:
                 d_range = [0]
 
             file_list = []
             for d in d_range:
                 t = time + d * timedelta(hours=1)
-                tstr = t.strftime('%Y%m%d%H%M')
-                search = os.path.join(path, t.strftime('%Y')+'_'+self.proj_name, 'ice_conc_'+self.proj_name+'-100_multi_'+tstr+'.nc')
+                search = os.path.join(path, f'{t:%Y}', f'{t:%m}', f'ice_conc_{self.proj_name}-100_{self.source}_{t:%Y%m%d}1200.nc')
                 for result in glob.glob(search):
                     if result not in file_list:
                         file_list.append(result)
@@ -48,8 +59,8 @@ class OsisafSeaIceConcObs(Dataset):
         assert len(file_list)>0, 'no matching files found: '+search
         return file_list
 
-    def random_network(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def generate_obs_network(self, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
 
         if kwargs['nobs'] is None:
             nobs = 1000
@@ -81,8 +92,8 @@ class OsisafSeaIceConcObs(Dataset):
                 }
         return obs_seq
 
-    def read_obs(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def read_obs_from_file(self, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         grid = kwargs['grid']
         mask = kwargs['mask']
 
@@ -90,7 +101,7 @@ class OsisafSeaIceConcObs(Dataset):
 
         for fname in self.filename(**kwargs):
 
-            ##read the data file
+            # read the data file
             f = netCDF4.Dataset(fname)
 
             lat = f['lat'][...].data.flatten()
@@ -106,7 +117,7 @@ class OsisafSeaIceConcObs(Dataset):
                 if 'total_uncertainty' in f.variables:
                     obs_err = f['total_uncertainty'][n,...].data.flatten()
                 else:
-                    obs_err = 0.3 * np.ones(obs.shape)  ##default conc err 0.3
+                    obs_err = 0.3 * np.ones(obs.shape)  # default conc err 0.3
 
                 for p in range(obs.size):
                     if qc_flag[p] < 0 or qc_flag[p] > 10:
@@ -120,14 +131,16 @@ class OsisafSeaIceConcObs(Dataset):
                     if mask_[p] > 0:
                         continue
 
-                    obs_value = obs[p] * 0.01   ##convert percent to 0-1
+                    obs_value = obs[p] * 0.01   # convert percent to 0-1
 
-                    #obs_err_var = (obs_err[p]*0.01)**2  ##uncertainty from dataset
-                    obs_err_var = 1. + (0.5 - np.abs(0.5-obs_value))**2  ##adaptive error used in topaz
+                    #obs_err_var = (obs_err[p]*0.01)**2  # uncertainty from dataset
+                    #obs_err_var = 0.01 + (0.5 - np.abs(0.5-obs_value))**2  # adaptive error used in topaz
+                    #obs_err_std = np.sqrt(obs_err_var)
+                    obs_err_std = kwargs['err']['std']  # use fixed error from config
 
-                    ##assignn to obs_seq
+                    # assignn to obs_seq
                     obs_seq['obs'].append(obs_value)
-                    obs_seq['err_std'].append(np.sqrt(obs_err_var))
+                    obs_seq['err_std'].append(obs_err_std)
                     obs_seq['t'].append(t)
                     obs_seq['z'].append(0)
                     obs_seq['y'].append(y_[p])
@@ -135,8 +148,9 @@ class OsisafSeaIceConcObs(Dataset):
 
             f.close()
 
+        obs_seq_arr = {}
         for key in obs_seq.keys():
-            obs_seq[key] = np.array(obs_seq[key])
+            obs_seq_arr[key] = np.array(obs_seq[key])
 
-        return obs_seq
+        return obs_seq_arr
 

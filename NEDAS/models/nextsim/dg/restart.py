@@ -7,7 +7,7 @@ import netCDF4 # type: ignore
 import numpy as np
 import pyproj # type: ignore
 
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.models.nextsim.dg.perturb import gen_perturb, apply_perturb
 
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
@@ -64,10 +64,10 @@ def get_restart_filename(file_options:dict, i_ens: int, time: datetime) -> str:
         try:
             fname = file_options['format'].format(i=i_ens, time=time.strftime(file_options['time_format']))
         except KeyError:
-            print ('Currently, we only supports keyword of 1. "time_format",'
-                   '2. "time_format"+"i".'
-                   'See the example yaml file for more information. '
-                   'Modified the code if you have other requirements.')
+            raise RuntimeError('Currently, we only supports keyword of 1. "time_format",'
+                               '2. "time_format"+"i".'
+                               'See the example yaml file for more information. '
+                               'Modified the code if you have other requirements.')
     return fname
 
 
@@ -80,17 +80,9 @@ def perturb_restart(restart_options:dict, file_options:dict, debug=False) -> Non
         perturbation options under the section of `perturb` from the yaml file
     file_options : dict
         This dictionary is constructed before the function is called.
-        It contains the following keys
-        - fname : str
-            forcing file name.
-            This has to be the file that will be perturbed, e.g. in the ensemble directory.
-            This is usually derived before it is called.
-        - lon_name: str
-            name of the longitude variable in the forcing file.
-            This is obtained from the files/restart section of the model configuration file.
-        - lat_name: str
-            name of the latitude variable in the forcing file
-            This is obtained from the files/restart section of the model configuration file.
+        Keys: fname (str, path to the file to perturb), lon_name (str, longitude
+        variable name from the restart section of the model config),
+        lat_name (str, latitude variable name from the restart section of the model config).
     """
 
     # perturbation arrays
@@ -103,7 +95,7 @@ def perturb_restart(restart_options:dict, file_options:dict, debug=False) -> Non
             lon = f[file_options['lon_name']][:]
             lat = f[file_options['lat_name']][:]
     x, y = _proj(lon, lat)
-    grid:Grid = Grid(_proj, x, y)
+    grid = RegularGrid(_proj, x, y)
 
     # get options for perturbing the forcing variables
     options = restart_options['variables']

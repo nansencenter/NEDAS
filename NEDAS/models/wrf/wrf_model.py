@@ -1,37 +1,52 @@
 import os
 import numpy as np
 from pyproj import Proj
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 from NEDAS.utils.conversion import dt1h
-from NEDAS.utils.shell_utils import run_command, run_job, makedir
+from NEDAS.core import Model
+from NEDAS.core.types import VarDesc
 # from .namelist import namelist
 # from .bin_io import read_
-from NEDAS.models import Model
 
-class WRFModel(Model):
+class WRFModel(Model[RegularGrid]):
+    map_proj: str
+    ref_lat: float
+    ref_lon: float
+    truelat1: float
+    truelat2: float
+    max_dom: int
+    e_we: list[int]
+    e_sn: list[int]
+    e_vert: list[int]
+    dx: list[float]
+    dy: list[float]
+    model_code_dir: str
+    nproc_per_run: int
+    walltime: int|None
+    z_units: str
+    restart_dt: float
 
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        ##derived default values
+        # derived default values
         self.ref_x = self.e_we[0] / 2
         self.ref_y = self.e_sn[0] / 2
 
-        levels = np.arange(1, self.e_vert[0]+1, 1)  ##use domain 1 setting for z levels
+        levels = np.arange(1, self.e_vert[0]+1, 1)  # use domain 1 setting for z levels
         level_sfc = np.array([0])
         self.variables = {
-            'atmos_velocity': {'name':('u_1', 'v_1'), 'dtype':'float', 'is_vector':True, 'levels':levels, 'units':'m/s'},
-            'atmos_surf_velocity': {'name':('U10', 'V10'), 'dtype':'float', 'is_vector':True, 'levels':level_sfc, 'units':'m/s'},
-            'atmos_temp': {'name':'T', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'K'},
-            'atmos_pres': {'name':'P', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'Pa'},
-            'atmos_q_vapor': {'name':'QVAPOR', 'dtype':'float', 'is_vector':False, 'levels':levels, 'units':'kg/kg'},
+            'atmos_velocity': VarDesc(name=('u_1', 'v_1'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units='m/s', z_units=self.z_units),
+            'atmos_surf_velocity': VarDesc(name=('U10', 'V10'), dtype='float', is_vector=True, dt=self.restart_dt, levels=level_sfc, units='m/s', z_units=self.z_units),
+            'atmos_temp': VarDesc(name='T', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='K', z_units=self.z_units),
+            'atmos_pres': VarDesc(name='P', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='Pa', z_units=self.z_units),
+            'atmos_q_vapor': VarDesc(name='QVAPOR', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units='kg/kg', z_units=self.z_units),
             }
 
-        self.run_process = None
-        self.run_status = 'pending'
+        self.read_grid()
 
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         tstr = kwargs['time'].strftime('%Y-%m-%d_%H:%M:%S')
         return os.path.join(kwargs['path'], 'wrfout_'+tstr+'.nc')
 
@@ -51,35 +66,35 @@ class WRFModel(Model):
         else:
             raise ValueError(f'unknown map_proj type {self.map_proj}')
 
-        ##staggering here?
-        ##again, use domain 1 settings for grid
+        # staggering here?
+        # again, use domain 1 settings for grid
         x_coords = (np.arange(self.e_we[0]) - self.ref_x) * self.dx
         y_coords = (np.arange(self.e_sn[0]) - self.ref_y) * self.dy
         x, y = np.meshgrid(x_coords, y_coords)
 
-        self.grid = Grid(proj, x, y)
+        self.grid = RegularGrid(proj, x, y)
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        pass
+        kwargs = super().parse_kwargs(kwargs)
+        raise NotImplementedError
 
-    def write_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+    def write_var(self, var, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
         pass
 
     def z_coords(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
-        pass
+        kwargs = super().parse_kwargs(kwargs)
+        raise NotImplementedError
 
     def preprocess(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         pass
 
     def postprocess(self, task_id=0, **kwargs):
         pass
 
     def run(self, task_id=0, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
         fname = self.filename(**kwargs)
@@ -91,17 +106,17 @@ class WRFModel(Model):
 
         log_file = 'rsl.error.0000'
 
-        ##collect restart variables from bin and write to wrfrst
+        # collect restart variables from bin and write to wrfrst
 
-        ##build the run command
-        shell_cmd = ". "+wrf_src+"; "   ##enter wrf env
+        # build the run command
+        shell_cmd = ". "+wrf_src+"; "   # enter wrf env
         shell_cmd += f"JOB_EXECUTE {wrf_exe} >& run.log"
 
-        run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
+        self.c.run_job(shell_cmd, job_name='wrf.run', run_dir=run_dir,
                 nproc=self.nproc_per_run, offset=task_id*self.nproc_per_run,
                 walltime=self.walltime, **kwargs)
 
         # "SUCCESS COMPLETE" in log_file
 
-        ##wrfrst at nexttime collect to bin file
+        # wrfrst at nexttime collect to bin file
 

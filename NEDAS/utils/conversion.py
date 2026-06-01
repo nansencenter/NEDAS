@@ -2,13 +2,13 @@ import numbers
 import numpy as np
 from datetime import datetime, timezone
 
-def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray:
+def units_convert(units_from, units_to, var):
     """
     Convert units for a given variable.
 
     Args:
-        units_from (str): Source units for the input variable
-        units_to (str): Target units to convert to
+        units_from (str or numbers.Number): Source units for the input variable
+        units_to (str or numbers.Number): Target units to convert to
         var (np.ndarray): The input variable
 
     Returns:
@@ -90,7 +90,7 @@ def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray
             },
             "from_base": {
                 "hPa": lambda x: x / 100.,
-                "bar": lambda x: x / 100000., 
+                "bar": lambda x: x / 100000.,
                 "mbar": lambda x: x / 100.,
             },
         },
@@ -125,11 +125,11 @@ def units_convert(units_from: str, units_to: str, var: np.ndarray) -> np.ndarray
         elif units_from in to_base and units_to in from_base:
             # Convert to base, then from base to target
             var_base = to_base[units_from](var)
-            return from_base[units_to](var_base)    
+            return from_base[units_to](var_base)
 
     raise ValueError(f"Conversion of unit from '{units_from}' to '{units_to}' not supported.")
 
-##binary file io type conversion
+# binary file io type conversion
 type_convert = {'double':np.float64, 'float':np.float32, 'int':np.int32}
 type_dic = {'double':'d', '8':'d', 'single':'f', 'float':'f', '4':'f', 'int':'i'}
 type_size = {'double':8, 'float':4, 'int':4}
@@ -194,6 +194,8 @@ def t2h(t: datetime) -> float:
     """
     Convert datetime object to hours since 1900-1-1 00:00
     """
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
     return (t - ref_time)/timedelta(hours=1)
 
 def h2t(h: float) -> datetime:
@@ -227,6 +229,8 @@ def ensure_list(v) -> list:
     """
     If the input :code:`v` is a list, return itself; if not, return :code:`[v]`.
     """
+    if v is None:
+        return []
     if isinstance(v, list):
         return v
     return [v]

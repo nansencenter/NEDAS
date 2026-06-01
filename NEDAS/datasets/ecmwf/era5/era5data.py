@@ -7,34 +7,37 @@ from pyproj import Proj
 import netCDF4
 from NEDAS.grid import Grid
 from NEDAS.utils.conversion import units_convert
-from NEDAS.datasets import Dataset
+from NEDAS.core import Dataset
+from NEDAS.core.types import VarDesc
 from NEDAS.datasets.ecmwf import atmos_utils
 
 class ERA5Data(Dataset):
-    def __init__(self, config_file=None, parse_args=False, **kwargs):
-        super().__init__(config_file, parse_args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        ##variable dictionary for ERA5 naming convention
+        # variable dictionary for ERA5 naming convention
+        level_sfc = np.array([0])
         self.variables = {
-            'atmos_surf_velocity': {'name':('10U', '10V'), 'is_vector':True, 'units':'m/s'},
-            'atmos_surf_temp': {'name':'2T', 'is_vector':False, 'units':'K'},
-            'atmos_surf_dewpoint': {'name':'2D', 'is_vector':False, 'units':'K'},
-            'atmos_surf_press': {'name':'MSL', 'is_vector':False, 'units':'Pa'},
-            'atmos_precip':        {'name':'TP', 'is_vector':False, 'units':'m/s'},
-            'atmos_down_longwave': {'name':'STRD', 'is_vector':False, 'units':'W/m2'},
-            'atmos_down_shortwave': {'name':'SSRD', 'is_vector':False, 'units':'W/m2'},
-            'atmos_surf_vapor_mix': {'getter':self.get_vapmix, 'is_vector':False, 'units':'kg/kg'},
-            }
-
+            'atmos_surf_velocity': VarDesc(name=('10U', '10V'), dtype='float', is_vector=True, dt=6, levels=level_sfc, z_units='Pa', units='m/s'),
+            'atmos_surf_temp': VarDesc(name='2T', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='K'),
+            'atmos_surf_dewpoint': VarDesc(name='2D', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='K'),
+            'atmos_surf_press': VarDesc(name='MSL', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='Pa'),
+            'atmos_precip':        VarDesc(name='TP', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='m/s'),
+            'atmos_down_longwave': VarDesc(name='STRD', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='W/m2'),
+            'atmos_down_shortwave': VarDesc(name='SSRD', dtype='float', is_vector=False, dt=6, levels=level_sfc, z_units='Pa', units='W/m2'),
+        }
+        self.diag_variable_getter = {
+            'atmos_surf_vapor_mix': self.get_vapmix,
+        }
         self.grid = None
 
-    ###format filename
+    # #format filename
     def filename(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         assert kwargs['time'] is not None, 'please specify time'
         assert kwargs['name'] is not None, 'please specify variable name'
         year = '{:04d}'.format(kwargs['time'].year)
-        rec = self.variables[kwargs['name']]
+        rec = self.variables[kwargs['name']].asdict()
         if rec['is_vector']:
             files = []
             for name in rec['name']:
@@ -49,7 +52,7 @@ class ERA5Data(Dataset):
         return files
 
     def read_grid(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)[0]
         with netCDF4.Dataset(fname) as f:
             lon = f['longitude'][:].data
@@ -57,24 +60,27 @@ class ERA5Data(Dataset):
             x, y = np.meshgrid(lon, lat)
         self.grid = Grid(Proj('+proj=longlat'), x, y, cyclic_dim='x', pole_dim='y', pole_index=(0,))
 
-    ##find the nearest index in data for the given t
+    # find the nearest index in data for the given t
     def find_time_index(self, time_series, time):
         t_ = (time - datetime(1900,1,1,tzinfo=timezone.utc)) / timedelta(hours=1)
         ind = np.abs(time_series - t_).argmin()
         return ind
 
     def read_var(self, **kwargs):
-        kwargs = super().parse_kwargs(**kwargs)
+        kwargs = super().parse_kwargs(kwargs)
         name = kwargs['name']
         assert name is not None, 'please specify which variable (name=?) to get'
         time = kwargs['time']
         k = kwargs.get('k', 0)
-        rec = self.variables[name]
+        rec = self.variables[name].asdict()
 
         if time is None:
             t_index = 0
 
-        if 'name' in rec:
+        if name in self.diag_variable_getter:
+            var = self.diag_variable_getter[name](**kwargs)
+
+        else:
             files = self.filename(**kwargs)
             if rec['is_vector']:
                 var = []
@@ -94,13 +100,10 @@ class ERA5Data(Dataset):
                     dat = f.variables[rec['name']][t_index, ...]
                     var = dat.data
                     var[dat.mask] = np.nan
-            ##convert units if necessary
+            # convert units if necessary
             if rec['name'] in ('TP', 'STRD', 'SSRD'):
-                ##need to convert the fluxes to per second units (they are per 6 hours in the dataset)
+                # need to convert the fluxes to per second units (they are per 6 hours in the dataset)
                 var /= 3600. * 6
-
-        else:
-            var = rec['getter'](**kwargs)
 
         var = units_convert(rec['units'], kwargs['units'], var)
         return var
@@ -112,5 +115,5 @@ class ERA5Data(Dataset):
         vapmix = atmos_utils.vapmix(e_sat, press)
         return vapmix
 
-    def read_obs(self):
+    def read_obs_from_file(self, **kwargs):
         raise NotImplementedError

@@ -4,30 +4,18 @@ import subprocess
 import tempfile
 from time import sleep
 from NEDAS.utils.conversion import seconds_to_timestr
-from NEDAS.job_submitters.base import JobSubmitter
+from .hpc import HPCJobSubmitter
 
-class OARJobSubmitter(JobSubmitter):
+class OARJobSubmitter(HPCJobSubmitter):
     """JobSubmitter Class customized for OAR schedulers"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        ##temporary node file
-        if not self.run_separate_jobs:
+        # set up temporary node file
+        if self.in_job_allocation:
             with tempfile.NamedTemporaryFile(delete=False, dir=self.run_dir) as file:
                 self.node_file = file.name
-
-        ##host specific settings
-        if self.host == 'gricad':
-            p = subprocess.run("hostname", capture_output=True, text=True)
-            if p.stdout.replace('\n', '').replace(' ', '') in ['dahu-oar3', 'f-dahu']:
-                self.job_submit_node = None  ##don't need ssh for oarsub on compute nodes
-            else:
-                ##job submit node based on queue type
-                if self.queue == 'devel':
-                    self.job_submit_node = 'dahu-oar3'
-                else:
-                    self.job_submit_node = 'f-dahu'
 
     @property
     def nproc_avail(self):
@@ -49,7 +37,7 @@ class OARJobSubmitter(JobSubmitter):
 
     @property
     def ppn_avail(self):
-        ##TODO: how to obtain this info from OAR system?
+        # TODO: how to obtain this info from OAR system?
         return 32
 
     def update_node_file(self):
@@ -60,31 +48,37 @@ class OARJobSubmitter(JobSubmitter):
 
     @property
     def execute_command(self):
-        if self.run_separate_jobs:
-            node_file = '$OAR_NODE_FILE'
-        else:
+        if self.in_job_allocation:
             self.update_node_file()
             node_file = self.node_file
+        else:
+            node_file = '$OAR_NODE_FILE'
         return f"mpirun -np {self.nproc} --machinefile {node_file}"
 
     @property
     def job_array_index_name(self):
         return '$OAR_ARRAY_INDEX'
 
+    @property
+    def in_job_allocation(self) -> bool:
+        # TODO: implement this to check if a job allocation is already in use
+        # for now, assume it's not
+        return False
+
     def run_job_as_step(self, commands):
         super().run_job_as_step(commands)
-        ##clean up
+        # clean up
         os.remove(self.node_file)
 
     def submit_job_and_monitor(self, commands):
-        ##build the job script
+        # build the job script
         with tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                          dir=self.run_dir,
                                          prefix=self.job_name+'.',
                                          suffix='.sh') as job_script:
             job_script.write("#!/bin/bash\n")
 
-            ##OAR headers
+            # OAR headers
             job_script.write(f"#OAR -n {self.job_name}\n")
             job_script.write(f"#OAR -l /nodes={self.nnode}/core={self.ppn},walltime={seconds_to_timestr(self.walltime)}\n")
             job_script.write(f"#OAR --project {self.project}\n")
@@ -108,27 +102,27 @@ class OARJobSubmitter(JobSubmitter):
         st = os.stat(self.job_script)
         os.chmod(self.job_script, st.st_mode | stat.S_IEXEC)
 
-        ##submit the job script
-        if self.job_submit_node:
-            submit_cmd = ['ssh', self.job_submit_node,
-                          f"oarsub -S {self.job_script}"]
-        else:
-            submit_cmd = ["oarsub", "-S", f"{self.job_script}"]
-        process = subprocess.run(submit_cmd, capture_output=True)
-        s = process.stderr.decode('utf-8')
-        print(s, flush=True)
-        s = process.stdout.decode('utf-8')
-        print(s, flush=True)
+        # submit the job script
+        submit_cmd = self.job_submit_cmd()
+        # YY: use text=True in subprocess.run stead of .decode('utf-8') on stdout later
+        p = subprocess.run(submit_cmd, capture_output=True, text=True)
+        # s = p.stderr.decode('utf-8')
+        # print(s, flush=True)
+        # YY: use return code for error handling
+        if p.returncode != 0:
+            raise RuntimeError(f"Submission failed: {p.stderr}")
+        # YY: only print this out if debugging
+        if self.debug:
+            print(p.stdout, flush=True)
 
-        ##monitor the queue for job completion
+        self.get_job_id(p.stdout)
+
+        # monitor the queue for job completion
         if self.use_job_array:
-            self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_ARRAY_ID=')[-1])
             while True:
                 sleep(self.check_dt)
-                p = subprocess.run(['ssh', self.job_submit_node,
-                                    'oarstat', '-f', f'--array {self.job_id}',
-                                    '| grep "state = "'], capture_output=True)
-                s = p.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
+                p = self.check_job_status()
+                s = p.stdout.replace(' ', '').split('\n')[:-1]
                 print(s, flush=True)
                 s = [string for string in s if 'state=' in string]
                 print(s, flush=True)
@@ -140,13 +134,10 @@ class OARJobSubmitter(JobSubmitter):
                     raise RuntimeError(f"Error job array {self.job_id}")
 
         else:
-            self.job_id = int(s.replace(' ', '').replace('\n', '').split('OAR_JOB_ID=')[-1])
             while True:
                 sleep(20)
-                p = subprocess.run(['ssh', self.job_submit_node,
-                                    'oarstat', '-f', f'--job {self.job_id}',
-                                    '| grep "state = "'], capture_output=True)
-                s = p.stdout.decode('utf-8').replace(' ', '').split('\n')[:-1]
+                p = self.check_job_status()
+                s = p.stdout.replace(' ', '').split('\n')[:-1]
                 s = s[0]
                 print(s, flush=True)
                 jobs_status = s.split('state=')[-1].replace(' ', '')
@@ -155,3 +146,20 @@ class OARJobSubmitter(JobSubmitter):
                     break
                 if jobs_status == 'Error':
                     raise RuntimeError(f"Error in job {self.job_id}")
+
+    def job_submit_cmd(self):
+        return ["oarsub", "-S", f"{self.job_script}"]
+
+    def get_job_id(self, stdout):
+        if self.use_job_array:
+            self.job_id = int(stdout.replace(' ', '').replace('\n', '').split('OAR_ARRAY_ID=')[-1])
+        else:
+            self.job_id = int(stdout.replace(' ', '').replace('\n', '').split('OAR_JOB_ID=')[-1])
+
+    def check_job_status(self):
+        if self.use_job_array:
+            cmd = f'oarstat -f --array {self.job_id} | grep "state = "'
+        else:
+            cmd = f'oarstat -f --job {self.job_id} | grep "state = "'
+        p = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        return p

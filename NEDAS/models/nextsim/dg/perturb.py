@@ -4,9 +4,9 @@ from scipy.optimize import fsolve, root_scalar # type: ignore
 from scipy.ndimage import distance_transform_edt, gaussian_filter # type: ignore
 from NEDAS.utils.spatial_operation import gradx, grady, warp
 from NEDAS.utils.fft_lib import fft2, ifft2, get_wn, fftwn
-from NEDAS.grid import Grid
+from NEDAS.grid import RegularGrid
 
-def gen_perturb(grid: Grid,
+def gen_perturb(grid: RegularGrid,
                 perturb_type: typing.Literal['gaussian'],
                 amp: float,
                 hcorr: int) -> np.ndarray:
@@ -15,8 +15,8 @@ def gen_perturb(grid: Grid,
 
     Parameters
     ----------
-    grid : Grid
-        grid object for the 2D domain
+    grid : RegularGrid
+        regular grid object for the 2D domain
     perturb_type : typing.Literal['gaussian']
         type of perturbation method
     amp : float
@@ -31,7 +31,7 @@ def gen_perturb(grid: Grid,
     np.ndarray
         random perturbation field
     """
-    ##generate perturbation according to prescribed parameters
+    # generate perturbation according to prescribed parameters
     if perturb_type == 'gaussian':
         perturb = random_field_gaussian(grid.nx, grid.ny, amp, hcorr)
         perturb = perturb - perturb.mean()
@@ -55,7 +55,7 @@ def apply_AR1_perturb(perturb: np.ndarray,
     prev_perturb : typing.Union[None, np.ndarray], optional
         previous perturbation field, by default None
     """
-    ##create perturbations that are correlated in time
+    # create perturbations that are correlated in time
     autocorr = np.exp(-1.0)
     alpha = autocorr**(1.0/tcorr)
     if prev_perturb is not None:
@@ -63,7 +63,7 @@ def apply_AR1_perturb(perturb: np.ndarray,
     return perturb
 
 
-def apply_perturb(grid: Grid,
+def apply_perturb(grid: RegularGrid,
                   field:np.ndarray,
                   perturb:np.ndarray,
                   perturb_type:typing.Literal['gaussian']) -> np.ndarray:
@@ -71,7 +71,7 @@ def apply_perturb(grid: Grid,
 
     Parameters
     ----------
-    grid : Grid
+    grid : RegularGrid
         grid object for the 2D domain
     field : np.ndarray
         field to be perturbed
@@ -85,7 +85,7 @@ def apply_perturb(grid: Grid,
     np.ndarray
         perturbed field
     """
-    ##apply the perturbation
+    # apply the perturbation
     # todo: adding logorithmic perturbation
     field += perturb
     return field
@@ -154,14 +154,14 @@ def random_field_gaussian(nx:int, ny:int, amplitude:float, hcorr:int) -> np.ndar
     return np.real(ifft2(ph * nx * ny))
 
 
-def pres_adjusted_wind_perturb(grid: Grid, ampl_pres:float, ampl_wind:float,
+def pres_adjusted_wind_perturb(grid: RegularGrid, ampl_pres:float, ampl_wind:float,
                                scorr:float, pres:np.ndarray,
                                with_wind_speed_limit:bool=True, wlat:float=15.) -> tuple[np.ndarray, np.ndarray]:
     """generate a random perturbation for wind u,v by pressure perturbation.
 
     Parameters
     ----------
-    grid : Grid
+    grid : RegularGrid
         grid object for the 2D domain
     ampl_pres : float
         amplitude of pressure perturbations (Pa)
