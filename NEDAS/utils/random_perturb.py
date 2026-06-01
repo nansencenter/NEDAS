@@ -95,8 +95,9 @@ def random_displacement(grid, mask, amp, hcorr):
         mask[-1, :] = True
 
     # distance to masked area
-    dist = distance_transform_edt(1-mask.astype(float))
-    dist /= dist.max()
+    dist = np.asarray(distance_transform_edt(~mask))
+    d_max = dist.max()
+    dist = dist / d_max if d_max > 0 else np.ones_like(dist)
     dist = gaussian_filter(dist, sigma=10)
     dist[mask] = 0
 
