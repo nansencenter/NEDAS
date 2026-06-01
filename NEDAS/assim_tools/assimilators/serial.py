@@ -177,16 +177,16 @@ class SerialAssimilator(Assimilator):
         pass
 
     @abstractmethod
-    def update_local_obs(self, obs_data_prior, obs_used, obs_prior, obs_incr,
-                         obs_h_dist, obs_v_dist, obs_t_dist,
+    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
+                         h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
                          h_local_func, v_local_func, t_local_func) -> None:
         """
         Update the local observations with analysis increments.
 
         Args:
-            obs_data_prior (np.ndarray):
-            obs_used (np.nd
+            obs_data (np.ndarray): obs prior ensemble, shape (nens, nlobs)
+            used (np.ndarray): boolean mask of already-assimilated obs
         """
         pass
 
