@@ -43,6 +43,10 @@ Homepage = "https://github.com/nansencenter/NEDAS"
 
 [tool.setuptools.packages.find]
 where = ["."]
+exclude = ["tests*"]
 
 [tool.setuptools_scm]
 write_to = "NEDAS/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
