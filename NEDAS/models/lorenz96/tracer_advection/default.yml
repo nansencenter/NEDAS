@@ -1,7 +1,9 @@
-##model nondimensional parameters
-nx: 40  ##model dimension
-F: 8    ##forcing parameter
-dt: 0.05 ##time step
+## model nondimensional parameters
+nx: 40   ## model dimension
+F: 8     ## forcing parameter
+dt: 0.05 ## time step
+
+numeric_opt: rk4
 
 mean_velocity: 0.0
 pert_velocity_multiplier: 5.0
@@ -12,8 +14,11 @@ point_tracer_source_rate: 5.0
 positive_tracer: True
 bound_above_is_one: False
 
-##some dimensional parameters
-restart_dt: 1  ##restart interval (hours)
+## some dimensional parameters
+restart_dt: 1  ## restart interval (hours)
 nproc_per_run: 1
 nproc_per_util: 1
 walltime: 10
+
+ens_init_dir:
+truth_dir:
