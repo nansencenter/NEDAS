@@ -13,7 +13,6 @@ slurm*out
 .pytest_cache
 .claude
 docs/build
-docs/source/NEDAS*.rst
 *.egg-info
 *.ipynb
 _version.py
