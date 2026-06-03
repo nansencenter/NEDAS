@@ -1,8 +1,7 @@
 """Basic smoke tests for the Python QG model."""
 
+import sys
 import numpy as np
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../'))
 
 from NEDAS.models.qg.python.spectral import setup_spectral_grid, spec2grid_cc, grid2spec, ir_prod
 from NEDAS.models.qg.python.strat import get_vmodes, strat_params
@@ -19,7 +18,7 @@ def test_transform_roundtrip():
     """
     kmax = 15
     g = setup_spectral_grid(kmax)
-    nkx, nky = g['nkx'], g['nky']
+    nkx, nky = int(g['nkx']), int(g['nky'])
     filt = g['filter_mask']
 
     # Random spectral field only on active (filter_mask > 0) modes
@@ -40,7 +39,7 @@ def test_ir_prod_dealiasing():
     """ir_prod product should have zero energy in conjugate-symmetry region."""
     kmax = 15
     g = setup_spectral_grid(kmax)
-    nkx, nky = g['nkx'], g['nky']
+    nkx, nky = int(g['nkx']), int(g['nky'])
     filt = g['filter_mask']
 
     rng = np.random.default_rng(0)
@@ -61,8 +60,8 @@ def test_ir_prod_dealiasing():
     assert leakage < 1e6, 'ir_prod result suspiciously large'
 
     # Verify that conjugate-determined region (ky=0, kx<=0) is consistent
-    kmax = g['kmax']
-    nkx  = g['nkx']
+    kmax = int(g['kmax'])
+    nkx  = int(g['nkx'])
     # Hermitian symmetry: F(-kx, 0) = conj(F(kx, 0)).
     # In the array (kx indexed 0..nkx-1 where kx=0 is at position kmax):
     #   prod_ky0[j] = conj(prod_ky0[nkx-1-j]) for j < kmax
@@ -126,17 +125,20 @@ def test_barotropic_run():
 
     rng = np.random.default_rng(7)
     g = setup_spectral_grid(15)
-    psi0 = (rng.standard_normal((1, g['nky'], g['nkx']))
-            + 1j * rng.standard_normal((1, g['nky'], g['nkx']))) * g['filter_mask']
+    nky, nkx = int(g['nky']), int(g['nkx'])
+    psi0 = (rng.standard_normal((1, nky, nkx))
+            + 1j * rng.standard_normal((1, nky, nkx))) * g['filter_mask']
     # Scale to target spectral energy sum(k²|ψ|²) = e_target
     e_target = 0.01
-    ksqd_ = g['ksqd_']
+    ksqd_: np.ndarray = g['ksqd_']
     energy_spec = float(np.sum(ksqd_[np.newaxis] * np.abs(psi0)**2))
     psi0 *= np.sqrt(e_target / (energy_spec + 1e-30))
 
     m.initialize(psi_init=psi0)
+    assert m.psi is not None
     e0 = float(np.sum(ksqd_ * np.abs(m.psi[0])**2))
     m.run(50)
+    assert m.psi is not None
     e1 = float(np.sum(ksqd_ * np.abs(m.psi[0])**2))
     print(f'Barotropic: initial energy={e0:.4f}, after 50 steps={e1:.4f}, dt={m.dt:.4f}')
     assert np.isfinite(e1), 'Energy is not finite after run'
@@ -154,18 +156,67 @@ def test_multilayer_run():
 
     g = setup_spectral_grid(15)
     rng = np.random.default_rng(3)
-    psi0 = (rng.standard_normal((nz, g['nky'], g['nkx']))
-            + 1j * rng.standard_normal((nz, g['nky'], g['nkx']))) * g['filter_mask']
+    nky, nkx = int(g['nky']), int(g['nkx'])
+    psi0 = (rng.standard_normal((nz, nky, nkx))
+            + 1j * rng.standard_normal((nz, nky, nkx))) * g['filter_mask']
     # Scale to target energy = 0.01 per layer
-    ksqd_ = g['ksqd_']
+    ksqd_: np.ndarray = g['ksqd_']
     e_spec = float(np.sum(ksqd_[np.newaxis] * np.abs(psi0)**2))
     psi0 *= np.sqrt(0.01 * nz / (e_spec + 1e-30))
 
     m.initialize(psi_init=psi0, dz=dz, rho=rho)
     m.run(20)
+    assert m.psi is not None
     print(f'Multi-layer run OK, time={m.time:.4f}, dt={m.dt:.4f}')
     assert np.isfinite(m.time)
     assert np.isfinite(float(np.sum(np.abs(m.psi)**2)))
+
+
+def test_fortran_config_stability():
+    """2-layer model with Fortran-equivalent config should not blow up at e_o=10.
+
+    Fortran defaults: kmax=127, dt=0.00025, F=100, beta=16, bot_drag=0.5,
+    filter_type='exp_cutoff', k_cut=100.  At kmax=63 (half resolution) the
+    stable fixed dt scales to ~0.0005 and k_cut scales to ~50.
+    Tests both fixed-dt and adapt_dt (with dt_max cap) modes across 5 seeds.
+    """
+    kmax = 63
+    g = setup_spectral_grid(kmax)
+    nky, nkx = int(g['nky']), int(g['nkx'])
+    ksqd_: np.ndarray = g['ksqd_']
+    dz  = np.array([0.5, 0.5])
+    rho = np.array([1.0, 1.03])
+
+    common = dict(kmax=kmax, nz=2, F=100.0, beta=16.0, bot_drag=0.5,
+                  filter_type='exp_cutoff', filter_exp=8.0, k_cut=50.0,
+                  dealiasing='isotropic')
+
+    for seed in range(3):
+        rng = np.random.default_rng(seed)
+        psi0 = (rng.standard_normal((2, nky, nkx))
+                + 1j * rng.standard_normal((2, nky, nkx))) * g['filter_mask']
+        e_o = 10.0
+        psi0 *= np.sqrt(e_o / (float(np.sum(ksqd_[np.newaxis] * np.abs(psi0)**2)) + 1e-30))
+
+        # Fixed dt
+        m = QGModel(**common, adapt_dt=False, dt=0.0005)
+        m.initialize(psi_init=psi0.copy(), dz=dz, rho=rho)
+        m.run(2000)
+        assert m.psi is not None
+        e_final = float(np.sum(ksqd_[np.newaxis] * np.abs(m.psi)**2))
+        print(f'  fixed-dt seed={seed}: final energy={e_final:.3f}, dt={m.dt:.5f}')
+        assert np.isfinite(e_final), f'fixed-dt seed={seed} blew up'
+        assert e_final < e_o * 10,   f'fixed-dt seed={seed} energy exploded'
+
+        # Adaptive dt with ceiling
+        m2 = QGModel(**common, adapt_dt=True, dt_max=0.002, dt_tune=1.5, dt_step=10)
+        m2.initialize(psi_init=psi0.copy(), dz=dz, rho=rho)
+        m2.run(2000)
+        assert m2.psi is not None
+        e_final2 = float(np.sum(ksqd_[np.newaxis] * np.abs(m2.psi)**2))
+        print(f'  adapt-dt seed={seed}: final energy={e_final2:.3f}, dt={m2.dt:.5f}')
+        assert np.isfinite(e_final2), f'adapt-dt seed={seed} blew up'
+        assert e_final2 < e_o * 10,   f'adapt-dt seed={seed} energy exploded'
 
 
 if __name__ == '__main__':

@@ -23,6 +23,7 @@ crossing the boundary between the two conventions.
 """
 
 import os
+from typing import Any
 import numpy as np
 from datetime import datetime
 
@@ -69,6 +70,14 @@ class QGPythonModel(Model):
     All physics parameters (kmax, nz, F, beta, bot_drag, …) are read from
     default.yml and overridden by the user YAML / CLI args via parse_config().
     """
+
+    # Dynamic config attributes set by parse_config() in the base Model class
+    kmax: int
+    nz: int
+    restart_dt: float
+    F: float
+    beta: float
+    _g: dict[str, Any]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -209,7 +218,7 @@ class QGPythonModel(Model):
         if os.path.exists(fname):
             psi_all = np.load(fname)
         else:
-            nky, nkx = self._g['nky'], self._g['nkx']
+            nky, nkx = int(self._g['nky']), int(self._g['nkx'])
             psi_all = np.zeros((self.nz, nky, nkx), dtype=complex)
 
         self._psi_from_var(var, kwargs['name'], iz, psi_all)
@@ -257,7 +266,7 @@ class QGPythonModel(Model):
         key = self._mem_key(kwargs)
         psi_all = self._get_psi_mem(tstr, key)
         if psi_all is None:
-            nky, nkx = self._g['nky'], self._g['nkx']
+            nky, nkx = int(self._g['nky']), int(self._g['nkx'])
             psi_all = np.zeros((self.nz, nky, nkx), dtype=complex)
         self._psi_from_var(var, kwargs['name'], iz, psi_all)
         self._set_psi_mem(tstr, key, psi_all)
@@ -347,6 +356,7 @@ class QGPythonModel(Model):
             deltc=ga(self, 'deltc', 0.2),
             surface_bc=ga(self, 'surface_bc', 'rigid_lid'),
             dt=ga(self, 'dt', 0.0),
+            dt_max=ga(self, 'dt_max', 0.0),
             adapt_dt=ga(self, 'adapt_dt', True),
             dt_tune=ga(self, 'dt_tune', 1.5),
             dt_step=ga(self, 'dt_step', 10),
@@ -376,7 +386,7 @@ class QGPythonModel(Model):
     def _make_init_psi(self, member=None, time=None):
         """Generate initial spectral psi from psi_init_type config."""
         g = self._g
-        nky, nkx = g['nky'], g['nkx']
+        nky, nkx = int(g['nky']), int(g['nkx'])
         ksqd_ = g['ksqd_']
         filt = g['filter_mask']
         nz = self.nz
@@ -458,14 +468,16 @@ class QGPythonModel(Model):
             m.step()
 
         # ---- Save output ----
+        psi_out = m.psi
+        assert psi_out is not None
         tstr_out = self.get_tstr(next_time)
         if self.io_mode == 'offline':
             out_file = self.filename(**{**kwargs, 'time': next_time})
             os.makedirs(os.path.dirname(out_file), exist_ok=True)
-            np.save(out_file, m.psi)
+            np.save(out_file, psi_out)
         else:
             out_key = tag + mstr
-            self._set_psi_mem(tstr_out, out_key, m.psi.copy())
+            self._set_psi_mem(tstr_out, out_key, psi_out.copy())
 
         self.run_status = 'done'
 
@@ -506,6 +518,7 @@ class QGPythonModel(Model):
         kwargs = super().parse_kwargs(kwargs)
         spinup_hours = getattr(self, 'spinup_hours', 168)
         member = kwargs['member']
+        assert member is not None, 'generate_init_ensemble requires a member index'
         mstr = f'{member+1:04d}'
         tstr = kwargs['time'].strftime('%Y%m%d_%H')
         init_file = os.path.join(self.ens_init_dir, mstr, f'output_{tstr}.npy')

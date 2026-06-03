@@ -14,7 +14,8 @@ beta: 16.0     # β₀L²/[(2π)²U]
 
 # Time stepping
 adapt_dt: false
-dt: 0.0025
+dt: 0.0005     # Fortran default is 0.00025 at kmax=127; ~0.0005 at kmax=63
+dt_max: 0.002  # ceiling for adapt_dt; prevents unbounded growth as energy decays
 dt_tune: 1.5
 dt_step: 10    # recalculate adaptive dt every dt_step steps
 robert: 0.01   # Robert-Asselin filter coefficient
@@ -60,11 +61,11 @@ forc_corr: 0.0
 kf_min: 1.0
 kf_max: 3.0
 
-# Spectral filter
-filter_type: 'hyperviscous'   # hyperviscous / exp_cutoff / none
+# Spectral filter  (matches Fortran: exp_cutoff with k_cut scaled for kmax)
+filter_type: 'exp_cutoff'     # hyperviscous / exp_cutoff / none
 filter_exp: 8.0
 filt_tune: 1.0
-k_cut: 0.0        # exp_cutoff wavenumber (only used when filter_type=exp_cutoff)
+k_cut: 50.0       # Fortran uses 100 at kmax=127; ~50 at kmax=63
 dealiasing: 'isotropic'
 
 # Dissipation

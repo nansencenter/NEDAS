@@ -32,7 +32,7 @@ Usage
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from .spectral import (
     setup_spectral_grid, make_filter,
@@ -73,6 +73,7 @@ class QGModel:
 
     # Time stepping
     dt:       float = 0.0
+    dt_max:   float = 0.0   # hard ceiling on adapt_dt; 0 = uncapped
     adapt_dt: bool  = True
     dt_tune:  float = 1.5
     dt_step:  int   = 10
@@ -112,7 +113,7 @@ class QGModel:
     pi: float = field(default=np.pi, init=False, repr=False)
 
     # ---- Internal state (populated by initialize()) ----
-    _g:      Optional[dict]       = field(default=None, init=False, repr=False)
+    _g:      Optional[dict[str, Any]] = field(default=None, init=False, repr=False)
     _psiq:   Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _filt:   Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _ubar:   Optional[np.ndarray] = field(default=None, init=False, repr=False)
@@ -124,7 +125,8 @@ class QGModel:
     _dz:     Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _rho:    Optional[np.ndarray] = field(default=None, init=False, repr=False)
     _hb:     Optional[np.ndarray] = field(default=None, init=False, repr=False)
-    _force_o: Optional[np.ndarray] = field(default=None, init=False, repr=False)
+    _force_o:    Optional[np.ndarray] = field(default=None, init=False, repr=False)
+    _toposhift:  Optional[np.ndarray] = field(default=None, init=False, repr=False)
 
     # Prognostic fields
     q:      Optional[np.ndarray] = field(default=None, init=False, repr=False)
@@ -158,8 +160,8 @@ class QGModel:
         g = setup_spectral_grid(self.kmax)
         self._g = g
         nz  = self.nz
-        nky = g['nky']
-        nkx = g['nkx']
+        nky = int(g['nky'])
+        nkx = int(g['nkx'])
 
         # Default vertical grid
         if dz is None:
@@ -183,7 +185,6 @@ class QGModel:
         self._shearv = np.zeros(nz)
         if nz > 1 and self._psiq is not None:
             # shearu = tri2mat(psiq) * ubar  (Fortran qg_driver line 61)
-            from .strat import _build_trimat
             psiq_mat = _build_trimat(self._psiq, nz)
             self._shearu = psiq_mat @ self._ubar
             self._shearv = psiq_mat @ self._vbar
@@ -224,14 +225,13 @@ class QGModel:
 
         # Initialise prognostic fields
         shape_spec = (nz, nky, nkx)
-        if psi_init is not None:
-            self.psi = np.asarray(psi_init, dtype=complex)
-        else:
-            self.psi = np.zeros(shape_spec, dtype=complex)
-
-        self.psi_o = self.psi.copy()
-        self.q     = self.get_pv(self.psi)
-        self.q_o   = self.q.copy()
+        psi_arr = (np.asarray(psi_init, dtype=complex) if psi_init is not None
+                   else np.zeros(shape_spec, dtype=complex))
+        self.psi   = psi_arr
+        self.psi_o = psi_arr.copy()
+        q_arr      = self.get_pv(psi_arr)
+        self.q     = q_arr
+        self.q_o   = q_arr.copy()
         self.rhs   = self._get_rhs()
 
         if self.adapt_dt and self.dt == 0.0:
@@ -252,6 +252,7 @@ class QGModel:
         psi : (nz, nky, nkx)  or  (nv, nky, nkx) for surf_buoy
         Returns (nz, nky, nkx)
         """
+        assert self._g is not None, 'call initialize() before get_pv()'
         g     = self._g
         nz    = self.nz
         ksqd_ = g['ksqd_']   # (nky, nkx)
@@ -262,12 +263,7 @@ class QGModel:
         if nz > 1 and psiq is not None:
             # Vertical stretching term
             # top boundary index depends on surface_bc
-            if self.surface_bc == 'rigid_lid':
-                top = 0        # psi[0] (Python 0-based = Fortran level 1)
-            elif self.surface_bc == 'surf_buoy':
-                top = 0        # psi[0] = surface buoyancy level
-            elif self.surface_bc == 'periodic':
-                top = nz - 1   # wrap: psi[nz-1] plays role of top
+            top = nz - 1 if self.surface_bc == 'periodic' else 0
 
             # q[0] = psiq[0,-1]*psi[top] + psiq[0,0]*psi[0] + psiq[0,1]*psi[1]
             q[0] = (psiq[0, 0] * psi[top]
@@ -296,6 +292,9 @@ class QGModel:
         """
         from .numerics import tridiag_vec, tridiag_cyc_vec
 
+        assert self._g is not None, 'call initialize() before invert_pv()'
+        assert self.q is not None
+
         g     = self._g
         nz    = self.nz
         ksqd_ = g['ksqd_']
@@ -314,6 +313,7 @@ class QGModel:
 
         # Build per-wavenumber diagonal: psiq[:, 1] - k²
         # Shape: (nmask, nz)  — k² varies per wavenumber
+        assert psiq is not None
         ksqd_flat = ksqd_[lin2ky, lin2kx]   # (nmask,)
         diag_base = psiq[:nz, 1]              # (nz,) shared part
         diag = diag_base[np.newaxis, :] - ksqd_flat[:, np.newaxis]   # (nmask, nz)
@@ -347,6 +347,13 @@ class QGModel:
         Translates Fortran Get_rhs subroutine in qg_driver.f90.
         Returns rhs of shape (nz, nky, nkx).
         """
+        assert self._g is not None
+        assert self._filt is not None
+        assert self._dz is not None
+        assert self.psi is not None and self.q is not None and self.psi_o is not None
+        assert self._qbarx is not None and self._qbary is not None
+        assert self._ubar is not None and self._vbar is not None
+
         g     = self._g
         nz    = self.nz
         kx_   = g['kx_']
@@ -443,17 +450,20 @@ class QGModel:
         Translates Fortran Markovian in qg_run_tools.f90.
         Returns forcing array (nky, nkx).
         """
+        assert self._g is not None
         g     = self._g
         ksqd_ = g['ksqd_']
-        nkx   = g['nkx']
-        nky   = g['nky']
+        nkx   = int(g['nkx'])
+        nky   = int(g['nky'])
+
+        assert self._force_o is not None
 
         mask = (ksqd_ > kf_min**2) & (ksqd_ <= kf_max**2)
         noise_phase = 2.0 * np.pi * ran(nkx, nky).T   # (nky, nkx)
-        noise = amp * np.exp(1j * noise_phase)
+        noise = amp * np.sqrt(1.0 - lam**2) * np.exp(1j * noise_phase)
 
         frc_o = self._force_o
-        frc_o = np.where(mask, lam * frc_o + amp * np.sqrt(1.0 - lam**2) * np.exp(1j * noise_phase), frc_o)
+        frc_o = np.where(mask, lam * frc_o + noise, frc_o)
         forc = frc_o.copy()
 
         if normalize:
@@ -475,7 +485,7 @@ class QGModel:
           dt = dt_tune * 2π / (kmax * sqrt(max(zsq(psi), beta, 1)))
         where  zsq = 2 * sum(dz * k⁴ * |ψ|²)  (twice the enstrophy).
         """
-        if self.psi is not None:
+        if self.psi is not None and self._g is not None and self._dz is not None:
             ksqd_ = self._g['ksqd_']
             zsq = 2.0 * float(
                 np.sum(self._dz[:, np.newaxis, np.newaxis]
@@ -486,6 +496,8 @@ class QGModel:
             zsq = 0.0
         denom = np.sqrt(max(zsq, self.beta, 1.0))
         self.dt = self.dt_tune * 2.0 * self.pi / (self.kmax * denom)
+        if self.dt_max > 0.0:
+            self.dt = min(self.dt, self.dt_max)
 
     # ---------------------------------------------------------------
     # Time integration
@@ -498,6 +510,9 @@ class QGModel:
         """
         if self._g is None:
             raise RuntimeError('call initialize() before step()')
+        assert self.q is not None and self.q_o is not None
+        assert self.rhs is not None and self._filt is not None
+        assert self.psi is not None
 
         g = self._g
 
@@ -533,18 +548,22 @@ class QGModel:
 
     def get_psi_grid(self):
         """Return streamfunction in physical space, shape (nz, ny, nx)."""
+        assert self.psi is not None and self._g is not None
         return spec2grid(self.psi, self._g)
 
     def get_q_grid(self):
         """Return PV in physical space, shape (nz, ny, nx)."""
+        assert self.q is not None and self._g is not None
         return spec2grid(self.q, self._g)
 
     def get_u_grid(self):
         """Return zonal velocity, shape (nz, ny, nx)."""
+        assert self.psi is not None and self._g is not None
         return spec2grid(-1j * self._g['ky_'][np.newaxis] * self.psi, self._g)
 
     def get_v_grid(self):
         """Return meridional velocity, shape (nz, ny, nx)."""
+        assert self.psi is not None and self._g is not None
         return spec2grid(1j * self._g['kx_'][np.newaxis] * self.psi, self._g)
 
     @property
@@ -577,6 +596,3 @@ def _build_trimat(psiq, nz):
     return mat
 
 
-# Monkey-patch into strat so QGModel.initialize() can call it
-import NEDAS.models.qg.python.strat as _strat_mod
-_strat_mod._build_trimat = _build_trimat

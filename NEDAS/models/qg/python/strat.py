@@ -38,12 +38,15 @@ def strat_params(dz, drho, F, Fe, surface_bc='rigid_lid'):
 
     elif surface_bc == 'surf_buoy':
         # psi at surface is in a delta sheet at z=0
-        op[0, 0]  = F / (dz[0] * drho[0])   # psi(0) coupling
-        op[0, 1]  = 1.0 / dz[0]             # b equation diagonal (level 0)
-        op[0, 2]  = -1.0 / dz[0]            # b equation super
+        op[0, 0] = F / (dz[0] * drho[0])   # psi(0) coupling
+        op[0, 2] = -1.0 / dz[0]            # b equation super
 
-    # Diagonal: op(:, 1) = -sub - super  (for rows 1..nz)
+    # Diagonal for interior layers: op(:, 1) = -sub - super
     op[0:nz, 1] = -op[0:nz, 0] - op[0:nz, 2]
+
+    if surface_bc == 'surf_buoy':
+        # Restore buoyancy-row diagonal (overwritten by the loop above)
+        op[0, 1] = 1.0 / dz[0]
     # Free lower surface correction
     op[nz-1, 1] -= Fe / dz[nz-1]
 

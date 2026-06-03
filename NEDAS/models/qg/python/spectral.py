@@ -24,9 +24,10 @@ Fortran fft(x, dirn=-1)  ->  FFTW_BACKWARD, scale=1   -> np.fft.ifft2(x)*N²
 Fortran fft(x, dirn=+1)  ->  FFTW_FORWARD,  scale=1/N² -> np.fft.fft2(x)/N²
 """
 
+from typing import Any
 import numpy as np
 try:
-    import jax.numpy as jnp
+    import jax.numpy as jnp  # type: ignore[import-untyped]
     _JAX = True
 except ImportError:
     jnp = np
@@ -37,7 +38,7 @@ except ImportError:
 # Grid setup
 # ---------------------------------------------------------------------------
 
-def setup_spectral_grid(kmax):
+def setup_spectral_grid(kmax: int) -> dict[str, Any]:
     """Return wavenumber grids and index arrays for spec<->phys transforms.
 
     Returns a dict with keys:
@@ -187,8 +188,8 @@ def spec2grid_cc(wf, g):
     # Python (0-based): indices 0..kmax set from indices 2*kmax..kmax (reversed)
     if _JAX:
         ky0 = wavefield[..., 0, :]
-        ky0 = ky0.at[..., :kmax + 1].set(xp.conj(ky0[..., 2*kmax:kmax-1:-1]))
-        wavefield = wavefield.at[..., 0, :].set(ky0)
+        ky0 = ky0.at[..., :kmax + 1].set(xp.conj(ky0[..., 2*kmax:kmax-1:-1]))  # type: ignore[union-attr]
+        wavefield = wavefield.at[..., 0, :].set(ky0)  # type: ignore[union-attr]
     else:
         wavefield[..., 0, :kmax + 1] = np.conj(wavefield[..., 0, 2*kmax:kmax-1:-1])
 
@@ -211,8 +212,8 @@ def spec2grid_cc(wf, g):
     minus_ = xp.conj(wf_t - 1j * (exx_t * wf_t))
 
     if _JAX:
-        physfield = physfield.at[..., ix_up, iy_up].set(plus_)
-        physfield = physfield.at[..., ix_dn, iy_dn].set(minus_)
+        physfield = physfield.at[..., ix_up, iy_up].set(plus_)  # type: ignore[union-attr]
+        physfield = physfield.at[..., ix_dn, iy_dn].set(minus_)  # type: ignore[union-attr]
     else:
         physfield[..., ix_up, iy_up] = plus_
         physfield[..., ix_dn, iy_dn] = minus_
