@@ -1,10 +1,6 @@
 Configuration file
 ==================
 
-.. contents::
-   :local:
-   :depth: 2
-
 Usage
 -----
 
@@ -17,28 +13,28 @@ Also, the simple entry types (not the compound types such as list, tuple and dic
 specified with a new value with ``--key value`` at runtime,
 which makes it easier to run the same experiment but just changing one or two parameters in the configuration.
 
-In a python script, the following code can be included
-
-.. code-block:: python
-
-   from NEDAS.config import Config
-   c = Config(parse_args=True)
-
-so that when the script is run on command line as
+To run a NEDAS experiment on command line:
 
 .. code-block:: bash
 
-   python script.py -c CONFIG_FILE --key value
+   python -m NEDAS -c CONFIG_FILE --key value
 
-the config object ``c`` is created, whose attributes carry the configuration parameters.
 
 Alternatively, in an interactive environment such as a Jupyter notebook,
-the configuration object ``c`` can be initialized directly with
+the configuration object ``config`` can be initialized directly with
 
 .. code-block:: python
 
    from NEDAS.config import Config
-   c = Config(config_file='CONFIG_FILE', key=value)
+   config = Config(config_file='CONFIG_FILE', key=value)
+
+The ``config`` object can then use used to initialize and run the analysis scheme
+
+.. code-block:: python
+
+   from NEDAS.schemes import get_scheme
+   scheme = get_scheme(config)
+   scheme()
 
 Description of entries
 ----------------------

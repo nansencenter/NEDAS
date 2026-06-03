@@ -17,4 +17,3 @@ Submodules
    NEDAS.models.qg.python.qg_python_model
    NEDAS.models.qg.python.spectral
    NEDAS.models.qg.python.strat
-   NEDAS.models.qg.python.test_basic

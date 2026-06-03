@@ -40,12 +40,8 @@ napoleon_use_ivar = True
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'furo'
 html_show_sphinx = False
 html_logo = '../imgs/nedas_logo_banner.png'
-html_theme_options = {
-    'logo_only': True,
-    'includehidden': False,
-}
 
 html_static_path = ['_static']
