@@ -12,6 +12,8 @@ batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.d
 
 [NEDAS documentaion is available online](https://nedas.readthedocs.io/en/latest/)
 
+[A series of tutorial notebooks are also available](https://github.com/myying/NEDAS_tutorials)
+
 ### Installing NEDAS
 
 NEDAS is available through this Github repository. To install the latest version at `[install path]`:
