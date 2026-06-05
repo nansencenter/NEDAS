@@ -41,7 +41,7 @@ def get_localization_func_component(localization_types):
     # elif 'NICE' in localization_types:
     #     from NEDAS.assim_tools.localization.NICE import
     else:
-        raise ValueError(f"Unknown localization type {type}")
+        raise ValueError(f"Unknown localization type {localization_types}")
     return local_func
 
 __all__ = ['registry', 'get_localization_funcs']
