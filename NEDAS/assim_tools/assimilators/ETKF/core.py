@@ -1,9 +1,25 @@
 import numpy as np
 from NEDAS.utils.njit import njit
+from NEDAS.utils.parallel import bcast_by_root
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
+    transform_solver: str  # 'svd' or 'eigen'
+
+    def assimilation_algorithm(self, c):
+        # Generate ONE mean-preserving random orthogonal rotation per analysis
+        # cycle, shared across all grid points and MPI ranks. DAPPER applies a
+        # single global rotation (one analysis domain); applying independent
+        # rotations at each grid point would scramble the spatial cross-
+        # covariances of the analysis ensemble (G_x^T G_y != I) and cause filter
+        # divergence. A single shared rotation relabels the members consistently
+        # everywhere, preserving the full posterior covariance.
+        if self.random_rotation and c.nens > 2:
+            self.rotation_matrix = bcast_by_root(c.comm)(mean_preserving_rotation)(c.nens)
+        else:
+            self.rotation_matrix = np.eye(c.nens)
+        super().assimilation_algorithm(c)
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  # variable id for each field (nfld)
@@ -20,18 +36,22 @@ class ETKFAssimilator(BatchAssimilator):
         troi = obs_data['troi'][obs_rec_id]
         impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
 
+        # the string solver option is mapped to a boolean here so that the njit
+        # kernels do not need to perform string comparisons
+        use_eigen = (self.transform_solver == 'eigen')
+
         local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_state)
+                            impact_on_state, self.rotation_matrix, use_eigen)
 
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_state) -> None:
+                        impact_on_state, rotation, use_eigen) -> None:
     """perform local analysis for one location in the analysis grid partition"""
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -76,11 +96,15 @@ def local_analysis_main(state_prior, obs_prior,
         sort_ind = np.argsort(lfactor[ind])[::-1]
         ind = ind[sort_ind]
 
-        # use cached weight if no localization is applied, to avoid repeated computation
+        # use cached weight if the localization factors are unchanged from the
+        # previous field record, to avoid repeated computation. Note: when a
+        # random rotation is applied, the cached weights (including their
+        # rotation) are reused, keeping neighboring field records consistent.
         if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
             weights = weights_old
         else:
-            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind])
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind],
+                                                 lfactor[ind], rotation, use_eigen)
 
         # perform local analysis and update the ensemble state
         state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
@@ -89,7 +113,26 @@ def local_analysis_main(state_prior, obs_prior,
         weights_old = weights
 
 @njit
-def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor):
+def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor,
+                               rotation, use_eigen=False):
+    """
+    Compute the ETKF ensemble transform weight matrix for one local analysis.
+
+    The algorithm follows the symmetric square-root (ETKF) formulation used in
+    DAPPER (github.com/nansencenter/DAPPER, ``EnKF_analysis`` with the ``Sqrt``
+    update). The transform is obtained directly from the singular value
+    decomposition of the (whitened, localized) observation anomaly matrix S,
+    rather than from forming the cross-product I + S^T S explicitly.
+
+    ``rotation`` is a (nens x nens) mean-preserving orthogonal matrix applied to
+    the symmetric square root (identity to disable). The SAME matrix must be
+    used at every grid point of an analysis (see ``mean_preserving_rotation``).
+
+    The returned ``weights`` matrix W (nens x nens) is such that the analysis
+    ensemble is ``x_post[k] = sum_m x_prior[m] * W[m, k]``, with each column
+    summing to one. W decomposes as ``W[m, k] = w[m] + T[m, k]`` where w is the
+    mean-update weight and T is the (optionally rotated) symmetric square root.
+    """
     nens, nlobs = obs_prior.shape
 
     # ensemble weight matrix, weights[:, m] is for the m-th member
@@ -101,71 +144,111 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor):
     for m in range(nens):
         obs_prior_mean += obs_prior[m, :]
     obs_prior_mean /= nens
-    # find variance of obs_prior
-    obs_prior_var = np.zeros(nlobs)
-    for m in range(nens):
-        obs_prior_var += (obs_prior[m, :] - obs_prior_mean)**2
-    obs_prior_var /= nens-1
 
-    innov = obs - obs_prior_mean
-    obs_var = obs_err**2
+    obs_err_std = np.sqrt(obs_err**2)
 
-    obs_err = np.sqrt(obs_var)
-
-    # obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.5
-    S = np.zeros((nlobs, nens))
-    dy = np.zeros((nlobs))
+    # whitened, localized observation anomaly matrix S (nens, nlobs) and
+    # innovation dy (nlobs). Both are scaled by the localized R^{-1/2} and by
+    # 1/sqrt(nens-1) so that the analysis Hessian in ensemble space is
+    # (I + S S^T) with eigenvalues d = sv^2 + 1.
+    S = np.zeros((nens, nlobs))
+    dy = np.zeros(nlobs)
     for p in range(nlobs):
-        S[p, :] = (obs_prior[:, p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
-        dy[p] = (obs[p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
+        S[:, p] = (obs_prior[:, p] - obs_prior_mean[p]) * local_factor[p] / obs_err_std[p]
+        dy[p] = (obs[p] - obs_prior_mean[p]) * local_factor[p] / obs_err_std[p]
     S /= np.sqrt(nens-1)
     dy /= np.sqrt(nens-1)
 
     # TODO:factor in the correlated R in obs_err, need another SVD of R
-    # obs_err_corr
 
-    # ----first part of weights: update of mean
-    # find singular values of the inverse variance ratio matrix (I + S^T S)
-    # note: the added I actually helps prevent issues if S^T S is not full rank
-    #       when nlobs<nens, there will be singular values of 0, but the full matrix
-    #       can still be inverted with singular values of 1.
-    var_ratio_inv = np.eye(nens) + S.T @ S
+    # ---decomposition of the analysis Hessian (I + S S^T) = U diag(d) U^T
+    # The added I prevents rank issues when nlobs<nens: the eigenvalues that
+    # would be zero in S S^T become 1, so the matrix is always invertible.
+    if use_eigen:
+        # eigen-decomposition of the explicitly formed nens x nens matrix
+        hessian = np.eye(nens) + S @ S.T
+        try:
+            d, U = np.linalg.eigh(hessian)
+        except Exception:
+            # if the decomposition fails just return equal weights (no update)
+            print('Error: failed to decompose the analysis Hessian')
+            return np.eye(nens)
+    else:
+        # SVD performed on S itself (DAPPER style), more numerically stable than
+        # forming the cross-product. Left singular vectors U (nens, nens) are the
+        # eigenvectors of S S^T; the eigenvalues of the Hessian are sv^2 + 1.
+        try:
+            U, sv, _ = np.linalg.svd(S, full_matrices=True)
+        except Exception:
+            # if the decomposition fails just return equal weights (no update)
+            print('Error: failed to compute SVD of S')
+            return np.eye(nens)
+        d = np.ones(nens)
+        for i in range(sv.size):
+            d[i] += sv[i]**2
 
-    # TODO: var_ratio_inv = np.eye(nlobs) + S @ S.T  if nlobs<nens
+    d_inv = 1.0 / d
+    d_inv_sqrt = np.sqrt(d_inv)
 
-    try:
-        L, sv, Rh = np.linalg.svd(var_ratio_inv)
-    except:
-        # if svd failed just return equal weights (no update)
-        print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
-        return np.eye(nens)
+    # var_ratio = (I + S S^T)^{-1} = U diag(d^{-1}) U^T
+    var_ratio = (U * d_inv) @ U.T
 
-    # the update of ens mean is given by (I + S^T S)^-1 S^T dy
-    # namely, var_ratio * obs_prior_var / obs_var * dy = G dy
-    var_ratio = L @ np.diag(sv**-1) @ Rh
+    # ----first part of weights: update of the ensemble mean
+    # w = var_ratio @ S @ dy, the Kalman-gain weight applied to the innovation
+    w = var_ratio @ (S @ dy)
 
-    # TODO: make EVD/SVD an option
-    # eigenvals, V = np.linalg.eigh(var_ratio_inv)
-    # var_ratio = (V / eigenvals) @ V.T
+    # ----second part of weights: symmetric square root T = U diag(d^{-1/2}) U^T
+    var_ratio_sqrt = (U * d_inv_sqrt) @ U.T
 
-    # the gain matrix
-    gain = var_ratio @ S.T
+    # ----mean-preserving random orthogonal rotation (DAPPER genOG_1)
+    # DAPPER post-multiplies the symmetric square root as T <- G @ T. Here the
+    # weight matrix is the transpose of DAPPER's transform (NEDAS applies
+    # x_post[k] = sum_m x_prior[m] W[m,k]), so the rotation is applied on the
+    # right as T <- T @ G^T. Because G fixes the ones-vector, this preserves
+    # both the analysis covariance (T^T T) and the column sums of W. When
+    # rotation is the identity matrix this is a no-op.
+    var_ratio_sqrt = var_ratio_sqrt @ rotation.T
 
-    for m in range(nens):
-        weights[m, :] = np.sum(gain[m, :] * dy)
-
-    # ---second part of weights: update of ensemble spread
-    var_ratio_sqrt = L @ np.diag(sv**-0.5) @ Rh
-    # var_ratio_sqrt = (V / np.sqrt(eigenvals)) @ V.T
-
-    # TODO: apply random rotation
-    # H = np.random.randn(nens, nens)
-    # U_matrix, _ = np.linalg.qr(H)
-    # var_ratio_sqrt = var_ratio_sqrt @ U_matrix
-
+    # assemble W[m, k] = w[m] + T[m, k]
     weights += var_ratio_sqrt
+    for m in range(nens):
+        weights[m, :] += w[m]
 
     return weights
+
+@njit
+def random_orthogonal_matrix(m):
+    """Generate a random orthogonal matrix in O(m) via QR of a Gaussian matrix.
+
+    Equivalent to DAPPER's genOG: the columns are normalized so that the
+    diagonal of R is positive, giving a uniform (Haar) distribution.
+    """
+    H = np.random.standard_normal((m, m))
+    Q, R = np.linalg.qr(H)
+    for i in range(m):
+        if R[i, i] < 0:
+            Q[:, i] = -Q[:, i]
+    return Q
+
+@njit
+def mean_preserving_rotation(nens):
+    """Random orthogonal matrix that fixes the ones-vector (DAPPER's genOG_1).
+
+    Constructs ``V @ block_diag(1, Q) @ V.T`` where V is an orthonormal basis
+    whose first column is proportional to ones, and Q is a random orthogonal
+    matrix in O(nens-1). The result U satisfies ``U @ ones == ones``, so applying
+    it to the ensemble anomalies leaves the ensemble mean unchanged.
+    """
+    # orthonormal basis whose first column is proportional to ones
+    e = np.ones((nens, 1))
+    V, _, _ = np.linalg.svd(e, full_matrices=True)
+
+    # block_diag(1, Q): keep the ones-direction fixed, rotate the complement
+    block = np.eye(nens)
+    Q = random_orthogonal_matrix(nens - 1)
+    block[1:, 1:] = Q
+
+    return V @ block @ V.T
 
 @njit
 def apply_ensemble_transform(ens_prior, weights):
@@ -185,4 +268,3 @@ def apply_ensemble_transform(ens_prior, weights):
         ens_post[m] = np.sum(ens_prior * weights[:, m])
 
     return ens_post
-
