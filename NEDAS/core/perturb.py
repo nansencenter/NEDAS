@@ -238,7 +238,7 @@ class Perturbation:
             model = c.models[model_name]
             vname = ensure_list(rec['variable'])[0]
             dt = model.variables[vname].dt
-            nstep = int(c.config.cycle_period / dt) + 1
+            nstep = int(c.config.forecast_period / dt) + 1
             for _ in range(nstep):
                 for _ in model.variables[vname].levels:
                     self.nfld += 1
@@ -264,7 +264,7 @@ class Perturbation:
             # get number of time steps for this set of variables
             # perturbation will be generated for all time steps if variable is available
             dt = max([model.variables[v].dt for v in variable_list])
-            nstep = int(c.config.cycle_period / dt) + 1
+            nstep = int(c.config.forecast_period / dt) + 1
             for n in range(nstep):
                 t = c.time + n * dt * dt1h
 
