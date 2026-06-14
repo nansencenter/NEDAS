@@ -170,7 +170,7 @@ class Topaz5Model(Model[RegularGrid]):
 
     def is_ncat(self, name):
         return (name in self.iced_variables) and (name.split('_')[-1][:3] == 'cat')
-    
+
     def get_cat_id(self, name):
         if self.is_ncat(name):
             return int(name.split('_')[-1][3:])
@@ -823,10 +823,6 @@ class Topaz5Model(Model[RegularGrid]):
                 if not os.path.exists(file):
                     raise RuntimeError(f"topaz.v5.model.run: input file missing: {file}")
 
-            # clean up some files from previous runs
-            self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out", nproc=1)
-            self.c.run_job(f"echo > {log_file}", nproc=1)
-
             # build the shell command line
             model_exe = os.path.join(self.basedir, f'expt_{self.X}', 'build', f'src_{self.V}ZA-07Tsig0-i-sm-sse_relo_mpi', 'hycom_cice')
             shell_cmd = ""
@@ -838,6 +834,10 @@ class Topaz5Model(Model[RegularGrid]):
             # run the model, give it 3 attempts
             for i in range(3):
                 try:
+                    # clean up some files from previous runs
+                    self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out", nproc=1)
+                    self.c.run_job(f"echo > {log_file}", nproc=1)
+
                     job_opts = {
                         **kwargs,
                         'job_name': 'topaz5',
@@ -856,7 +856,7 @@ class Topaz5Model(Model[RegularGrid]):
                 if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
                     run_success = True
                     break
-        assert run_success, f"model run failed after 3 attempts, check in {run_dir}"
+        assert run_success, f"model run failed after {i} attempts, check in {run_dir}"
 
         # move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_%M%S')
