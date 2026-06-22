@@ -22,6 +22,12 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         'PartitionConfig', 'QOSGrpBillingMinutes',
     }
 
+    # After a job leaves the queue the scheduler may still take a moment to flush its
+    # .out file and append the completion epilog ("Job <id> completed"). Poll for that
+    # marker up to this many seconds before declaring the job failed, so a job that
+    # actually finished isn't falsely reported as a missing-/incomplete-.out failure.
+    COMPLETION_MARKER_TIMEOUT = 60
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -180,9 +186,22 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         if self.use_job_array:
             for i in range(self.array_size):
                 log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}_{i}.out")
-                if not find_keyword_in_file(log_file, f"Job {self.job_id} completed"):
-                    raise RuntimeError(f"job {self.job_name} failed, check {log_file}")
+                self._wait_for_completion_marker(log_file)
         else:
             log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}.out")
-            if not find_keyword_in_file(log_file, f"Job {self.job_id} completed"):
+            self._wait_for_completion_marker(log_file)
+
+    def _wait_for_completion_marker(self, log_file):
+        """Wait briefly for the scheduler's completion marker to appear in log_file.
+
+        Raises RuntimeError if the marker never appears within COMPLETION_MARKER_TIMEOUT,
+        which means the job did not finish cleanly (e.g. it crashed or never ran).
+        """
+        keyword = f"Job {self.job_id} completed"
+        elapsed = 0
+        # check immediately first, then poll once per second to absorb the flush race
+        while not find_keyword_in_file(log_file, keyword):
+            if elapsed >= self.COMPLETION_MARKER_TIMEOUT:
                 raise RuntimeError(f"job {self.job_name} failed, check {log_file}")
+            sleep(1)
+            elapsed += 1

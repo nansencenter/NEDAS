@@ -50,6 +50,10 @@ def watch_log(logfile: str, keyword: str, timeout: int=1000, check_dt: int=1) ->
             raise RuntimeError(f"watch_log: {logfile} remain stagnant for {timeout} seconds, while waiting for keyword '{keyword}'")
 
 def find_keyword_in_file(file: str, keyword: str) -> bool:
+    # a not-yet-created file simply doesn't contain the keyword (yet); treat it as
+    # "not found" rather than surfacing grep's "No such file or directory" as an error
+    if not os.path.exists(file):
+        return False
     p = subprocess.run(f"grep '{keyword}' {file}", shell=True, capture_output=True, text=True)
     if p.stderr:
         raise RuntimeError(p.stderr)
