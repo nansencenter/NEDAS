@@ -13,6 +13,15 @@ class SLURMJobSubmitter(HPCJobSubmitter):
     MAX_NNODES = 1000
     MAX_PPN = 1000
 
+    # Pending (PD) reasons that will never resolve on their own. A job stuck with
+    # one of these (e.g. "launch failed requeued held") would otherwise keep the
+    # monitor loop waiting forever, so we treat them as submission failures.
+    PENDING_FAILURE_REASONS = {
+        'JobHeldUser', 'JobHeldAdmin', 'BadConstraints', 'DependencyNeverSatisfied',
+        'InvalidQOS', 'InvalidAccount', 'PartitionDown', 'PartitionInactive',
+        'PartitionConfig', 'QOSGrpBillingMinutes',
+    }
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -20,7 +29,6 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         self.mem_per_cpu = kwargs.get('mem_per_cpu')
 
         self.log_file = kwargs.get('log_file', None)
-        self.stagnant_log_timeout = kwargs.get('stagnant_log_timeout', 600)
 
     @property
     def nproc_avail(self):
@@ -104,7 +112,11 @@ class SLURMJobSubmitter(HPCJobSubmitter):
             raise RuntimeError(f"Failed to submit job: {p.stderr}")
         self.job_id = int(p.stdout.split()[-1])
 
-        self.log_file = log_file.replace('%j', str(self.job_id))
+        # Determine which file to stream to the tty. If the caller redirected the job's
+        # runtime output to a specific file (passed in via log_file), stream that file.
+        # Otherwise fall back to the scheduler's stdout file for this job.
+        if self.log_file is None:
+            self.log_file = log_file.replace('%j', str(self.job_id))
 
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' submitted with ID {self.job_id} to SLURM scheduler", flush=True)
@@ -124,27 +136,33 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                     break
 
         else:
-            elapsed_time = 0
             file_pointer = 0
             while True:
                 sleep(self.check_dt)
-                p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}'], capture_output=True, text=True)
-                if not p.stdout:
+                # query state (%t) and the pending reason (%r) explicitly; the
+                # reason can contain spaces (e.g. "launch failed requeued held")
+                # so it is read as a single trailing field rather than by index
+                p = subprocess.run(['squeue', '-h', '-j', f'{self.job_id}', '-o', '%t|%r'],
+                                    capture_output=True, text=True)
+                if not p.stdout.strip():
                     # job no longer in queue
                     break
-                job_status = p.stdout.split()[4]
+                job_status, _, job_reason = p.stdout.strip().partition('|')
+                job_reason = job_reason.strip()
                 if job_status not in ['R', 'PD', 'CG']:
                     # job not running, pending, or cleaning up
                     raise RuntimeError(f"job {self.job_name} failed with status {job_status}")
 
-                if job_status == 'PD':  # if job is pending in queue, keep waiting
-                    continue
+                if job_status == 'PD':  # job is pending in queue
+                    # a held / un-schedulable job stays pending forever; abort instead of waiting
+                    if 'held' in job_reason.lower() or job_reason in self.PENDING_FAILURE_REASONS:
+                        raise RuntimeError(f"job {self.job_name} stuck pending and will not start "
+                                           f"(reason: {job_reason})")
+                    continue  # transient pending reason, keep waiting
 
-                # if self.log_file is specified
+                # stream new log output to the tty, if a log file is available
                 if self.log_file is None:
                     continue
-
-                elapsed_time += self.check_dt
 
                 # open log file and seek to the last position
                 with open(self.log_file, 'r') as f:
@@ -154,12 +172,6 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                     if new_content:
                         print(new_content, end='', flush=True)  # stream the new content to tty
                         file_pointer = f.tell()  # update file pointer to the new position
-                        elapsed_time = 0         # reset elapsed time since we have new log output
-
-                # kill the job if log file remain stagnant for too long
-                if elapsed_time > self.stagnant_log_timeout:
-                    subprocess.run(['scancel', str(self.job_id)])
-                    raise RuntimeError(f"job {self.job_name} killed: {self.log_file} stagnent for {elapsed_time} seconds")
 
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' finished", flush=True)

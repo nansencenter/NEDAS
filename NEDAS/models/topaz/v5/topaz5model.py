@@ -6,7 +6,7 @@ import numpy as np
 
 from NEDAS.utils.conversion import units_convert, t2s, dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
-from NEDAS.utils.progress import watch_log, find_keyword_in_file, watch_files
+from NEDAS.utils.progress import find_keyword_in_file, watch_files
 from NEDAS.grid import RegularGrid
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc, IOMode
@@ -40,7 +40,6 @@ class Topaz5Model(Model[RegularGrid]):
     nproc_per_util: int
     use_job_array: bool
     walltime: int|None
-    stagnant_log_timeout: int
     meanssh_file: str
     forcing_file: str
     restart_dt: int

@@ -85,7 +85,6 @@ model_def:
     forcing_dt: 6
     ens_run_strategy: scheduler
     use_job_array: False
-    stagnant_log_timeout: 100
     ens_init_dir: '/cluster/work/users/yingyue/TP5_2021/output/26090/FORECAST'
     forcing_file: '/cluster/work/users/yingyue/TP5a0.06/force/synoptic/041/{name}'
     truth_dir: ''

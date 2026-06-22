@@ -21,7 +21,6 @@ nproc_per_util: 32
 use_job_array: False
 walltime: 3600
 ens_run_strategy: scheduler
-stagnant_log_timeout: 100
 
 # #model specific settings (blkdat)
 idm: 800   # longitudinal array size
