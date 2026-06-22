@@ -4,7 +4,6 @@ import subprocess
 import tempfile
 from time import sleep
 from NEDAS.utils.conversion import seconds_to_timestr
-from NEDAS.utils.progress import find_keyword_in_file
 from .hpc import HPCJobSubmitter
 
 class SLURMJobSubmitter(HPCJobSubmitter):
@@ -23,10 +22,10 @@ class SLURMJobSubmitter(HPCJobSubmitter):
     }
 
     # After a job leaves the queue the scheduler may still take a moment to flush its
-    # .out file and append the completion epilog ("Job <id> completed"). Poll for that
-    # marker up to this many seconds before declaring the job failed, so a job that
+    # .out file (where the job script writes its exit-code sentinel). Poll for that
+    # sentinel up to this many seconds before declaring the job failed, so a job that
     # actually finished isn't falsely reported as a missing-/incomplete-.out failure.
-    COMPLETION_MARKER_TIMEOUT = 60
+    EXIT_CODE_TIMEOUT = 60
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -105,6 +104,15 @@ class SLURMJobSubmitter(HPCJobSubmitter):
             if self.use_job_array:
                 job_script.write(f"#SBATCH --array=1-{self.array_size}\n")
 
+            # Emit an exit-code sentinel on ANY shell exit (normal end, an explicit
+            # 'exit', or an errored command) via a bash EXIT trap, so the monitor can
+            # read the true exit status regardless of any scheduler completion epilog
+            # (e.g. "Job <id> completed"), which is written even when the job failed
+            # (issue #20). This is scheduler-agnostic and needs no accounting database.
+            # A job killed abnormally (out of memory, timeout, node failure) cannot run
+            # the trap and so leaves no sentinel, which is likewise treated as a failure.
+            job_script.write('trap \'echo "NEDAS_JOB_EXIT_CODE=$?"\' EXIT\n')
+
             # add the commands
             commands = super().parse_commands(commands)
             job_script.write(commands)
@@ -162,6 +170,8 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                 if job_status == 'PD':  # job is pending in queue
                     # a held / un-schedulable job stays pending forever; abort instead of waiting
                     if 'held' in job_reason.lower() or job_reason in self.PENDING_FAILURE_REASONS:
+                        # cancel it so we don't leave an orphan sitting in the queue (issue #20)
+                        subprocess.run(['scancel', str(self.job_id)])
                         raise RuntimeError(f"job {self.job_name} stuck pending and will not start "
                                            f"(reason: {job_reason})")
                     continue  # transient pending reason, keep waiting
@@ -182,26 +192,50 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' finished", flush=True)
 
-        # check log file and report errors
+        # verify the job actually succeeded and report errors
         if self.use_job_array:
             for i in range(self.array_size):
                 log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}_{i}.out")
-                self._wait_for_completion_marker(log_file)
+                self._check_job_outcome(log_file)
         else:
             log_file = os.path.join(self.run_dir, f"{self.job_name}-{self.job_id}.out")
-            self._wait_for_completion_marker(log_file)
+            self._check_job_outcome(log_file)
 
-    def _wait_for_completion_marker(self, log_file):
-        """Wait briefly for the scheduler's completion marker to appear in log_file.
+    def _check_job_outcome(self, log_file):
+        """Verify the job succeeded, using the exit-code sentinel its script appended.
 
-        Raises RuntimeError if the marker never appears within COMPLETION_MARKER_TIMEOUT,
-        which means the job did not finish cleanly (e.g. it crashed or never ran).
+        The job script records "NEDAS_JOB_EXIT_CODE=<rc>" as its final action, so the
+        sentinel reflects the real exit status regardless of any scheduler completion
+        epilog (issue #20). A job killed abnormally (out of memory, timeout, node
+        failure) never reaches that line, so a missing sentinel is also a failure.
         """
-        keyword = f"Job {self.job_id} completed"
         elapsed = 0
-        # check immediately first, then poll once per second to absorb the flush race
-        while not find_keyword_in_file(log_file, keyword):
-            if elapsed >= self.COMPLETION_MARKER_TIMEOUT:
-                raise RuntimeError(f"job {self.job_name} failed, check {log_file}")
+        # the .out may not be flushed yet right after the job leaves the queue; poll
+        rc = self._read_exit_code(log_file)
+        while rc is None:
+            if elapsed >= self.EXIT_CODE_TIMEOUT:
+                raise RuntimeError(f"job {self.job_name} did not finish cleanly "
+                                   f"(no exit status recorded, likely killed), check {log_file}")
             sleep(1)
             elapsed += 1
+            rc = self._read_exit_code(log_file)
+        if rc != 0:
+            raise RuntimeError(f"job {self.job_name} failed with exit code {rc}, check {log_file}")
+
+    @staticmethod
+    def _read_exit_code(log_file):
+        """Return the exit code from the job script's sentinel line, or None if absent."""
+        if not os.path.exists(log_file):
+            return None
+        prefix = 'NEDAS_JOB_EXIT_CODE='
+        codes = []
+        with open(log_file) as f:
+            for line in f:
+                if line.startswith(prefix):
+                    codes.append(line[len(prefix):].strip())
+        if not codes:
+            return None
+        try:
+            return int(codes[-1])  # last occurrence, in case the file is reused across retries
+        except ValueError:
+            return None
