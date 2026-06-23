@@ -109,7 +109,6 @@ class TestGetKDEBandwidths(unittest.TestCase):
 # BUG: get_kde_params, kde_pdf, kde_cdf are marked @njit but use Python dicts
 # and lambdas that capture non-constant variables — numba rejects this.
 # These tests are skipped until the @njit decorators are removed from those functions.
-@unittest.skip("get_kde_params/@njit incompatible with dict + lambda capture — remove @njit to fix")
 class TestKDEPrior(unittest.TestCase):
 
     def setUp(self):
@@ -133,8 +132,6 @@ class TestKDEPrior(unittest.TestCase):
         vals = np.array([float(kde_cdf(x, self.params)) for x in xs])
         self.assertTrue(np.all(np.diff(vals) >= -1e-8))
 
-
-@unittest.skip("obs_increment_qcef calls get_kde_params which has @njit + lambda bug — remove @njit to fix")
 class TestObsIncrementQCEF(unittest.TestCase):
 
     def test_zero_increment_when_all_members_equal(self):

@@ -165,7 +165,6 @@ def get_kde_bandwidths(obs_prior: np.ndarray) -> np.ndarray:
     lamda = np.sqrt(g / f_tilde)
     return h0 * lamda
 
-@njit
 def gauss_quad(a, b, f):
     ## Apply three-point (fifth-order) Gauss-Legendre quadrature to integrate f(x) from x=a to x=b
 
@@ -180,7 +179,6 @@ def gauss_quad(a, b, f):
     # Evaluate
     return np.sum(weights * f(nodes))
 
-@njit
 def get_kde_params(obs_prior: np.ndarray, obs, obs_err):
     ## Calculates and stores a bunch of parameters related to a kde distribution
     ## obs_err = np.inf signals that we're using the prior.
@@ -217,7 +215,6 @@ def get_kde_params(obs_prior: np.ndarray, obs, obs_err):
         params["cdf_at_edges"] = cdf_at_edges
     return params
 
-@njit
 def kde_pdf(x, params):
     ## Evaluates the kde approximation to the pdf at x. params is a dict set above.
     kde_pdf = 0.0  # Initialize
@@ -232,7 +229,6 @@ def kde_pdf(x, params):
                  * np.exp(-0.5 * ((x - params["obs"]) / params["obs_err"])**2)  # TODO: Enable non-Gaussian likelihoods
     return kde_pdf
 
-@njit
 def kde_cdf(x, params):
     ## Evaluates the cdf at x.
     ## Whether it's prior or posterior is defined by the param dict that is passed in.
