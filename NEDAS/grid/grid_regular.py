@@ -206,8 +206,19 @@ class RegularGrid(Grid2DBase):
 
     def _fill_pole_void(self, fld):
         """
-        if rotation of vectors (or other reasons) generates nan at the poles
-        we fill in the void using surrounding values for each pole defined by self.pole_dim and pole_index
+        Optional spatial smoother for pole rows/columns.
+
+        At a geographic pole every grid point shares the same location, so a
+        vector field has no unique orientation there.  When ``pole_dim`` and
+        ``pole_index`` are set this method replaces the pole row/column with
+        the mean of the immediately adjacent row/column, producing a smooth
+        transition into the pole.
+
+        Note: the rotation matrix no longer produces NaN at the poles (see
+        ``Grid2DBase._set_rotation_matrix``), so this method is not needed for
+        correctness.  It is retained as an opt-in smoother for cases where the
+        source data representation at the pole causes a visible discontinuity.
+        It is a no-op when ``pole_dim`` is ``None``.
         """
         if self.pole_dim == 'x':
             for i in self.pole_index or []:
@@ -226,7 +237,7 @@ class RegularGrid(Grid2DBase):
     def rotate_vectors(self, vec_fld):
         vec_fld = super().rotate_vectors(vec_fld)
         for i in range(2):
-            vec_fld[i,...] = self._fill_pole_void(vec_fld[i,...])
+            vec_fld[i,...] = self._fill_pole_void(vec_fld[i,...])  # no-op unless pole_dim is set
         return vec_fld
 
     def get_corners(self, fld):
