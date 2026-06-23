@@ -122,4 +122,4 @@ class AlignmentUpdator(Updator):
 
         ind = np.where(np.isnan(var_post))
         var_post[ind] = var_prior[ind]
-        c.io.call_method(c, 'current', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
+        c.io.call_method(c, 'current', model.write_var, var_post, member=mem_id, **rec)

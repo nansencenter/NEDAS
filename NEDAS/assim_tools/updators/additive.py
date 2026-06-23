@@ -59,4 +59,4 @@ class AdditiveUpdator(Updator):
         #     raise ValueError('nan detected in var_post')
 
         # write the posterior variable to restart file
-        c.io.call_method(c, 'current', model.write_var, var_post, member=mem_id, comm=c.comm, **rec)
+        c.io.call_method(c, 'current', model.write_var, var_post, member=mem_id, **rec)

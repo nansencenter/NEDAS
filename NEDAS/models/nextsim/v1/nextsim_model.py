@@ -289,10 +289,10 @@ class NextsimModel(Model):
             if rec['is_vector']:
                 for i in range(2):
                     data_attr={'standard_name':rec['name'][i], 'units':rec['units'], 'grid_mapping':'projection_stereo'}
-                    nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'][i], var[i, ...], recno={'time':nt_in_file}, attr=data_attr, comm=kwargs['comm'])
+                    nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'][i], var[i, ...], recno={'time':nt_in_file}, attr=data_attr, comm=self.c.comm)
             else:
                 data_attr={'standard_name':rec['name'], 'units':rec['units'], 'grid_mapping':'projection_stereo'}
-                nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'], var, recno={'time':nt_in_file}, attr=data_attr, comm=kwargs['comm'])
+                nc_write_var(fname, {'time':None, 'y':ny, 'x':nx}, rec['name'], var, recno={'time':nt_in_file}, attr=data_attr, comm=self.c.comm)
         else:
             raise ValueError('unknown variable name: '+name)
 

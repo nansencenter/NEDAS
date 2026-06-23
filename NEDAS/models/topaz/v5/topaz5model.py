@@ -356,7 +356,7 @@ class Topaz5Model(Model[RegularGrid]):
                     else:
                         dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                         recno = None
-                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=self.c.comm)
             else:
                 if self.is_ncat(name):
                     dims = {'ncat':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
@@ -364,16 +364,16 @@ class Topaz5Model(Model[RegularGrid]):
                 else:
                     dims = {'nj':self.grid.ny, 'ni':self.grid.nx}
                     recno = None
-                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=self.c.comm)
 
         elif name in self.iceh_variables:
             dims = {'time':None, 'nj':self.grid.ny, 'ni':self.grid.nx}
             recno = {'time':0}
             if rec['is_vector']:
                 for i in range(2):
-                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], recno=recno, comm=self.c.comm)
             else:
-                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=self.c.comm)
 
         elif name in self.atmos_forcing_variables:
             if kwargs['time'].tzinfo is None:

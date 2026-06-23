@@ -186,19 +186,19 @@ class NextsimDGModel(Model[RegularGrid]):
             if rec['is_vector']:
                 dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx}
                 for i in range(2):
-                    nc_write_var(fname, dims, rec['name'][i], var[i,...], comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'][i], var[i,...], comm=self.c.comm)
             else:
                 if rec['name'] in ['data/cice', 'data/hice']:
                     dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx, 'dg_comp':None}
                     recno = {'dg_comp':kwargs['k']}
-                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=self.c.comm)
                 elif rec['name'] in ['data/tice']:
                     dims = {'zdim':None, 'ydim':self.grid.ny, 'xdim':self.grid.nx}
                     recno = {'zdim':kwargs['k']}
-                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=self.c.comm)
                 else:
                     dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx}
-                    nc_write_var(fname, dims, rec['name'], var, comm=kwargs['comm'])
+                    nc_write_var(fname, dims, rec['name'], var, comm=self.c.comm)
 
         elif name in self.diag_variables:
             np.save(fname, var)
@@ -359,8 +359,8 @@ class NextsimDGModel(Model[RegularGrid]):
 
         # write back to restart file
         dims = {'ydim':self.grid.ny, 'xdim':self.grid.nx, 'dg_comp':self.dg_comp}
-        nc_write_var(restartfile, dims, 'data/cice', cice, comm=kwargs['comm'])
-        nc_write_var(restartfile, dims, 'data/hice', hice, comm=kwargs['comm'])
+        nc_write_var(restartfile, dims, 'data/cice', cice, comm=self.c.comm)
+        nc_write_var(restartfile, dims, 'data/hice', hice, comm=self.c.comm)
 
     def run(self, *args, **kwargs):
         if self.ens_run_strategy == 'batch':

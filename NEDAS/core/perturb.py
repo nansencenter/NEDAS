@@ -232,15 +232,13 @@ class Perturbation:
         return task_list
 
     def count_num_fields(self, c: Context):
-        # first go through the fields to count how many (for showing progress)
         for rec in self.task_list[c.pid]:
-            model_name = rec['model_src']
-            model = c.models[model_name]
-            vname = ensure_list(rec['variable'])[0]
-            dt = model.variables[vname].dt
-            nstep = int(c.config.forecast_period / dt) + 1
+            model = c.models[rec['model_src']]
+            variable_list = ensure_list(rec['variable'])
+            dt = self.rec_dt(model, variable_list)
+            nstep = self.nstep(c, model, dt)
             for _ in range(nstep):
-                for _ in model.variables[vname].levels:
+                for _ in model.variables[variable_list[0]].levels:
                     self.nfld += 1
 
     def __call__(self, c: Context) -> None:
@@ -249,42 +247,121 @@ class Perturbation:
 
         c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
 
+        self.init_file_locks(c)
+
         # go through the tasks
         c.total_tasks = self.nfld+1
         fld_id = 0
-        for rec in self.task_list[c.pid]:
-            p = PerturbField(**rec, grid=c.grid)
-            model = c.models[rec['model_src']]  # model class object
-            member = rec['member']
-            variable_list = ensure_list(rec['variable'])
+        error = None
+        try:
+            for rec in self.task_list[c.pid]:
+                p = PerturbField(**rec, grid=c.grid)
+                model = c.models[rec['model_src']]  # model class object
+                member = rec['member']
+                variable_list = ensure_list(rec['variable'])
 
-            # check if previous perturb is available from past cycles
-            self.load_perturb_data(c, **rec)
+                # check if previous perturb is available from past cycles
+                self.load_perturb_data(c, **rec)
 
-            # get number of time steps for this set of variables
-            # perturbation will be generated for all time steps if variable is available
-            dt = max([model.variables[v].dt for v in variable_list])
-            nstep = int(c.config.forecast_period / dt) + 1
-            for n in range(nstep):
-                t = c.time + n * dt * dt1h
+                # IC variables (dt >= forecast_period) perturbed once; BC/forcing variables loop
+                dt = self.rec_dt(model, variable_list)
+                nstep = self.nstep(c, model, dt)
+                for n in range(nstep):
+                    t = c.time + n * dt * dt1h
 
-                # TODO: perturbation for each k level is drawn independently, can be improved
-                # by introducing a vertical correlation length scale, or using EOF modes.
-                # Note: assuming all variables in the list have the same k levels
-                for k in model.variables[variable_list[0]].levels:
-                    fld_id += 1
-                    c.debug_message = f"perturbing mem{member+1:03} {variable_list} at {t} level {k}"
-                    c.current_task = fld_id
+                    # TODO: perturbation for each k level is drawn independently, can be improved
+                    # by introducing a vertical correlation length scale, or using EOF modes.
+                    # Note: assuming all variables in the list have the same k levels
+                    for k in model.variables[variable_list[0]].levels:
+                        fld_id += 1
+                        c.debug_message = f"perturbing mem{member+1:03} {variable_list} at {t} level {k}"
+                        c.current_task = fld_id
 
-                    fields = self.collect_fields(c, t, k, **rec)
-                    self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n)
-                    fields = p.add_perturb(fields, self.perturb, **rec)
+                        fields = self.collect_fields(c, t, k, **rec)
+                        self.perturb = p.generate_perturb(c.grid, fields, prev_perturb=self.perturb, dt=dt, n=n)
+                        fields = p.add_perturb(fields, self.perturb, **rec)
 
-                    self.output_perturbed_fields(c, fields, t, k, **rec)
+                        self.output_perturbed_fields(c, fields, t, k, **rec)
 
-            self.save_perturb_data(c, **rec)
+                self.save_perturb_data(c, **rec)
 
+        except Exception as e:
+            error = e
+
+        # all ranks must reach the barrier; re-raise after so a failed rank exits cleanly
         c.comm.Barrier()
+        c.comm.cleanup_file_locks()
+
+        if error is not None:
+            raise error
+
+    def init_file_locks(self, c: Context) -> None:
+        """Initialize file locks for nc-backed perturb variables (e.g. iced, iceh).
+
+        Mirrors the updator pattern: collect all output file paths across every rank,
+        gather them globally so every rank knows about every file, then init a lock
+        for each unique path before any parallel write begins.
+
+        The file-collection loop is wrapped in try/except so that a rank that fails
+        mid-loop still participates in the collective allgather and Barrier, preventing
+        an MPI deadlock.  Any error is re-raised after the barrier so the outer
+        try/except in __call__ can handle it uniformly.
+        """
+        files = []
+        error = None
+        try:
+            for rec in self.task_list[c.pid]:
+                model = c.models[rec['model_src']]
+                variable_list = ensure_list(rec['variable'])
+                dt = self.rec_dt(model, variable_list)
+                nstep = self.nstep(c, model, dt)
+                for n in range(nstep):
+                    t = c.time + n * dt * dt1h
+                    for vname in variable_list:
+                        for k in model.variables[vname].levels:
+                            file = c.io.call_method(c, 'current', model.filename,
+                                                    name=vname, time=t, k=k, **rec)
+                            if file:
+                                files.append(file)
+        except Exception as e:
+            error = e
+        all_files = c.comm.allgather(files)
+        unique_files = {f for sublist in all_files for f in sublist if f}
+        for file in unique_files:
+            c.comm.init_file_lock(file)
+        c.comm.Barrier()
+        if error is not None:
+            raise error
+
+    def rec_dt(self, model, variable_list: list) -> float:
+        """Return the shared dt for all variables in a perturb record.
+
+        Raises ValueError if variables have different dt, since one time loop
+        cannot serve variables with different temporal resolutions.
+        """
+        dts = {model.variables[v].dt for v in variable_list}
+        if len(dts) > 1:
+            raise ValueError(
+                f"Variables in a perturb record must all have the same dt, "
+                f"got {dict(zip(variable_list, [model.variables[v].dt for v in variable_list]))}"
+            )
+        return dts.pop()
+
+    def nstep(self, c: Context, model, dt: float) -> int:
+        """Number of time steps to perturb for a variable with the given dt.
+
+        A variable is BC/forcing if its dt is strictly less than the model restart_dt
+        (sub-restart temporal resolution). It is perturbed at every dt step over the
+        forecast period. IC/restart variables are perturbed once at t=0.
+
+        Uses model.restart_dt as the threshold when available; falls back to
+        cycle_period so models without restart_dt get the conservative nstep=1.
+        """
+        period = c.config.forecast_period or c.config.cycle_period
+        restart_dt = getattr(model, 'restart_dt', None) or period
+        if dt < restart_dt:
+            return int(period / dt) + 1
+        return 1
 
     def prepare_perturb_dir(self, c):
         """ Prepare and clear the directory where perturbation data will be stored (offline mode) """
