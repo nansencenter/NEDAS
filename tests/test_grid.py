@@ -87,10 +87,11 @@ class TestGrid(unittest.TestCase):
         v = np.zeros(grid1.x.shape)
         vfld1 = np.array([u, v])
 
-        # case 1: pole_dim is not set, there will be nan after rotating vectors
+        # case 1: the fix in _set_rotation_matrix handles the pole singularity directly,
+        # so no NaN even without pole_dim/pole_index (fix #17)
         grid1.set_destination_grid(grid2)
         vfld2 = grid1.convert(vfld1, is_vector=True)
-        self.assertTrue(np.isnan(vfld2[0, 100, 100]))
+        self.assertFalse(np.isnan(vfld2[0, 100, 100]))
 
         # case 2: when pole_dim is set, the void will be filled, so nan is gone
         grid1.pole_dim='y'

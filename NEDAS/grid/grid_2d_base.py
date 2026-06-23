@@ -291,7 +291,7 @@ class Grid2DBase(ABC):
             xu, yu = self._proj_to(self.x + eps, self.y      )  # move a bit in x dirn
             xv, yv = self._proj_to(self.x      , self.y + eps)  # move a bit in y dirn
 
-            np.seterr(invalid='ignore')  # will get nan at poles due to singularity, fill_pole_void takes care later
+            np.seterr(invalid='ignore')  # will get nan at poles due to singularity
             dxu = xu-x
             dyu = yu-y
             dxv = xv-x
@@ -302,6 +302,37 @@ class Grid2DBase(ABC):
             self.rotate_matrix[2, :] = dyu/hu
             self.rotate_matrix[1, :] = dxv/hv  # rotation of v
             self.rotate_matrix[3, :] = dyv/hv
+            np.seterr(invalid='warn')
+
+            # Fix pole singularity (issue #17): at the geographic poles all longitudes
+            # map to the same projected point, so the finite-difference displacement is
+            # zero and the rotation is undefined (NaN).  Convention: follow the lon=0
+            # meridian — replace those entries with the rotation computed at the
+            # reference point (lon=0, lat=±(90-delta)).  Physical vector fields are
+            # continuous, so this limit is well-defined and projection-independent.
+            nan_mask = np.isnan(self.rotate_matrix[0])
+            if np.any(nan_mask):
+                delta = 2.0   # degrees offset from the pole; must be > eps (0.1*dx in deg)
+                lon_p, lat_p = self.proj(self.x[nan_mask], self.y[nan_mask], inverse=True)
+                sign_pole = np.sign(lat_p)   # +1 North, -1 South
+                x_ref, y_ref = self.proj(
+                    np.zeros_like(lon_p),
+                    sign_pole * (90.0 - delta),
+                )
+                x_r,  y_r  = self._proj_to(x_ref,            y_ref)
+                xu_r, yu_r = self._proj_to(x_ref + eps,       y_ref)
+                # +eps in y (toward the pole) overshoots lat=±90; step AWAY from the
+                # pole instead (-sign_pole * eps) and negate to recover the toward-pole
+                # direction. This is valid for both hemispheres.
+                xv_away, yv_away = self._proj_to(x_ref, y_ref - sign_pole * eps)
+                dxu_r = xu_r - x_r;    dyu_r = yu_r - y_r
+                dxv_r = x_r - xv_away; dyv_r = y_r - yv_away  # negate: away→toward
+                hu_r = np.hypot(dxu_r, dyu_r)
+                hv_r = np.hypot(dxv_r, dyv_r)
+                self.rotate_matrix[0, nan_mask] = dxu_r / hu_r
+                self.rotate_matrix[2, nan_mask] = dyu_r / hu_r
+                self.rotate_matrix[1, nan_mask] = dxv_r / hv_r
+                self.rotate_matrix[3, nan_mask] = dyv_r / hv_r
         else:
             # if no change in proj, we can skip the calculation
             self.rotate_matrix[0, :] = 1.
