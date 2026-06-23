@@ -3,8 +3,14 @@ import netCDF4
 import numpy as np
 from typing import Literal
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from tensorflow import keras, float32  #type: ignore
+try:
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    from tensorflow import keras, float32  #type: ignore
+except ImportError:
+    raise ImportError(
+        "tensorflow is not installed. This module uses a Keras/TF UNet implementation. "
+        "PyTorch is the recommended ML framework for NEDAS (pip install 'nedas[emulator]')"
+    )
 
 class Att_Res_UNet():
     def __init__(self, list_predictors, list_targets, patch_dim, batch_size, n_filters, activation, kernel_initializer, batch_norm, pooling_type, dropout):

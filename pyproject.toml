@@ -27,13 +27,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv", "tensorflow", "torch"]
+all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv", "torch"]
 mpi = ["mpi4py"]
 jit = ["numba"]
 fftw = ["pyFFTW"]
 grib = ["pygrib"]
 alignment = ["opencv"]
-emulator = ["tensorflow", "torch"]
+emulator = ["torch"]
 
 [project.scripts]
 nedas-run = "NEDAS.__main__:main"
