@@ -222,17 +222,20 @@ class Scheme(ABC):
         self.c.comm.Barrier()
 
     def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
-        # setup an offline scheduler to distribute tasks
-        # get number of available workers to initialize the scheduler
-        total_nproc = opts.get('total_nproc', self.config.nproc)
+        nproc_per_task = opts.get('nproc', 1)
 
-        if opts['nproc']>1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
-            # the scheduling is then delegated to HPC's scheduler (each task submitted as a separate job)
-            # here, the offline scheduler should just submit all tasks at once
-            nworker = self.c.nens
+        if nproc_per_task > 1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:
+            # Each member becomes a separate HPC job; nproc_per_task is the job size on the cluster,
+            # not a local CPU count.  Submit all nens members at once and let the HPC scheduler
+            # manage actual concurrency — throttle with opts['max_concurrent'] if needed.
+            nworker = opts.get('max_concurrent', self.c.nens)
         else:
-            assert total_nproc >= opts['nproc'], f"requested nproc ({opts['nproc']}) exceeds available total_nproc {total_nproc}"
-            nworker = total_nproc // opts['nproc']
+            # Local or in-allocation mode: bound concurrency by available processors.
+            total_nproc = opts.get('total_nproc', self.config.nproc)
+            assert total_nproc >= nproc_per_task, (
+                f"requested nproc ({nproc_per_task}) exceeds available total_nproc ({total_nproc})"
+            )
+            nworker = max(1, total_nproc // nproc_per_task)
 
         # initialize the scheduler
         self.c.debug_message = f"running {task_name} in offline scheduler: nworker={nworker}"
