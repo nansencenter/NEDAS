@@ -230,3 +230,12 @@ class AMSR2Obs(Dataset):
         def obs_operator(**kwargs):
             return self._simulated_tb(channel, **kwargs)
         return obs_operator
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['obs_operator']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.obs_operator = {ch: self._get_obs_operator(ch) for ch in self.channels}

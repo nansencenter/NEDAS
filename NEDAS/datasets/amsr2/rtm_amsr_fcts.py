@@ -137,6 +137,16 @@ def calc_epsilon(Ts, channel, freq = None) :
     ny = 0.012 # Spread factor. Klein and Swift is using 0.02 which is giving a higher epsilon_R (4.9)
     light_speed = 3.00E10 # Speed of light, [cm/s]
     free_space_permittivity = 8.854E-12
+
+    # Skip land points (NaN): compute only over valid pixels, return NaN for the rest
+    Ts = np.asarray(Ts, dtype=float)
+    scalar = Ts.ndim == 0
+    Ts = np.atleast_1d(Ts)
+    valid = ~np.isnan(Ts)
+    epsilon = np.full(Ts.shape, np.nan + 0j)
+    if not np.any(valid):
+        return epsilon.item() if scalar else epsilon
+    Ts = Ts[valid]
     #eq 43
     epsilon_S = (87.90 * np.exp(-0.004585 * (Ts - 273.15))) * (np.exp(-3.45E-3 * s + 4.69E-6 * s**2 + 1.36E-5 * s * (Ts - 273.15)))
     #eq 44
@@ -156,9 +166,9 @@ def calc_epsilon(Ts, channel, freq = None) :
     #print('lambda_R:', lambda_R)
     #print('llambda:', llambda)
     #print('ny:', ny)
-    epsilon = epsilon_R + ((epsilon_S - epsilon_R)/(1.0 + ((cmath.sqrt(-1) * lambda_R)/llambda)**(1.0 - ny))) - ((2.0 * cmath.sqrt(-1) * sigma * llambda)/light_speed)
+    epsilon[valid] = epsilon_R + ((epsilon_S - epsilon_R)/(1.0 + ((cmath.sqrt(-1) * lambda_R)/llambda)**(1.0 - ny))) - ((2.0 * cmath.sqrt(-1) * sigma * llambda)/light_speed)
 
-    return epsilon
+    return epsilon.item() if scalar else epsilon
 
 def calc_ocean_emissivity(W, Ts, theta, channel) :
     """
