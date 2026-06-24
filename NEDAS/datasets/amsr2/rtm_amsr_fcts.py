@@ -192,21 +192,41 @@ def calc_ocean_emissivity(W, Ts, theta, channel) :
 
     # Get channel index
     i = _get_chn_idx(channel)
+
+    # Skip land points (NaN): compute only over valid pixels
+    # theta may be a per-pixel array (eia) or a scalar — handle both
+    W  = np.asarray(W,  dtype=float)
+    Ts = np.asarray(Ts, dtype=float)
+    theta_arr = np.asarray(theta, dtype=float)
+    scalar = (W.ndim == 0 and Ts.ndim == 0)
+    W, Ts = np.atleast_1d(W), np.atleast_1d(Ts)
+    W, Ts = np.broadcast_arrays(W, Ts)
+    valid = ~np.isnan(W) & ~np.isnan(Ts)
+    if theta_arr.ndim > 0:
+        theta_arr = np.broadcast_to(theta_arr, W.shape).copy()
+        valid &= ~np.isnan(theta_arr)
+    ocean_emissivity = np.full(W.shape, np.nan)
+    if not np.any(valid):
+        return ocean_emissivity.item() if scalar else ocean_emissivity
+    W_v     = W[valid]
+    Ts_v    = Ts[valid]
+    theta_v = theta_arr[valid] if theta_arr.ndim > 0 else theta
+
     # Get the dielectric constant of sea water (epsilon)
-    epsilon = calc_epsilon(Ts, channel)
+    epsilon = calc_epsilon(Ts_v, channel)
     # Next equations split for each polarisation
     if _is_Vpol(channel) : # vertical polarisation
         #eq.45
-        rho = (epsilon * np.cos(np.deg2rad(theta)) - np.sqrt(epsilon - np.sin(np.deg2rad(theta))**2))/\
-             (epsilon * np.cos(np.deg2rad(theta)) + np.sqrt(epsilon - np.sin(np.deg2rad(theta))**2))
-        C_R_0 = (4.887E-8 - 6.108E-8 * (Ts - 273.0)**3)
+        rho = (epsilon * np.cos(np.deg2rad(theta_v)) - np.sqrt(epsilon - np.sin(np.deg2rad(theta_v))**2))/\
+             (epsilon * np.cos(np.deg2rad(theta_v)) + np.sqrt(epsilon - np.sin(np.deg2rad(theta_v))**2))
+        C_R_0 = (4.887E-8 - 6.108E-8 * (Ts_v - 273.0)**3)
         r0 = r0v[i]; r1 = r1v[i]; r2 = r2v[i]; r3 = r3v[i];
         W_1 = 3.0; W_2 = 12.0
         f1 = m1v[i]; f2 = m2v[i]
     else: # horizontal polarisation
         #eq.45
-        rho = (np.cos(np.deg2rad(theta)) - np.sqrt(epsilon - np.sin(np.deg2rad(theta))**2))/\
-             (np.cos(np.deg2rad(theta)) + np.sqrt(epsilon - np.sin(np.deg2rad(theta))**2))
+        rho = (np.cos(np.deg2rad(theta_v)) - np.sqrt(epsilon - np.sin(np.deg2rad(theta_v))**2))/\
+             (np.cos(np.deg2rad(theta_v)) + np.sqrt(epsilon - np.sin(np.deg2rad(theta_v))**2))
         C_R_0 = 0
         r0 = r0h[i]; r1 = r1h[i]; r2 = r2h[i]; r3 = r3h[i];
         W_1 = 7.0; W_2 = 12.0
@@ -214,18 +234,18 @@ def calc_ocean_emissivity(W, Ts, theta, channel) :
     #eq.46
     R_0 = np.absolute(rho)**2 + C_R_0
     #eq.57
-    R_geo = R_0 - (r0 + r1 * (theta - 53.0) + r2 * (Ts - 288.0) + r3 * (theta - 53.0) * (Ts - 288.0)) * W
+    R_geo = R_0 - (r0 + r1 * (theta_v - 53.0) + r2 * (Ts_v - 288.0) + r3 * (theta_v - 53.0) * (Ts_v - 288.0)) * W_v
     #eq.60
-    w_low = (W <= W_1)
-    w_mid = (W_1 < W) * (W < W_2)
-    w_high = (W >= W_2)
-    F = w_low * (f1 * W) +\
-                w_mid * (f1 * W + 0.5 * (f2 - f1) * ((W - W_1)**2)/(W_2 - W_1)) +\
-                w_high * (f2 * W - 0.5 * (f2 - f1) * (W_2 + W_1))
+    w_low = (W_v <= W_1)
+    w_mid = (W_1 < W_v) * (W_v < W_2)
+    w_high = (W_v >= W_2)
+    F = w_low * (f1 * W_v) +\
+                w_mid * (f1 * W_v + 0.5 * (f2 - f1) * ((W_v - W_1)**2)/(W_2 - W_1)) +\
+                w_high * (f2 * W_v - 0.5 * (f2 - f1) * (W_2 + W_1))
     R = (1 - F) * R_geo
-    ocean_emissivity = 1 - R
+    ocean_emissivity[valid] = (1 - R).real
 
-    return ocean_emissivity
+    return ocean_emissivity.item() if scalar else ocean_emissivity
 
 def calc_emissivity(V, L, Ts, Tb, theta, channel) :
     """
