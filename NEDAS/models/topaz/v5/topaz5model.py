@@ -591,6 +591,10 @@ class Topaz5Model(Model[RegularGrid]):
                     continue
                 else:
                     raise FileNotFoundError(f"preprocess: ERROR: forcing file {forcing_file} not found")
+            for ext in ['.a', '.b']:
+                p = forcing_file_out + ext
+                if os.path.islink(p):
+                    os.remove(p)
             fo = ABFileForcing(forcing_file_out, 'w', idm=f.idm, jdm=f.jdm, cline1=f._cline1, cline2=f._cline2)
             t = time
             dt = self.forcing_dt
