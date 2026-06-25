@@ -40,6 +40,7 @@ class Topaz5Model(Model[RegularGrid]):
     nproc_per_util: int
     use_job_array: bool
     walltime: int|None
+    max_num_attempts: int
     meanssh_file: str
     forcing_file: str
     restart_dt: int
@@ -810,6 +811,7 @@ class Topaz5Model(Model[RegularGrid]):
         self.c.run_job("touch "+log_file, nproc=1)
 
         run_success = False
+        attempt = 0
         # early exit if the run is already finished
         if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
             run_success = True
@@ -835,7 +837,7 @@ class Topaz5Model(Model[RegularGrid]):
             shell_cmd += 'JOB_EXECUTE '+model_exe+" >& run.log"
 
             # run the model, give it 3 attempts
-            for i in range(3):
+            for attempt in range(self.max_num_attempts):
                 try:
                     # clean up some files from previous runs
                     self.c.run_job(f"cd {run_dir}; rm -f archm.* ovrtn_out summary_out", nproc=1)
@@ -852,14 +854,14 @@ class Topaz5Model(Model[RegularGrid]):
                     }
                     self.c.run_job(shell_cmd, **job_opts)
                 except RuntimeError as e:
-                    print(f"{e}, retrying ({2-i} attempts remain)")
-                    self.c.run_job(f"cp {log_file} {log_file}.attempt{i}", nproc=1)
+                    print(f"{e}, retrying ({self.max_num_attempts - attempt} attempts remain)")
+                    self.c.run_job(f"cp {log_file} {log_file}.attempt{attempt}", nproc=1)
                     continue
                 # check output
                 if find_keyword_in_file(log_file, 'Exiting hycom_cice'):
                     run_success = True
                     break
-        assert run_success, f"model run failed after {i} attempts, check in {run_dir}"
+        assert run_success, f"model run failed after {attempt} attempts, check in {run_dir}"
 
         # move the output restart files to forecast_dir
         tstr = next_time.strftime('%Y_%j_%H_%M%S')
