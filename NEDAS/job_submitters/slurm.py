@@ -129,8 +129,10 @@ class SLURMJobSubmitter(HPCJobSubmitter):
         # Determine which file to stream to the tty. If the caller redirected the job's
         # runtime output to a specific file (passed in via log_file), stream that file.
         # Otherwise fall back to the scheduler's stdout file for this job.
-        if self.log_file is None:
-            self.log_file = log_file.replace('%j', str(self.job_id))
+        # Use a local variable so self.log_file (which may be a %j template) is never
+        # mutated — avoids re-reading a previous job's log on the next run() call.
+        _log_template = self.log_file if self.log_file is not None else log_file
+        current_log_file = _log_template.replace('%j', str(self.job_id))
 
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' submitted with ID {self.job_id} to SLURM scheduler", flush=True)
@@ -177,17 +179,25 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                     continue  # transient pending reason, keep waiting
 
                 # stream new log output to the tty, if a log file is available
-                if self.log_file is None:
+                if not os.path.exists(current_log_file):
                     continue
 
                 # open log file and seek to the last position
-                with open(self.log_file, 'r') as f:
+                with open(current_log_file, 'r', newline='') as f:
                     f.seek(file_pointer)
                     new_content = f.read()
 
                     if new_content:
                         print(new_content, end='', flush=True)  # stream the new content to tty
                         file_pointer = f.tell()  # update file pointer to the new position
+
+        # flush any log content written between the last poll and the job leaving the queue
+        if os.path.exists(current_log_file):
+            with open(current_log_file, 'r', newline='') as f:
+                f.seek(file_pointer)
+                tail = f.read()
+            if tail:
+                print(tail, end='', flush=True)
 
         if self.debug:
             print(f"JobSubmitter: job '{self.job_name}' finished", flush=True)
