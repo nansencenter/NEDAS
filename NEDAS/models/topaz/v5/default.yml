@@ -20,6 +20,9 @@ nproc_per_run: 512   # batch size n*128, easier to divide up the compute nodes
 nproc_per_util: 32
 use_job_array: False
 walltime: 3600
+preproc_copy_forcing: True
+preproc_link_runtime_files: True
+preproc_copy_restart: True
 max_num_attempts: 3
 ens_run_strategy: scheduler
 

@@ -67,6 +67,9 @@ class Topaz5Model(Model[RegularGrid]):
     aice_thresh: float
     fice_thresh: float
     hice_impact: float
+    preproc_copy_forcing: bool = True
+    preproc_link_runtime_files: bool = True
+    preproc_copy_restart: bool = True
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -131,17 +134,14 @@ class Topaz5Model(Model[RegularGrid]):
         self.force_synoptic_names = [name for r in self.atmos_forcing_variables.values() for name in (r.name if isinstance(r.name, tuple) else [r.name])]
 
         self.diag_variables = {
-            'ocean_surf_height': VarDesc(name='ssh', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
-            'ocean_surf_height_anomaly': VarDesc(name='sla', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
-            'ocean_surf_temp': VarDesc(name='sst', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='C', z_units=self.z_units),
-            'seaice_conc': VarDesc(name='sic', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units=1, z_units=self.z_units),
-            'seaice_thick': VarDesc(name='sit', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
-            'snow_thick': VarDesc(name='snwt', dtype='float', is_vector=False, dt=self.restart_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'ocean_surf_height': VarDesc(name='ssh', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'seaice_conc': VarDesc(name='sic', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units=1, z_units=self.z_units),
+            'seaice_thick': VarDesc(name='sit', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
+            'snow_thick': VarDesc(name='snwt', dtype='float', is_vector=False, dt=self.output_dt, levels=level_sfc, units='m', z_units=self.z_units),
             }
+        # operators to compute diag variables from the prognostic state variables in restart files
         self.operator = {
             'ocean_surf_height': self.get_ocean_surf_height,
-            'ocean_surf_height_anomaly': self.get_ocean_surf_height_anomaly,
-            'ocean_surf_temp': self.get_ocean_surf_temp,
             'seaice_conc': self.get_seaice_conc,
             'seaice_thick': self.get_seaice_thick,
             'snow_thick': self.get_snow_thick,
@@ -176,6 +176,21 @@ class Topaz5Model(Model[RegularGrid]):
             return int(name.split('_')[-1][3:])
         else:
             raise ValueError(f"get_cat_id: variable {name} is not a ncat variable")
+
+    def _restart_file_exists(self, kwargs):
+        try:
+            restart_fname = self.filename(**{**kwargs, 'name':'ocean_temp', 'k':1})
+        except FileNotFoundError:
+            return False
+        if not os.path.exists(restart_fname):
+            return False
+        try:
+            iced_fname = self.filename(**{**kwargs, 'name':'seaice_conc_cat0', 'k':0})
+        except FileNotFoundError:
+            return False
+        if not os.path.exists(iced_fname):
+            return False
+        return True
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -301,13 +316,19 @@ class Topaz5Model(Model[RegularGrid]):
                 f.close()
 
         elif name in self.diag_variables:
-            #  if the npy file exists, one could just read it to get the variable.
-            #  but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
-            if not os.path.exists(fname):
-                var = self.operator[name](**kwargs)
-                np.save(fname, var)
+            # if restart file exists, run through operator to get the diag variable and save to a npy cache file
+            if self._restart_file_exists(kwargs):
+                #  if the npy file exists, one could just read it to get the variable.
+                if os.path.exists(fname):
+                    var = np.load(fname)
+                else:
+                    # calculate the diag variable
+                    var = self.operator[name](**kwargs)
+                    # save the variable to npy file
+                    np.save(fname, var)
+            # otherwise, fall back to read the variable from daily output files
             else:
-                var = np.load(fname)
+                var = self.read_var(**{**kwargs, 'name': name+'_daily'})
 
         elif name in self.archive_variables:
             f = ABFileArchv(fname, 'r', mask=True)
@@ -391,7 +412,12 @@ class Topaz5Model(Model[RegularGrid]):
                 f.close()
 
         elif name in self.diag_variables:
-            np.save(fname, var)
+            # if restart file exists, the diag variable should be save to a npy cache file
+            if self._restart_file_exists(kwargs):
+                np.save(fname, var)
+            # otherwise, save the variable to daily output files
+            else:
+                self.write_var(var, **{**kwargs, 'name': name+'_daily'})
 
         else:
             print(f"WARNING: write_var not implemented for variable {name}, skipping...")
@@ -478,20 +504,6 @@ class Topaz5Model(Model[RegularGrid]):
         ssh[self.grid.mask] = np.nan
         return ssh
 
-    def get_ocean_surf_height_anomaly(self, **kwargs):
-        if self.grid is None:
-            raise AttributeError("topaz5model: grid not yet defined")
-        self.meanssh_file = os.path.join(self.basedir, 'topo', 'meanssh.uf')
-        assert self.meanssh is not None, f"SLA: cannot find meanssh file {self.meanssh_file}"
-        ssh = self.get_ocean_surf_height(**kwargs)
-        sla = ssh - self.meanssh
-        sla[self.grid.mask] = np.nan
-        return sla
-
-    def get_ocean_surf_temp(self, **kwargs):
-        #just return first level ocean_temp
-        return self.read_var(**{**kwargs, 'name':'ocean_temp', 'k':1})
-
     def get_seaice_conc(self, **kwargs):
         """
         Get total seaice concentration from multicategory ice concentration (aicen)
@@ -499,20 +511,12 @@ class Topaz5Model(Model[RegularGrid]):
         """
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
-        seaice_conc = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
-
-        # try to read it from iced file
-        try:
-            for cat_id in range(self.ncat):
-                rec['name'] = f'seaice_conc_cat{cat_id}'  # can use iceh or iced files
-                rec['units'] = self.variables[rec['name']].units
-                seaice_conc += self.read_var(**rec)
-        except FileNotFoundError:
-            # if failed, try to read from iceh file
-            rec['name'] = 'seaice_conc_daily'
+        seaice_conc = np.zeros(self.grid.x.shape)
+        for cat_id in range(self.ncat):
+            rec['name'] = f'seaice_conc_cat{cat_id}'
             rec['units'] = self.variables[rec['name']].units
-            seaice_conc = self.read_var(**rec)
+            seaice_conc += self.read_var(**rec)
 
         seaice_conc[np.where(seaice_conc<self.MIN_SEAICE_CONC)] = 0.0  # discard below threadshold
         seaice_conc[self.grid.mask] = np.nan
@@ -524,8 +528,8 @@ class Topaz5Model(Model[RegularGrid]):
         """
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined before calling get_seaice_thick")
-        seaice_conc = self.get_seaice_conc(**kwargs)
 
+        seaice_conc = self.get_seaice_conc(**kwargs)
         seaice_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         for cat_id in range(self.ncat):
@@ -546,8 +550,8 @@ class Topaz5Model(Model[RegularGrid]):
         """
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined before calling get_snow_thick")
-        seaice_conc = self.get_seaice_conc(**kwargs)
 
+        seaice_conc = self.get_seaice_conc(**kwargs)
         snow_volume = np.zeros(self.grid.x.shape)
         rec = kwargs.copy()
         for cat_id in range(self.ncat):
@@ -561,33 +565,14 @@ class Topaz5Model(Model[RegularGrid]):
         snow_thick[ind] = np.minimum(snow_volume[ind] / seaice_conc[ind], upper_limit)
         return snow_thick
 
-    def preprocess(self, *args, **kwargs):
-        kwargs = super().parse_kwargs(kwargs)
-        # task_id = kwargs.get('worker_id', 0)
-        # offset = task_id * self.nproc_per_util
-        time = kwargs['time']
-        forecast_period = kwargs['forecast_period']
-        next_time = time + forecast_period * dt1h
-
-        if kwargs['member'] is not None:
-            mstr = '_mem{:03d}'.format(kwargs['member']+1)
-        else:
-            mstr = ''
-        run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
-        # make sure model run directory exists
-        self.c.fs.make_dir(run_dir)
-
-        # generate namelists, blkdat, ice_in, etc.
-        namelist(self, time, forecast_period, run_dir)
-
-        # copy synoptic forcing fields from a long record in basedir, will be perturbed later
+    def _copy_forcing_files(self, time, next_time, run_dir, member):
+        """Copy synoptic forcing fields from a long record self.forcing_file, will be perturbed later."""
         for varname in self.force_synoptic_names:
-            forcing_file = self.forcing_file.format(member=kwargs['member']+1, time=time, name=varname)
+            forcing_file = self.forcing_file.format(member=member+1, time=time, name=varname)
             forcing_file_out = os.path.join(run_dir, 'forcing.'+varname)
             try:
                 f = ABFileForcing(forcing_file, 'r')
             except FileNotFoundError:
-                #print(f"WARNING: {forcing_file} not found, skipping...")
                 if varname in ['tcwv', 'tclw']:  # these two variables are optional
                     continue
                 else:
@@ -608,7 +593,8 @@ class Topaz5Model(Model[RegularGrid]):
             f.close()
             fo.close()
 
-        # link necessary files for model run
+    def _link_model_files(self, run_dir):
+        """Link static files (topo, nest, relax, rivers, seawifs) needed for the model run."""
         shell_cmd = f"cd {run_dir}; "
         # partition setting
         partit_file = os.path.join(self.basedir, 'topo', 'partit', f'depth_{self.R}_{self.T}.{self.nproc:04d}')
@@ -645,23 +631,47 @@ class Topaz5Model(Model[RegularGrid]):
             shell_cmd += f"ln -fs {file} {'forcing.kpar'+ext}; "
         self.c.run_job(shell_cmd, nproc=1)
 
-        # copy restart files from restart_dir
-        restart_dir = kwargs['restart_dir']
-        # job_submit_cmd = kwargs['job_submit_cmd']
+    def _copy_restart_files(self, time, mstr, run_dir, restart_dir, path):
+        """Copy restart (.a/.b) and iced (.nc) files from restart_dir into the run directory."""
         tstr = time.strftime('%Y_%j_%H_%M%S')
         for ext in ['.a', '.b']:
             file = os.path.join(restart_dir, 'restart.'+tstr+mstr+ext)
-            file1 = os.path.join(kwargs['path'], 'restart.'+tstr+mstr+ext)
+            file1 = os.path.join(path, 'restart.'+tstr+mstr+ext)
             self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
             self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'restart.'+tstr+ext)}", nproc=1)
         self.c.fs.make_dir(os.path.join(run_dir, 'cice'))
         tstr = f"{time:%Y-%m-%d}-{time.hour*3600:05}"
         file = os.path.join(restart_dir, 'iced.'+tstr+mstr+'.nc')
-        file1 = os.path.join(kwargs['path'], 'iced.'+tstr+mstr+'.nc')
+        file1 = os.path.join(path, 'iced.'+tstr+mstr+'.nc')
         # TODO: use runtime file manipulation instead
         self.c.run_job(f"cp -fL {file} {file1}", nproc=1)
         self.c.run_job(f"ln -fs {file1} {os.path.join(run_dir, 'cice', 'iced.'+tstr+'.nc')}", nproc=1)
         self.c.run_job(f"echo {os.path.join('.', 'cice', 'iced.'+tstr+'.nc')} > {os.path.join(run_dir, 'cice', 'ice.restart_file')}", nproc=1)
+
+    def preprocess(self, *args, **kwargs):
+        kwargs = super().parse_kwargs(kwargs)
+        time = kwargs['time']
+        forecast_period = kwargs['forecast_period']
+        next_time = time + forecast_period * dt1h
+
+        if kwargs['member'] is not None:
+            mstr = '_mem{:03d}'.format(kwargs['member']+1)
+        else:
+            mstr = ''
+        run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
+        self.c.fs.make_dir(run_dir)
+
+        # generate namelists, blkdat, ice_in, etc.
+        namelist(self, time, forecast_period, run_dir)
+
+        if self.preproc_copy_forcing:
+            self._copy_forcing_files(time, next_time, run_dir, kwargs['member'])
+
+        if self.preproc_link_runtime_files:
+            self._link_model_files(run_dir)
+
+        if self.preproc_copy_restart:
+            self._copy_restart_files(time, mstr, run_dir, kwargs['restart_dir'], kwargs['path'])
 
     def postprocess(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
