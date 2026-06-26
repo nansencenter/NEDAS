@@ -52,6 +52,7 @@ time_end: 2001-01-30T00:00:00Z   # end time of the experiment
 time_analysis_start:             # start time of the first analysis cycle, default to time_start
 time_analysis_end:               # end time of the last analysis cycle, default to time_end
 cycle_period: 12                 # cycle period, in hours
+forecast_period:                 # forecast period, in hours
 time:                            # current time (given in runtime context)
 obs_time_steps: [0]              # time steps defining observation window, hours, relative to cycle time
 obs_time_scale: 0                # smoothing window in hours for observations

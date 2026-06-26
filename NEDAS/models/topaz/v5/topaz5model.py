@@ -180,13 +180,13 @@ class Topaz5Model(Model[RegularGrid]):
     def _restart_file_exists(self, kwargs):
         try:
             restart_fname = self.filename(**{**kwargs, 'name':'ocean_temp', 'k':1})
-        except FileNotFoundError:
+        except Exception:
             return False
         if not os.path.exists(restart_fname):
             return False
         try:
             iced_fname = self.filename(**{**kwargs, 'name':'seaice_conc_cat0', 'k':0})
-        except FileNotFoundError:
+        except Exception:
             return False
         if not os.path.exists(iced_fname):
             return False
@@ -223,6 +223,10 @@ class Topaz5Model(Model[RegularGrid]):
             file = os.path.join(mstr[1:], 'SCRATCH', 'archm.'+tstr+'.a')
 
         elif kwargs['name'] in self.diag_variables:
+            if not self._restart_file_exists(kwargs):
+                daily_name = kwargs['name'] + '_daily'
+                if daily_name in self.variables:
+                    return self.filename(**{**kwargs, 'name': daily_name})
             kstr = f"_k{kwargs['k']}_"
             tstr = t2s(kwargs['time'])
             file = os.path.join(mstr[1:], 'SCRATCH', kwargs['name']+kstr+tstr+'.npy')

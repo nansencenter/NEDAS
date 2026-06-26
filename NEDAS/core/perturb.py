@@ -357,7 +357,7 @@ class Perturbation:
         Uses model.restart_dt as the threshold when available; falls back to
         cycle_period so models without restart_dt get the conservative nstep=1.
         """
-        period = c.config.forecast_period or c.config.cycle_period
+        period = getattr(c.config, 'forecast_period', None) or c.config.cycle_period
         restart_dt = getattr(model, 'restart_dt', None) or period
         if dt < restart_dt:
             return int(period / dt) + 1
