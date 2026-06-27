@@ -2,11 +2,111 @@
 import numpy as np
 from NEDAS.utils.fft_lib import fft2, get_wn
 
-def rmse(fld, fld_tr):
-    return
+def rmse(fld_ens, fld_tr):
+    """
+    RMSE of the ensemble mean against the truth field.
 
-def pattern_corr(fld, fld_tr):
-    return
+    Args:
+        fld_ens: np.ndarray, shape (nens, ...) — ensemble members
+        fld_tr:  np.ndarray, shape (...)        — truth / reference field
+
+    Returns:
+        float: spatially averaged RMSE
+    """
+    ens_mean = np.mean(fld_ens, axis=0)
+    return float(np.sqrt(np.nanmean((ens_mean - fld_tr) ** 2)))
+
+
+def spread(fld_ens):
+    """
+    Ensemble spread: sqrt of the spatial mean ensemble variance.
+
+    Args:
+        fld_ens: np.ndarray, shape (nens, ...) — ensemble members
+
+    Returns:
+        float: ensemble spread (same units as fld_ens)
+    """
+    return float(np.sqrt(np.nanmean(np.var(fld_ens, axis=0, ddof=1))))
+
+
+def pattern_corr(fld_ens, fld_tr):
+    """
+    Anomaly pattern correlation between ensemble mean and truth.
+
+    Args:
+        fld_ens: np.ndarray, shape (nens, ...) — ensemble members
+        fld_tr:  np.ndarray, shape (...)        — truth / reference field
+
+    Returns:
+        float: Pearson correlation coefficient in [-1, 1]
+    """
+    a = np.nanmean(fld_ens, axis=0).ravel()
+    b = fld_tr.ravel()
+    mask = np.isfinite(a) & np.isfinite(b)
+    a = a[mask] - np.mean(a[mask])
+    b = b[mask] - np.mean(b[mask])
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
+    if denom == 0:
+        return np.nan
+    return float(np.dot(a, b) / denom)
+
+
+def crps(fld_ens, fld_tr):
+    """
+    Continuous Ranked Probability Score (CRPS) at each grid point.
+
+    Uses the O(N log N) sorted-ensemble formula (Gneiting & Raftery 2007):
+        CRPS = MAE(ens_mean, obs) - (1/2) * mean_spread
+
+    which in the sorted-ensemble form (Ferro & Fricker 2012) is:
+        CRPS = (1/N) * sum_i |x_(i) - y|
+               - (1/N^2) * sum_i (2i - N + 1) * x_(i)
+
+    Args:
+        fld_ens: np.ndarray, shape (nens, ...) — ensemble members
+        fld_tr:  np.ndarray, shape (...)        — truth / reference field
+
+    Returns:
+        np.ndarray, shape (...): pointwise CRPS (≥ 0, lower is better)
+    """
+    nens = fld_ens.shape[0]
+    sorted_ens = np.sort(fld_ens, axis=0)
+    # broadcast weights over all spatial dims
+    w = (2 * np.arange(nens) - nens + 1).reshape((nens,) + (1,) * (fld_ens.ndim - 1))
+    mae = np.mean(np.abs(fld_ens - fld_tr), axis=0)
+    dispersion = np.sum(w * sorted_ens, axis=0) / nens ** 2
+    return mae - dispersion
+
+
+def mean_crps(fld_ens, fld_tr):
+    """
+    Spatially averaged CRPS.
+
+    Returns:
+        float
+    """
+    return float(np.nanmean(crps(fld_ens, fld_tr)))
+
+
+def brier_score(fld_ens, fld_tr, threshold):
+    """
+    Brier score for the binary event (field > threshold).
+
+    BS = mean( (P_ens(X > threshold) - 1{y > threshold})^2 )
+
+    Args:
+        fld_ens:   np.ndarray, shape (nens, ...) — ensemble members
+        fld_tr:    np.ndarray, shape (...)        — truth / reference field
+        threshold: float                          — event threshold (same units)
+
+    Returns:
+        float: Brier score in [0, 1] (lower is better)
+    """
+    p_ens = np.mean(fld_ens > threshold, axis=0).astype(float)
+    event_obs = (fld_tr > threshold).astype(float)
+    return float(np.nanmean((p_ens - event_obs) ** 2))
+
 
 # some spectral diagnostics
 def pwrspec2d(fld):
@@ -44,7 +144,7 @@ def pwrspec2d(fld):
     wn = np.arange(0., nup)
     pwr = np.zeros(fld.shape[:-2] + (nup,))
     for k in range(nup):
-        pwr[..., k] = np.mean(P[np.where(np.ceil(k2d)==k)])
+        pwr[..., k] = np.mean(P[np.where(np.floor(k2d)==k)])
         # we show mean pwr spectrum, it will be more intuitive to
         # see the white noise spectrum as a flat line;
         #
@@ -53,8 +153,3 @@ def pwrspec2d(fld):
         # and typical synoptic scale flows have a well-known -3 slope
 
     return wn, pwr
-
-# #some ensemble metrics
-def crps(fld_ens, fld_tr):
-    return
-
