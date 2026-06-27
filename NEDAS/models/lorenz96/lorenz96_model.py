@@ -13,16 +13,23 @@ class Lorenz96Model(Model[Grid1D]):
     Args:
         nx (int): dimension of the model, default is 40.
         F (float): forcing parameter, default is 8
+        F_std (float): std for per-member F perturbation in generate_init_ensemble; 0 disables SSPE
         dt (float): model time step, default is 0.05
         numeric_opt (str): numeric option, default is 'rk4'
     """
     io_mode: IOMode = 'online'  # both online and offline supported, default to online
     nx: int
     F: float
+    F_std: float
     dt: float
     restart_dt: float
     numeric_opt: str
     memory: dict = {}
+
+    # scalar parameters available for SSPE (name → metadata dict)
+    params = {
+        'F': {'dtype': 'float', 'units': '*'},
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -40,46 +47,46 @@ class Lorenz96Model(Model[Grid1D]):
             'rk4': self.run_1step_rk4,
         }
         assert self.numeric_opt in self.run_1step_funcs, f"{self.__class__.__name__}: unknown numerics '{self.numeric_opt}'."
-        self.run_1step = self.run_1step_funcs[self.numeric_opt]
+        self.run_1step = self.run_1step_funcs[self.numeric_opt]  # signature: (x, F=None)
 
         # convention to real time for the nondimensional model
         # 6 h in meteorological models is representative by t = 0.05
         # so 120 hours per unit model time
         self.hours_per_unit_time = 120.
 
-    def dxdt(self, x):
-        return (np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + self.F
+    def dxdt(self, x, F=None):
+        F = self.F if F is None else F
+        return (np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F
 
-    def run_1step_euler_forward(self, x):
-        return x + self.dt * self.dxdt(x)
+    def run_1step_euler_forward(self, x, F=None):
+        return x + self.dt * self.dxdt(x, F)
 
-    def run_1step_rk4(self, x):
-        dx1 = self.dt * self.dxdt(x)
-        dx2 = self.dt * self.dxdt(x + dx1/2.0)
-        dx3 = self.dt * self.dxdt(x + dx2/2.0)
-        dx4 = self.dt * self.dxdt(x + dx3)
+    def run_1step_rk4(self, x, F=None):
+        dx1 = self.dt * self.dxdt(x, F)
+        dx2 = self.dt * self.dxdt(x + dx1/2.0, F)
+        dx3 = self.dt * self.dxdt(x + dx2/2.0, F)
+        dx4 = self.dt * self.dxdt(x + dx3, F)
         return x + (dx1 + 2.0*dx2 + 2.0*dx3 + dx4)/6.0
 
-    def advance_time(self, x_in, T):
+    def advance_time(self, x_in, T, F=None):
         """
         Nonlinear advance_time function
 
         Args:
-            x (np.ndarray): the initial condition
+            x_in (np.ndarray): the initial condition
             T (float): duration of the simulation
+            F (float, optional): forcing parameter; uses self.F if not given
 
         Return:
             np.ndarray: the updated model state after simulation
         """
-        # check if any state becomes NaN
         if np.isnan(x_in).any():
             raise RuntimeError('NaN detected in lorenz96 model state. Aborting...')
         if np.isinf(x_in).any():
             raise RuntimeError('Inf detected in lorenz96 model state. Aborting...')
-        # run model forward in time to reach duration T:
         x = x_in.copy()
         for _ in range(int(T/self.dt)):
-            x = self.run_1step(x)
+            x = self.run_1step(x, F)
         return x
 
     def filename(self, **kwargs):
@@ -144,9 +151,12 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs = super().parse_kwargs(kwargs)
         self.run_status = 'running'
 
+        # use per-member forcing parameter if available (falls back to self.F)
+        F_m = self.read_param(name='F', member=kwargs['member'])
+
         state = self.read_var(**kwargs)
         next_time = kwargs['time'] + kwargs['forecast_period'] * dt1h
-        next_state = self.advance_time(state, kwargs['forecast_period']/self.hours_per_unit_time)
+        next_state = self.advance_time(state, kwargs['forecast_period']/self.hours_per_unit_time, F=F_m)
         self.write_var(next_state, **{**kwargs, 'time':next_time})
 
         self.run_status = 'complete'
@@ -171,3 +181,9 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs['time'] = self.c.config.time_start
         kwargs['path'] = self.ens_init_dir
         self.write_var(state, **kwargs)
+
+        # perturb forcing parameter for this member if F_std > 0
+        m = kwargs.get('member')
+        if self.F_std > 0 and m is not None:
+            rng = np.random.default_rng(seed=m)  # per-member seed
+            self.write_param(self.F + rng.normal(0, self.F_std), name='F', member=m)

@@ -1,6 +1,7 @@
 # model nondimensional parameters
 nx: 40   # model dimension
 F: 8     # forcing parameter
+F_std: 0 # std for per-member F perturbation (0 = no SSPE)
 dt: 0.05 # time step
 
 numeric_opt: rk4

@@ -59,6 +59,9 @@ class State:
         self.state_post = {}
         self.fields_post = {}
         self.data = {}
+        self.scalars_prior = {}   # (mem_id, scalar_id) → float; all members, all procs
+        self.scalars_post = {}    # accumulated sum during unpack
+        self._scalar_counts = {} # grid-point count for weighted averaging
 
     def distribute_state_tasks(self, c: Context) -> dict[int, list[int]]:
         """
@@ -76,7 +79,8 @@ class State:
         Main method to collect fields from model to form the complete state (field-complete distributed)
         """
         c.logger('Collect prior fields')(self.collect_prior_fields)(c)
-        #self.scalars_prior = self.collect_scalars(c)
+        if self.info.scalars:
+            c.logger('Collect prior scalar parameters')(self.collect_scalar_variables)(c)
 
         c.logger('Collect reference z coords')(self.output_ref_z)(c)
 
@@ -145,9 +149,62 @@ class State:
         if c.debug:
             c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior, path=c.fs.analysis_dir(c.time, c.iter))
 
-    def collect_scalar_variables(self, c):
-        pass
-        # TODO: implement scalars here for simultaneous state parameter estimation (SSPE)
+    def collect_scalar_variables(self, c: Context) -> None:
+        """
+        Collect scalar parameters from each ensemble member and broadcast to all procs.
+
+        Reads per-member parameter values via model.read_param, then allgathers so every
+        proc holds the full ensemble of scalar values needed during pack_local_state_data.
+        """
+        scalars_local: dict = {}
+        for scalar_id, rec in self.info.scalars.items():
+            model = c.models[rec.model_src]
+            for mem_id in c.mem_list[c.pid_mem]:
+                val = model.read_param(name=rec.name, member=mem_id)
+                scalars_local[mem_id, scalar_id] = float(val)
+
+        all_scalars = c.comm_mem.allgather(scalars_local)
+        self.scalars_prior = {}
+        for d in all_scalars:
+            self.scalars_prior.update(d)
+
+    def output_scalar_variables(self, c: Context, tag: str) -> None:
+        """
+        Write posterior scalar parameters back to each model member.
+
+        Each proc writes scalars for its own members (field-complete pattern).
+
+        Args:
+            c (Context): the runtime context obj
+            tag (str): 'post' or 'prior'
+        """
+        scalars = self.scalars_post if tag == 'post' else self.scalars_prior
+        for scalar_id, rec in self.info.scalars.items():
+            model = c.models[rec.model_src]
+            for mem_id in c.mem_list[c.pid_mem]:
+                val = scalars.get((mem_id, scalar_id), self.scalars_prior.get((mem_id, scalar_id)))
+                if val is not None:
+                    model.write_param(val, name=rec.name, member=mem_id)
+
+    def reduce_scalars(self, c: Context) -> None:
+        """
+        Reduce accumulated scalar sums across all MPI ranks to compute the posterior.
+
+        After unpack_local_state_data accumulates weighted sums over local partitions,
+        this allreduces the totals and stores the per-member posterior in scalars_post.
+        """
+        if not self.info.scalars:
+            return
+        for m in range(c.nens):
+            for scalar_id in self.info.scalars:
+                local_sum   = self.scalars_post.get((m, scalar_id), 0.0)
+                local_count = self._scalar_counts.get((m, scalar_id), 0)
+                global_sum   = c.comm_mem.allreduce(local_sum)    # default: SUM
+                global_count = c.comm_mem.allreduce(local_count)  # default: SUM
+                if global_count > 0:
+                    self.scalars_post[m, scalar_id] = global_sum / global_count
+                else:
+                    self.scalars_post[m, scalar_id] = self.scalars_prior.get((m, scalar_id), 0.0)
 
     def output_state(self, c: Context, tag: str, mem_id_out: int|None=None, rec_id_out: int|None=None) -> None:
         """
@@ -422,12 +479,19 @@ class State:
             data['x'] = c.grid.x[inds][~msk]
             data['y'] = c.grid.y[inds][~msk]
 
+        # field entries: (rec_id, component)
         data['field_ids'] = []
         for rec_id in self.rec_list[c.pid_rec]:
             rec = self.info.fields[rec_id]
             v_list = [0, 1] if rec.is_vector else [None]
             for v in v_list:
                 data['field_ids'].append((rec_id, v))
+
+        nfld_only = len(data['field_ids'])
+
+        # scalar entries: ('scalar', scalar_id) — one row replicated across all locations
+        for scalar_id in self.info.scalars:
+            data['field_ids'].append(('scalar', scalar_id))
 
         nfld = len(data['field_ids'])
         nloc = len(data['x'])
@@ -436,7 +500,10 @@ class State:
         data['var_id'] = np.full(nfld, 0)
         data['err_type'] = np.full(nfld, 0)
         data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
-        for n in range(nfld):
+
+        # fill field rows
+        t_analysis = t2h(c.time)
+        for n in range(nfld_only):
             rec_id, v = data['field_ids'][n]
             rec = self.info.fields[rec_id]
             data['t'][n] = t2h(rec.time)
@@ -446,12 +513,30 @@ class State:
                 data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  # ens mean z
                 data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
 
+        # fill scalar rows: replicate scalar value at every spatial location
+        for n in range(nfld_only, nfld):
+            scalar_id = data['field_ids'][n][1]
+            rec = self.info.scalars[scalar_id]
+            data['t'][n] = t_analysis  # scalar is effectively at analysis time
+            data['err_type'][n] = self.info.err_types.index(rec.err_type)
+            data['var_id'][n] = self.info.variables.index(rec.name)
+            # z stays 0 (surface), already filled
+            for m in range(c.nens):
+                data['state_prior'][m, n, :] = self.scalars_prior.get((m, scalar_id), np.nan)
+
         return data
 
-    def unpack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, data: dict) -> None:
-        """unpack data and write back to the state dict"""
-        nfld = len(data['field_ids'])
+    def unpack_local_state_data(self, c: Context, par_id: PartitionID, state_post: StateEns, data: dict) -> None:
+        """unpack data and write back to the state dict; accumulate scalar updates for reduce_scalars"""
         for m in range(c.nens):
-            for n in range(nfld):
-                rec_id, v = data['field_ids'][n]
-                state_prior[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]
+            for n, fid in enumerate(data['field_ids']):
+                if fid[0] == 'scalar':
+                    scalar_id = fid[1]
+                    # accumulate weighted sum (weight = number of locations)
+                    nloc = data['state_prior'].shape[-1]
+                    key = (m, scalar_id)
+                    self.scalars_post[key] = self.scalars_post.get(key, 0.0) + float(np.sum(data['state_prior'][m, n, :]))
+                    self._scalar_counts[key] = self._scalar_counts.get(key, 0) + nloc
+                else:
+                    rec_id, v = fid
+                    state_post[m, rec_id][par_id][v, :] = data['state_prior'][m, n, :]

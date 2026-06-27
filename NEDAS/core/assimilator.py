@@ -32,6 +32,11 @@ class Assimilator(ABC):
         # assimilates c.obs.obs_seq into c.state.state_prior to get c.state.state_post
         c.logger('Assimilation algorithm')(self.assimilation_algorithm)(c)
 
+        # reduce scalar parameter updates across MPI ranks and write posteriors to models
+        if c.state.info.scalars:
+            c.logger('Reduce scalar parameters')(c.state.reduce_scalars)(c)
+            c.logger('Output posterior scalar parameters')(c.state.output_scalar_variables)(c, 'post')
+
         # transpose c.state.state_post back to field-complete c.state.fields_post
         c.logger('Transpose back to field-complete')(self.transpose_to_field_complete)(c)
 

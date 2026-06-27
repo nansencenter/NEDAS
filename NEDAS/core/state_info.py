@@ -1,7 +1,7 @@
 import numpy as np
 from NEDAS.utils.conversion import type_size, t2h, h2t, dt1h, ensure_list
 from NEDAS.core.context import Context
-from NEDAS.core.types import FieldRecord
+from NEDAS.core.types import FieldRecord, ScalarRecord
 
 class StateInfo:
     """
@@ -17,6 +17,7 @@ class StateInfo:
     shape: tuple
     mask: np.ndarray
     fields: dict[int, FieldRecord]
+    scalars: dict[int, ScalarRecord]
     size: int
     variables: list[str]
     err_types: list[str]
@@ -26,11 +27,12 @@ class StateInfo:
         self.shape = c.grid.x.shape
         self.mask = c.grid.mask
         self.fields = {}
-        # self.scalars: Dict[int, ScalarRecord] = {}
+        self.scalars = {}
         self.size = 0
         variables = set()
         err_types = set()
         self.pos = 0  # seek position for rec
+        self._scalar_id = 0
 
         # loop through variables in state_def
         for vrec in ensure_list(c.config.state_def):
@@ -44,7 +46,7 @@ class StateInfo:
                 self.add_fields_for_variable(c, vrec)
 
             elif vtype == 'scalar':
-                pass
+                self.add_scalar_for_variable(c, vrec)
 
             else:
                 raise NotImplementedError(f"{vtype} is not supported in the state vector.")
@@ -96,8 +98,32 @@ class StateInfo:
         #update total size
         self.size = self.pos
 
+    def add_scalar_for_variable(self, c: Context, vrec: dict) -> None:
+        """
+        Register a scalar parameter in the state.
+
+        Args:
+            c (Context): the runtime context object
+            vrec (dict): the variable record defining its properties
+        """
+        vname = vrec['name']
+        model_name = vrec['model_src']
+        model = c.models[model_name]
+        if not hasattr(model, 'params') or vname not in model.params:
+            raise RuntimeError(f"scalar parameter '{vname}' not declared in {model_name} model.params")
+
+        rec = ScalarRecord(
+            name=vname,
+            model_src=model_name,
+            dtype=model.params[vname].get('dtype', 'float'),
+            units=model.params[vname].get('units', '*'),
+            err_type=vrec['err_type'],
+        )
+        self.scalars[self._scalar_id] = rec
+        self._scalar_id += 1
+
     def __repr__(self):
-        return (f"StateInfo(nfld={len(self.fields)}, "
+        return (f"StateInfo(nfld={len(self.fields)}, nscalar={len(self.scalars)}, "
                 f"size={self.size} bytes, "
                 f"variables={list(self.variables)})")
 

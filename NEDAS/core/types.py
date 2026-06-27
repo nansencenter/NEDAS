@@ -113,12 +113,33 @@ class ObsRecord:
     def asdict(self) -> dict:
         return asdict(self)
 
+@dataclass
+class ScalarRecord:
+    """
+    Represents a scalar parameter in the augmented state vector (SSPE).
+
+    Attributes:
+        name (str): name of the parameter
+        model_src (str): name of the model source module for this parameter
+        dtype (str): data type
+        units (str|float): physical units
+        err_type (str): type of error model to use for this parameter
+    """
+    name: str
+    model_src: str
+    dtype: str
+    units: Unit
+    err_type: str
+    def asdict(self) -> dict:
+        return asdict(self)
+
 ProcID = Annotated[int, 'process id in comm']
 ProcIDMem = Annotated[int, 'process id in comm_mem']
 ProcIDRec = Annotated[int, 'process id in comm_rec']
 
 MemID = Annotated[int, 'member id']
 FieldRecordID = Annotated[int, 'field record id']
+ScalarRecordID = Annotated[int, 'scalar record id']
 ObsRecordID = Annotated[int, 'obs record id']
 PartitionID = Annotated[int, 'partition id']
 #TODO: Partition = Annotated[tuple[int, int, int, int, int, int] | np.typing.NDArray, 'partition: (istart,iend,di,jstart,jend,dj) or just inds array']

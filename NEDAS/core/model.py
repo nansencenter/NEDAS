@@ -273,6 +273,48 @@ class Model(Generic[GridT], ABC):
         """
         ...
 
+    def read_param(self, **kwargs) -> float:
+        """
+        Read a scalar parameter from the model.
+
+        Default implementation reads from self.memory['param'][mstr][name].
+        Falls back to getattr(self, name) if not in param memory.
+
+        Args:
+            name (str): parameter name
+            member (int|None): ensemble member index
+
+        Returns:
+            float: the parameter value
+        """
+        name = kwargs.get('name')
+        member = kwargs.get('member', None)
+        mstr = self.get_mstr(member) if member is not None else ''
+        try:
+            return self.memory['param'][mstr][name]
+        except KeyError:
+            return float(getattr(self, name))
+
+    def write_param(self, value: float, **kwargs) -> None:
+        """
+        Write a scalar parameter to the model.
+
+        Default implementation stores in self.memory['param'][mstr][name].
+
+        Args:
+            value (float): the parameter value to write
+            name (str): parameter name
+            member (int|None): ensemble member index
+        """
+        name = kwargs.get('name')
+        member = kwargs.get('member', None)
+        mstr = self.get_mstr(member) if member is not None else ''
+        if 'param' not in self.memory:
+            self.memory['param'] = {}
+        if mstr not in self.memory['param']:
+            self.memory['param'][mstr] = {}
+        self.memory['param'][mstr][name] = float(value)
+
     def generate_truth(self, *args, **kwargs) -> None:
         """
         Generate truth (nature run) model states. Use for running synthetic observation experiments.
