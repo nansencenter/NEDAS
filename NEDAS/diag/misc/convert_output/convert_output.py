@@ -78,7 +78,7 @@ def run(c: Context, **kwargs):
         time_start = s2t(kwargs['time'])
     else:
         time_start = c.time
-    dt_hours = kwargs.get("dt_hours", getattr(model, 'output_dt'))
+    dt_hours = kwargs.get("dt_hours", getattr(model, 'output_dt', 1))
     forecast_hours = kwargs.get("forecast_hours", c.config.cycle_period)
     time_units = kwargs.get('time_units', 'seconds since 1970-01-01T00:00:00+00:00')
     time_calendar = kwargs.get('time_calendar', 'standard')
@@ -116,6 +116,8 @@ def run(c: Context, **kwargs):
             dims[time_name] = None  # make time dimension unlimited in nc file
             k_name = kwargs.get('k_name')
             if len(levels) > 1:
+                if k_name is None:
+                    raise ValueError("'k_name' must be specified in kwargs when variable has multiple levels")
                 dims[k_name] = None  # add level dimension (unlimited) if there are multiple levels
             dims[y_name] = grid.ny
             dims[x_name] = grid.nx

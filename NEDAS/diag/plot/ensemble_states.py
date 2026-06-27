@@ -16,6 +16,12 @@ def get_task_list(c: Context, **kwargs) -> list:
     nlevels = ensure_list(kwargs['nlevels'])
     cmap = ensure_list(kwargs['cmap'])
 
+    if 'plot_dir' in kwargs:
+        plot_dir = kwargs['plot_dir']
+    else:
+        plot_dir = os.path.join(c.config.work_dir, 'plots', 'ensemble_states')
+    figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
+
     tasks = []
     for member in range(c.nens):
         for i, vname in enumerate(variables):
@@ -24,7 +30,14 @@ def get_task_list(c: Context, **kwargs) -> list:
             dt = model.variables[vname].dt
             for k in levels:
                 for t in np.arange(t2h(c.time), t2h(c.next_time), dt):
-                    tasks.append({**kwargs, 'time':h2t(float(t)), 'member':member, 'model_src':model_src[i], 'vname':vname, 'k':k, 'vmin':vmin[i], 'vmax':vmax[i], 'nlevels':nlevels[i], 'cmap':cmap[i]})
+                    tasks.append({**kwargs, 'time': h2t(float(t)), 'member': member,
+                                  'model_src': model_src[i], 'vname': vname, 'k': k,
+                                  'vmin': vmin[i], 'vmax': vmax[i],
+                                  'nlevels': nlevels[i], 'cmap': cmap[i]})
+
+    # generate the viewer HTML once here, before parallel task dispatch
+    generate_viewer_html(c, plot_dir, variables, model_src, figsize)
+
     return tasks
 
 def run(c: Context, **kwargs) -> None:
@@ -40,7 +53,6 @@ def run(c: Context, **kwargs) -> None:
     figsize = (kwargs.get('fig_size_x', 9), kwargs.get('fig_size_y', 8))
     landcolor = kwargs.get('land_color', 'gray')
 
-    variables = ensure_list(kwargs['variables'])
     vname = kwargs['vname']
     vmin = kwargs['vmin']
     vmax = kwargs['vmax']
@@ -54,12 +66,6 @@ def run(c: Context, **kwargs) -> None:
 
     c.debug_message = f"plotting state variable '{vname:20}' k={k:3} at {time} for member{member+1:03}"
 
-    # if the viewer html file does not exist, generate it
-    viewer = os.path.join(plot_dir, 'index.html')
-    if not os.path.exists(viewer):
-        generate_viewer_html(c, plot_dir, model_src, variables, figsize)
-
-    # plot the variables defined in kwargs, save to figfile
     figfile = os.path.join(plot_dir, f"{vname}_k{k}_{time:%Y%m%dT%H%M%S}_mem{member+1:03}.png")
 
     # read the field from model restart files
@@ -94,39 +100,35 @@ def run(c: Context, **kwargs) -> None:
         print(f"ERROR: Failed to plot {vname} at level {k} and time {time} for member {member+1}")
         raise e
 
-def generate_viewer_html(c, plot_dir, model_src, variables, figsize) -> None:
-    """Generating a html page to help viewing the ensemble state variables"""
+def generate_viewer_html(c, plot_dir, variables, model_src_list, figsize) -> None:
+    """Generate a static HTML viewer page for browsing the ensemble state plots."""
     c.debug_message = f"Generating viewer.html page in {plot_dir}"
 
     with open(os.path.join(os.path.dirname(__file__), 'viewer.html'), 'rt') as f:
         html_page = f.read()
 
-    # replace the placeholder with the list of variables,levels,times,members
-    levels_by_variable = ""
-    times_by_variable = ""
-    for vname in variables:
-        levels_by_variable += f"'{vname}': ["
-        model = c.models[model_src]
-        for level in model.variables[vname]['levels']:
-            levels_by_variable += f"{level}, "
-        levels_by_variable += "], \n"
-        times_by_variable += f"'{vname}': ["
-        for t in np.arange(t2h(c.time_start), t2h(c.time_end), model.variables[vname]['dt']):
-            times_by_variable += f"'{h2t(float(t)):%Y%m%dT%H%M%S}', "
-        times_by_variable += "], \n"
-    html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_by_variable)
-    html_page = html_page.replace("TIMES_BY_VARIABLE", times_by_variable)
+    # replace the placeholder with the list of variables, levels, times, members
+    levels_str = ""
+    times_str = ""
+    for i, vname in enumerate(variables):
+        model = c.models[model_src_list[i]]
+        levels_str += f"'{vname}': ["
+        for level in model.variables[vname].levels:
+            levels_str += f"{level}, "
+        levels_str += "], \n"
+        times_str += f"'{vname}': ["
+        for t in np.arange(t2h(c.config.time_start), t2h(c.config.time_end), model.variables[vname].dt):
+            times_str += f"'{h2t(float(t)):%Y%m%dT%H%M%S}', "
+        times_str += "], \n"
+    html_page = html_page.replace("LEVELS_BY_VARIABLE", levels_str)
+    html_page = html_page.replace("TIMES_BY_VARIABLE", times_str)
 
-    members = "["
-    for m in range(c.nens):
-        members += f"'{m+1:03}', "
-    members += "]"
+    members = "[" + "".join(f"'{m+1:03}', " for m in range(c.nens)) + "]"
     html_page = html_page.replace("MEMBERS", members)
-
     html_page = html_page.replace("TITLE", "Ensemble States")
     html_page = html_page.replace("IMAGE_WIDTH", f"{figsize[0]*60}")
     html_page = html_page.replace("IMAGE_HEIGHT", f"{figsize[1]*60}")
 
-    # write the html page to file
+    c.fs.make_dir(plot_dir)
     with open(os.path.join(plot_dir, 'index.html'), 'w') as f:
         f.write(html_page)
