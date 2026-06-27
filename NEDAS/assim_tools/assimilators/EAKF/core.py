@@ -9,11 +9,13 @@ class EAKFAssimilator(SerialAssimilator):
     def update_local_state(self, state_prior, obs_prior, obs_incr,
                         state_h_dist, state_v_dist, state_t_dist,
                         hroi, vroi, troi,
-                        h_local_func, v_local_func, t_local_func) -> None:
+                        h_local_func, v_local_func, t_local_func,
+                        impact_on_state) -> None:
         return update_local_state_linear(state_prior, obs_prior, obs_incr,
                                          state_h_dist, state_v_dist, state_t_dist,
                                          hroi, vroi, troi,
-                                         h_local_func, v_local_func, t_local_func)
+                                         h_local_func, v_local_func, t_local_func,
+                                         impact_on_state)
 
     def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
                          h_dist, v_dist, t_dist,
@@ -56,7 +58,8 @@ def obs_increment_eakf(obs_prior, obs, obs_err) -> np.ndarray:
 def update_local_state_linear(state_data, obs_prior, obs_incr,
                               h_dist, v_dist, t_dist,
                               hroi, vroi, troi,
-                              h_local_func, v_local_func, t_local_func) -> None:
+                              h_local_func, v_local_func, t_local_func,
+                              impact_on_state) -> None:
 
     nens, nfld, nloc = state_data.shape
 
@@ -66,11 +69,10 @@ def update_local_state_linear(state_data, obs_prior, obs_incr,
 
     nloc_sub = np.where(h_lfactor>0)[0]  # subset of range(nloc) to update
 
-    # TODO: impact_on_state missing
     lfactor = np.zeros((nfld, nloc))
     for l in nloc_sub:
         for n in range(nfld):
-            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n]
+            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n] * impact_on_state[n]
 
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
 

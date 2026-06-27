@@ -124,10 +124,12 @@ class SerialAssimilator(Assimilator):
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
+            impact_per_field = obs_p['impact_on_state'][state_data['var_id']]
             self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
                                     state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                                    c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
+                                    c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
+                                    impact_per_field)
 
             # 3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
@@ -164,15 +166,16 @@ class SerialAssimilator(Assimilator):
     def update_local_state(self, state_prior, obs_prior, obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
-                           h_local_func, v_local_func, t_local_func) -> None:
+                           h_local_func, v_local_func, t_local_func,
+                           impact_on_state) -> None:
         """
         Update the local state vector with the analysis increments.
 
         Args:
-            state_data (np.ndarray): Local state vector, shape (nens, nfld, nloc)
+            state_prior (np.ndarray): Local state vector, shape (nens, nfld, nloc)
             obs_prior (np.ndarray): Observation priors, shape (nens,)
             obs_incr (np.ndarray): Analysis increments, shape (nens,)
-
+            impact_on_state (np.ndarray): Cross-variable localization factor per field, shape (nfld,)
         """
         pass
 
