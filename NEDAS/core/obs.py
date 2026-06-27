@@ -4,7 +4,7 @@ from NEDAS.utils.conversion import t2h, ensure_list
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
-from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
+from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq, IOTag
 from .obs_info import ObsInfo
 
 class Obs:
@@ -108,7 +108,7 @@ class Obs:
             z[k] = z_fld[0, ...] if rec.is_vector else z_fld
         return z
 
-    def state_to_obs(self, c: Context, tag: str, **kwargs) -> np.ndarray:
+    def state_to_obs(self, c: Context, tag: IOTag, **kwargs) -> np.ndarray:
         """
         Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
         This function includes several ways to compute the obs_prior:
@@ -116,14 +116,18 @@ class Obs:
         1, If obs_name is one of the variables provided by the model_src module, then
         model_src.read_var shall be able to provide the obs field defined on model native grid.
         Then we convert the obs field to the analysis grid and do vertical interpolation.
+        Uses ``tag`` to route model state reads to the correct snapshot ('prior', 'post', 'truth').
 
         2, If obs_name is one of the variables provided by obs.obs_operator, we call it to
         obtain the obs seq. Typically the obs_operator performs more complex computation, such
         as path integration, radiative transfer model, etc. (slowest)
+        Always reads auxiliary model inputs (e.g. forcing files) via the 'current' tag,
+        since those files reside in the current cycle directory regardless of DA stage.
 
         Args:
             c (Context): the runtime context object
-            tag (str): 'prior' or 'post', or 'truth' if generating synthetic obs
+            tag (IOTag): state snapshot to use for option 1 reads — 'prior', 'post', or
+                'truth'. Option 2 (obs_operator) always reads auxiliary inputs via 'current'.
             **kwargs: Additional parameters
                 - member: int, member index; or None if dealing with synthetic obs
                 - name: str, obs variable name
@@ -167,7 +171,7 @@ class Obs:
             operator = dataset.obs_operator[kwargs['name']]
 
             # get the obs seq from operator
-            seq = c.io.call_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
+            seq = c.io.call_method(c, "current", operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
