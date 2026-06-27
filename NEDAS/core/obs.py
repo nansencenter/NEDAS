@@ -365,6 +365,10 @@ class Obs:
 
     def prepare_obs(self, c: Context) -> None:
         self.obs_seq = bcast_by_root(c.comm_mem)(self.collect_obs_seq)(c)
+        # collect_obs_seq runs only on root and sets rec.nobs there; sync to all procs
+        # using the already-broadcast obs_seq so no extra communication is needed
+        for obs_rec_id, seq in self.obs_seq.items():
+            self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
 
     def prepare_obs_from_state(self, c: Context, tag: str) -> None:
         """

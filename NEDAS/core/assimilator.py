@@ -118,7 +118,6 @@ class Assimilator(ABC):
         c.state.fields_post = c.logger('Tranpose posterior state back')(c.state.transpose_to_field_complete)(c, c.state.state_post)
 
         if c.obs.lobs_post:
-            # TODO there is a bug here, in transpose seq[:, ind] out of bound
             c.obs.obs_post = c.logger('Transpose obs posterior ensemble back')(c.obs.transpose_to_field_complete)(c, c.obs.lobs_post)
 
     @abstractmethod
