@@ -35,8 +35,9 @@ class OnlineIO(IOBackend):
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
 
-        # just append tag to the kwargs, online model classes will read this tag
-        # and look for corresponding dict entries for cached data.
-        kwargs['tag'] = tag
+        # 'post' is an alias for 'current' in online mode: the updator always writes
+        # the posterior under 'current'; there is no separate 'post' memory slot.
+        # In offline mode 'post' already routes to the same path as 'current'.
+        kwargs['tag'] = 'current' if tag == 'post' else tag
 
         return method(*args, **kwargs)

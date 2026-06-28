@@ -113,8 +113,8 @@ class OfflineIO(IOBackend):
             raise ValueError(f"tag '{tag}' not supported in io.call_method")
 
         # make sure path exists
-        if path:
-            c.fs.make_dir(path)
+        # if path:
+        #     c.fs.make_dir(path)
 
         kwargs['path'] = path
         return method(*args, **kwargs)

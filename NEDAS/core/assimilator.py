@@ -50,7 +50,6 @@ class Assimilator(ABC):
 
         if self.assim_mode == 'batch':
             # for batch filters the obs_post needs to be computed
-            # (TODO: they can be updated along with the state, as an alternative)
             c.logger('Prepare obs from posterior state')(c.obs.prepare_obs_from_state)(c, 'post')
 
         # posterior inflation

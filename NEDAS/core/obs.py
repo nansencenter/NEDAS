@@ -178,13 +178,13 @@ class Obs:
 
         return seq
 
-    def get_model_fld_z_on_grid(self, c: Context, tag: str, **kwargs) -> tuple[np.ndarray, np.ndarray]:
+    def get_model_fld_z_on_grid(self, c: Context, tag: IOTag, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         """ Get obs variable field and z coords at level k and convert to c.grid """
         model = c.models[kwargs['model_src']]
 
-        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)] and tag != 'truth':
-            # the obs variable is one of the state variables
-            # we can find its corresponding rec_id and call io.read_field to get it
+        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)] and tag in ('prior', 'post'):
+            # shortcut: use pre-interpolated fields_{tag} already on the analysis grid.
+            # fields_prior written by prepare_state; fields_post written by assimilator.assimilate.
             rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==kwargs['name'] and r.time==kwargs['time'] and r.k==kwargs['k']]
             if len(rec_id_found) == 0:
                 raise RuntimeError(f"field '{kwargs['name']}' at t={kwargs['time']} k={kwargs['k']} not found in state.info.fields")
@@ -193,7 +193,7 @@ class Obs:
             zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
 
         else:
-            # otherwise, we get the field from by calling model.read_var
+            # otherwise, we get the field by calling model.read_var
             model_fld = c.io.call_method(c, tag, model.read_var, **kwargs)
             model_z = c.io.call_method(c, 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
@@ -370,13 +370,13 @@ class Obs:
         for obs_rec_id, seq in self.obs_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
 
-    def prepare_obs_from_state(self, c: Context, tag: str) -> None:
+    def prepare_obs_from_state(self, c: Context, tag: IOTag) -> None:
         """
         Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
         Args:
             c (Context): the runtime context object
-            tag (str): 'prior' or 'post' ensemble model states
+            tag (IOTag): 'prior' or 'post' ensemble model states
         """
         mem_list = c.mem_list
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
