@@ -26,7 +26,7 @@ class IOBackend(ABC):
     io_mode: IOMode = 'offline'
     tags: list[str] = list(get_args(IOTag))
 
-    def validate_tag(self, tag: str):
+    def validate_tag(self, tag: str) -> None:
         if tag not in self.tags:
             raise ValueError(f"IOBackend: unknown tag '{tag}', supported: {self.tags}")
 
@@ -68,6 +68,23 @@ class IOBackend(ABC):
         """
         ...
 
+    def prepare_obs_storage(self, c: 'Context', tag: str) -> None:
+        """
+        Initialise obs_{tag}.bin and write its .dat metadata file.
+        Called at the start of prepare_obs_from_state. No-op in online mode.
+        """
+        pass
+
+    @abstractmethod
+    def write_obs(self, seq: np.ndarray, c: 'Context', tag: str, obs_rec_id: int, mem_id: int) -> None:
+        """Write one member's obs sequence array for one obs record (tag = 'prior' or 'post')."""
+        ...
+
+    @abstractmethod
+    def read_obs(self, c: 'Context', tag: str, obs_rec_id: int, mem_id: int) -> np.ndarray:
+        """Read one member's obs sequence array for one obs record."""
+        ...
+
     @abstractmethod
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs) -> Any:
         """
@@ -75,7 +92,7 @@ class IOBackend(ABC):
 
         Args:
             c (Context): the runtime context
-            tag (str): which copy of the model state to request io from: "prior", "post" or "truth"
+            tag (str): which copy of the model state to request io from
             method (Callable): method name
             ``*args``, ``**kwargs``: will be passed to the method
 

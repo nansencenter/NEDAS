@@ -287,7 +287,7 @@ class Model(Generic[GridT], ABC):
         Returns:
             float: the parameter value
         """
-        name = kwargs.get('name')
+        name: str = kwargs['name']
         member = kwargs.get('member', None)
         mstr = self.get_mstr(member) if member is not None else ''
         try:

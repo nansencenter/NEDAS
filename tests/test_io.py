@@ -19,7 +19,7 @@ class TestOfflineIO(unittest.TestCase):
         cwd = os.getcwd()
         assert isinstance(self.c.io, OfflineIO)
         binfile = os.path.join(cwd, 'cycle', '202301010000', 'analysis', 'fields_prior.bin')
-        self.assertEqual(self.c.io.binfile_name(self.c, 'prior'), binfile)
+        self.assertEqual(self.c.io.state_binfile_name(self.c, 'prior'), binfile)
 
 class _MockContext:
     """Minimal context for OnlineIO tests — no MPI, no models, no IO setup."""

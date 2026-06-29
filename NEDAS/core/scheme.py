@@ -10,7 +10,7 @@ from NEDAS.utils.parallel import OfflineScheduler
 from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.config import Config
 from NEDAS.core.context import Context
-from NEDAS.core.types import EnsRunStrategy, IOTag
+from NEDAS.core.types import EnsRunStrategy
 
 class Scheme(ABC):
     """
@@ -187,7 +187,7 @@ class Scheme(ABC):
         self.c.logger(func_name)(stepfunc)()
 
     def run_ensemble_tasks(self, strategy: EnsRunStrategy,
-                           tag: IOTag,
+                           tag: str,
                            task_name: str,
                            func: Callable,
                            **opts) -> None:
@@ -202,14 +202,14 @@ class Scheme(ABC):
         else:
             raise ValueError(f"Unknown ensemble run strategy '{strategy}'")
 
-    def _run_ensemble_tasks_batch(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+    def _run_ensemble_tasks_batch(self, tag: str, task_name: str, func: Callable, **opts) -> None:
         # the func should handle the entire ensemble in one go
         # make sure nens is defined in opts
         self.c.debug_message = f"running {task_name} in batch mode..."
         opts['nens'] = self.c.nens
         self.c.io.call_method(self.c, tag, func, **opts)
 
-    def _run_ensemble_tasks_online(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+    def _run_ensemble_tasks_online(self, tag: str, task_name: str, func: Callable, **opts) -> None:
         # scheduling internally within mpi environment
         # using the mem_list (member lists distributed on pid ranks by comm)
         nm = len(self.c.mem_list[self.c.pid_mem])
@@ -221,7 +221,7 @@ class Scheme(ABC):
             self.c.io.call_method(self.c, tag, func, **opts)
         self.c.comm.Barrier()
 
-    def _run_ensemble_tasks_offline_scheduler(self, tag: IOTag, task_name: str, func: Callable, **opts) -> None:
+    def _run_ensemble_tasks_offline_scheduler(self, tag: str, task_name: str, func: Callable, **opts) -> None:
         nproc_per_task = opts.get('nproc', 1)
 
         if nproc_per_task > 1 and isinstance(self.c.jsub, HPCJobSubmitter) and not self.c.jsub.in_job_allocation:

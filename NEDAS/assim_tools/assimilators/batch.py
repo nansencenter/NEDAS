@@ -5,6 +5,9 @@ from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
+    """
+    Subclass for batch assimilation algorithms
+    """
     assim_mode = 'batch'
 
     def init_partitions(self, c: Context) -> list:

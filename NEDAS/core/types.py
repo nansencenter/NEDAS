@@ -110,6 +110,7 @@ class ObsRecord:
     vroi: float
     troi: float
     impact_on_state: dict
+    pos: int = 0  # byte offset in binary file
     def asdict(self) -> dict:
         return asdict(self)
 

@@ -1,10 +1,11 @@
+import os
 import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import t2h, ensure_list
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
-from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq, IOTag
+from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
 from .obs_info import ObsInfo
 
 class Obs:
@@ -108,7 +109,7 @@ class Obs:
             z[k] = z_fld[0, ...] if rec.is_vector else z_fld
         return z
 
-    def state_to_obs(self, c: Context, tag: IOTag, **kwargs) -> np.ndarray:
+    def state_to_obs(self, c: Context, tag: str, **kwargs) -> np.ndarray:
         """
         Compute the corresponding obs value given the state variable(s), namely the "obs_prior"
         This function includes several ways to compute the obs_prior:
@@ -126,7 +127,7 @@ class Obs:
 
         Args:
             c (Context): the runtime context object
-            tag (IOTag): state snapshot to use for option 1 reads — 'prior', 'post', or
+            tag (str): state snapshot to use for option 1 reads — 'prior', 'post', or
                 'truth'. Option 2 (obs_operator) always reads auxiliary inputs via 'current'.
             **kwargs: Additional parameters
                 - member: int, member index; or None if dealing with synthetic obs
@@ -178,7 +179,7 @@ class Obs:
 
         return seq
 
-    def get_model_fld_z_on_grid(self, c: Context, tag: IOTag, **kwargs) -> tuple[np.ndarray, np.ndarray]:
+    def get_model_fld_z_on_grid(self, c: Context, tag: str, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         """ Get obs variable field and z coords at level k and convert to c.grid """
         model = c.models[kwargs['model_src']]
 
@@ -369,14 +370,25 @@ class Obs:
         # using the already-broadcast obs_seq so no extra communication is needed
         for obs_rec_id, seq in self.obs_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
+        self.info.finalize_pos()
+        if c.pid == 0:
+            analysis_dir = c.fs.analysis_dir(c.time, c.iter)
+            np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(self.obs_seq, dtype=object))
 
-    def prepare_obs_from_state(self, c: Context, tag: IOTag) -> None:
+    def output_obs(self, c: 'Context', tag: str) -> None:
+        """Persist obs_post already in memory (from serial assimilator lobs_post
+        transpose) to obs_post.bin without re-running the forward operator."""
+        c.io.prepare_obs_storage(c, tag)
+        for (mem_id, obs_rec_id), seq in getattr(self, f"obs_{tag}").items():
+            c.io.write_obs(seq, c, tag, obs_rec_id, mem_id)
+
+    def prepare_obs_from_state(self, c: Context, tag: str) -> None:
         """
         Compute the obs priors in parallel, run state_to_obs to obtain obs_prior_seq
 
         Args:
             c (Context): the runtime context object
-            tag (IOTag): 'prior' or 'post' ensemble model states
+            tag (str): 'prior' or 'post' ensemble model states
         """
         mem_list = c.mem_list
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]

@@ -12,22 +12,57 @@ class OfflineIO(IOBackend):
     """
     io_mode = 'offline'
 
-    def binfile_name(self, c: Context, tag: str) -> str:
+    def analysis_dir(self, c: Context) -> str:
+        return c.fs.analysis_dir(c.time, c.iter)
+
+    def state_binfile_name(self, c: Context, tag: str) -> str:
         """
         Name of the binary file that stores the state data.
-
-        Args:
-            c (Context): the runtime context
-            tag (str): which version of the state
-
-        Returns:
-            str: file name
         """
-        analysis_dir = c.fs.analysis_dir(c.time, c.iter)
-        return os.path.join(analysis_dir, f'fields_{tag}.bin')
+        return os.path.join(self.analysis_dir(c), f'fields_{tag}.bin')
+
+    def obs_binfile_name(self, c: Context, tag: str) -> str:
+        """
+        Name of the binary file that stores the observation data.
+        """
+        return os.path.join(self.analysis_dir(c), f'obs_{tag}.bin')
+
+    def prepare_obs_storage(self, c: Context, tag: str) -> None:
+        """Create obs_{tag}.bin and write obs_{tag}.dat before the parallel write loop."""
+        binfile = self.obs_binfile_name(c, tag)
+        if c.pid == 0:
+            with open(binfile, 'wb') as f:
+                pass
+            c.obs.info.write_to_file(binfile)
+        c.comm.Barrier()
+
+    def write_obs(self, seq: np.ndarray, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> None:
+        if mem_id not in c.mem_list[c.pid_mem]:
+            return
+        # cache in memory so assimilator can access obs_prior during analysis
+        getattr(c.obs, f'obs_{tag}')[mem_id, obs_rec_id] = seq
+        # persist to binary file
+        rec = c.obs.info.records[obs_rec_id]
+        seq_ = seq.flatten() if rec.is_vector else seq
+        with open(self.obs_binfile_name(c, tag), 'r+b') as f:
+            f.seek(mem_id * c.obs.info.size + rec.pos)
+            f.write(struct.pack(seq_.size * type_dic[rec.dtype], *seq_))
+
+    def read_obs(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> np.ndarray:
+        # check memory cache first
+        obs_store = getattr(c.obs, f'obs_{tag}')
+        if (mem_id, obs_rec_id) in obs_store:
+            return obs_store[mem_id, obs_rec_id]
+        rec = c.obs.info.records[obs_rec_id]
+        nv = 2 if rec.is_vector else 1
+        with open(self.obs_binfile_name(c, tag), 'rb') as f:
+            f.seek(mem_id * c.obs.info.size + rec.pos)
+            raw = f.read(nv * rec.nobs * type_size[rec.dtype])
+        seq_ = np.array(struct.unpack(nv * rec.nobs * type_dic[rec.dtype], raw))
+        return seq_.reshape(2, rec.nobs) if rec.is_vector else seq_
 
     def prepare_fields_storage(self, c: Context, tag: str):
-        binfile = self.binfile_name(c, tag)
+        binfile = self.state_binfile_name(c, tag)
         if c.pid == 0:
             # create the .bin file
             with open(binfile, 'wb') as f:
@@ -54,7 +89,7 @@ class OfflineIO(IOBackend):
         fld_shape = (2,)+c.state.info.shape if rec.is_vector else c.state.info.shape
         fld_size = np.sum((~c.grid.mask).astype(int))
 
-        binfile = self.binfile_name(c, tag)
+        binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'rb') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
             fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
@@ -85,7 +120,7 @@ class OfflineIO(IOBackend):
         else:
             fld_ = fld[~c.grid.mask]
 
-        binfile = self.binfile_name(c, tag)
+        binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'r+b') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
             f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))

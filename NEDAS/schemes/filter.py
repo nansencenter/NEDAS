@@ -207,12 +207,18 @@ class FilterAnalysisScheme(Scheme):
         self.c.obs = Obs(self.c)
         self.c.logger('Prepare obs')(self.c.obs.prepare_obs)(self.c)
         self.c.logger('Prepare obs from prior state')(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
+        self.c.logger('Output obs prior')(self.c.obs.output_obs)(self.c, 'prior')
 
         # run assimilate algorithm
         self.c.logger('Assimilator')(self.c.assimilator.assimilate)(self.c)
 
         # update the state to get posteriors
         self.c.logger('Updator')(self.c.updator.update)(self.c)
+
+        # compute posterior obs ensemble for obs-space diagnostics
+        if self.c.assimilator.assim_mode == 'batch':
+            self.c.logger('Prepare obs from post state')(self.c.obs.prepare_obs_from_state)(self.c, 'post')
+        self.c.logger('Output obs post')(self.c.obs.output_obs)(self.c, 'post')
 
     def perturb(self) -> None:
         """

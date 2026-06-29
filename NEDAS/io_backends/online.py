@@ -32,6 +32,25 @@ class OnlineIO(IOBackend):
         fields = getattr(c.state, f"fields_{tag}")
         fields[mem_id, rec_id] = fld
 
+    def read_obs(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> np.ndarray:
+        """
+        Read an observation from memory
+        """
+        self.validate_tag(tag)
+        obs_ens = getattr(c.obs, f'obs_{tag}')
+        return obs_ens[mem_id, obs_rec_id]
+
+    def write_obs(self, seq: np.ndarray, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> None:
+        """
+        Write an observation to memory
+        """
+        self.validate_tag(tag)
+        
+        if not hasattr(c.obs, f'obs_{tag}'):
+            setattr(c.obs, f'obs_{tag}', {})
+        obs_ens = getattr(c.obs, f'obs_{tag}')
+        obs_ens[mem_id, obs_rec_id] = seq
+
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
 

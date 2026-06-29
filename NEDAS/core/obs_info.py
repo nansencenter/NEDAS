@@ -1,5 +1,5 @@
 import numpy as np
-from NEDAS.utils.conversion import dt1h, ensure_list
+from NEDAS.utils.conversion import dt1h, ensure_list, type_size, t2h, h2t
 from .types import ErrorModel, ObsRecord
 from .context import Context
 
@@ -121,37 +121,64 @@ class ObsInfo:
                     if not isinstance(obs_rec.err.cross_corr[vname], float):
                         raise TypeError(f"obs_def: {obs_rec.name} has err.cross_corr.{vname} defined as {obs_rec.err.cross_corr[vname]}, expecting a float")
 
-    # def write_obs_info(self, binfile):
-    #     with open(binfile.replace('.bin','.dat'), 'wt') as f:
-    #         f.write('{} {}\n'.format(self.info['nobs'], self.info['nens']))
-    #         for rec in self.info['obs_seq'].values():
-    #             f.write('{} {} {} {} {} {} {} {} {} {} {} {} {} {}\n'.format(rec['name'], rec['dataset_src'], rec['model_src'], rec['dtype'], int(rec['is_vector']), rec['units'], rec['z_units'], rec['x'], rec['y'], rec['z'], t2h(rec['time']), rec['pos']))
+    def finalize_pos(self):
+        """Compute byte offsets and total size once rec.nobs is known (after prepare_obs)."""
+        offset = 0
+        for rec in self.records.values():
+            nv = 2 if rec.is_vector else 1
+            rec.pos = offset
+            offset += nv * rec.nobs * type_size[rec.dtype]
+        self.size = offset
 
-    # # read obs_info from the dat file
-    # def read_obs_info(self, binfile):
-    #     with open(binfile.replace('.bin','.dat'), 'r') as f:
-    #         lines = f.readlines()
+    def write_to_file(self, binfile: str) -> None:
+        """
+        Write binary-reading metadata to the .dat file.
+        
+        Columns: name dataset_src model_src dtype is_vector units z_units
+                 time dt obs_window_min obs_window_max nobs pos
+        """
+        with open(binfile.replace('.bin', '.dat'), 'wt') as f:
+            f.write(f"{len(self.records)}\n")
+            f.write(f"{self.size}\n")
+            for rec in self.records.values():
+                f.write(
+                    f"{rec.name} {rec.dataset_src} {rec.model_src} "
+                    f"{rec.dtype} {int(rec.is_vector)} "
+                    f"{rec.units} {rec.z_units} "
+                    f"{t2h(rec.time)} {rec.dt} "
+                    f"{rec.obs_window_min} {rec.obs_window_max} "
+                    f"{rec.nobs} {rec.pos}\n"
+                )
 
-    #         ss = lines[0].split()
-    #         self.info = {'nobs':int(ss[0]), 'nens':int(ss[1]), 'obs_seq':{}}
+    def read_from_file(self, binfile: str) -> None:
+        """
+        Read .dat file; updates existing records or reconstructs from scratch.
 
-    #         # following lines of obs records
-    #         obs_id = 0
-    #         for lin in lines[1:]:
-    #             ss = lin.split()
-    #             rec = {'name': ss[0],
-    #                 'dataset_src': ss[1],
-    #                 'model_src': ss[2],
-    #                 'dtype': ss[3],
-    #                 'is_vector': bool(int(ss[4])),
-    #                 'units': ss[5],
-    #                 'z_units':ss[6],
-    #                 'err_type': ss[7],
-    #                 'err': float(ss[8]),
-    #                 'x': float(ss[9]),
-    #                 'y': float(ss[10]),
-    #                 'z': float(ss[11]),
-    #                 'time': h2t(float(ss[12])),
-    #                 'pos': int(ss[13]), }
-    #             self.info['obs_seq'][obs_id] = rec
-    #             obs_id += 1
+        Column layout (0-based):
+          0:name 1:dataset_src 2:model_src 3:dtype 4:is_vector 5:units 6:z_units
+          7:time 8:dt 9:obs_window_min 10:obs_window_max 11:nobs 12:pos
+        """
+        from .types import ErrorModel, ObsRecord
+        with open(binfile.replace('.bin', '.dat'), 'r') as f:
+            lines = f.readlines()
+        nrec = int(lines[0])
+        self.size = int(lines[1])
+        for rec_id, line in enumerate(lines[2:2 + nrec]):
+            ss = line.split()
+            if rec_id in self.records:
+                rec = self.records[rec_id]
+            else:
+                rec = ObsRecord(
+                    name=ss[0], dataset_src=ss[1], model_src=ss[2],
+                    dtype=ss[3], is_vector=bool(int(ss[4])),
+                    units=ss[5], z_units=ss[6],
+                    err=ErrorModel(type='normal', std=1., hcorr=0., vcorr=0., tcorr=0., cross_corr={}),
+                    time=h2t(float(ss[7])), dt=float(ss[8]),
+                    obs_window_min=int(ss[9]), obs_window_max=int(ss[10]),
+                    hroi=0., vroi=0., troi=0.,
+                    nobs=int(ss[11]), pos=int(ss[12]),
+                    impact_on_state={},
+                )
+                self.records[rec_id] = rec
+            rec.nobs = int(ss[11])
+            rec.pos  = int(ss[12])
