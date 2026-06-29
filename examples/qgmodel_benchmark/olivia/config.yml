@@ -69,7 +69,7 @@ obs_def:
   hroi: 100
   vroi: 5
   troi: 24
-  impact_on_state:
+  impact_on_variable:
     streamfunc: 1.0
 
 dataset_def:

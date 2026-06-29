@@ -113,7 +113,7 @@ obs_def:
   hroi: 100               # horizontal localization radius (in grid coordinate units)
   vroi: 5                 # vertical   ..            .. (vertical coordinate units)
   troi: 24                # temporal   ..            .. (hours)
-  impact_on_state:        # a list of impact factor of this observation on state variables
+  impact_on_variable:        # a list of impact factor of this observation on state variables
     streamfunc: 1.0       # unlisted state variable has a default of 1.0,
                           # this can help removing the analysis increment only on certain variables
 

@@ -95,42 +95,36 @@ obs_def:
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 - name: 'ocean_saln'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 - name: 'ocean_surf_temp'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 - name: 'seaice_conc'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 - name: 'seaice_thick'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 - name: 'seaice_drift'
   dataset_src: 'topaz'
   model_src: 'topaz.v5'
   hroi: 2e5
   vroi: 1e3
   troi: inf
-  impact_on_state:
 
 dataset_def:
   topaz:

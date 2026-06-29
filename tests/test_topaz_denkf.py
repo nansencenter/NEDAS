@@ -116,14 +116,14 @@ class TestLocalAnalysisMain(unittest.TestCase):
         state_t   = np.zeros(nfld)
         obs_t     = np.zeros(nlobs)
         troi      = 1.0
-        impact_on_state = np.ones((nlobs, nfld))
+        impact_on_variable = np.ones((nlobs, nfld))
 
         prior_copy = state_prior.copy()
         local_analysis_main(
             state_prior, obs_prior, obs, obs_err, hlfactor,
             state_z, obs_z, vroi, step_func,
             state_t, obs_t, troi, step_func,
-            impact_on_state, 1.0, 1e6, nlobs_max,
+            impact_on_variable, 1.0, 1e6, nlobs_max,
         )
         return prior_copy, state_prior  # (before, after)
 
@@ -148,14 +148,14 @@ class TestLocalAnalysisMain(unittest.TestCase):
         obs_z   = np.zeros(nlobs)
         state_t = np.zeros(nfld)
         obs_t   = np.zeros(nlobs)
-        impact_on_state = np.ones((nlobs, nfld))
+        impact_on_variable = np.ones((nlobs, nfld))
 
         before = state_prior.copy()
         local_analysis_main(
             state_prior, obs_prior, obs, obs_err, hlfactor,
             state_z, obs_z, 1.0, step_func,
             state_t, obs_t, 1.0, step_func,
-            impact_on_state, 1.0, 1e6, nlobs,
+            impact_on_variable, 1.0, 1e6, nlobs,
         )
         np.testing.assert_array_equal(state_prior, before)
 
@@ -171,7 +171,7 @@ class TestLocalAnalysisMain(unittest.TestCase):
         obs_z   = np.zeros(nlobs)
         state_t = np.zeros(nfld)
         obs_t   = np.zeros(nlobs)
-        impact_on_state = np.ones((nlobs, nfld))
+        impact_on_variable = np.ones((nlobs, nfld))
 
         state1 = rng.normal(0, 2, (nens, nfld))
         state2 = state1.copy()
@@ -179,12 +179,12 @@ class TestLocalAnalysisMain(unittest.TestCase):
         local_analysis_main(state1, obs_prior, obs, obs_err, hlfactor,
                             state_z, obs_z, 1.0, step_func,
                             state_t, obs_t, 1.0, step_func,
-                            impact_on_state, 1.0, 1e6, 1)
+                            impact_on_variable, 1.0, 1e6, 1)
 
         local_analysis_main(state2, obs_prior, obs, obs_err, hlfactor,
                             state_z, obs_z, 1.0, step_func,
                             state_t, obs_t, 1.0, step_func,
-                            impact_on_state, 1.0, 1e6, nlobs)
+                            impact_on_variable, 1.0, 1e6, nlobs)
 
         self.assertFalse(np.allclose(state1, state2))
 

@@ -56,7 +56,7 @@ obs_def:
   hroi: 5
   vroi: inf
   troi: inf
-  impact_on_state:
+  impact_on_variable:
 
 dataset_def:
   synthetic:

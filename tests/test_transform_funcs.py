@@ -23,7 +23,7 @@ def _obs_record() -> ObsRecord:
         nobs=0, obs_window_min=-1, obs_window_max=1,
         dtype='float', is_vector=False, units='*', z_units='*',
         time=datetime(2000, 1, 1, tzinfo=timezone.utc),
-        dt=1.0, err=err, hroi=100.0, vroi=100.0, troi=1.0, impact_on_state={},
+        dt=1.0, err=err, hroi=100.0, vroi=100.0, troi=1.0, impact_on_variable={},
     )
 
 

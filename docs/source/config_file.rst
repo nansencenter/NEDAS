@@ -554,10 +554,10 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
    * - ``troi``
      - Temporal localization distance
      - inf
-   * - ``impact_on_state``
+   * - ``impact_on_variable``
      - List of impact factors of this observation
 
-       on the state variables.
+       on the state/obs variables.
 
        The unlisted variable has a default impact of 1.0
      - { 'streamfunc': 0 },
