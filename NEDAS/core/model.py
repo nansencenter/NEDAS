@@ -19,6 +19,7 @@ class Model(Generic[GridT], ABC):
     model_name: str
     io_mode: IOMode
     variables: dict[VarName, VarDesc]
+    params: dict[str, dict]
     grid: GridT
     z: dict[LevelID, np.ndarray]
     mask: np.ndarray

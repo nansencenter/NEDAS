@@ -350,9 +350,9 @@ class NextsimModel(Model):
         kwargs = super().parse_kwargs(kwargs)
         return getattr(self, kwargs['name'])
 
-    def write_param(self, param, **kwargs):
+    def write_param(self, value, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        setattr(self, kwargs['name'], param)
+        setattr(self, kwargs['name'], value)
 
     def preprocess(self, task_id=0, **kwargs):
         """Preprocess the dir, collect input files for model run"""
