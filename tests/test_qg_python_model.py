@@ -1,6 +1,7 @@
 """Basic smoke tests for the Python QG model."""
 
 import sys
+from typing import Any
 import numpy as np
 
 from NEDAS.models.qg.python.spectral import setup_spectral_grid, spec2grid_cc, grid2spec, ir_prod
@@ -187,9 +188,9 @@ def test_fortran_config_stability():
     dz  = np.array([0.5, 0.5])
     rho = np.array([1.0, 1.03])
 
-    common = dict(kmax=kmax, nz=2, F=100.0, beta=16.0, bot_drag=0.5,
-                  filter_type='exp_cutoff', filter_exp=8.0, k_cut=50.0,
-                  dealiasing='isotropic')
+    common: dict[str, Any] = dict(kmax=kmax, nz=2, F=100.0, beta=16.0, bot_drag=0.5,
+                                   filter_type='exp_cutoff', filter_exp=8.0, k_cut=50.0,
+                                   dealiasing='isotropic')
 
     for seed in range(3):
         rng = np.random.default_rng(seed)

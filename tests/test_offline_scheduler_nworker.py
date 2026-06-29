@@ -51,12 +51,12 @@ class TestOfflineSchedulerNworker(unittest.TestCase):
         captured = {}
 
         class FakeScheduler:
-            def __init__(self_, c, nworker, *a, **kw):
-                captured['nworker'] = nworker
-                self_.error_jobs = {}
-            def submit_job(self_, *a, **kw): pass
-            def start_queue(self_): pass
-            def shutdown(self_): pass
+            def __init__(self, c, nworker, *a, **kw):
+                captured["nworker"] = nworker
+                self.error_jobs = {}
+            def submit_job(self, *a, **kw): pass
+            def start_queue(self): pass
+            def shutdown(self): pass
 
         with patch('NEDAS.core.scheme.OfflineScheduler', FakeScheduler):
             run_offline(self_ns, opts)

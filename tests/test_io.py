@@ -2,6 +2,7 @@ import os
 import numpy as np
 import unittest
 from datetime import datetime
+from typing import cast
 from NEDAS.core import Context
 from NEDAS.io_backends.offline import OfflineIO
 from NEDAS.io_backends.online import OnlineIO
@@ -23,15 +24,15 @@ class TestOfflineIO(unittest.TestCase):
 
 class _MockContext:
     """Minimal context for OnlineIO tests — no MPI, no models, no IO setup."""
-    pass
+    state: object
 
 
 class TestOnlineIO(unittest.TestCase):
 
     def setUp(self):
         self.io = OnlineIO()
-        self.c = _MockContext()
-        self.c.state = _MockContext()
+        self.c = cast(Context, _MockContext())
+        self.c.state = _MockContext()  # type: ignore[attr-defined]
 
     def test_io_instance(self):
         self.assertIsInstance(self.io, OnlineIO)

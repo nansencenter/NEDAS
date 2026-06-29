@@ -237,5 +237,5 @@ class AMSR2Obs(Dataset):
         return state
 
     def __setstate__(self, state):
-        self.__dict__.update(state)
+        self.__dict__.update(state)  # type: ignore[union-attr]
         self.obs_operator = {ch: self._get_obs_operator(ch) for ch in self.channels}

@@ -319,7 +319,10 @@ class Perturbation:
                     t = c.time + n * dt * dt1h
                     for vname in variable_list:
                         for k in model.variables[vname].levels:
-                            file = c.io.call_method(c, 'current', model.filename,
+                            get_filename = getattr(model, 'filename', None)
+                            if get_filename is None:
+                                continue
+                            file = c.io.call_method(c, 'current', get_filename,
                                                     name=vname, time=t, k=k, **rec)
                             if file:
                                 files.append(file)
