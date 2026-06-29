@@ -12,7 +12,7 @@ class TopazDEnKFAssimilator(BatchAssimilator):
         state_z = state_data['z'][:, loc_id]
         state_t = state_data['t'][:]
 
-        # vertical, time and cross-variable (impact_on_state) localization
+        # vertical, time and cross-variable (impact_on_variable) localization
         obs_value = obs_data['obs'][ind]
         obs_err = obs_data['err_std'][ind]
         obs_z = obs_data['z'][ind]
@@ -20,20 +20,20 @@ class TopazDEnKFAssimilator(BatchAssimilator):
         obs_rec_id = obs_data['obs_rec_id'][ind]
         vroi = obs_data['vroi'][obs_rec_id]
         troi = obs_data['troi'][obs_rec_id]
-        impact_on_state = obs_data['impact_on_state'][:, state_var_id][obs_rec_id]
+        impact_on_variable = obs_data['impact_on_variable'][:, state_var_id][obs_rec_id]
 
         local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_state, self.rfactor, self.kfactor, self.nlobs_max)
+                            impact_on_variable, self.rfactor, self.kfactor, self.nlobs_max)
 
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_state, rfactor, kfactor, nlobs_max) -> None:
+                        impact_on_variable, rfactor, kfactor, nlobs_max) -> None:
     """perform local analysis for one location in the analysis grid partition"""
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -59,7 +59,7 @@ def local_analysis_main(state_prior, obs_prior,
             continue  # the state is outside of troi of all obs, skip
 
         # total lfactor
-        lfactor =  hlfactor * vlfactor * tlfactor * impact_on_state[:, n]
+        lfactor =  hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
         if (lfactor==0).all():
             continue
 

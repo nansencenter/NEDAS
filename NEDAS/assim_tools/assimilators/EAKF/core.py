@@ -10,21 +10,23 @@ class EAKFAssimilator(SerialAssimilator):
                         state_h_dist, state_v_dist, state_t_dist,
                         hroi, vroi, troi,
                         h_local_func, v_local_func, t_local_func,
-                        impact_on_state) -> None:
+                        impact_on_variable) -> None:
         return update_local_state_linear(state_prior, obs_prior, obs_incr,
                                          state_h_dist, state_v_dist, state_t_dist,
                                          hroi, vroi, troi,
                                          h_local_func, v_local_func, t_local_func,
-                                         impact_on_state)
+                                         impact_on_variable)
 
     def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func) -> None:
+                         h_local_func, v_local_func, t_local_func,
+                         impact_on_variable) -> None:
         return update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
                                        h_dist, v_dist, t_dist,
                                        hroi, vroi, troi,
-                                       h_local_func, v_local_func, t_local_func)
+                                       h_local_func, v_local_func, t_local_func,
+                                       impact_on_variable)
 
 @njit
 def obs_increment_eakf(obs_prior, obs, obs_err) -> np.ndarray:
@@ -59,7 +61,7 @@ def update_local_state_linear(state_data, obs_prior, obs_incr,
                               h_dist, v_dist, t_dist,
                               hroi, vroi, troi,
                               h_local_func, v_local_func, t_local_func,
-                              impact_on_state) -> None:
+                              impact_on_variable) -> None:
 
     nens, nfld, nloc = state_data.shape
 
@@ -72,7 +74,7 @@ def update_local_state_linear(state_data, obs_prior, obs_incr,
     lfactor = np.zeros((nfld, nloc))
     for l in nloc_sub:
         for n in range(nfld):
-            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n] * impact_on_state[n]
+            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n] * impact_on_variable[n]
 
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], obs_prior, obs_incr, lfactor[:, nloc_sub])
 
@@ -80,14 +82,15 @@ def update_local_state_linear(state_data, obs_prior, obs_incr,
 def update_local_obs_linear(obs_data, used, obs_prior, obs_incr,
                             h_dist, v_dist, t_dist,
                             hroi, vroi, troi,
-                            h_local_func, v_local_func, t_local_func):
+                            h_local_func, v_local_func, t_local_func,
+                            impact_on_variable):
 
     # distance between local obs_data and the obs being assimilated
     h_lfactor = h_local_func(h_dist, hroi)
     v_lfactor = v_local_func(v_dist, vroi)
     t_lfactor = t_local_func(t_dist, troi)
 
-    lfactor = h_lfactor * v_lfactor * t_lfactor
+    lfactor = h_lfactor * v_lfactor * t_lfactor * impact_on_variable
 
     # update the unused obs within roi
     ind = np.where(np.logical_and(~used, lfactor>0))[0]

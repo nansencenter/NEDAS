@@ -358,9 +358,9 @@ class Obs:
             c.io.call_method(c, 'raw', dataset.write_obs, seq, **obs_rec.asdict(), member=None)
 
         # output obs sequence for debugging
-        if c.debug and c.pid_mem == 0:
-            for obs_rec_id, rec in obs_seq.items():
-                c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec, path=c.fs.analysis_dir(c.time, c.iter))
+        # if c.debug and c.pid_mem == 0:
+        #     for obs_rec_id, rec in obs_seq.items():
+        #         c.io.save_debug_data(c, f'obs_seq.rec{obs_rec_id}', rec, path=c.fs.analysis_dir(c.time, c.iter))
 
         return obs_seq
 
@@ -726,7 +726,8 @@ class Obs:
     def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns) -> dict:
         """pack lobs and lobs_prior into arrays for the jitted functions"""
         n_obs_rec = len(self.info.records)        # number of obs records
-        n_state_var = len(c.state.info.variables)   # number of state variable names
+        state_variables = list(c.state.info.variables)
+        n_state_var = len(state_variables)
 
         # filter out obs with nan in obs_prior, valid index stored as subset of local_inds
         nlobs = 0  # number of local obs on partition
@@ -752,7 +753,8 @@ class Obs:
         data['hroi'] = np.ones(n_obs_rec)
         data['vroi'] = np.ones(n_obs_rec)
         data['troi'] = np.ones(n_obs_rec)
-        data['impact_on_state'] = np.ones((n_obs_rec, n_state_var))
+        data['impact_on_variable'] = np.ones((n_obs_rec, n_state_var))
+        data['obs_impact'] = np.ones(nlobs)
 
         i = 0
         for obs_rec_id in range(n_obs_rec):
@@ -762,16 +764,17 @@ class Obs:
             data['hroi'][obs_rec_id] = obs_rec.hroi
             data['vroi'][obs_rec_id] = obs_rec.vroi
             data['troi'][obs_rec_id] = obs_rec.troi
-            for state_var_id in range(len(c.state.info.variables)):
-                state_vname = c.state.info.variables[state_var_id]
-                data['impact_on_state'][obs_rec_id, state_var_id] = obs_rec.impact_on_state[state_vname]
+            for state_var_id, vname in enumerate(state_variables):
+                data['impact_on_variable'][obs_rec_id, state_var_id] = obs_rec.impact_on_variable.get(vname, 1.0)
 
             valid = self.valid[obs_rec_id]
             local_inds = self.obs_inds[obs_rec_id][par_id]
             d = len(local_inds[valid])
             # append obs and obs prior records to the full array
+            obs_impact = obs_rec.impact_on_variable.get(obs_rec.name, 1.0)
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
+                data['obs_impact'][i:i+d] = obs_impact
                 data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, valid])
                 data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x'][valid]
                 data['y'][i:i+d] = lobs[obs_rec_id][par_id]['y'][valid]

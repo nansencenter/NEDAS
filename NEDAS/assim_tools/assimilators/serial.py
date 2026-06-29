@@ -105,7 +105,7 @@ class SerialAssimilator(Assimilator):
                 obs_p['prior'] = obs_data['obs_prior'][:, i]
                 for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
                     obs_p[key] = obs_data[key][i]
-                for key in ('hroi', 'vroi', 'troi', 'impact_on_state'):
+                for key in ('hroi', 'vroi', 'troi', 'impact_on_variable'):
                     obs_p[key] = obs_data[key][obs_rec_id]
                 # mark this obs as used
                 obs_data['used'][i] = True
@@ -124,7 +124,7 @@ class SerialAssimilator(Assimilator):
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
-            impact_per_field = obs_p['impact_on_state'][state_data['var_id']]
+            impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
             self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
                                     state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
@@ -135,10 +135,12 @@ class SerialAssimilator(Assimilator):
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
             obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
             obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])
+            obs_impact = obs_data['obs_impact']
             self.update_local_obs(obs_data['obs_prior'], obs_data['used'], obs_p['prior'], obs_incr,
                                   obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
-                                  c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'])
+                                  c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
+                                  obs_impact)
 
         # ens-complete inverse transforms (probit)
         self.transform_ens_state_backward(state_data)
@@ -167,7 +169,7 @@ class SerialAssimilator(Assimilator):
                            state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
                            h_local_func, v_local_func, t_local_func,
-                           impact_on_state) -> None:
+                           impact_on_variable) -> None:
         """
         Update the local state vector with the analysis increments.
 
@@ -175,7 +177,7 @@ class SerialAssimilator(Assimilator):
             state_prior (np.ndarray): Local state vector, shape (nens, nfld, nloc)
             obs_prior (np.ndarray): Observation priors, shape (nens,)
             obs_incr (np.ndarray): Analysis increments, shape (nens,)
-            impact_on_state (np.ndarray): Cross-variable localization factor per field, shape (nfld,)
+            impact_on_variable (np.ndarray): Cross-variable localization factor per variable, shape (nfld,)
         """
         pass
 
@@ -183,7 +185,8 @@ class SerialAssimilator(Assimilator):
     def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func) -> None:
+                         h_local_func, v_local_func, t_local_func,
+                         impact_on_variable) -> None:
         """
         Update the local observations with analysis increments.
 

@@ -64,13 +64,11 @@ class ObsInfo:
         variables = dataset.variables
         assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.dataset.variables'
 
-        # parse impact of obs on each state variable, default is 1.0 on all variables unless set by obs_def record
-        impact_on_state = {}
-        for state_name in c.state.info.variables:
-            impact_on_state[state_name] = 1.0
-        if 'impact_on_state' in vrec and vrec['impact_on_state'] is not None:
-            for state_name, impact_fac in vrec['impact_on_state'].items():
-                impact_on_state[state_name] = impact_fac
+        # parse impact of obs on state/obs variables; user specifies overrides, default is 1.0
+        impact_on_variable = {}
+        if 'impact_on_variable' in vrec and vrec['impact_on_variable'] is not None:
+            for vname_key, impact_fac in vrec['impact_on_variable'].items():
+                impact_on_variable[vname_key] = impact_fac
 
         # loop through time steps in obs window
         time_steps = c.time + np.array(c.config.obs_time_steps)*dt1h
@@ -102,7 +100,7 @@ class ObsInfo:
                 hroi=vrec['hroi'] * c.config.localize_scale_fac[c.iter],
                 vroi=vrec['vroi'],
                 troi=vrec['troi'],
-                impact_on_state=impact_on_state,
+                impact_on_variable=impact_on_variable,
             )
             self.records[rec_id] = rec
 
@@ -177,7 +175,7 @@ class ObsInfo:
                     obs_window_min=int(ss[9]), obs_window_max=int(ss[10]),
                     hroi=0., vroi=0., troi=0.,
                     nobs=int(ss[11]), pos=int(ss[12]),
-                    impact_on_state={},
+                    impact_on_variable={},
                 )
                 self.records[rec_id] = rec
             rec.nobs = int(ss[11])
