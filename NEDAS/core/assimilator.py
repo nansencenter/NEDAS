@@ -48,10 +48,6 @@ class Assimilator(ABC):
         c.logger('Output posterior ensemble members')(c.state.output_state)(c, 'post')
         c.logger('Output posterior ensemble mean')(c.state.output_ens_mean)(c, 'post')
 
-        if self.assim_mode == 'batch':
-            # for batch filters the obs_post needs to be computed
-            c.logger('Prepare obs from posterior state')(c.obs.prepare_obs_from_state)(c, 'post')
-
         # posterior inflation
         c.logger('Posterior inflation')(c.inflation_func)(c, 'post')
 

@@ -146,8 +146,8 @@ class State:
         c.comm.Barrier()
 
         # additonal output of debugging
-        if c.debug:
-            c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior, path=c.fs.analysis_dir(c.time, c.iter))
+        # if c.debug:
+        #     c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior, path=c.fs.analysis_dir(c.time, c.iter))
 
     def collect_scalar_variables(self, c: Context) -> None:
         """
