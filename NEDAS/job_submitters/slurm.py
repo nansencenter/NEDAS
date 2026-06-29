@@ -138,6 +138,7 @@ class SLURMJobSubmitter(HPCJobSubmitter):
             print(f"JobSubmitter: job '{self.job_name}' submitted with ID {self.job_id} to SLURM scheduler", flush=True)
 
         # monitor job status
+        file_pointer = 0
         if self.use_job_array:
             while True:
                 sleep(self.check_dt)
@@ -152,7 +153,6 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                     break
 
         else:
-            file_pointer = 0
             while True:
                 sleep(self.check_dt)
                 # query state (%t) and the pending reason (%r) explicitly; the
