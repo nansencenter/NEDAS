@@ -144,6 +144,17 @@ class PerturbField:
 
     def add_perturb(self, fields: dict[str, np.ndarray], perturb: dict[str, np.ndarray], **kwargs) -> dict[str, np.ndarray]:
         """ Add perturbations to each field """
+        # mask_zero: skip perturbation at points where the *prior* field is already
+        # at/below zero (e.g. open-ocean points for seaice_conc/seaice_thick).
+        # Clipping negative draws back up to 0 at those points while leaving positive
+        # draws untouched biases the ensemble mean upward; masking avoids that.
+        variable_list = ensure_list(kwargs['variable'])
+        mask_zero = kwargs.get('mask_zero', False)
+        if not isinstance(mask_zero, list):
+            mask_zero = [mask_zero] * len(variable_list)
+        orig = {vname: fields[vname].copy()
+                for vname, mz in zip(variable_list, mask_zero) if mz}
+
         for vname,rec in self.params.items():
             for s in range(rec['nscale']):
                 if self.perturb_type == 'displace':
@@ -160,6 +171,10 @@ class PerturbField:
             if 'bounds' in kwargs:
                 vmin, vmax = kwargs['bounds']
                 fields[vname] = np.minimum(np.maximum(fields[vname], vmin), vmax)
+
+            # restore prior value where it was already at/below zero
+            if vname in orig:
+                fields[vname] = np.where(orig[vname] <= 0, orig[vname], fields[vname])
         return fields
 
     def perturb_random_gaussian(self, rec: dict[str, Any], s: int) -> np.ndarray:
