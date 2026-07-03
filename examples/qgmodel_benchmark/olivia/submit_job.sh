@@ -2,10 +2,9 @@
 
 #SBATCH --account=nn2993k
 #SBATCH --job-name=run_expt
-#SBATCH --time=0-01:00:00
+#SBATCH --time=0-00:20:00
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=64
-#SBATCH --cpus-per-task=4
+#SBATCH --ntasks-per-node=16
 #SBATCH --mem=740G
 #SBATCH --qos=devel
 #SBATCH --partition=small

@@ -4,7 +4,7 @@ This is a simple multiprocess example, cycling for ~2 weeks including a spinup
 period and a 3 day forecast at the end.
 Minimal settings include:
 
-* 16 processes (despite requesting 64 tasks from SLURM)
+* 16 processes
 * 16 ensemble members
 
 Should take ~10 minutes.
