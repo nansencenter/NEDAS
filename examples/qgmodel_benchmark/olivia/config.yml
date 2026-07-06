@@ -1,34 +1,27 @@
-work_dir: /cluster/work/projects/nn2993k/yingyue/qg_benchmark
-
-python_env: /cluster/home/yingyue/python.src
-
+work_dir: ./qg-work
 io_mode: offline
+nproc: 16
+debug: false
+quiet: false
+timer: true
+interactive: false
 
-#job_submit:
-#  host: olivia
-#  project: nn2993k
-#  queue:
-#  scheduler: slurm
-#  ppn: 16
+job_submit:
+  host: local
+  ppn: 128
+  parallel_mode: serial
 
-nproc: 4
-nproc_mem: 4
-nproc_util: 1
-
-nens: 20
-run_preproc: True
+nens: 16
 run_forecast: True
 run_analysis: True
-run_postproc: True
 run_diagnose: True
-debug: False
 
 time_start: 2001-01-01T00:00:00Z
 time_end: 2001-01-14T00:00:00Z
+time_end: 2001-01-08T00:00:00Z
 time_analysis_start: 2001-01-03T00:00:00Z
 time_analysis_end: 2001-01-09T00:00:00Z
-time:
-cycle_period: 12
+cycle_period: 24
 
 obs_time_steps: [0]
 obs_time_scale: 0
@@ -47,14 +40,9 @@ state_def:
 model_def:
   qg.fortran:
     config_file: '{nedas_root}/models/qg/fortran/default.yml'
-    model_env: '{nedas_root}/models/qg/fortran/env/setup_olivia.src'
     model_code_dir: '{nedas_root}/models/qg/fortran'
-    nproc_per_run: 1
-    nproc_per_util: 1
-    walltime: 1000
-    restart_dt: 24
+    model_env: '{nedas_root}/../examples/qgmodel_benchmark/setup_docker.src'
     ens_run_strategy: scheduler
-    use_job_array: False
     ens_init_dir: '{work_dir}/init_ens'
     truth_dir: '{work_dir}/truth'
 
@@ -67,49 +55,35 @@ obs_def:
     type: normal
     std: 0.2
   hroi: 100
-  vroi: 5
-  troi: 24
-  impact_on_variable:
-    streamfunc: 1.0
+  vroi: inf
+  troi: inf
 
 dataset_def:
   synthetic:
     model_src: qg.fortran
-    config_file:
-    dataset_dir:
     obs_window_min: -6
     obs_window_max: 0
-
-shuffle_obs: False
-z_coords_from: mean
-interp_method: linear
 
 perturb:
 
 scheme: filter
 
 niter: 1
-resolution_level: [0]
-character_length: [16]
-localize_scale_fac: [1]
-obs_err_scale_fac: [1]
+iter: 0
 
 assimilator_def:
   type: ETKF
-  config_file:
 
 updator_def:
   type: additive
-  config_file:
 
 covariance_def:
   type: ensemble
-  config_file:
 
 inflation_def:
   type: post,multiplicative
   adaptive: False
-  coef: 1.0
+  coef: 1.05
 
 localization_def:
   horizontal:
@@ -123,11 +97,15 @@ transform_def:
 - type: scale_bandpass
   decompose_obs: False
 
+resolution_level: [0]
+character_length: [10]
+localize_scale_fac: [1]
+obs_err_scale_fac: [1]
+
 diag:
-- method: 'misc.convert_output'
-  is_ensemble: False
-  config_file: '/cluster/home/yingyue/code/NEDAS/diag/misc/convert_output/default.yml'
-  model_src: 'qg'
+- method: misc.convert_output
+  config_file: '{nedas_root}/diag/misc/convert_output/default.yml'
+  model_src: qg.fortran
   variables: ['streamfunc', 'temperature', 'vorticity']
   grid_def:
-  file: '/cluster/work/users/yingyue/qg/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
+  file: '{work_dir}/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'
