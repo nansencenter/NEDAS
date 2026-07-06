@@ -40,6 +40,15 @@ class Assimilator(ABC):
         # transpose c.state.state_post back to field-complete c.state.fields_post
         c.logger('Transpose back to field-complete')(self.transpose_to_field_complete)(c)
 
+        # batch assimilators don't populate obs_post internally (unlike serial, which builds it
+        # up incrementally during the local obs loop -- see assim_tools/assimilators/serial.py),
+        # so recompute it here from the just-transposed fields_post before posterior inflation
+        # needs it. schemes/filter.py's filter_iter recomputes
+        # obs_post again afterward (for batch mode) to reflect the final, post-update/post-inflation
+        # state, so skipping this call otherwise avoids a redundant forward-operator pass.
+        if self.assim_mode == 'batch' and c.inflation_func.post and c.inflation_func.adaptive:
+            c.logger('Prepare obs from post state (for posterior inflation)')(c.obs.prepare_obs_from_state)(c, 'post')
+
         # output the post state
         # TODO: which version of posterior to output? ideally the inflated one?
         # algorithmically clean way is to output the intermediate versions as well and
