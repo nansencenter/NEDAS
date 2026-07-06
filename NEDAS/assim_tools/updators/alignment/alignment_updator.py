@@ -79,9 +79,12 @@ class AlignmentUpdator(Updator):
             # then add the residual increment — grid points themselves do not move.
             displace_m = c.grid.convert(displace, is_vector=True, method='linear')
             u, v = displace_m[0,...], displace_m[1,...]
-            taper_boundary = getattr(model, 'taper_boundary')
-            u = taper_boundary(u)
-            v = taper_boundary(v)
+            # taper_boundary is only relevant for models with a physical (non-cyclic) domain edge;
+            # cyclic-domain models (e.g. qg.fortran) have no boundary to taper, so skip if absent.
+            if hasattr(model, 'taper_boundary'):
+                taper_boundary = getattr(model, 'taper_boundary')
+                u = taper_boundary(u)
+                v = taper_boundary(v)
 
             res_incr_m = c.grid.convert(res_incr, is_vector=rec['is_vector'], method='linear')
             if fld_shape == model.grid.x.shape:
