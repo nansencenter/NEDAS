@@ -257,6 +257,11 @@ def distribute_tasks(comm: Comm, tasks: np.ndarray|Sequence, load: np.ndarray|Se
     nproc = comm.Get_size()  # number of processors
     ntask = len(tasks)       # number of tasks
 
+    # no tasks to distribute (e.g. all perturb records filtered out by init_only on a non-initial
+    # cycle) -- every rank gets an empty list, nothing else to compute
+    if ntask == 0:
+        return {r: [] for r in range(nproc)}
+
     # assume equal load between tasks if not specified
     if load is None:
         load = np.ones(ntask)

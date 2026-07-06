@@ -266,7 +266,25 @@ class QGFortranModel(Model):
                 print(f"Init file {init_file} already exists, skipping")
             return
 
-        # create the initial ensemble members
+        self.c.fs.make_dir(os.path.dirname(init_file))
+
+        if self.truth_dir is not None:
+            # OSSE case: start every member as an identical copy of the truth state at this time.
+            # A separate, one-time perturbation step (core.Perturbation, run once by the caller
+            # before cycling begins -- not wired into this function) then adds a tiny random kick
+            # to each member; the ensemble's own forecast cycling from time_start to
+            # time_analysis_start lets that kick grow into flow-dependent spread before analysis
+            # begins. This replaces spinning up an independent psi_init_type='spectral_m'
+            # realization per member, found 2026-07-06 to be uncorrelated with truth (a
+            # fundamental mismatch with OSSE experiments that assume members start near truth).
+            src_file = os.path.join(self.truth_dir, basename)
+            if debug:
+                print(f"Copying truth state {src_file} as init condition for member {kwargs['member']+1}")
+            self.c.fs.copy_file(src_file, init_file)
+            return
+
+        # fallback (no truth reference available, e.g. real-data DA): draw an independent random
+        # realization via psi_init_type and spin up for self.spinup_hours, as before.
         if debug:
             print(f"Creating initial condition for qg modeli member {kwargs['member']+1}:")
         init_time = kwargs['time'] - self.spinup_hours * dt1h
@@ -283,5 +301,4 @@ class QGFortranModel(Model):
         if debug:
             print("Moving output files")
         src_file = os.path.join(run_dir, mstr, basename)
-        self.c.fs.make_dir(os.path.dirname(init_file))
         self.c.fs.move_file(src_file, init_file)

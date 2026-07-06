@@ -241,6 +241,16 @@ class Perturbation:
     def distribute_perturb_tasks(self, c: Context) -> dict[int, list[dict]]:
         task_list_full = []
         for perturb_rec in ensure_list(c.config.perturb):
+            # init_only: True restricts this perturb record to the very first cycle (c.time ==
+            # config.time_start), e.g. a one-time initial-condition kick for spinning up ensemble
+            # spread from a near-identical start. Without this, the scheme's "perturb" step (run
+            # every cycle in run_all()'s while loop, for ongoing BC/forcing-type perturbations)
+            # would re-generate this record each cycle too -- and for an IC-type variable (dt >=
+            # restart_dt), generate_perturb's reuse-from-prev_perturb logic means it would then
+            # silently re-add the SAME frozen perturbation on top of the already-evolved state
+            # every cycle, rather than applying it once at t=0.
+            if perturb_rec.get('init_only', False) and c.time != c.config.time_start:
+                continue
             for mem_id in range(c.nens):
                 task_list_full.append({**perturb_rec, 'member':mem_id})
         task_list = parallel.distribute_tasks(c.comm, task_list_full)
@@ -257,10 +267,15 @@ class Perturbation:
                     self.nfld += 1
 
     def __call__(self, c: Context) -> None:
+        # nothing to do (e.g. all perturb records are init_only and this isn't the initial cycle)
+        active_pids = [p for p,lst in self.task_list.items() if len(lst)>0]
+        if not active_pids:
+            return
+
         if c.config.io_mode == 'offline':
             self.prepare_perturb_dir(c)
 
-        c.pid_show = [p for p,lst in self.task_list.items() if len(lst)>0][0]
+        c.pid_show = active_pids[0]
 
         self.init_file_locks(c)
 
