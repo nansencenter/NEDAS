@@ -7,6 +7,15 @@ class Transform(ABC):
     """
     Base class for miscellaneous transform functions
     """
+    #: Whether forward_state/forward_obs are true no-ops given the current config (e.g. a
+    #: ScaleBandpass transform with only 1 scale). When True for every active transform_func,
+    #: code that needs H(X) (e.g. computing obs_prior/obs_post) may safely shortcut by reading
+    #: cached state fields instead of re-reading the raw, untransformed model state -- otherwise
+    #: it must always re-read the raw state, since the cached fields no longer represent it.
+    #: Subclasses must set this correctly (statically or in __init__ based on config), not the
+    #: caller -- only the transform itself knows whether its own forward_state is a no-op.
+    is_identity: bool = False
+
     def __init__(self, c: Context, **kwargs) -> None:
         ...
 

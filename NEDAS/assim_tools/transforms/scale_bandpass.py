@@ -15,6 +15,8 @@ class ScaleBandpass(Transform):
 
         # validate config parameters
         self.nscale = c.config.niter
+        # forward_state/forward_obs both no-op when nscale==1 (see below) -- see Transform.is_identity
+        self.is_identity = (self.nscale == 1)
 
         for key in ['resolution_level', 'character_length',]:
             value = getattr(c.config, key)
@@ -39,6 +41,13 @@ class ScaleBandpass(Transform):
     def forward_obs(self, c, obs_rec, obs_seq):
         if self.nscale == 1:
             return obs_seq
+
+        # inflate obs err std per scale component -- this must apply regardless of whether obs
+        # values themselves get decomposed (Ying 2019 keeps obs undecomposed and only scales
+        # err_std to account for the fact that at narrower scales, unfiltered obs innovations
+        # partly reflect content from other scales)
+        assert c.config.obs_err_scale_fac is not None
+        obs_seq['err_std'] *= c.config.obs_err_scale_fac[c.iter]
 
         if not self.decompose_obs:
             return obs_seq
@@ -73,12 +82,6 @@ class ScaleBandpass(Transform):
                 obs_seq['obs'][i,...] = c.grid.interp(obs_fld_new[i,...], obs_seq['x'], obs_seq['y'], method='nearest')
         else:
             obs_seq['obs'] = c.grid.interp(obs_fld_new, obs_seq['x'], obs_seq['y'], method='nearest')
-
-        # TODO: current implementation is very slow
-        # update obs err std because some averaging happened in get_scale_component
-        #obs_seq['err_std'] *= get_error_scale_factor(c.grid, c.character_length, c.iter)
-        assert c.config.obs_err_scale_fac is not None
-        obs_seq['err_std'] *= c.config.obs_err_scale_fac[c.iter]
 
         return obs_seq
 

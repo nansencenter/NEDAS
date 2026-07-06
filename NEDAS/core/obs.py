@@ -182,10 +182,21 @@ class Obs:
     def get_model_fld_z_on_grid(self, c: Context, tag: str, **kwargs) -> tuple[np.ndarray, np.ndarray]:
         """ Get obs variable field and z coords at level k and convert to c.grid """
         model = c.models[kwargs['model_src']]
+        # true only if every active transform is currently a no-op (see Transform.is_identity) --
+        # only then does the cached fields_{tag} still represent the raw, untransformed state
+        transforms_are_identity = all(tf.is_identity for tf in c.transform_funcs)
 
-        if kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)] and tag in ('prior', 'post'):
+        if (kwargs['name'] in [r['name'] for r in ensure_list(c.config.state_def)]
+                and tag in ('prior', 'post') and transforms_are_identity):
             # shortcut: use pre-interpolated fields_{tag} already on the analysis grid.
             # fields_prior written by prepare_state; fields_post written by assimilator.assimilate.
+            # Only valid when every transform is currently identity: if any transform_func (e.g.
+            # ScaleBandpass with nscale>1) actually modifies the field, fields_{tag} no longer
+            # represents the raw model state, so using it here would compute H(X_s) (the
+            # transformed prior) instead of H(X^(s)) (the full, untransformed current state)
+            # needed for a correct innovation -- see paper eq. 13 and the original qgmodel_enkf
+            # code's np.sum(x[m,:,:,:,:], axis=0) in EnSRF/EAKF. Falls through to the full-model-
+            # read branch below whenever any active transform is non-identity.
             rec_id_found = [i for i,r in c.state.info.fields.items() if r.name==kwargs['name'] and r.time==kwargs['time'] and r.k==kwargs['k']]
             if len(rec_id_found) == 0:
                 raise RuntimeError(f"field '{kwargs['name']}' at t={kwargs['time']} k={kwargs['k']} not found in state.info.fields")
@@ -194,8 +205,12 @@ class Obs:
             zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
 
         else:
-            # otherwise, we get the field by calling model.read_var
-            model_fld = c.io.call_method(c, tag, model.read_var, **kwargs)
+            # otherwise, we get the field by calling model.read_var. When a transform is active
+            # (non-identity) and tag in ('prior','post'), read via 'current' -- the mutable,
+            # cumulative full-state buffer already updated by previous outer-loop iterations --
+            # since there is no separate transformed model-format file for 'prior'/'post'.
+            read_tag = 'current' if (tag in ('prior', 'post') and not transforms_are_identity) else tag
+            model_fld = c.io.call_method(c, read_tag, model.read_var, **kwargs)
             model_z = c.io.call_method(c, 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)

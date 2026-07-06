@@ -6,6 +6,8 @@ class Identity(Transform):
     """
     Subclass for the identity transform.
     """
+    is_identity = True
+
     def forward_state(self, c: Context, rec: FieldRecord, field: np.ndarray) -> np.ndarray:
         return field
 
