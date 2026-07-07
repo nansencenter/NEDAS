@@ -1,7 +1,6 @@
 from typing import Optional
 import copy
 import numpy as np
-import matplotlib
 from NEDAS.grid.grid_2d_base import Grid2DBase
 
 class RegularGrid(Grid2DBase):
@@ -345,6 +344,7 @@ class RegularGrid(Grid2DBase):
             vmax = np.nanmax(fld)
 
         if isinstance(cmap, str):
+            import matplotlib
             cmap = matplotlib.colormaps[cmap]  # type: ignore
 
         x = self.x

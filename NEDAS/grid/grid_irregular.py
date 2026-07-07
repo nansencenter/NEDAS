@@ -1,6 +1,4 @@
 import numpy as np
-from matplotlib.tri import Triangulation
-import matplotlib
 from NEDAS.grid.grid_2d_base import Grid2DBase
 
 class IrregularGrid(Grid2DBase):
@@ -14,6 +12,7 @@ class IrregularGrid(Grid2DBase):
     """
     def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian',
                  triangles=None, dst_grid=None):
+        from matplotlib.tri import Triangulation
         super().__init__(proj, x, y, bounds, cyclic_dim, distance_type, dst_grid)
         self.regular = False
 
@@ -91,6 +90,7 @@ class IrregularGrid(Grid2DBase):
         setattr(self.tri, 'ratio', ratio)
 
     def _pad_cyclic_mesh_bounds(self):
+        from matplotlib.tri import Triangulation
         # repeat the mesh in x and y directions if cyclic, to form the wrap around geometry
         x = self.x
         y = self.y
@@ -261,6 +261,7 @@ class IrregularGrid(Grid2DBase):
             vmax = np.nanmax(fld)
 
         if isinstance(cmap, str):
+            import matplotlib
             cmap = matplotlib.colormaps[cmap]  # type: ignore
 
         if fld.shape == self.x.shape:

@@ -1,7 +1,5 @@
 import numpy as np
 from functools import lru_cache
-from scipy.optimize import fsolve
-from scipy.ndimage import distance_transform_edt, gaussian_filter
 from NEDAS.utils.spatial_operation import gradx, grady
 from NEDAS.utils.fft_lib import fft2, ifft2, get_wn
 
@@ -58,6 +56,7 @@ def get_sig_in_gaussian(nx, ny, hcorr):
     elif hcorr >= nup/2:  # longer than domain scale, sig_out should be smallest
         sig_out = 1.
     else:
+        from scipy.optimize import fsolve  # lazy: scipy.optimize import is slow on Lustre-hosted envs, only pay it if this branch runs
         sig_out = np.abs(fsolve(func2d, 1)[0])
     # print(sig_out, func2d(sig_out))
     return sig_out
@@ -80,13 +79,15 @@ def random_field_powerlaw(nx, ny, amp, pwrlaw):
 
 def random_displacement(grid, mask, amp, hcorr):
     # prototype: generate a random wavenumber-1 displacement for the whole domain
+    from scipy.ndimage import distance_transform_edt, gaussian_filter  # lazy: scipy.ndimage import is slow on Lustre-hosted envs, only pay it if this function is called
 
     # set the boundaries to be masked if they are not cyclic
-    # i.e. we don't want displacement across non-cyclic boundary
+    # i.e. we do not want displacement across non-cyclic boundary
     if grid.cyclic_dim is not None:
         cyclic_dim = grid.cyclic_dim
     else:
         cyclic_dim = ''
+
     if 'x' not in cyclic_dim:
         mask[:, 0] = True
         mask[:, -1] = True
