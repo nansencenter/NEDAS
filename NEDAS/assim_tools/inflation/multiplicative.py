@@ -45,12 +45,11 @@ class MultiplicativeInflation(Inflation):
             c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}", flag='stats')
         # self.coef = np.sqrt(omaamb/vara)
         ratio = (omb2-varo-amb2)/vara
-        if ratio < 0:
-            self.coef = 1.0
-            c.message = f"omb2 = {omb2}, varo={varo}, amb2 = {amb2}; ratio<0, setting coef=1."
-            return
-        self.coef = np.sqrt(ratio)
-        c.message = f"varb = {varb}, vara = {vara}, varo={varo}; coef = {self.coef}"
+        # clip to [1, 2]: never deflate (ratio<1 would give coef<1), and cap runaway inflation
+        # at 2x -- matches the original Ying (2019) code's `infl=sqrt(max(1,ratio));
+        # infl=min(2,infl)` exactly (qgmodel_enkf/filter.py, commit f2e1be2)
+        self.coef = min(2.0, np.sqrt(max(1.0, ratio)))
+        c.message = f"varb = {varb}, vara = {vara}, varo={varo}; ratio={ratio}; coef = {self.coef}"
 
     def apply_inflation(self, c, flag):
         if flag not in ['prior', 'post']:

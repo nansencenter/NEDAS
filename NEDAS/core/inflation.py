@@ -9,11 +9,20 @@ class Inflation(ABC):
     """
     def __init__(self, coef: float=1.0,
                  adaptive: bool=False,
-                 prior: bool=False, post: bool=False):
+                 prior: bool=False, post: bool=False,
+                 timing: Literal['per_iteration', 'once_after_outer_loop']='per_iteration'):
         self.coef = coef
         self.adaptive = adaptive
         self.prior = prior
         self.post = post
+        # 'per_iteration' (default): apply inflation inside every outer-loop iteration, to
+        # that iteration's scale-filtered field, as usual.
+        # 'once_after_outer_loop': skip inflation during each iteration's assimilate() call;
+        # the scheme instead applies it once, after all outer-loop iterations recombine into
+        # the full state (see schemes/filter.py::final_inflation). Matches the original design
+        # in Ying (2019) where posterior inflation is domain-wide and computed/applied once on
+        # the fully recombined analysis, not per scale.
+        self.timing = timing
 
     def __call__(self, c: Context, flag: Literal['prior', 'post']) -> None:
         """

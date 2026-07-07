@@ -46,7 +46,8 @@ class Assimilator(ABC):
         # needs it. schemes/filter.py's filter_iter recomputes
         # obs_post again afterward (for batch mode) to reflect the final, post-update/post-inflation
         # state, so skipping this call otherwise avoids a redundant forward-operator pass.
-        if self.assim_mode == 'batch' and c.inflation_func.post and c.inflation_func.adaptive:
+        if (self.assim_mode == 'batch' and c.inflation_func.post and c.inflation_func.adaptive
+                and c.inflation_func.timing == 'per_iteration'):
             c.logger('Prepare obs from post state (for posterior inflation)')(c.obs.prepare_obs_from_state)(c, 'post')
 
         # output the post state
@@ -57,8 +58,11 @@ class Assimilator(ABC):
         c.logger('Output posterior ensemble members')(c.state.output_state)(c, 'post')
         c.logger('Output posterior ensemble mean')(c.state.output_ens_mean)(c, 'post')
 
-        # posterior inflation
-        c.logger('Posterior inflation')(c.inflation_func)(c, 'post')
+        # posterior inflation: 'once_after_outer_loop' skips this per-iteration application --
+        # schemes/filter.py::final_inflation applies it once, after the outer loop, on the full
+        # recombined state instead (see core/inflation.py's Inflation.timing docstring)
+        if c.inflation_func.timing == 'per_iteration':
+            c.logger('Posterior inflation')(c.inflation_func)(c, 'post')
 
     def partition_grid(self, c: Context) -> None:
         """
