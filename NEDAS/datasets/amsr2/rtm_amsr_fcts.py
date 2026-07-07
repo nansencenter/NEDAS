@@ -14,7 +14,6 @@ Tb=f(V,W,L,Ts,Ti,c_ice)
 - e_icex: ice emissivity
 """
 import numpy as np
-import xarray as xr  #type: ignore
 import cmath
 
 frequencies = np.array([6.93, 10.65, 18.70, 23.80, 36.50, 50.30, 52.80, 89.00])
@@ -634,6 +633,7 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
     elif ice_emissivity_options[opt_em] == 'atlas' :
         if file_atlas is None:
             raise ValueError("file_atlas must be provided when opt_em='atlas'")
+        import xarray as xr  #type: ignore
         data_atlas = xr.open_dataset(file_atlas)
         e_ice = data_atlas[f'em_{channel}'][:].data
     elif ice_emissivity_options[opt_em] == 'dal' :
@@ -641,6 +641,7 @@ def simulated_tb_v03(V, W, L, Ts, ice_conc, theta, channel, ow_bias = 0, opt_em 
     elif ice_emissivity_options[opt_em] == 'ml' :
         if file_ml is None:
             raise ValueError("file_ml must be provided when opt_em='ml'")
+        import xarray as xr  #type: ignore
         e_ice = xr.open_dataset(file_ml)[f'Prediction_AMSR2_e{channel}'].data
     else:
         raise ValueError(f"unknown ice_emissivity_option {ice_emissivity_options[opt_em]}")
