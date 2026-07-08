@@ -6,12 +6,52 @@ class OpticalFlow:
         self.method = method
         self.kwargs = kwargs
 
+    @staticmethod
+    def _to_uint8_pair(fld1, fld2):
+        """Convert a pair of fields to uint8 images for cv2's DIS/Farneback (both require 8-bit
+        input -- confirmed via direct testing that float32 input raises a hard assertion error
+        in cv2, so this quantization is unavoidable for these two backends specifically).
+
+        2026-07-08 fix: previously each field was normalized independently
+        (fld - fld.min())/(fld.max()-fld.min()), so the SAME physical value could map to
+        DIFFERENT pixel intensities between frame1/frame2 whenever their min/max differed
+        (which they generally do, being different ensemble members/times) -- this directly
+        violates the brightness-constancy assumption both DIS and Farneback rely on, degrading
+        their accuracy independent of any real displacement. Now uses a single shared min/max
+        (the combined range of both fields) so the same physical value always maps to the same
+        pixel intensity in both frames, matching Horn-Schunck's own convention of normalizing
+        both frames with one shared range (there using field1's range only; combined range used
+        here instead so neither frame clips/wraps if their ranges differ).
+        """
+        vmin = min(np.nanmin(fld1), np.nanmin(fld2))
+        vmax = max(np.nanmax(fld1), np.nanmax(fld2))
+        scale = 255.0 / (vmax - vmin) if vmax > vmin else 0.0
+        frame1 = np.clip((fld1 - vmin) * scale, 0, 255).astype(np.uint8)
+        frame2 = np.clip((fld2 - vmin) * scale, 0, 255).astype(np.uint8)
+        return frame1, frame2
+
     def __call__(self, grid, fld1, fld2):
         if self.method == 'DIS':
-            dis_creator = getattr(cv2, 'DISOpticalFlow_create')
-            dis = dis_creator(cv2.DISOPTICAL_FLOW_PRESET_FAST)
-            frame1 = ((fld1 - np.nanmin(fld1)) / (np.nanmax(fld1) - np.nanmin(fld1)) * 255).astype(np.uint8)
-            frame2 = ((fld2 - np.nanmin(fld2)) / (np.nanmax(fld2) - np.nanmin(fld2)) * 255).astype(np.uint8)
+            # 2026-07-08: exposed DIS's own tunable parameters (previously hardcoded to
+            # PRESET_FAST with no further tuning) -- preset defaults to FAST for backward
+            # compatibility, but patch_size/patch_stride/finest_scale can now be set directly.
+            # Visual diagnostics (see qg_benchmark/optflow_algorithm_comparison*.png) showed
+            # PRESET_FAST's default (large) patch size produces a blocky, over-smoothed
+            # displacement field relative to Horn-Schunck -- smaller patch_size or
+            # PRESET_MEDIUM should recover finer spatial detail, at the cost of more noise/compute.
+            preset_name = self.kwargs.get('preset', 'DISOPTICAL_FLOW_PRESET_FAST')
+            dis = cv2.DISOpticalFlow_create(getattr(cv2, preset_name))
+            if 'finest_scale' in self.kwargs:
+                dis.setFinestScale(self.kwargs['finest_scale'])
+            if 'patch_size' in self.kwargs:
+                dis.setPatchSize(self.kwargs['patch_size'])
+            if 'patch_stride' in self.kwargs:
+                dis.setPatchStride(self.kwargs['patch_stride'])
+            if 'grad_descent_iter' in self.kwargs:
+                dis.setGradientDescentIterations(self.kwargs['grad_descent_iter'])
+            if 'variational_refine_iter' in self.kwargs:
+                dis.setVariationalRefinementIterations(self.kwargs['variational_refine_iter'])
+            frame1, frame2 = self._to_uint8_pair(fld1, fld2)
             flow = dis.calc(frame1, frame2, None)
             u, v = flow[...,0], flow[...,1]
             u *= grid.dx
@@ -19,10 +59,21 @@ class OpticalFlow:
             return np.array([u, v])
 
         elif self.method == 'Farneback':
-            frame1 = ((fld1 - np.nanmin(fld1)) / (np.nanmax(fld1) - np.nanmin(fld1)) * 255).astype(np.uint8)
-            frame2 = ((fld2 - np.nanmin(fld2)) / (np.nanmax(fld2) - np.nanmin(fld2)) * 255).astype(np.uint8)
-            farneback = getattr(cv2, 'calcOpticalFlowFarneback')
-            flow = farneback(frame1, frame2, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+            # 2026-07-08: exposed Farneback's own parameters (previously hardcoded). Defaults
+            # match the prior hardcoded call for backward compatibility. `winsize` (averaging
+            # window) is the main smoothing control -- OpenCV's own docs note larger winsize
+            # "yields more blurred motion field"; the default 15 is larger than even the S-scale's
+            # character_length (6.4), which likely over-smooths fine-scale displacement structure.
+            frame1, frame2 = self._to_uint8_pair(fld1, fld2)
+            pyr_scale = self.kwargs.get('pyr_scale', 0.5)
+            levels = self.kwargs.get('levels', 3)
+            winsize = self.kwargs.get('winsize', 15)
+            iterations = self.kwargs.get('iterations', 3)
+            poly_n = self.kwargs.get('poly_n', 5)
+            poly_sigma = self.kwargs.get('poly_sigma', 1.2)
+            flags = self.kwargs.get('flags', 0)
+            flow = cv2.calcOpticalFlowFarneback(frame1, frame2, None, pyr_scale, levels, winsize,
+                                                  iterations, poly_n, poly_sigma, flags)
             u, v = flow[...,0], flow[...,1]
             u *= grid.dx
             v *= grid.dy
