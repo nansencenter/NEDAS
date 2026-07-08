@@ -150,6 +150,42 @@ class Comm:
         self._locks = {}
         self._MPI = None
 
+def abort_all_ranks(comm: 'Comm|None' = None, code: int = 1) -> None:
+    """Terminate the whole MPI job (all ranks) if running under MPI; a plain
+    `sys.exit()` already works fine for a genuinely serial run, so this only
+    takes the MPI path when `comm` says it's actually ready for it.
+
+    An uncaught exception on one rank would otherwise just kill that rank's
+    own process; every other rank keeps running until it reaches the next
+    collective call shared with the dead rank (e.g. a gather/bcast
+    downstream) and blocks there forever, since the dead rank can never
+    arrive to participate -- turning a single-rank failure into a silent,
+    multi-node hang that only a SLURM walltime timeout or a human noticing
+    and cancelling the job would end. MPI.COMM_WORLD.Abort() reaches every
+    rank regardless of which sub-communicator (comm_mem/comm_rec, see
+    core/context.py) the code was using at the time.
+
+    `comm` should be the process's existing `Comm` instance (e.g.
+    `scheme.c.comm`), not a fresh one -- `Comm.mpi_ready` reflects whether
+    *this* process actually detected and successfully imported mpi4py at
+    startup (core/context.py's set_comm()). Probing for MPI from scratch
+    here (a bare `from mpi4py import MPI`) is unsafe: a process that isn't
+    truly part of an MPI communicator (e.g. NEDAS's own single-process
+    driver, which merely inherits SLURM/PMI environment variables from the
+    surrounding sbatch allocation without itself being launched under
+    srun/mpirun) can still have those env vars set, so a fresh import
+    triggers a real (and here, failing) MPI_Init attempt instead of a clean
+    exit. Reusing `comm._MPI` (the module reference saved once mpi_ready
+    detection already succeeded) avoids re-triggering that initialization.
+
+    Call this from a bare `except:` block in a script's top-level main(),
+    after printing/logging the traceback yourself (Abort() does not unwind
+    normally, so the usual automatic traceback print does not happen).
+    """
+    if comm is not None and getattr(comm, 'mpi_ready', False):
+        comm._MPI.COMM_WORLD.Abort(code)
+    sys.exit(code)
+
 class DummyComm:
     """Dummy communicator for python without mpi"""
     def __init__(self):

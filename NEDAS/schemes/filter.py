@@ -1,7 +1,9 @@
+import traceback
 from typing import Any
 from datetime import datetime
 import numpy as np
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
+from NEDAS.utils.parallel import abort_all_ranks
 
 class FilterAnalysisScheme(Scheme):
     """
@@ -327,15 +329,25 @@ class FilterAnalysisScheme(Scheme):
         return restart_dir
 
 def main():
-    # initialize scheme
-    scheme = FilterAnalysisScheme(parse_args=True)
+    scheme = None
+    try:
+        # initialize scheme
+        scheme = FilterAnalysisScheme(parse_args=True)
 
-    step = scheme.config.step
-    if step:
-        scheme.run_step(step)
-        return
+        step = scheme.config.step
+        if step:
+            scheme.run_step(step)
+            return
 
-    scheme()
+        scheme()
+
+    except KeyboardInterrupt:
+        print("\nInterrupted. Exiting...")
+        abort_all_ranks(scheme.c.comm if scheme is not None else None, 1)
+
+    except Exception:
+        traceback.print_exc()
+        abort_all_ranks(scheme.c.comm if scheme is not None else None, 1)
 
 if __name__ == '__main__':
     main()

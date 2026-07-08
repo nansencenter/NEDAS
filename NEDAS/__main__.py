@@ -1,7 +1,10 @@
 import sys
+import traceback
 from NEDAS import get_scheme
+from NEDAS.utils.parallel import abort_all_ranks
 
 def main() -> None:
+    scheme = None
     try:
         scheme = get_scheme(parse_args=True)
 
@@ -14,10 +17,11 @@ def main() -> None:
 
     except KeyboardInterrupt:
         print("\nInterrupted. Exiting...")
-        sys.exit(1)
+        abort_all_ranks(scheme.c.comm if scheme is not None else None, 1)
 
-    except Exception as e:
-        raise e
+    except Exception:
+        traceback.print_exc()
+        abort_all_ranks(scheme.c.comm if scheme is not None else None, 1)
 
 if __name__ == '__main__':
     main()
