@@ -14,7 +14,7 @@ from NEDAS.utils import parallel, progress
 from NEDAS.config import Config
 from NEDAS import grid, models, datasets, assim_tools, io_backends, job_submitters
 from .file_system import FileSystem
-from .types import ProcIDMem, MemID, ParallelMode
+from .types import ProcIDMem, MemID, ParallelMode, ObsEns
 if TYPE_CHECKING:
     from . import Model, Dataset, IOBackend, JobSubmitter, State, Obs, Transform, Inflation, Assimilator, Updator
 
@@ -48,6 +48,7 @@ class Context:
     inflation_func: Inflation
     state: State
     obs: Obs
+    _cycle_obs_prior_full: ObsEns
 
     def __init__(self, config: Config|None=None,
                  config_file: str|None=None,

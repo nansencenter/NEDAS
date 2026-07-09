@@ -40,7 +40,8 @@ class OpticalFlow:
             # displacement field relative to Horn-Schunck -- smaller patch_size or
             # PRESET_MEDIUM should recover finer spatial detail, at the cost of more noise/compute.
             preset_name = self.kwargs.get('preset', 'DISOPTICAL_FLOW_PRESET_FAST')
-            dis = cv2.DISOpticalFlow_create(getattr(cv2, preset_name))
+            DISOpticalFlow_create = getattr(cv2, 'DISOpticalFlow_create')
+            dis = DISOpticalFlow_create(getattr(cv2, preset_name))
             if 'finest_scale' in self.kwargs:
                 dis.setFinestScale(self.kwargs['finest_scale'])
             if 'patch_size' in self.kwargs:
@@ -64,6 +65,7 @@ class OpticalFlow:
             # window) is the main smoothing control -- OpenCV's own docs note larger winsize
             # "yields more blurred motion field"; the default 15 is larger than even the S-scale's
             # character_length (6.4), which likely over-smooths fine-scale displacement structure.
+            calcOpticalFlowFarneback = getattr(cv2, 'calcOpticalFlowFarneback')
             frame1, frame2 = self._to_uint8_pair(fld1, fld2)
             pyr_scale = self.kwargs.get('pyr_scale', 0.5)
             levels = self.kwargs.get('levels', 3)
@@ -72,8 +74,8 @@ class OpticalFlow:
             poly_n = self.kwargs.get('poly_n', 5)
             poly_sigma = self.kwargs.get('poly_sigma', 1.2)
             flags = self.kwargs.get('flags', 0)
-            flow = cv2.calcOpticalFlowFarneback(frame1, frame2, None, pyr_scale, levels, winsize,
-                                                  iterations, poly_n, poly_sigma, flags)
+            flow = calcOpticalFlowFarneback(frame1, frame2, None, pyr_scale, levels, winsize,
+                                            iterations, poly_n, poly_sigma, flags)
             u, v = flow[...,0], flow[...,1]
             u *= grid.dx
             v *= grid.dy

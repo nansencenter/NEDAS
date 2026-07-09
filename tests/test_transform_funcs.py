@@ -17,13 +17,13 @@ def _field_record() -> FieldRecord:
 
 
 def _obs_record() -> ObsRecord:
-    err = ErrorModel(type='gaussian', std=1.0, hcorr=0.0, vcorr=0.0, tcorr=0.0, cross_corr={})
+    err = ErrorModel(type='gaussian', std=1.0, hcorr=0.0, vcorr=0.0, tcorr=0.0, cross_corr=())
     return ObsRecord(
         name='test', dataset_src='test', model_src='test',
         nobs=0, obs_window_min=-1, obs_window_max=1,
         dtype='float', is_vector=False, units='*', z_units='*',
         time=datetime(2000, 1, 1, tzinfo=timezone.utc),
-        dt=1.0, err=err, hroi=100.0, vroi=100.0, troi=1.0, impact_on_variable={},
+        dt=1.0, err=err, hroi=100.0, vroi=100.0, troi=1.0, impact_on_variable=(),
     )
 
 

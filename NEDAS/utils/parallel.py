@@ -182,7 +182,7 @@ def abort_all_ranks(comm: 'Comm|None' = None, code: int = 1) -> None:
     after printing/logging the traceback yourself (Abort() does not unwind
     normally, so the usual automatic traceback print does not happen).
     """
-    if comm is not None and getattr(comm, 'mpi_ready', False):
+    if comm is not None and getattr(comm, 'mpi_ready', False) and comm._MPI is not None:
         comm._MPI.COMM_WORLD.Abort(code)
     sys.exit(code)
 
