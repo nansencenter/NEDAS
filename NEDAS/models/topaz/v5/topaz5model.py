@@ -441,38 +441,63 @@ class Topaz5Model(Model[RegularGrid]):
             print(f"WARNING: write_var not implemented for variable {name}, skipping...")
 
     def z_coords(self, **kwargs):
-        return self._z_coords_cached(**kwargs)
+        """
+        Public entry point -- accepts the flexible **kwargs calling
+        convention used throughout the codebase (FieldRecord.asdict(),
+        ObsRecord.asdict(), obs_seq entries merged in by core/obs.py, etc.),
+        but the cached implementation only ever needs member/time/k/path to
+        locate and read a field (name/units get overridden internally, see
+        _z_coords_cached; everything else has a default -- see base Model's
+        parse_kwargs). Extracting exactly those four here, into
+        _z_coords_cached's own explicit (non-**kwargs) signature, means
+        nothing else the caller's kwargs happens to contain -- an obs_seq
+        entry's x/y/z coordinate arrays today, whatever gets added tomorrow
+        -- ever reaches the lru_cache boundary at all: it's excluded by not
+        being a parameter, not by being matched against a list of known-bad
+        fields. 'path' specifically must be one of the four kept: see
+        io_backends/offline.py's call_method, which resolves the correct
+        forecast-cycle path (using model_src from the *original* kwargs)
+        and injects it before calling z_coords -- drop it and parse_kwargs
+        falls back to config.work_dir alone (missing the
+        /cycle/<time>/<model> suffix), silently pointing at the wrong
+        directory instead of raising.
+        """
+        return self._z_coords_cached(
+            member=kwargs.get('member'),
+            time=kwargs.get('time'),
+            k=kwargs.get('k', 0),
+            path=kwargs.get('path'),
+        )
 
     @lru_cache(maxsize=3)
-    def _z_coords_cached(self, **kwargs):
+    def _z_coords_cached(self, member, time, k, path):
         """
         Calculate vertical coordinates given the 3D model state
         Return:
         - z: np.array
         The corresponding z field
         """
-        # some defaults if not set in kwargs
-        if 'k' not in kwargs:
-            kwargs['k'] = 0
-
         z = np.zeros((self.jdm, self.idm))
-        if kwargs['k'] == 0:
+        if k == 0:
             # if level index is 0, this is the surface, so just return zeros
             return z
         else:
             # get layer thickness and convert to units
-            rec = kwargs.copy()
-            rec['name'] = 'ocean_layer_thick'
-            rec['units'] = self.variables['ocean_layer_thick'].units # should be Pa
+            rec = {'member': member, 'time': time, 'k': k, 'path': path}
+            # fall back to the daily archive field when no restart file exists
+            # (e.g. daily/archm-only experiments with no forecast/restart cycling)
+            rec['name'] = 'ocean_layer_thick' if self._restart_file_exists(rec) else 'ocean_layer_thick_daily'
+            rec['units'] = self.variables[rec['name']].units # should be Pa
             if self.z_units == 'm':
                 dz = - self.read_var(**rec) / self.ONEM # in meters, negative relative to surface
             elif self.z_units == 'Pa':
                 dz = self.read_var(**rec)
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
-            # use recursive func, get previous layer z and add dz
-            kwargs['k'] -= 1
-            z_prev = self.z_coords(**kwargs)
+            # use recursive func, get previous layer z and add dz -- call the
+            # cached form directly (not the public z_coords wrapper): args
+            # are already the clean explicit set, no re-extraction needed
+            z_prev = self._z_coords_cached(member=member, time=time, k=k-1, path=path)
             return z_prev + dz
 
     def get_ocean_surf_height(self, **kwargs):

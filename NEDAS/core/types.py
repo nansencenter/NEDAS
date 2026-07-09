@@ -1,5 +1,5 @@
 from typing import Annotated, Sequence, Literal
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime
 import numpy as np
 
@@ -51,7 +51,7 @@ class FieldRecord:
     def asdict(self) -> dict:
         return asdict(self)
 
-@dataclass
+@dataclass(frozen=True)
 class ErrorModel:
     """
     Parameters defining an error model
@@ -62,14 +62,26 @@ class ErrorModel:
         hcorr (float): horizontal correlation scale, in grid.x units
         vcorr (float): vertical correlation scale, in z units
         tcorr (float): temporal correlation scale, in hours
-        cross_corr (dict[str, float]): cross-variable correlation dictionary
+        cross_corr (tuple[float, ...]): cross-variable correlation with each
+            variable in ObsInfo.variables, in that same order (positional,
+            not name-keyed -- see ObsInfo.add_obs_record). A plain dict here
+            previously made ErrorModel instances unhashable, which crashed
+            any lru_cache'd function fed **obs_rec.asdict() as kwargs (e.g.
+            a model's z_coords); a tuple is hashable and frozen=True makes
+            the whole ErrorModel hashable as long as every field is.
     """
     type: str
     std: float
     hcorr: float
     vcorr: float
     tcorr: float
-    cross_corr: dict[str, float]
+    cross_corr: tuple[float, ...]
+    def __getitem__(self, key):
+        # keeps kwargs['err']['std']-style access working (used by several
+        # obs_operator modules, e.g. amsr2_obs.py, ice_conc_obs.py) even
+        # though `err` is now an ErrorModel object rather than a dict --
+        # see ObsRecord.asdict below for why it stays an object.
+        return getattr(self, key)
     def asdict(self) -> dict:
         return asdict(self)
 
@@ -92,6 +104,10 @@ class ObsRecord:
         z_units (str): vertical coordinate units
         time (datetime): time coordinate for this observation
         dt (float): representative time interval (hours) for this observation
+        impact_on_variable (tuple[float, ...]): impact of this obs record on
+            each state variable in state.info.variables, in that same order
+            (positional, not name-keyed -- see ObsInfo.add_obs_record). Was
+            a dict; same hashability rationale as ErrorModel.cross_corr.
     """
     name: str
     dataset_src: str
@@ -109,10 +125,17 @@ class ObsRecord:
     hroi: float
     vroi: float
     troi: float
-    impact_on_variable: dict
+    impact_on_variable: tuple[float, ...]
     pos: int = 0  # byte offset in binary file
     def asdict(self) -> dict:
-        return asdict(self)
+        # Shallow conversion (unlike dataclasses.asdict, which recurses into
+        # every nested dataclass and flattens it back into a plain dict --
+        # that would undo ErrorModel's hashability right here, since a dict
+        # is unhashable no matter how simple its contents are). Keeping
+        # `err` as the ErrorModel object is what makes **obs_rec.asdict()
+        # safe to pass into an lru_cache'd function (e.g. a model's
+        # z_coords) without any kwargs filtering.
+        return {f.name: getattr(self, f.name) for f in fields(self)}
 
 @dataclass
 class ScalarRecord:

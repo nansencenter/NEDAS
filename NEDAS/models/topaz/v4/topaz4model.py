@@ -118,22 +118,43 @@ class Topaz4Model(Model[RegularGrid]):
         Calculate vertical coordinates given the 3D model state.
         Returns:
             np.ndarray: The corresponding z field.
+
+        Public entry point -- accepts the flexible **kwargs calling
+        convention used throughout the codebase (FieldRecord.asdict(),
+        ObsRecord.asdict(), obs_seq entries merged in by core/obs.py, etc.),
+        but the cached implementation only ever needs member/time/k/path to
+        locate and read a field (name/units get overridden internally, see
+        _z_coords_cached; everything else has a default -- see base Model's
+        parse_kwargs). Extracting exactly those four here, into
+        _z_coords_cached's own explicit (non-**kwargs) signature, means
+        nothing else the caller's kwargs happens to contain -- an obs_seq
+        entry's x/y/z coordinate arrays today, whatever gets added tomorrow
+        -- ever reaches the lru_cache boundary at all: it's excluded by not
+        being a parameter, not by being matched against a list of known-bad
+        fields. Same fix as topaz/v5. 'path' specifically must be one of
+        the four kept: see io_backends/offline.py's call_method, which
+        resolves the correct forecast-cycle path (using model_src from the
+        *original* kwargs) and injects it before calling z_coords -- drop
+        it and parse_kwargs falls back to config.work_dir alone (missing
+        the /cycle/<time>/<model> suffix), silently pointing at the wrong
+        directory instead of raising.
         """
-        return self._z_coords_cached(tuple(sorted(kwargs.items())))
+        return self._z_coords_cached(
+            member=kwargs.get('member'),
+            time=kwargs.get('time'),
+            k=kwargs.get('k', 0),
+            path=kwargs.get('path'),
+        )
 
     @lru_cache(maxsize=3)
-    def _z_coords_cached(self, kwargs_tuple):
+    def _z_coords_cached(self, member, time, k, path):
         # not checked for correctness yet
-        kwargs = dict(kwargs_tuple)
-        if 'k' not in kwargs:
-            kwargs['k'] = 0
-
         z = np.zeros(self.grid.x.shape)
 
-        if kwargs['k'] == 0:
+        if k == 0:
             return z
         else:
-            rec = kwargs.copy()
+            rec = {'member': member, 'time': time, 'k': k, 'path': path}
             rec['name'] = 'ocean_layer_thick'
             rec['units'] = self.variables['ocean_layer_thick'].units
             if self.z_units == 'm':
@@ -143,8 +164,7 @@ class Topaz4Model(Model[RegularGrid]):
             else:
                 raise ValueError('do not know how to calculate z_coords for z_units = '+self.z_units)
 
-            rec['k'] -= 1
-            z_prev = self._z_coords_cached(tuple(sorted(rec.items())))
+            z_prev = self._z_coords_cached(member=member, time=time, k=k-1, path=path)
             return z_prev + dz
 
     def preprocess(self, task_id=0, **kwargs):

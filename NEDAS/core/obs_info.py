@@ -27,26 +27,31 @@ class ObsInfo:
             dict: A dictionary with some dimensions and list of unique obs records
         """
         self.records = {}
+        obs_def_list = ensure_list(c.config.obs_def)
         variables = set()
         err_types = set()
 
-        # loop through variables in obs_def
-        for vrec in ensure_list(c.config.obs_def):
+        # first pass: collect the full set of obs variables/err types before
+        # constructing any records, so add_obs_record (second pass, below)
+        # can build each record's cross_corr tuple already ordered against
+        # the final self.variables list, rather than needing a separate
+        # after-the-fact completion step over per-record dicts.
+        for vrec in obs_def_list:
             vname = vrec['name']
             variables.add(vname)
-
             if 'err' not in vrec or vrec['err'] is None:
                 vrec['err'] = {}
             assert isinstance(vrec.get('err'), dict), f"obs_def: {vname}: expect 'err' to be a dictionary"
             err_types.add(vrec['err'].get('type', 'normal'))
 
-            self.add_obs_record(c, vrec)
-
         # convert set to list, for later indexing
         self.variables = list(variables)
         self.err_types = list(err_types)
 
-        self.complete_err_cross_corr_matrix()
+        # second pass: now self.variables is final, build records (and their
+        # cross_corr/impact_on_variable tuples) against it
+        for vrec in obs_def_list:
+            self.add_obs_record(c, vrec)
 
         c.debug_message = f"number of unique observation records = {len(self.records)}"
         c.debug_message = f"observation variables: {self.variables}"
@@ -64,11 +69,36 @@ class ObsInfo:
         variables = dataset.variables
         assert vname in variables, 'variable '+vname+' not defined in '+vrec['dataset_src']+'.dataset.variables'
 
-        # parse impact of obs on state/obs variables; user specifies overrides, default is 1.0
-        impact_on_variable = {}
-        if 'impact_on_variable' in vrec and vrec['impact_on_variable'] is not None:
-            for vname_key, impact_fac in vrec['impact_on_variable'].items():
-                impact_on_variable[vname_key] = impact_fac
+        # cross-variable error correlation, positional against self.variables
+        # (already finalized by the time add_obs_record runs -- see
+        # ObsInfo.__init__'s two-pass construction). Default: 1.0 with self,
+        # 0.0 with everything else, same as the old per-record dict default.
+        cross_corr_opts = vrec['err'].get('cross_corr', {}) or {}
+        if not isinstance(cross_corr_opts, dict):
+            raise TypeError(f"obs_def: {vname} has err.cross_corr defined as {cross_corr_opts}, expecting a dictionary")
+        cross_corr = []
+        for vname2 in self.variables:
+            if vname2 in cross_corr_opts:
+                val = cross_corr_opts[vname2]
+                if not isinstance(val, float):
+                    raise TypeError(f"obs_def: {vname} has err.cross_corr.{vname2} defined as {val}, expecting a float")
+                cross_corr.append(val)
+            else:
+                cross_corr.append(1.0 if vname2 == vname else 0.0)
+        cross_corr = tuple(cross_corr)
+
+        # impact of this obs on each state variable, positional against
+        # state.info.variables; user specifies overrides, default is 1.0.
+        # c.state may not exist yet for standalone/diagnostic-only Obs(c)
+        # construction (e.g. diag/plot/observations.py) -- impact tuple is
+        # simply empty in that case, since nothing on that path performs a
+        # multivariate state update anyway.
+        if hasattr(c, 'state') and hasattr(c.state, 'info'):
+            state_variables = c.state.info.variables
+        else:
+            state_variables = []
+        impact_opts = vrec.get('impact_on_variable') or {}
+        impact_on_variable = tuple(impact_opts.get(svname, 1.0) for svname in state_variables)
 
         # loop through time steps in obs window
         time_steps = c.time + np.array(c.config.obs_time_steps)*dt1h
@@ -81,7 +111,7 @@ class ObsInfo:
                 hcorr=err_opts.get('hcorr',0.),
                 vcorr=err_opts.get('vcorr',0.),
                 tcorr=err_opts.get('tcorr',0.),
-                cross_corr=err_opts.get('cross_corr',{}),
+                cross_corr=cross_corr,
             )
             rec = ObsRecord(
                 name=vname,
@@ -103,21 +133,6 @@ class ObsInfo:
                 impact_on_variable=impact_on_variable,
             )
             self.records[rec_id] = rec
-
-    def complete_err_cross_corr_matrix(self):
-        """Go through the obs error cross correlation matrix again to fill in the default values"""
-        for obs_rec_id, obs_rec in self.records.items():
-            if not isinstance(obs_rec.err.cross_corr, dict):
-                raise TypeError(f"obs_def: {obs_rec.name} has err.cross_corr defined as {obs_rec.err.cross_corr}, expecting a dictionary")
-            for vname in self.variables:
-                if vname not in obs_rec.err.cross_corr:
-                    if vname == obs_rec.name:
-                        obs_rec.err.cross_corr[vname] = 1.0
-                    else:
-                        obs_rec.err.cross_corr[vname] = 0.0
-                else:
-                    if not isinstance(obs_rec.err.cross_corr[vname], float):
-                        raise TypeError(f"obs_def: {obs_rec.name} has err.cross_corr.{vname} defined as {obs_rec.err.cross_corr[vname]}, expecting a float")
 
     def finalize_pos(self):
         """Compute byte offsets and total size once rec.nobs is known (after prepare_obs)."""
@@ -170,12 +185,12 @@ class ObsInfo:
                     name=ss[0], dataset_src=ss[1], model_src=ss[2],
                     dtype=ss[3], is_vector=bool(int(ss[4])),
                     units=ss[5], z_units=ss[6],
-                    err=ErrorModel(type='normal', std=1., hcorr=0., vcorr=0., tcorr=0., cross_corr={}),
+                    err=ErrorModel(type='normal', std=1., hcorr=0., vcorr=0., tcorr=0., cross_corr=()),
                     time=h2t(float(ss[7])), dt=float(ss[8]),
                     obs_window_min=int(ss[9]), obs_window_max=int(ss[10]),
                     hroi=0., vroi=0., troi=0.,
                     nobs=int(ss[11]), pos=int(ss[12]),
-                    impact_on_variable={},
+                    impact_on_variable=(),
                 )
                 self.records[rec_id] = rec
             rec.nobs = int(ss[11])

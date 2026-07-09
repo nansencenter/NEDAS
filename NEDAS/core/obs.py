@@ -779,14 +779,18 @@ class Obs:
             data['hroi'][obs_rec_id] = obs_rec.hroi
             data['vroi'][obs_rec_id] = obs_rec.vroi
             data['troi'][obs_rec_id] = obs_rec.troi
+            # impact_on_variable is now a tuple ordered against state_variables
+            # (built that way in ObsInfo.add_obs_record), so this is just a
+            # positional read -- no name-keyed dict lookup needed.
             for state_var_id, vname in enumerate(state_variables):
-                data['impact_on_variable'][obs_rec_id, state_var_id] = obs_rec.impact_on_variable.get(vname, 1.0)
+                data['impact_on_variable'][obs_rec_id, state_var_id] = obs_rec.impact_on_variable[state_var_id]
 
             valid = self.valid[obs_rec_id]
             local_inds = self.obs_inds[obs_rec_id][par_id]
             d = len(local_inds[valid])
             # append obs and obs prior records to the full array
-            obs_impact = obs_rec.impact_on_variable.get(obs_rec.name, 1.0)
+            obs_impact = (obs_rec.impact_on_variable[state_variables.index(obs_rec.name)]
+                          if obs_rec.name in state_variables else 1.0)
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
                 data['obs_impact'][i:i+d] = obs_impact
