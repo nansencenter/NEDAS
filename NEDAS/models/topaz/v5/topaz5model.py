@@ -423,6 +423,20 @@ class Topaz5Model(Model[RegularGrid]):
             else:
                 self.write_var(var, **{**kwargs, 'name': name+'_daily'})
 
+        elif name in self.archive_variables:
+            # open the archive file for over-writing -- persists a DA posterior
+            # update into a daily archive field (e.g. ocean_temp_daily,
+            # ocean_saln_daily) when there's no restart file to update instead.
+            # 'r+' mode and overwrite_field were added to ABFileArchv in
+            # .abfile for this purpose, mirroring ABFileRestart's own pattern.
+            f = ABFileArchv(fname, 'r+', mask=True)
+            if rec['is_vector']:
+                for i in range(2):
+                    f.overwrite_field(var[i,...], self.grid.mask, rec['name'][i], level=kwargs['k'])
+            else:
+                f.overwrite_field(var, self.grid.mask, rec['name'], level=kwargs['k'])
+            f.close()
+
         else:
             print(f"WARNING: write_var not implemented for variable {name}, skipping...")
 

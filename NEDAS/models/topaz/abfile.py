@@ -556,7 +556,9 @@ class ABFileArchv(ABFile) :
         self._yrflag=yrflag
 
         super(ABFileArchv,self).__init__(basename,action,mask=mask,real4=real4,endian=endian)
-        if self._action == "r" :
+        if self._action[0] == "r" :
+            # matches "r" and "r+" (the latter needed by overwrite_field), same
+            # convention as ABFileRestart.__init__
             self.read_header() # Sets internal metadata. Overrides those on input
             self.read_field_info()
             if self._jdm is None or self._idm is None:
@@ -587,6 +589,13 @@ class ABFileArchv(ABFile) :
         #
         self._fields={}
         line=self.readline()
+        # byte offset where record 0's line starts -- every field-info line is
+        # fixed-width (see FIELD_LINE_FMT), so record i's line always starts at
+        # self._field_info_offset + i*FIELD_LINE_WIDTH. Recorded here (rather
+        # than assumed) so overwrite_field can seek directly to its own
+        # record's bytes without needing to know how long cline1/2/3 (the
+        # free-text header lines, variable length) happen to be.
+        self._field_info_offset = self._fileb.tell()
         line=self.readline().strip()
         i=0
         while line :
@@ -600,12 +609,16 @@ class ABFileArchv(ABFile) :
             i+=1
             line=self.readline().strip()
 
-    def read_field(self,fieldname,level) :
-        """ Read field corresponding to fieldname and level from archive file"""
+    def find_record(self, fieldname, level) :
         record = None
         for i,d in self._fields.items() :
             if d["field"] == fieldname and level == d["k"] :
                 record=i
+        return record
+
+    def read_field(self,fieldname,level) :
+        """ Read field corresponding to fieldname and level from archive file"""
+        record = self.find_record(fieldname, level)
         if record  is not None :
             assert self._filea is not None
             r = self._filea.read_record(record)
@@ -636,8 +649,55 @@ class ABFileArchv(ABFile) :
         self.check_dimensions(field)
         assert self._filea is not None
         hmin,hmax = self._filea.writerecord(field,mask)
-        fmtstr="%-9s=%11d%11.2f%3d%7.3f%16.7E%16.7E\n"
-        self._fileb.write(fmtstr%(fieldname,time_step,model_day,k,dens,hmin,hmax))
+        self._fileb.write(self.FIELD_LINE_FMT%(fieldname,time_step,model_day,k,dens,hmin,hmax))
+
+    # Fixed-width format for one field-info line -- length is constant
+    # regardless of the numeric values' magnitude/precision (as long as
+    # fieldname fits within 9 chars), which is what makes a byte-exact seek
+    # to record i's line safe: %-9s=%11d%11.2f%3d%7.3f%16.7E%16.7E\n
+    FIELD_LINE_FMT = "%-9s=%11d%11.2f%3d%7.3f%16.7E%16.7E\n"
+
+    def overwrite_field(self, field, mask, fieldname, level) :
+        """Overwrite an existing field record in place (requires action='r+').
+
+        Companion to write_field (which appends a new record to a fresh
+        file) -- this rewrites one record of an already-existing archive
+        file, the same role ABFileRestart.overwrite_field plays for restart
+        files. Needed so DA posterior updates can be persisted back into
+        daily archive-format fields (e.g. ocean_temp_daily/ocean_saln_daily),
+        which otherwise have no write path (see topaz5model.py write_var).
+
+        Safe under concurrent multi-rank writes to different records of the
+        SAME file (different k-levels of the same member/variable can land
+        on different MPI ranks -- see core/state.py's per-(member,k) record
+        distribution): the .a write already only touches its own record's
+        byte range (AFile.writerecord's record= seek). This method now does
+        the same for the .b file -- seek to exactly this record's own
+        fixed-width line (self._field_info_offset + record*line width) and
+        overwrite only those bytes, rather than reading the whole field list
+        into memory and rewriting the entire file from scratch (which raced
+        with other ranks doing the same and produced a corrupted, longer
+        file -- confirmed 2026-07-08: 382 lines grew to 387 under concurrent
+        writes). Uses a separate binary-mode handle so the byte offset is
+        exact regardless of self._fileb's own text-mode position/buffering.
+        """
+        assert self._action == "r+", "overwrite_field requires the file to be opened with action='r+'"
+        record = self.find_record(fieldname, level)
+        assert record is not None, f"cannot find field {fieldname} at level {level} in file {self.basename}"
+        self._open_filea_if_necessary(field)
+        self.check_dimensions(field)
+        assert self._filea is not None
+        hmin,hmax = self._filea.writerecord(field, mask, record=record)
+        self._fields[record]["min"] = hmin
+        self._fields[record]["max"] = hmax
+
+        d = self._fields[record]
+        assert len(d["field"]) <= 9, f"fieldname '{d['field']}' longer than 9 chars breaks the fixed-width line assumption"
+        line = self.FIELD_LINE_FMT % (d["field"],d["step"],d["day"],d["k"],d["dens"],d["min"],d["max"])
+        line_bytes = line.encode()
+        with open(self._basename+".b","rb+") as fb:
+            fb.seek(self._field_info_offset + record*len(line_bytes))
+            fb.write(line_bytes)
 
 # Mostafa
     def get_fields(self):
