@@ -110,6 +110,56 @@ def get_scale_component(grid, fld, character_length, s):
             flds[i] = get_scale_component_convolve(grid, fld[i], character_length, s)
     return flds
 
+def get_remaining_scale_component_spec_bandpass(grid, fld, character_length, s):
+    assert grid.regular, "get_remaining_scale_component_spec_bandpass only works for regular grid"
+
+    L = max(grid.Lx, grid.Ly)
+    character_k = L / np.array(character_length)
+    nscale = len(character_k)
+    if nscale == 1 or s == nscale-1:
+        # nothing left to process after the last scale
+        return np.zeros_like(fld)
+
+    # bands 0..s telescope to a single lowpass filter at character_k[s+1];
+    # the not-yet-processed remainder (bands s+1..nscale-1) is its complement
+    kx, ky = get_wn(fld)
+    k2d = np.hypot(kx, ky)
+    fld_spec = fft2(fld)
+    r = 1 - lowpass_response(k2d, character_k[s], character_k[s+1])
+    return ifft2(fld_spec * r)
+
+def get_remaining_scale_component_convolve(grid, fld, character_length, s):
+    L = max(grid.Lx, grid.Ly)
+    character_k = L / np.array(character_length)
+    nscale = len(character_k)
+    if nscale == 1 or s == nscale-1:
+        return np.zeros_like(fld)
+
+    rgrid = Grid.regular_grid(grid.proj, grid.xmin, grid.xmax, grid.ymin, grid.ymax, grid.dx)
+    rgrid.set_destination_grid(grid)
+    kx, ky = get_wn(rgrid.x)
+    k2d = np.hypot(kx, ky)
+    r = lowpass_response(k2d, character_k[s], character_k[s+1])
+    return fld - convolve(grid, fld, rgrid, r)
+
+def get_remaining_scale_component(grid, fld, character_length, s):
+    """
+    Get the sum of not-yet-processed finer scale components (s+1..nscale-1),
+    i.e. the complement of bands 0..s, which telescope to a single lowpass filter.
+    Used by the alignment updator to warp only the remainder of the outer-loop
+    decomposition that hasn't been assimilated yet, leaving already-finalized
+    coarser scales untouched.
+    Input/Return: same convention as get_scale_component.
+    """
+    fldr = fld.copy()
+    if grid.regular:
+        for i in np.ndindex(fld.shape[:-2]):
+            fldr[i] = get_remaining_scale_component_spec_bandpass(grid, fld[i], character_length, s)
+    else:
+        for i in np.ndindex(fld.shape[:-1]):
+            fldr[i] = get_remaining_scale_component_convolve(grid, fld[i], character_length, s)
+    return fldr
+
 def get_error_scale_factor(grid, character_length, s):
     err_scale_fac = np.ones(grid.x.shape)
     L = max(grid.Lx, grid.Ly)

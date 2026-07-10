@@ -1,5 +1,6 @@
 import numpy as np
 from NEDAS.core import Context, Updator
+from NEDAS.utils.multiscale import get_remaining_scale_component
 from .optical_flow import OpticalFlow, warp
 
 class AlignmentUpdator(Updator):
@@ -49,6 +50,20 @@ class AlignmentUpdator(Updator):
         """Apply displacement to model state variables.
 
         See Ying 2019 for details on the alignment technique.
+
+        Ying (2019)'s design keeps scale components in separate arrays: the current
+        scale's own posterior is finalized directly (no warp), and the displacement
+        derived from it is applied only to the not-yet-processed finer-scale remainder,
+        so already-finalized coarser scales are never re-displaced by a later
+        iteration's (independently, noisily estimated) displacement.
+
+        NEDAS stores only one recombined array per field, so var_prior (read below)
+        already mixes finalized coarser scales, the current scale's old value, and the
+        not-yet-processed remainder together. To reproduce Ying (2019)'s bookkeeping
+        without a separate per-scale storage, we reconstruct the split on the analysis
+        grid (bands are additive and telescope, see utils/multiscale.py), subtract it
+        out at native model resolution to isolate the remainder, warp only that
+        remainder, and leave the finalized bands untouched.
         """
         rec = c.state.info.fields[rec_id].asdict()
         model = c.models[rec['model_src']]
@@ -64,19 +79,23 @@ class AlignmentUpdator(Updator):
             fld_shape = var_prior.shape
 
         displace = self.displace[mem_id, rec['k']]
-
-        # warp the analysis-grid prior field with the displacement to isolate residual
-        fld_prior_warp = fld_prior.copy()
         u_ana = displace[0,...] / c.grid.dx
         v_ana = displace[1,...] / c.grid.dx
-        for ind in np.ndindex(fld_prior.shape[:-2]):
-            fld_prior_warp[ind] = warp(fld_prior[ind], -u_ana, -v_ana)
-
-        res_incr = fld_post - fld_prior_warp
 
         if self.interp_displaced_fields:
-            # Interpolation approach: evaluate prior at displaced model-grid positions,
-            # then add the residual increment — grid points themselves do not move.
+            # Interpolation approach: evaluate the remainder at displaced model-grid
+            # positions, then add the finalized+current-band content unwarped — grid
+            # points themselves do not move.
+
+            # split the current full state (on the analysis grid) into: this iteration's
+            # scale band (fld_prior, already computed by ScaleBandpass.forward_state),
+            # the not-yet-processed remainder (finer bands), and by subtraction, the
+            # already-finalized frozen bands (coarser, from earlier iterations)
+            model.grid.set_destination_grid(c.grid)
+            full_prior_ana = model.grid.convert(var_prior, is_vector=rec['is_vector'], method='linear', coarse_grain=True)
+            remaining_ana = get_remaining_scale_component(c.grid, full_prior_ana, c.config.character_length, c.iter)
+            frozen_ana = full_prior_ana - fld_prior - remaining_ana
+
             displace_m = c.grid.convert(displace, is_vector=True, method='linear')
             u, v = displace_m[0,...], displace_m[1,...]
             # taper_boundary is only relevant for models with a physical (non-cyclic) domain edge;
@@ -86,26 +105,43 @@ class AlignmentUpdator(Updator):
                 u = taper_boundary(u)
                 v = taper_boundary(v)
 
-            res_incr_m = c.grid.convert(res_incr, is_vector=rec['is_vector'], method='linear')
+            frozen_m = c.grid.convert(frozen_ana, is_vector=rec['is_vector'], method='linear')
+            fld_post_m = c.grid.convert(fld_post, is_vector=rec['is_vector'], method='linear')
+            # isolate the remainder at native model resolution (not just analysis-grid
+            # resolution), by subtracting the (frozen + current-band-prior) content,
+            # converted up from the analysis grid, from the actual native var_prior
+            frozen_and_prior_m = c.grid.convert(frozen_ana + fld_prior, is_vector=rec['is_vector'], method='linear')
+            remaining_native = var_prior - frozen_and_prior_m
+
             if fld_shape == model.grid.x.shape:
                 if rec['is_vector']:
-                    var_prior_warp_x = model.grid.interp(var_prior[0,...], model.grid.x-u, model.grid.y-v)
-                    var_prior_warp_y = model.grid.interp(var_prior[1,...], model.grid.x-u, model.grid.y-v)
-                    var_prior_warp_m = np.array([var_prior_warp_x, var_prior_warp_y])
+                    remaining_warp_x = model.grid.interp(remaining_native[0,...], model.grid.x-u, model.grid.y-v)
+                    remaining_warp_y = model.grid.interp(remaining_native[1,...], model.grid.x-u, model.grid.y-v)
+                    remaining_warp_m = np.array([remaining_warp_x, remaining_warp_y])
                 else:
-                    var_prior_warp_m = model.grid.interp(var_prior[...], model.grid.x-u, model.grid.y-v)
-                var_post = var_prior_warp_m + res_incr_m
+                    remaining_warp_m = model.grid.interp(remaining_native[...], model.grid.x-u, model.grid.y-v)
+                var_post = frozen_m + fld_post_m + remaining_warp_m
             elif fld_shape == model.grid.x_elem.shape:
                 u_elem = np.mean(u[...,model.grid.tri.triangles], axis=-1)
                 v_elem = np.mean(v[...,model.grid.tri.triangles], axis=-1)
-                var_prior_warp_m = model.grid.interp(var_prior, model.grid.x_elem-u_elem, model.grid.y_elem-v_elem)
-                var_post = var_prior_warp_m + np.mean(res_incr_m[...,model.grid.tri.triangles], axis=-1)
+                remaining_warp_m = model.grid.interp(remaining_native, model.grid.x_elem-u_elem, model.grid.y_elem-v_elem)
+                var_post = (remaining_warp_m
+                            + np.mean(frozen_m[...,model.grid.tri.triangles], axis=-1)
+                            + np.mean(fld_post_m[...,model.grid.tri.triangles], axis=-1))
             else:
-                raise RuntimeError(f"mismatch in field prior {var_prior.shape} with residual increment {res_incr_m.shape}")
+                raise RuntimeError(f"mismatch in field prior {var_prior.shape} with remainder {remaining_native.shape}")
 
         else:
-            # Grid-moving approach: grid already displaced via model.displace in compute_increment;
-            # apply the residual increment additively on the (now-displaced) grid.
+            # Grid-moving approach: grid already displaced via model.displace in compute_increment,
+            # on the *whole* state file at once (model-specific, scale-unaware) -- this path does not
+            # yet get the frozen-scale fix above, since separating already-finalized content from the
+            # remainder would require compute_increment itself to warp only the remainder. Not exercised
+            # by the qg_benchmark case study (qg.fortran has no model.displace); revisit if ever used
+            # together with alignment.
+            fld_prior_warp = fld_prior.copy()
+            for ind in np.ndindex(fld_prior.shape[:-2]):
+                fld_prior_warp[ind] = warp(fld_prior[ind], -u_ana, -v_ana)
+            res_incr = fld_post - fld_prior_warp
             res_incr_m = c.grid.convert(res_incr, is_vector=rec['is_vector'], method='linear')
             if hasattr(model, 'displace'):
                 if fld_shape == model.grid.x.shape:

@@ -1,6 +1,10 @@
 import numpy as np
 import unittest
-from NEDAS.utils.multiscale import lowpass_response, get_scale_component_spec_bandpass
+from NEDAS.utils.multiscale import (
+    lowpass_response,
+    get_scale_component_spec_bandpass,
+    get_remaining_scale_component_spec_bandpass,
+)
 
 
 class TestLowpassResponse(unittest.TestCase):
@@ -85,6 +89,52 @@ class TestGetScaleComponentSpecBandpass(unittest.TestCase):
         fld = np.zeros((32, 32), dtype=np.float32)
         comp = get_scale_component_spec_bandpass(grid, fld, [800e3, 200e3], s=0)
         self.assertEqual(comp.shape, fld.shape)
+
+
+class TestGetRemainingScaleComponentSpecBandpass(unittest.TestCase):
+
+    def _make_grid(self, ny=32, nx=32, L=1000e3):
+        class FakeGrid:
+            regular = True
+            Lx = L
+            Ly = L
+        return FakeGrid()
+
+    def test_last_scale_has_no_remainder(self):
+        grid = self._make_grid()
+        rng = np.random.default_rng(1)
+        fld = rng.standard_normal((32, 32)).astype(np.float32)
+        cl = [800e3, 400e3, 100e3]
+        remainder = get_remaining_scale_component_spec_bandpass(grid, fld, cl, s=2)
+        np.testing.assert_array_equal(remainder, np.zeros_like(fld))
+
+    def test_remainder_plus_processed_bands_equals_original(self):
+        """bands 0..s plus the remainder after s must reconstruct the full field,
+        matching the frozen/remaining split used in AlignmentUpdator.update_files."""
+        grid = self._make_grid()
+        rng = np.random.default_rng(11)
+        fld = rng.standard_normal((32, 32)).astype(np.float32)
+        cl = [800e3, 400e3, 100e3]
+        for s in range(len(cl)):
+            processed = sum(
+                get_scale_component_spec_bandpass(grid, fld, cl, s=j)
+                for j in range(s + 1)
+            )
+            remainder = get_remaining_scale_component_spec_bandpass(grid, fld, cl, s=s)
+            np.testing.assert_allclose(processed + remainder, fld, atol=1e-4)
+
+    def test_remainder_equals_sum_of_later_bands(self):
+        grid = self._make_grid()
+        rng = np.random.default_rng(23)
+        fld = rng.standard_normal((32, 32)).astype(np.float32)
+        cl = [800e3, 400e3, 100e3]
+        s = 0
+        later_bands = sum(
+            get_scale_component_spec_bandpass(grid, fld, cl, s=j)
+            for j in range(s + 1, len(cl))
+        )
+        remainder = get_remaining_scale_component_spec_bandpass(grid, fld, cl, s=s)
+        np.testing.assert_allclose(remainder, later_bands, atol=1e-4)
 
 
 if __name__ == '__main__':
