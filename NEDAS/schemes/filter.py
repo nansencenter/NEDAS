@@ -142,9 +142,14 @@ class FilterAnalysisScheme(Scheme):
         model = self.c.models[model_name]
         model.load_memory('current', self.c.config.time_start)
         name = list(model.variables.keys())[0]
+        # ens_init_dir is a template (e.g. '.../{time:%Y_%j}') -- must be resolved
+        # against time_start before use, same as get_restart_dir() does; passing
+        # it raw sends the literal '{time:...}' string through to filename() and
+        # every member fails to be found, even when the real restart files exist.
+        restart_dir = model.ens_init_dir.format(time=self.c.config.time_start) if model.ens_init_dir is not None else None
         for member in self.c.mem_list[self.c.pid_mem]:
             try:
-                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start, model_src=model_name, path=model.ens_init_dir)
+                self.c.io.call_method(self.c, 'current', model.read_var, name=name, member=member, time=self.c.config.time_start, model_src=model_name, path=restart_dir)
             except Exception:
                 return False
         return True
