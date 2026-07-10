@@ -43,11 +43,14 @@ class MultiplicativeInflation(Inflation):
         amb2 = stats['amb2'] / stats['total_nobs']
         if c.debug:
             c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}", flag='stats')
-        # self.coef = np.sqrt(omaamb/vara)
-        ratio = (omb2-varo-amb2)/vara
-        # clip to [1, 2]: never deflate (ratio<1 would give coef<1), and cap runaway inflation
-        # at 2x -- matches the original Ying (2019) code's `infl=sqrt(max(1,ratio));
-        # infl=min(2,infl)` exactly (qgmodel_enkf/filter.py, commit f2e1be2)
+        # ratio = <(a-b)(o-a)>/vara, i.e. omaamb/vara -- matches the original Ying (2019) code's
+        # `amb=hxam-hxbm; oma=obs-hxam; infl=sqrt(max(1,sum(amb*oma)/sum(vara)))` exactly
+        # (qgmodel_enkf/filter.py, commit f2e1be2). A previous version of this function used
+        # ratio=(omb2-varo-amb2)/vara instead -- a different, also Desroziers-derived estimator
+        # (obtained by assuming o-a is uncorrelated with a-b), but not the formula that actually
+        # produced the paper's published numbers; switched back to the exact match.
+        ratio = omaamb/vara
+        # clip to [1, 2]: never deflate (ratio<1 would give coef<1), and cap runaway inflation at 2x
         self.coef = min(2.0, np.sqrt(max(1.0, ratio)))
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; ratio={ratio}; coef = {self.coef}"
 

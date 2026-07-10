@@ -46,21 +46,21 @@ class TestMultiplicativePostInflation(unittest.TestCase):
 
     def test_formula_coef(self):
         infl = self._make()
-        vara, varo, omb2, amb2 = 2.0, 1.0, 8.0, 2.0
-        # ratio = (omb2 - varo - amb2) / vara = 5/2 = 2.5
-        # coef = sqrt(2.5)
+        # ratio = omaamb / vara = <(a-b)(o-a)>/vara -- matches Ying (2019)'s
+        # `infl=sqrt(max(1,sum(amb*oma)/sum(vara)))` (qgmodel_enkf/filter.py, commit f2e1be2)
+        vara, omaamb = 2.0, 5.0
         n = 10
-        _patch_stats(infl, {'total_nobs': n, 'varb': 3*n, 'vara': vara*n, 'varo': varo*n,
-                             'omb2': omb2*n, 'omaamb': 0, 'amb2': amb2*n})
+        _patch_stats(infl, {'total_nobs': n, 'varb': 3*n, 'vara': vara*n, 'varo': 1*n,
+                             'omb2': 8*n, 'omaamb': omaamb*n, 'amb2': 2*n})
         infl.adaptive_post_inflation(_mock_context())
-        np.testing.assert_allclose(infl.coef, np.sqrt((omb2 - varo - amb2) / vara), rtol=1e-10)
+        np.testing.assert_allclose(infl.coef, np.sqrt(omaamb / vara), rtol=1e-10)
 
     def test_negative_ratio_gives_one(self):
         infl = self._make()
-        # ratio = (omb2-varo-amb2)/vara < 0
+        # ratio = omaamb/vara < 0
         n = 10
         _patch_stats(infl, {'total_nobs': n, 'varb': 2*n, 'vara': 3*n, 'varo': 5*n,
-                             'omb2': 2*n, 'omaamb': 0, 'amb2': 1*n})
+                             'omb2': 2*n, 'omaamb': -1*n, 'amb2': 1*n})
         infl.adaptive_post_inflation(_mock_context())
         self.assertEqual(infl.coef, 1.0)
 
