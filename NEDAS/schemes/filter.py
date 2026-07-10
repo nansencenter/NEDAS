@@ -236,7 +236,22 @@ class FilterAnalysisScheme(Scheme):
         self.c.logger('Updator')(self.c.updator.update)(self.c)
 
         # compute posterior obs ensemble for obs-space diagnostics
-        if self.c.assimilator.assim_mode == 'batch':
+        # batch assimilators never populate obs_post internally, so this is always needed there.
+        # Serial assimilators (e.g. EAKF) DO populate obs_post internally via their own lobs_post
+        # transpose, but that value is NOT a full re-evaluation of H(x) on the final analyzed
+        # state: update_local_obs_linear's `~used` mask (assim_tools/assimilators/EAKF/core.py)
+        # permanently excludes each observation from ever being updated again once it's had its
+        # own turn, so a given observation's lobs_post only reflects its own single-step update,
+        # never the cumulative effect of later, spatially-overlapping observations. This makes it
+        # unsuitable for the once_after_outer_loop Desroziers diagnostic (final_inflation(), which
+        # needs the TRUE fully-converged H(x_post)) -- confirmed 2026-07-10 by direct
+        # instrumentation: amb (analysis-minus-background) correlated 0.63 with the original
+        # innovation but only 0.006 with oma (obs-minus-analysis), when a well-behaved gain should
+        # give oma the same sign as amb (oma is the undone fraction of the same innovation) --
+        # i.e. obs_post was statistical noise relative to amb, not a real post-fit value. Recompute
+        # it from the actual post-update state for serial mode too when that diagnostic is needed.
+        if (self.c.assimilator.assim_mode == 'batch'
+                or self.c.inflation_func.timing == 'once_after_outer_loop'):
             self.c.logger('Prepare obs from post state')(self.c.obs.prepare_obs_from_state)(self.c, 'post')
         self.c.logger('Output obs post')(self.c.obs.output_obs)(self.c, 'post')
 
