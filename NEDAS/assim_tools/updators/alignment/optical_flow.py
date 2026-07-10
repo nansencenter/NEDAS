@@ -87,7 +87,21 @@ class OpticalFlow:
         else:
             raise ValueError(f"Unsupported optical flow method: {self.method}")
 
-def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=1, **kwargs):
+def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=None, alpha_squared=None, **kwargs):
+    """smoothness_weight is applied to a field ALREADY normalized to [0,1] below (using THIS
+    call's own xmax-xmin, recomputed fresh every call) -- so a fixed smoothness_weight only
+    matches the paper's raw-field alpha^2 for field ranges close to whatever R was used to derive
+    it (2026-07-08: smoothness_weight=alpha^2/R^2, R~52.7 measured once from a cp2-scale field).
+    That fixed value silently drifts wrong whenever the ACTUAL field range differs (2026-07-09:
+    confirmed at cp10's longer, more nonlinear cycling period, where larger forecast divergence
+    means R is genuinely larger -- the same fixed 0.036 becomes an effectively much stronger
+    alpha^2, over-smoothing and collapsing MSA's performance below even plain MS). Pass
+    alpha_squared (the paper's true, field-range-independent physical constant, =100) instead of
+    smoothness_weight to have this function derive the correctly-scaled weight itself from the
+    SAME xmax/xmin it already computes for normalization, self-consistently, every call.
+    smoothness_weight is kept as a direct override for callers that want the old fixed-value
+    behavior (e.g. DIS/Farneback callers never touch this function at all).
+    """
     ni = int(2**np.ceil(np.log(np.max(fld1.shape))/np.log(2)))
     x1 = np.full((ni,ni), np.nan)
     x2 = np.full((ni,ni), np.nan)
@@ -96,10 +110,13 @@ def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothnes
     mask = np.logical_or(np.isnan(x1), (np.abs(x2-x1)<0.00001))
     x1[mask] = 0
     x2[mask] = 0
-    w = smoothness_weight
     ni, nj = x1.shape
     # normalize field so that w can be fixed
     xmax = np.max(x1[:, :]); xmin = np.min(x1[:, :])
+    if alpha_squared is not None:
+        w = alpha_squared / (xmax - xmin)**2 if xmax > xmin else alpha_squared
+    else:
+        w = smoothness_weight if smoothness_weight is not None else 1
     if (xmax>xmin):
         x1[:, :] = (x1[:, :] - xmin) / (xmax -xmin)
         x2[:, :] = (x2[:, :] - xmin) / (xmax -xmin)
