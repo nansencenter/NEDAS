@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from NEDAS.core import Context, Updator
 from NEDAS.utils.multiscale import get_remaining_scale_component
@@ -36,6 +37,18 @@ class AlignmentUpdator(Updator):
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 displace = self.optical_flow(c.grid, fld_prior, fld_post)
                 self.displace[mem_id, rec['k']] = displace
+
+                # Diagnostic instrumentation (2026-07-14): dump the real fld_prior/fld_post/
+                # displace actually seen by compute_increment, to measure how large the ACTUAL
+                # prior-vs-EnKF-posterior displacement is in practice (as opposed to a
+                # member-vs-truth proxy -- see qg_benchmark.md vault note). Gated on c.debug
+                # (same switch as the rest of the codebase's debug-only diagnostics), no effect
+                # on normal runs.
+                if c.debug:
+                    dbg_dir = os.path.join(c.config.work_dir, 'align_debug')
+                    os.makedirs(dbg_dir, exist_ok=True)
+                    np.savez(os.path.join(dbg_dir, f'align_mem{mem_id}_rec{rec_id}_iter{c.iter}.npz'),
+                             fld_prior=fld_prior, fld_post=fld_post, displace=displace)
 
                 if not self.interp_displaced_fields and hasattr(model, 'displace'):
                     # Lagrangian approach: physically move the model grid points
