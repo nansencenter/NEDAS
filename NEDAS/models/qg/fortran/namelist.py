@@ -79,6 +79,39 @@ def namelist(conf_dict, time, forecast_period, psi_init_type, member=0, dt_ratio
     nmlstr += " write_step = "+value_str(total_counts)+"\n"
     nmlstr += " diag1_step = "+value_str(total_counts)+"\n"
     nmlstr += " diag2_step = "+value_str(total_counts)+"\n"
+
+    # passive tracer (optional): advected by the flow but never feeds back onto
+    # psi/q, so it's safe to enable without affecting model dynamics/stability.
+    # tracer_init_type mirrors psi_init_type's create-vs-restart switching: a
+    # fresh field ('spatially_centered' by default) is only drawn at the very
+    # first run of a cycling sequence (psi_init_type != 'read'); every
+    # subsequent cycle restarts the tracer from 'input_t.bin', the same way
+    # psi restarts from 'input.bin'.
+    use_tracer = conf_dict.get('use_tracer', False)
+    nmlstr += " use_tracer = "+value_str(use_tracer)+"\n"
+    if use_tracer:
+        if psi_init_type == 'read':
+            tracer_init_type = 'read'
+        else:
+            tracer_init_type = conf_dict.get('tracer_init_type', 'spatially_centered')
+        nmlstr += " tracer_init_type = "+value_str(tracer_init_type)+"\n"
+        nmlstr += " tracer_init_file = 'input_t'\n"
+        nmlstr += " tvar_o = "+value_str(conf_dict.get('tvar_o', 1.0))+"\n"
+        nmlstr += " z_stir = "+value_str(conf_dict.get('z_stir', 1))+"\n"
+        nmlstr += " filter_type_t = "+value_str(conf_dict.get('filter_type_t', conf_dict['filter_type']))+"\n"
+        nmlstr += " filter_exp_t = "+value_str(conf_dict.get('filter_exp_t', conf_dict['filter_exp']))+"\n"
+        nmlstr += " filt_tune_t = "+value_str(conf_dict.get('filt_tune_t', conf_dict['filt_tune']))+"\n"
+        nmlstr += " k_cut_t = "+value_str(conf_dict.get('k_cut_t', conf_dict['k_cut']))+"\n"
+        nmlstr += " use_mean_grad_t = "+value_str(conf_dict.get('use_mean_grad_t', False))+"\n"
+        use_forcing_t = conf_dict.get('use_forcing_t', False)
+        nmlstr += " use_forcing_t = "+value_str(use_forcing_t)+"\n"
+        if use_forcing_t:
+            nmlstr += " norm_forcing_t = "+value_str(conf_dict.get('norm_forcing_t', False))+"\n"
+            nmlstr += " forc_coef_t = "+value_str(conf_dict.get('forc_coef_t', conf_dict['forc_coef']))+"\n"
+            nmlstr += " forc_corr = "+value_str(conf_dict.get('forc_corr', 0.0))+"\n"
+            nmlstr += " kf_min_t = "+value_str(conf_dict.get('kf_min_t', conf_dict['kf_min']))+"\n"
+            nmlstr += " kf_max_t = "+value_str(conf_dict.get('kf_max_t', conf_dict['kf_max']))+"\n"
+
     nmlstr += " /"
 
     # write the namelist to input.nml file

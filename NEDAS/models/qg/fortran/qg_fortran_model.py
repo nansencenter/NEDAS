@@ -20,6 +20,7 @@ class QGFortranModel(Model):
     model_code_dir: str
     model_env: str
     spinup_hours: int
+    use_tracer: bool
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -35,12 +36,18 @@ class QGFortranModel(Model):
         self.dz = kwargs['dz'] if 'dz' in kwargs else 1.0
         levels = np.arange(0, self.nz, self.dz)
 
+        self.use_tracer = kwargs.get('use_tracer', False)
+
         self.variables = {
             'velocity': VarDesc(name=('u', 'v'), dtype='float', is_vector=True, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'streamfunc': VarDesc(name='psi', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'vorticity': VarDesc(name='zeta', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
             'temperature': VarDesc(name='temp', dtype='float', is_vector=False, dt=self.restart_dt, levels=levels, units=1, z_units=1),
         }
+        if self.use_tracer:
+            # passive scalar advected by the flow; single level (no vertical structure),
+            # stored in its own 'output_t_*.bin' file alongside psi's 'output_*.bin'
+            self.variables['tracer'] = VarDesc(name='tracer', dtype='float', is_vector=False, dt=self.restart_dt, levels=np.array([0]), units=1, z_units=1)
 
         assert self.nproc_per_run==1, f'qg model only support serial runs (got task_nproc={self.nproc_per_run})'
 
@@ -54,7 +61,8 @@ class QGFortranModel(Model):
         assert kwargs['time'] is not None, 'missing time in kwargs'
         tstr = kwargs['time'].strftime('%Y%m%d_%H')
 
-        return os.path.join(kwargs['path'], mstr, 'output_'+tstr+'.bin')
+        prefix = 'output_t_' if kwargs.get('name') == 'tracer' else 'output_'
+        return os.path.join(kwargs['path'], mstr, prefix+tstr+'.bin')
 
     def read_grid(self, **kwargs):
         pass
@@ -65,6 +73,10 @@ class QGFortranModel(Model):
     def read_var(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
+
+        if kwargs['name'] == 'tracer':
+            tracerk = read_data_bin(fname, self.kmax, 1, 0)
+            return spec2grid(tracerk).T
 
         k = kwargs['k']
         k1 = int(k)
@@ -117,6 +129,11 @@ class QGFortranModel(Model):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
 
+        if kwargs['name'] == 'tracer':
+            tracerk = grid2spec(var.T)
+            write_data_bin(fname, tracerk, self.kmax, 1, 0)
+            return
+
         k = kwargs['k']
         if k==int(k):
             if kwargs['name'] == 'streamfunc':
@@ -158,6 +175,11 @@ class QGFortranModel(Model):
         self.c.fs.make_dir(input_dir)
         self.c.fs.copy_file(restart_file, input_file)
 
+        if self.use_tracer:
+            restart_file_t = self.filename(**{**kwargs, 'path':restart_dir, 'name':'tracer'})
+            input_file_t = self.filename(**{**kwargs, 'name':'tracer'})
+            self.c.fs.copy_file(restart_file_t, input_file_t)
+
     def postprocess(self, *args, **kwargs):
         pass
 
@@ -185,6 +207,9 @@ class QGFortranModel(Model):
             #this is during cycling
             psi_init_type = 'read'
             prep_input_cmd = 'ln -fs '+input_file+' input.bin; '
+            if self.use_tracer:
+                input_file_t = self.filename(**{**kwargs, 'name':'tracer'})
+                prep_input_cmd += 'ln -fs '+input_file_t+' input_t.bin; '
         else:
             # this is initial run for spin up
             psi_init_type = self.psi_init_type
@@ -219,9 +244,14 @@ class QGFortranModel(Model):
                 raise RuntimeError('errors in '+log_file)
         if not os.path.exists(os.path.join(run_dir, 'output.bin')):
             raise RuntimeError('output.bin file not found')
+        if self.use_tracer and not os.path.exists(os.path.join(run_dir, 'output_t.bin')):
+            raise RuntimeError('output_t.bin file not found')
 
         shell_cmd = "cd "+run_dir+"; "
         shell_cmd += "mv output.bin "+output_file
+        if self.use_tracer:
+            output_file_t = self.filename(**{**kwargs, 'time':next_time, 'name':'tracer'})
+            shell_cmd += "; mv output_t.bin "+output_file_t
         self.c.run_job(shell_cmd, offset=task_id*self.nproc_per_run, **kwargs)
 
     def generate_truth(self, *args, **kwargs) -> None:
@@ -281,6 +311,10 @@ class QGFortranModel(Model):
             if debug:
                 print(f"Copying truth state {src_file} as init condition for member {kwargs['member']+1}")
             self.c.fs.copy_file(src_file, init_file)
+            if self.use_tracer:
+                basename_t = f"output_t_{kwargs['time']:%Y%m%d_%H}.bin"
+                self.c.fs.copy_file(os.path.join(self.truth_dir, basename_t),
+                                     os.path.join(self.ens_init_dir, mstr, basename_t))
             return
 
         # fallback (no truth reference available, e.g. real-data DA): draw an independent random
@@ -302,3 +336,7 @@ class QGFortranModel(Model):
             print("Moving output files")
         src_file = os.path.join(run_dir, mstr, basename)
         self.c.fs.move_file(src_file, init_file)
+        if self.use_tracer:
+            basename_t = f"output_t_{next_time:%Y%m%d_%H}.bin"
+            self.c.fs.move_file(os.path.join(run_dir, mstr, basename_t),
+                                 os.path.join(self.ens_init_dir, mstr, basename_t))

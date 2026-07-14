@@ -125,8 +125,10 @@ program qg_driver
      if (mod(cntr,write_step)==0.or.start) frame = Write_snapshots(frame)
 
      !!!!!!MY: output file
-     if (cntr==total_counts) &
+     if (cntr==total_counts) then
        call Write_field(psi,'output',1)
+       if (use_tracer) call Write_field(tracer,'output_t',1)
+     endif
 
      if (adapt_dt.and.(mod(cntr,dt_step)==0.or.start)) &    ! Adapt dt
           dt = dt_tune*2*pi/(kmax*sqrt(max(zsq(psi),beta,1.)))
