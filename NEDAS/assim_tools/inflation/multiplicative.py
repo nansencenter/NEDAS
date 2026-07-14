@@ -1,7 +1,18 @@
+from typing import Literal
 import numpy as np
 from NEDAS.core.inflation import Inflation
 
 class MultiplicativeInflation(Inflation):
+    def __init__(self, *args, post_infl_formula: Literal['omaamb', 'omb2_amb2']='omaamb', **kwargs):
+        super().__init__(*args, **kwargs)
+        # which Desroziers-derived estimator to use for the posterior-inflation ratio:
+        # 'omaamb' (default): ratio = <(a-b)(o-a)>/vara -- matches Ying (2019)'s exact formula
+        #   (qgmodel_enkf/filter.py, commit f2e1be2): infl=sqrt(max(1,sum(amb*oma)/sum(vara)))
+        # 'omb2_amb2': ratio = (omb2-varo-amb2)/vara -- an alternative Desroziers estimator,
+        #   obtained by assuming o-a is uncorrelated with a-b; not the formula that produced
+        #   the paper's published numbers, but kept available for comparison/testing.
+        self.post_infl_formula = post_infl_formula
+
     def adaptive_prior_inflation(self, c):
         """compute prior inflate coef by obs-space statistics (Desroziers et al. 2005)"""
         c.debug_message = "adaptive prior inflation"
@@ -43,13 +54,12 @@ class MultiplicativeInflation(Inflation):
         amb2 = stats['amb2'] / stats['total_nobs']
         if c.debug:
             c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}, omaamb = {omaamb}, amb2={amb2}", flag='stats')
-        # ratio = <(a-b)(o-a)>/vara, i.e. omaamb/vara -- matches the original Ying (2019) code's
-        # `amb=hxam-hxbm; oma=obs-hxam; infl=sqrt(max(1,sum(amb*oma)/sum(vara)))` exactly
-        # (qgmodel_enkf/filter.py, commit f2e1be2). A previous version of this function used
-        # ratio=(omb2-varo-amb2)/vara instead -- a different, also Desroziers-derived estimator
-        # (obtained by assuming o-a is uncorrelated with a-b), but not the formula that actually
-        # produced the paper's published numbers; switched back to the exact match.
-        ratio = omaamb/vara
+        if self.post_infl_formula == 'omaamb':
+            ratio = omaamb/vara
+        elif self.post_infl_formula == 'omb2_amb2':
+            ratio = (omb2-varo-amb2)/vara
+        else:
+            raise ValueError(f"Unknown post_infl_formula '{self.post_infl_formula}', should be 'omaamb' or 'omb2_amb2'")
         # clip to [1, 2]: never deflate (ratio<1 would give coef<1), and cap runaway inflation at 2x
         self.coef = min(2.0, np.sqrt(max(1.0, ratio)))
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; ratio={ratio}; coef = {self.coef}"

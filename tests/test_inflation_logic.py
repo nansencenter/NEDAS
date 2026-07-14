@@ -78,6 +78,30 @@ class TestMultiplicativePostInflation(unittest.TestCase):
         infl.adaptive_post_inflation(_mock_context())
         self.assertEqual(infl.coef, 1.0)
 
+    def test_default_post_infl_formula_is_omaamb(self):
+        infl = self._make()
+        self.assertEqual(infl.post_infl_formula, 'omaamb')
+
+    def test_post_infl_formula_omb2_amb2(self):
+        infl = MultiplicativeInflation(coef=1.0, adaptive=True, prior=False, post=True,
+                                        post_infl_formula='omb2_amb2')
+        vara, varo, omb2, amb2 = 2.0, 1.0, 8.0, 2.0
+        # ratio = (omb2 - varo - amb2) / vara = 5/2 = 2.5
+        n = 10
+        _patch_stats(infl, {'total_nobs': n, 'varb': 3*n, 'vara': vara*n, 'varo': varo*n,
+                             'omb2': omb2*n, 'omaamb': 0, 'amb2': amb2*n})
+        infl.adaptive_post_inflation(_mock_context())
+        np.testing.assert_allclose(infl.coef, np.sqrt((omb2 - varo - amb2) / vara), rtol=1e-10)
+
+    def test_unknown_post_infl_formula_raises(self):
+        infl = MultiplicativeInflation(coef=1.0, adaptive=True, prior=False, post=True,
+                                        post_infl_formula='bogus')
+        n = 10
+        _patch_stats(infl, {'total_nobs': n, 'varb': 3*n, 'vara': 2*n, 'varo': 1*n,
+                             'omb2': 8*n, 'omaamb': 5*n, 'amb2': 2*n})
+        with self.assertRaises(ValueError):
+            infl.adaptive_post_inflation(_mock_context())
+
 
 class TestRTPPPostInflation(unittest.TestCase):
 

@@ -793,6 +793,12 @@ Covariance inflation parameters are stored in the ``inflation_def`` entry as a d
    * - ``coef``
      - Static inflation coefficient.
      - 1.0
+   * - ``post_infl_formula``
+     - Only used by adaptive posterior ``multiplicative`` inflation. Which Desroziers-derived
+       estimator to use for the inflation ratio: ``omaamb`` (default, :math:`\langle(a-b)(o-a)\rangle/\mathrm{vara}`)
+       matches Ying (2019)'s original formula; ``omb2_amb2`` (:math:`(\mathrm{omb}^2-\mathrm{varo}-\mathrm{amb}^2)/\mathrm{vara}`)
+       is an alternative estimator derived under a different independence assumption.
+     - 'omaamb'
 
 Covariance localization settings are separately defined for the spatial and temporal components.
 The ``localization_def`` entry is a dictionary with keys ``horizontal``, ``vertical`` and ``temporal``

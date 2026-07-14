@@ -38,7 +38,10 @@ def get_inflation_func(c: Context) -> Inflation:
         if key in inflation_type:
             module = importlib.import_module('NEDAS.assim_tools.inflation.'+key)
             InflationClass = getattr(module, registry[key])
-            return InflationClass(coef, adaptive, prior, post, timing)
+            kwargs = {}
+            if key == 'multiplicative' and 'post_infl_formula' in c.config.inflation_def:
+                kwargs['post_infl_formula'] = c.config.inflation_def['post_infl_formula']
+            return InflationClass(coef, adaptive, prior, post, timing, **kwargs)
 
     raise RuntimeError("No valid inflation class found, check c.inflation_def")
 
