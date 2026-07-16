@@ -3,14 +3,24 @@ import sys
 import signal
 import tempfile
 import inspect
+import numpy as np
 from typing import Callable
 from abc import ABC, abstractmethod
 from NEDAS.job_submitters.hpc import HPCJobSubmitter
 from NEDAS.utils.parallel import OfflineScheduler
+from NEDAS.utils.njit import njit
 from NEDAS.datasets.synthetic import SyntheticObs
 from NEDAS.config import Config
 from NEDAS.core.context import Context
 from NEDAS.core.types import EnsRunStrategy
+
+@njit
+def _seed_numba_rng(seed: int) -> None:
+    """Seed numba's own internal RNG stream used inside @njit functions (e.g.
+    ETKF's random_orthogonal_matrix) -- it is separate from numpy's global
+    RNG, so np.random.seed() alone does not make jitted random draws
+    reproducible."""
+    np.random.seed(seed)
 
 class Scheme(ABC):
     """
@@ -34,6 +44,14 @@ class Scheme(ABC):
             self.config = config
         else:
             self.config = Config(config_file=config_file, parse_args=parse_args, **kwargs)
+
+        # seed both numpy's global RNG (truth/ensemble IC, synthetic obs, ...) and numba's
+        # separate internal RNG (ETKF random rotation, other @njit functions) for a fully
+        # reproducible run; if unset, leave both RNGs on their current (random) state
+        if self.config.seed is not None:
+            np.random.seed(self.config.seed)
+            _seed_numba_rng(self.config.seed)
+
         self.c = Context(self.config)
 
         # check if io mode is online:

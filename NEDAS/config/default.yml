@@ -25,6 +25,8 @@ nproc_util:
 
 # some experiment design parameters
 nens: 20            # ensemble size
+seed:               # random seed for reproducibility (truth/ensemble IC, synthetic obs,
+                    # ETKF random rotation); leave empty for a random, non-reproducible seed
 run_preproc: True   # if true, run the preprocessing step
 run_forecast: True  # if true, run the ensemble forecast step
 run_analysis: True  # if true, run the analysis step
