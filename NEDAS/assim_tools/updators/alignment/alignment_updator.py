@@ -2,7 +2,7 @@ import os
 import numpy as np
 from NEDAS.core import Context, Updator
 from NEDAS.utils.multiscale import get_remaining_scale_component
-from .optical_flow import OpticalFlow, warp
+from NEDAS.utils.optical_flow import OpticalFlow, warp
 
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique.

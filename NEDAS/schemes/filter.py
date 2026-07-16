@@ -3,6 +3,7 @@ from typing import Any
 from datetime import datetime
 import numpy as np
 from NEDAS.core import Scheme, State, Obs, Perturbation, Diagnostics
+from NEDAS.core.preconditioner import restore_precondition
 from NEDAS.utils.parallel import abort_all_ranks
 
 class FilterAnalysisScheme(Scheme):
@@ -229,8 +230,15 @@ class FilterAnalysisScheme(Scheme):
         if self.c.iter == 0 and self.c.inflation_func.timing == 'once_after_outer_loop':
             self.c._cycle_obs_prior_full = {k: v.copy() for k, v in self.c.obs.obs_prior.items()}
 
+        # optional preconditioning step (e.g. position-error correction) before assimilation;
+        # no-op unless preconditioner_def specifies a non-identity type
+        self.c.logger('Preconditioner (pre)')(self.c.preconditioner.pre_assimilate)(self.c)
+
         # run assimilate algorithm
         self.c.logger('Assimilator')(self.c.assimilator.assimilate)(self.c)
+
+        # undo any preconditioning before the updator sees fields_prior/fields_post
+        self.c.logger('Restore preconditioning')(restore_precondition)(self.c)
 
         # update the state to get posteriors
         self.c.logger('Updator')(self.c.updator.update)(self.c)
