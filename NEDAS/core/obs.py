@@ -386,7 +386,7 @@ class Obs:
         for obs_rec_id, seq in self.obs_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
         self.info.finalize_pos()
-        if c.pid == 0:
+        if c.pid == 0 and c.config.io_mode != 'online':
             analysis_dir = c.fs.analysis_dir(c.time, c.iter)
             np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(self.obs_seq, dtype=object))
 
