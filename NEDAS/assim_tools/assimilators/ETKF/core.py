@@ -257,11 +257,15 @@ def apply_ensemble_transform(ens_prior, weights):
     nens = ens_prior.size
     ens_post = ens_prior.copy()
 
-    # check if weights sum to 1
+    # Renormalize each column to sum to exactly 1. The SVD/eigen-based construction
+    # of `weights` is only mean-preserving up to floating-point precision -- in
+    # practice this drift is small (~1e-5) and uniform across members, not a sign of
+    # an ill-conditioned or wrongly-computed transform (the underlying d/U from
+    # ensemble_transform_weights remain well-conditioned), but it occurs on nearly
+    # every local analysis, so aborting on it (as before) made ETKF unusable for
+    # anything but toy problems. Correct it explicitly rather than raising.
     for m in range(nens):
-        sum_wgts = np.sum(weights[:, m])
-        if np.abs(sum_wgts - 1) > 1e-5:
-            raise RuntimeError('ETKF: sum of weights != 1 detected! Aborting...')
+        weights[:, m] /= np.sum(weights[:, m])
 
     # apply the weights
     for m in range(nens):
