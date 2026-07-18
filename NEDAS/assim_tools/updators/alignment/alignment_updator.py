@@ -4,6 +4,12 @@ from NEDAS.core import Context, Updator
 from NEDAS.utils.multiscale import get_remaining_scale_component
 from NEDAS.utils.optical_flow import OpticalFlow, warp
 
+def _vorticity(u, v):
+    """Simple centered-difference vorticity, grid-index units (no dx scaling) -- used only as a
+    scalar tracking image for optical flow, not a physically-scaled diagnostic."""
+    return (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
+
+
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique.
 
@@ -12,6 +18,14 @@ class AlignmentUpdator(Updator):
 
     When interp_displaced_fields=True: displacement is applied by interpolating each
     field to the displaced grid positions without moving grid points themselves.
+
+    For a vector-valued `variable` (is_vector=True, e.g. a (u,v) wind field with no separate
+    scalar diagnostic to align on): optical flow itself only operates on scalar images, so
+    compute_increment derives displacement from the field's own vorticity (a scalar proxy that
+    directly captures the coherent rotational feature, e.g. a vortex) rather than passing the
+    raw (2,ny,nx) vector array to the optical-flow solver -- the resulting single displacement
+    field is then applied to both vector components identically (update_files already handled
+    this correctly; only the displacement *derivation* was vector-unaware).
     """
     displace = {}
 
@@ -35,7 +49,12 @@ class AlignmentUpdator(Updator):
             for mem_id in c.mem_list[c.pid_mem]:
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]
-                displace = self.optical_flow(c.grid, fld_prior, fld_post)
+                if rec['is_vector']:
+                    img_prior = _vorticity(fld_prior[0], fld_prior[1])
+                    img_post = _vorticity(fld_post[0], fld_post[1])
+                else:
+                    img_prior, img_post = fld_prior, fld_post
+                displace = self.optical_flow(c.grid, img_prior, img_post)
                 self.displace[mem_id, rec['k']] = displace
 
                 # Diagnostic instrumentation (2026-07-14): dump the real fld_prior/fld_post/

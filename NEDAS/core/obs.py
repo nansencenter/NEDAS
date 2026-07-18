@@ -122,13 +122,20 @@ class Obs:
         2, If obs_name is one of the variables provided by obs.obs_operator, we call it to
         obtain the obs seq. Typically the obs_operator performs more complex computation, such
         as path integration, radiative transfer model, etc. (slowest)
-        Always reads auxiliary model inputs (e.g. forcing files) via the 'current' tag,
-        since those files reside in the current cycle directory regardless of DA stage.
+        Uses ``tag`` to route the operator's own state reads to the correct snapshot ('prior',
+        'post', or 'truth'), same as option 1 -- e.g. Vort2DObs's obs_operator functions
+        (get_vortex_position/intensity/size) evaluate a feature directly on the state ψ being
+        assimilated, so they need the SAME snapshot h(x) is being computed against, not a fixed
+        tag. (2026-07-18 fix: previously hardcoded to 'current' regardless of the requested tag
+        -- correct only for an operator reading genuinely tag-independent auxiliary inputs, e.g.
+        static forcing files that live under the current cycle directory regardless of DA stage;
+        wrong for any operator computing h(x) from the state itself. An operator that does need
+        tag-independent auxiliary data can still read it via its own explicit 'current' call
+        internally, bypassing the tag passed in kwargs.)
 
         Args:
             c (Context): the runtime context object
-            tag (str): state snapshot to use for option 1 reads — 'prior', 'post', or
-                'truth'. Option 2 (obs_operator) always reads auxiliary inputs via 'current'.
+            tag (str): state snapshot to use for both options — 'prior', 'post', or 'truth'.
             **kwargs: Additional parameters
                 - member: int, member index; or None if dealing with synthetic obs
                 - name: str, obs variable name
@@ -172,7 +179,7 @@ class Obs:
             operator = dataset.obs_operator[kwargs['name']]
 
             # get the obs seq from operator
-            seq = c.io.call_method(c, "current", operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
+            seq = c.io.call_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
