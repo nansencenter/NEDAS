@@ -69,27 +69,37 @@ class MultiplicativeInflation(Inflation):
             raise ValueError(f"Unknown flag {flag}, should be prior or post")
         fields = getattr(c.state, f"fields_{flag}")
 
+        # pid_show is temporarily redirected to whichever rank actually holds data
+        # for this call (the mean field may not live on rank 0); it must be restored
+        # afterward, otherwise every subsequent logger call for the rest of the run
+        # is silently gated to this other rank instead of the usual rank 0, producing
+        # garbled-looking (mislabeled/out-of-order) progress output downstream.
+        original_pid_show = c.pid_show
         pid_mem_show = [p for p,lst in c.mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in c.state.rec_list.items() if len(lst)>0][0]
         c.pid_show = pid_rec_show * c.config.nproc_mem + pid_mem_show
 
-        c.debug_message = f'inflating {flag} ensemble with multiplicative coef={self.coef}'
+        try:
+            c.debug_message = f'inflating {flag} ensemble with multiplicative coef={self.coef}'
 
-        # process the fields, each processor goes through its own subset of
-        # mem_id,rec_id simultaneously
-        nm = len(c.mem_list[c.pid_mem])
-        nr = len(c.state.rec_list[c.pid_rec])
-        c.total_tasks = nm * nr
-        for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
+            # process the fields, each processor goes through its own subset of
+            # mem_id,rec_id simultaneously
+            nm = len(c.mem_list[c.pid_mem])
+            nr = len(c.state.rec_list[c.pid_rec])
+            c.total_tasks = nm * nr
+            for r, rec_id in enumerate(c.state.rec_list[c.pid_rec]):
 
-            # read the mean field with rec_id
-            #c.io.read_field()
-            fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
-            for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
-                c.debug_message = f"inflating mem{mem_id+1:03}"
-                c.current_task = m*nr+r
+                # read the mean field with rec_id
+                #c.io.read_field()
+                fields_mean = c.io.read_field(c, f"{flag}_mean", rec_id, mem_id=0)
+                for m, mem_id in enumerate(c.mem_list[c.pid_mem]):
+                    c.debug_message = f"inflating mem{mem_id+1:03}"
+                    c.current_task = m*nr+r
+                    c.message = f"completed {c.current_task}/{c.total_tasks} fields."
 
-                # inflate the ensemble perturbations by coef
-                fields[mem_id, rec_id] = self.coef*(fields[mem_id, rec_id] - fields_mean) + fields_mean
+                    # inflate the ensemble perturbations by coef
+                    fields[mem_id, rec_id] = self.coef*(fields[mem_id, rec_id] - fields_mean) + fields_mean
 
-        c.comm.Barrier()
+            c.comm.Barrier()
+        finally:
+            c.pid_show = original_pid_show
