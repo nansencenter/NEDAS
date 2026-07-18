@@ -128,7 +128,16 @@ class AlignmentPreconditioner(Preconditioner):
                 field = c.state.fields_prior[key]
                 displace_full = coarse_grid.convert(displace_coarse, is_vector=True, method='linear')
                 alpha = self.alpha[c.iter] if isinstance(self.alpha, (list, tuple)) else self.alpha
-                u_full, v_full = alpha * displace_full[0], alpha * displace_full[1]
+                # displace_full is in physical units (meters, from OpticalFlow's grid.dx/dy
+                # scaling) but warp() operates in grid-INDEX units (see optical_flow.py::warp,
+                # interp2d uses ii+v, jj+u directly as array offsets) -- convert here. Only a
+                # no-op for grids with dx=dy=1 (e.g. qg.fortran's index-based grid, where this
+                # was previously untested/unnoticed); for any model with real physical grid
+                # spacing (e.g. vort2d's dx=9000m) omitting this made the warp apply a
+                # displacement thousands of grid cells too large, effectively randomizing the
+                # field rather than aligning it.
+                u_full = alpha * displace_full[0] / c.grid.dx
+                v_full = alpha * displace_full[1] / c.grid.dy
 
                 self.displace[key] = np.array([u_full, v_full])
                 # warp(x, u, v)[i,j] = x[i+v, j+u] -- to bring `field` (source of image1) INTO
