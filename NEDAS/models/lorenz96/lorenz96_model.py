@@ -34,6 +34,11 @@ class Lorenz96Model(Model[Grid1D]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # memory: dict = {} above is a class-level attribute; Model.__init__ never assigns
+        # self.memory, so without this line every Lorenz96Model instance in the process shares
+        # the SAME dict object (same bug found and fixed in vort2d_model.py, 2026-07-19).
+        self.memory = {}
+
         self.grid = Grid1D.regular_grid(0, self.nx, 1, cyclic=True)
         self.grid.mask = np.full(self.grid.x.shape, False)
 

@@ -25,6 +25,14 @@ class Vort2DModel(Model[RegularGrid]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # `memory: dict = {}` above is a class-level attribute; Model.__init__ never assigns
+        # self.memory, so without this line every Vort2DModel instance in the process shares the
+        # SAME dict object (classic Python mutable-default-argument pitfall, just at the class
+        # level instead of a function signature). In practice this let stale truth/ensemble state
+        # from an earlier Config/scheme instance (even from a separate, unrelated run reusing the
+        # same time keys) silently leak into a later one's read_var_from_memory calls.
+        self.memory = {}
+
         # define the model grid
         ii, jj = np.meshgrid(np.arange(self.nx), np.arange(self.ny))
         x = ii*self.dx
