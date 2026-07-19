@@ -392,6 +392,13 @@ class Progress:
         node, level = self.node, self.level
         total, current = node['total_tasks'], node['current_task']
 
+        if total == 0:
+            # no tasks assigned to this partition -- can happen when nproc exceeds
+            # the number of partitionable units (e.g. more ranks than local grid
+            # points/observations to distribute), so some ranks legitimately get
+            # zero. Nothing to report progress on.
+            return ""
+
         # throttle output to remain within a fixed rate
         now = time.time()
         is_important = (current == 0) or (current >= total)
