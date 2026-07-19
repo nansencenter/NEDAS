@@ -178,8 +178,21 @@ class Obs:
             # if dataset module provides an obs_operator, we use it to compute obs seq
             operator = dataset.obs_operator[kwargs['name']]
 
+            # Same 'prior'/'post' -> 'current' redirect as get_model_fld_z_on_grid's option-1
+            # else-branch (2026-07-20 fix): when a transform is non-identity (e.g. ScaleBandpass
+            # with nscale>1), there is no separate transformed model-format file for 'prior'/
+            # 'post' -- 'current' is the mutable, cumulative full-state buffer already updated by
+            # PREVIOUS outer-loop iterations. Without this, an obs_operator computing h(x) on the
+            # full state (like Vort2DObs.get_vortex_position) read the same static, cycle-start
+            # 'prior' snapshot on every iteration, never seeing earlier iterations' corrections --
+            # silently defeating the outer-loop multiscale mechanism for any obs using option 2
+            # (confirmed: Position_Obs showed no improvement from added scales at large position
+            # spread, unlike Single_Wind_Obs, which uses option 1 and already had this redirect).
+            transforms_are_identity = all(tf.is_identity for tf in c.transform_funcs)
+            read_tag = 'current' if (tag in ('prior', 'post') and not transforms_are_identity) else tag
+
             # get the obs seq from operator
-            seq = c.io.call_method(c, tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
+            seq = c.io.call_method(c, read_tag, operator, model=model, grid=c.grid, mask=c.grid.mask, **kwargs)
 
         else:
             raise ValueError(f"unable to obtain obs prior for '{kwargs['name']}'")
@@ -351,15 +364,26 @@ class Obs:
             ref_z = self.get_ref_z(c, obs_rec.model_src, obs_rec.time)
 
             if isinstance(dataset, SyntheticObs):  #using synthetic observation
-                # generate synthetic obs network
-                seq = dataset.generate_obs_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict(), tag='truth')
+                # the network location, truth-evaluated value, and noise draw must be fixed
+                # once per analysis cycle: collect_obs_seq runs fresh at the start of every
+                # outer-loop iteration (c.iter), but a multiscale cycle should assimilate the
+                # SAME noisy obs at each scale, not draw a new noisy obs every iteration
+                if not hasattr(c, '_synthetic_obs_cache'):
+                    c._synthetic_obs_cache = {}
+                if c.iter == 0 or obs_rec_id not in c._synthetic_obs_cache:
+                    # generate synthetic obs network
+                    seq = dataset.generate_obs_network(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict(), tag='truth')
 
-                # compute obs values
-                seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
+                    # compute obs values
+                    seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
 
-                # perturb with obs err
-                # TODO: only support normal err_type here
-                seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
+                    # perturb with obs err
+                    # TODO: only support normal err_type here
+                    seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
+
+                    c._synthetic_obs_cache[obs_rec_id] = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in seq.items()}
+                else:
+                    seq = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in c._synthetic_obs_cache[obs_rec_id].items()}
 
             else:
                 # read dataset files and obtain obs sequence
