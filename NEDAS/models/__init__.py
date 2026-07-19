@@ -14,6 +14,7 @@ registry = {
     'nextsim.v1': 'NextsimModel',
     'nextsim.dg': 'NextsimDGModel',
     'wrf': 'WRFModel',
+    'vort3d': 'Vort3DModel',
 }
 
 def get_model_class(model_name: str) -> Type["Model"]:

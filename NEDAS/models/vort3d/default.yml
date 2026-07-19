@@ -1,0 +1,28 @@
+nproc_per_run: 1
+nproc_per_util: 1
+ens_init_dir: ''
+ens_run_strategy: scheduler
+walltime: 100
+
+nx: 200   # grid dimensions (paper: 200x200)
+ny: 200
+
+dx: 20000  # grid spacing, in meters (paper: 20 km)
+
+dt: 15   # internal model integration time step in seconds (paper: 15s)
+
+restart_dt: 1  # model restart output interval in hours
+
+beta: 0.0   # Coriolis beta parameter, df/dy, /m/s (0 = pure f-plane, matching
+            # the paper's own experiments; e.g. 2.3e-11 for beta-drift near 20N)
+
+moist: true  # if false, run the dry dynamical core only (no surface fluxes,
+             # radiative cooling, condensation, or Ooyama convection)
+
+Vbg: 0.       # background flow wind speed (std), m/s (0 = calm, matching the
+              # paper's own experiments)
+Vslope: -3.   # background flow kinetic energy spectrum power law
+
+bg_seed: null  # RNG seed for the background flow; null uses the ensemble
+               # member index in generate_init_ensemble (independent
+               # per-member background-flow realization)
