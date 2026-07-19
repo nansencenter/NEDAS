@@ -359,6 +359,19 @@ class Context:
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
+                # Several functions (obs.py, state.py, updator.py, perturb.py, diag.py,
+                # batch.py, inflation/*.py) temporarily reassign c.pid_show to whichever
+                # rank actually holds the data/workload relevant to their own progress
+                # display, but do not reliably restore it. Left unrestored, this rank
+                # keeps gating ALL subsequent print_1p calls -- including this call's own
+                # pop() and every later logger()-wrapped call -- producing mislabeled or
+                # dropped progress output (e.g. a step's header printed by rank 0 but its
+                # result footer silently attributed to a different rank, or vice versa).
+                # Restoring it here, once, at the framework level after the wrapped
+                # function returns (but before this call's own pop()) fixes it for every
+                # call site at once, regardless of whether the wrapped function itself
+                # remembers to restore it.
+                original_pid_show = self.pid_show
                 try:
                     # register the function in call stack
                     status = self.progress.push(func_name)
@@ -376,6 +389,7 @@ class Context:
                     self.progress.set_flag('error')
                     raise
                 finally:
+                    self.pid_show = original_pid_show
                     status = self.progress.pop()
                     self.print_1p(status)
 
