@@ -5,33 +5,41 @@ from NEDAS.utils.conversion import dt1h
 from NEDAS.utils.netcdf_lib import nc_read_var, nc_write_var
 from NEDAS.core import Model
 from NEDAS.core.types import VarDesc
-from .core import SOUNDING_P
-from .util import LAYER_NAMES, initial_condition, advance_time
+from .core import make_sigma_levels, PSTAR_FAR, p_top
+from .util import layer_names, initial_condition, advance_time
 
 
 class Vort3DModel(Model[RegularGrid]):
     """
     Zhu, Smith & Ulrich (2001) minimal 3D tropical cyclone model: sigma-
-    coordinate primitive equations on an f/beta-plane, 3 layers (upper
-    troposphere, lower/mid troposphere, boundary layer) + surface fluxes,
-    radiative cooling, explicit condensation, and the Ooyama (1969)
-    convective closure. See ~/Google_Drive/papers/2024.NEDAS.Introduction/
-    vort3d/ for the standalone prototype and validation this was ported
-    from (dev log: techNotes/models/vort3d.md).
+    coordinate primitive equations on an f/beta-plane, `nz` free-
+    atmosphere layers (top-to-bottom) plus one boundary layer at the
+    bottom, + surface fluxes, radiative cooling, explicit condensation,
+    and a convective closure. See ~/Google_Drive/papers/
+    2024.NEDAS.Introduction/vort3d/ for the standalone prototype and
+    validation this was ported from (dev log: techNotes/models/vort3d.md).
 
-    State is 3 layers x 4 fields (u,v,theta,q) + one 2D field (p*, column
-    mass) -- represented here as separate NEDAS variables per layer
-    ('wind_1','theta_1','q_1', etc, suffixes 1/3/b for
-    upper-troposphere/lower-mid-troposphere/boundary-layer) plus 'pstar',
-    rather than a single multi-level variable -- the three layers are
-    physically distinct (different typical error/localization behavior),
+    State is (nz+1) layers x 4 fields (u,v,theta,q) + one 2D field (p*,
+    column mass) -- represented here as separate NEDAS variables per layer
+    ('wind_0','theta_0','q_0', ..., suffix 'b' for the boundary layer)
+    plus 'pstar', rather than a single multi-level variable -- the
+    boundary layer in particular is physically distinct from the free-
+    atmosphere layers (different typical error/localization behavior),
     and this keeps read/write as simple single-array-per-name operations
     matching vort2d/lorenz96's pattern instead of needing a
-    read-modify-write per level within one native netCDF variable.
+    read-modify-write per level within one native netCDF variable (the
+    pattern NEDAS's qg model uses, see dev log for why that was surveyed
+    and not adopted here).
 
     Args:
         nx, ny (int): grid dimensions (paper: 200x200)
         dx (float): grid spacing, m (paper: 20000)
+        nz (int): number of free-atmosphere layers (paper: 2 -- upper
+            troposphere + lower/mid troposphere). Total prognostic layers
+            = nz+1 (always +1 boundary layer at the bottom). For nz=2, the
+            vertical sigma levels match the paper's own Fig. 1/Table A1
+            exactly; other nz use equal-sigma-thickness free-tropospheric
+            layers (see core.make_sigma_levels).
         dt (float): internal model integration time step, s (paper: 15)
         restart_dt (float): restart/output interval, hours
         beta (float): df/dy, Coriolis beta parameter, /m/s (0 = pure
@@ -39,6 +47,11 @@ class Vort3DModel(Model[RegularGrid]):
             beta-drift)
         moist (bool): if False, runs the dry dynamical core only (no
             surface fluxes, radiative cooling, condensation, or convection)
+        convection_scheme (str): 'ooyama' (the paper's own closure, only
+            valid for nz=2) or 'betts_miller' (a simplified Betts/
+            Betts-Miller-style column relaxation, valid for any nz -- see
+            core.py's module docstring and the dev log for why these are
+            the two supported options)
         Vbg (float): random background-flow wind speed amplitude, m/s
             (0 = calm, matching the paper's own experiments)
         Vslope (float): background-flow kinetic-energy spectrum power law
@@ -52,10 +65,12 @@ class Vort3DModel(Model[RegularGrid]):
     nx: int
     ny: int
     dx: float
+    nz: int
     dt: float
     restart_dt: float
     beta: float
     moist: bool
+    convection_scheme: str
     Vbg: float
     Vslope: float
     bg_seed: int | None
@@ -79,9 +94,10 @@ class Vort3DModel(Model[RegularGrid]):
         self.grid = RegularGrid(None, x, y, cyclic_dim='x')
         self.grid.mask = np.full(self.grid.x.shape, False)  # no mask
 
+        names = layer_names(self.nz)
         levels = np.array([0])
         self.variables = {}
-        for name in LAYER_NAMES:
+        for name in names:
             self.variables[f'wind_{name}'] = VarDesc(
                 name=(f'u{name}', f'v{name}'), dtype='float', is_vector=True,
                 dt=self.restart_dt, levels=levels, units='m/s', z_units='hPa')
@@ -95,13 +111,14 @@ class Vort3DModel(Model[RegularGrid]):
             name='pstar', dtype='float', is_vector=False,
             dt=self.restart_dt, levels=levels, units='Pa', z_units='hPa')
 
-        # nominal pressure of each layer, from the paper's Appendix A far-
-        # field sounding (Table A1) -- a static z-coordinate, documented
-        # simplification since the layers are actually sigma surfaces
-        # (their true pressure varies with p* and hence with location/time
-        # as the vortex evolves; see the dev log's phase-1 discussion of
-        # this same simplification in the standalone prototype).
-        self._layer_pressure = {'1': SOUNDING_P[0], '3': SOUNDING_P[1], 'b': SOUNDING_P[2]}
+        # nominal far-field pressure of each layer -- a static z-coordinate,
+        # documented simplification since the layers are actually sigma
+        # surfaces (their true pressure varies with p* and hence with
+        # location/time as the vortex evolves; see the dev log's phase-1
+        # discussion of this same simplification in the standalone prototype).
+        sigma_mid, _ = make_sigma_levels(self.nz)
+        layer_p = sigma_mid*PSTAR_FAR + p_top
+        self._layer_pressure = {name: float(layer_p[k]) for k, name in enumerate(names)}
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -149,7 +166,8 @@ class Vort3DModel(Model[RegularGrid]):
 
     def generate_initial_condition(self):
         bg_seed = self.bg_seed
-        return initial_condition(self.nx, self.ny, self.dx, beta=self.beta, moist=self.moist,
+        return initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
+                                  moist=self.moist, convection_scheme=self.convection_scheme,
                                   Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed)
 
     def _read_full_state(self, **kwargs) -> dict:
@@ -205,8 +223,8 @@ class Vort3DModel(Model[RegularGrid]):
         forecast_period = kwargs['forecast_period']
         next_time = kwargs['time'] + forecast_period * dt1h
 
-        new_state = advance_time(state, self.nx, self.ny, self.dx, self.beta,
-                                  self.moist, self.dt, forecast_period)
+        new_state = advance_time(state, self.nx, self.ny, self.dx, self.nz, self.beta,
+                                  self.moist, self.convection_scheme, self.dt, forecast_period)
         if any(np.any(np.isnan(v)) for v in new_state.values()):
             raise RuntimeError(f"{self.__class__.__name__}: NaN detected in model run")
 
@@ -251,6 +269,7 @@ class Vort3DModel(Model[RegularGrid]):
         if debug:
             print(f"generating initial condition for member {member+1 if member is not None else 1}")
 
-        state = initial_condition(self.nx, self.ny, self.dx, beta=self.beta, moist=self.moist,
+        state = initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
+                                   moist=self.moist, convection_scheme=self.convection_scheme,
                                    Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed)
         self._write_full_state(state, **{**kwargs, 'path': self.ens_init_dir})

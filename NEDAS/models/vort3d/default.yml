@@ -9,6 +9,12 @@ ny: 200
 
 dx: 20000  # grid spacing, in meters (paper: 20 km)
 
+nz: 2   # number of free-atmosphere layers (paper: 2 -- upper troposphere +
+        # lower/mid troposphere). Total prognostic layers = nz+1 (always
+        # +1 boundary layer at the bottom). nz=2 uses the paper's own exact
+        # sigma levels; other nz use equal-sigma-thickness free-tropospheric
+        # layers (see core.make_sigma_levels).
+
 dt: 15   # internal model integration time step in seconds (paper: 15s)
 
 restart_dt: 1  # model restart output interval in hours
@@ -17,7 +23,12 @@ beta: 0.0   # Coriolis beta parameter, df/dy, /m/s (0 = pure f-plane, matching
             # the paper's own experiments; e.g. 2.3e-11 for beta-drift near 20N)
 
 moist: true  # if false, run the dry dynamical core only (no surface fluxes,
-             # radiative cooling, condensation, or Ooyama convection)
+             # radiative cooling, condensation, or convection)
+
+convection_scheme: ooyama  # 'ooyama' (the paper's own closure, only valid
+                            # for nz=2) or 'betts_miller' (simplified
+                            # Betts/Betts-Miller column relaxation, valid
+                            # for any nz -- see core.py module docstring)
 
 Vbg: 0.       # background flow wind speed (std), m/s (0 = calm, matching the
               # paper's own experiments)
