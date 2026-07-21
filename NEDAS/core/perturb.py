@@ -2,7 +2,7 @@ import os
 import numpy as np
 from datetime import datetime
 from typing import Callable, Any
-from NEDAS.utils.conversion import ensure_list, dt1h
+from NEDAS.utils.conversion import ensure_list, expand_scale_dict, dt1h
 from NEDAS.utils import random_perturb, spatial_operation, parallel
 from NEDAS.grid import GridType, RegularGrid
 from .context import Context
@@ -76,6 +76,22 @@ class PerturbField:
         for v in range(nv):
             vname = variable_list[v]
             self.params[vname] = {}
+
+            # allow each key's per-variable value to be given as an explicit
+            # 'scale0'/'scale1'/... dict -- converted here to the equivalent
+            # ordered list, so the existing nscale-detection/rectification
+            # below (which already handles a bare list = "one entry per
+            # scale") sees the same shape either way. This is perturb's OWN
+            # multiscale decomposition (nscale, generate_perturb's own
+            # `for s in range(ns)` loop) -- entirely separate from and
+            # unrelated to the DA scheme's outer loop (niter/c.iter), which
+            # perturb doesn't loop over at all (the perturb step runs once
+            # per cycle, before FilterAnalysisScheme.filter()'s niter loop
+            # even starts). See DA-algorithms.md's "Outer-loop design" notes
+            # for the analogous (but distinct) iterN-keyed mechanism there.
+            for key in key_list:
+                kwargs[key][v] = expand_scale_dict(kwargs[key][v])
+
             # in multiscale approach, a list of parameters can be specified for a variable;
             # one separate perturbation will be generated for each, then they will be added together
             if isinstance(kwargs[key_list[0]][v], list):

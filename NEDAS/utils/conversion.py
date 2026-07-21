@@ -1,3 +1,4 @@
+import re
 import numbers
 import numpy as np
 from datetime import datetime, timezone
@@ -234,4 +235,49 @@ def ensure_list(v) -> list:
     if isinstance(v, list):
         return v
     return [v]
+
+_ITER_KEY_RE = re.compile(r'iter(\d+)')
+
+def expand_scale_dict(value):
+    """
+    If value is a dict keyed ``'scale0'``, ``'scale1'``, ..., ``'scale{n-1}'``
+    (n>=1, no gaps, no stray keys), return the equivalent ORDERED LIST
+    ``[value['scale0'], value['scale1'], ...]``.
+
+    This is an explicit alternative to inferring the number of scales from
+    a bare list's length (today's existing convention for one perturbation
+    variable's own multiscale decomposition, PerturbField's ``nscale``) --
+    it EXPANDS a keyed dict into the equivalent positional list every
+    downstream consumer already expects, rather than SELECTING a single
+    entry the way ``resolve_iter_dict`` does for the (separate, unrelated)
+    DA-scheme outer loop -- perturb's own multiscale loop needs all
+    `nscale` components at once (``generate_perturb``'s own
+    ``for s in range(ns)``), not one at a time.
+
+    If value is not such a dict, it is returned unchanged: a bare scalar
+    (nscale=1) or a bare list (nscale=len(list), today's existing
+    convention) both keep working exactly as before -- introducing this
+    explicit dict form doesn't create any new ambiguity at this nesting
+    level, since a dict was never a valid value here before.
+
+    Args:
+        value: the config value to expand (any type).
+
+    Returns:
+        The expanded ordered list if `value` was a scale-keyed dict,
+        otherwise `value` unchanged.
+    """
+    if not isinstance(value, dict):
+        return value
+
+    n = 0
+    while f'scale{n}' in value:
+        n += 1
+    expected_keys = {f'scale{i}' for i in range(n)}
+    if n == 0 or set(value.keys()) != expected_keys:
+        raise ValueError(
+            f"scale-keyed dict must have exactly 'scale0'..'scale{max(n-1,0)}' "
+            f"with no gaps or stray keys, got {list(value.keys())}"
+        )
+    return [value[f'scale{i}'] for i in range(n)]
 
