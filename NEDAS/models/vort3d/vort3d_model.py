@@ -68,6 +68,10 @@ class Vort3DModel(Model[RegularGrid]):
             realization -- the only source of initial-condition spread
             currently implemented; the vortex itself is not yet
             randomized in position/intensity, unlike vort2d's loc_sprd).
+        Vmax (float): initial vortex peak tangential wind speed, m/s
+            (smith_vortex's own default: 15.0)
+        Rmw (float): initial vortex radius of maximum wind, m
+            (smith_vortex's own default: 120e3)
     """
     nx: int
     ny: int
@@ -81,6 +85,8 @@ class Vort3DModel(Model[RegularGrid]):
     Vbg: float
     Vslope: float
     bg_seed: int | None
+    Vmax: float
+    Rmw: float
     memory: dict = {}
 
     def __init__(self, **kwargs):
@@ -194,7 +200,8 @@ class Vort3DModel(Model[RegularGrid]):
         bg_seed = self.bg_seed
         return initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
                                   moist=self.moist, convection_scheme=self.convection_scheme,
-                                  Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed)
+                                  Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed,
+                                  Vmax=self.Vmax, Rmw=self.Rmw)
 
     def _read_full_state(self, **kwargs) -> dict:
         """Read all layer/pstar fields at kwargs['time'] into one flat
@@ -295,5 +302,6 @@ class Vort3DModel(Model[RegularGrid]):
 
         state = initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
                                    moist=self.moist, convection_scheme=self.convection_scheme,
-                                   Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed)
+                                   Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed,
+                                   Vmax=self.Vmax, Rmw=self.Rmw)
         self._write_full_state(state, **{**kwargs, 'path': self.ens_init_dir})

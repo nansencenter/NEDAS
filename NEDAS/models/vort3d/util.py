@@ -52,12 +52,15 @@ def unpack_state(state: dict, core: Core) -> None:
 
 
 def initial_condition(nx, ny, dx, nz=2, beta=0.0, moist=True, convection_scheme='ooyama',
-                       Vbg=0.0, Vslope=-3, bg_seed=None) -> dict:
+                       Vbg=0.0, Vslope=-3, bg_seed=None, Vmax=15.0, Rmw=120.0e3) -> dict:
     """Generate a vort3d initial condition (Smith et al. 1990 vortex +
     Jordan 1957 sounding, per ZSU2001) -- reuses Core's own __init__,
-    which already does this, then flattens the result."""
+    which already does this, then flattens the result. Vmax/Rmw set the
+    initial vortex's peak tangential wind / radius of maximum wind
+    (smith_vortex's own defaults: 15.0 m/s, 120e3 m)."""
     core = Core(nx=nx, ny=ny, dx=dx, nz=nz, beta=beta, moist=moist,
-                convection_scheme=convection_scheme, Vbg=Vbg, Vslope=Vslope, bg_seed=bg_seed)
+                convection_scheme=convection_scheme, Vbg=Vbg, Vslope=Vslope, bg_seed=bg_seed,
+                Vmax=Vmax, Rmw=Rmw)
     return pack_state(core)
 
 

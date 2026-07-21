@@ -252,6 +252,10 @@ class Core:
             (paper's own value: 8/9). Only affects nz != 2 (the nz=2
             sigma levels are always the paper's exact Fig. 1 values,
             regardless of this argument).
+        Vmax (float): initial vortex peak tangential wind speed, m/s
+            (smith_vortex's own default: 15.0).
+        Rmw (float): initial vortex radius of maximum wind, m
+            (smith_vortex's own default: 120e3).
 
     Attributes set after construction: `u`, `v`, `theta`, `q` (each shape
     `(nz+1, ny, nx)`), `pstar` (shape `(ny, nx)`, column mass p*=ps-p_top).
@@ -259,7 +263,8 @@ class Core:
     """
 
     def __init__(self, nx=100, ny=100, dx=20e3, nz=2, Vbg=0.0, Vslope=-3, bg_seed=None,
-                 beta=0.0, moist=True, convection_scheme='ooyama', sigma_boundary_top=8/9):
+                 beta=0.0, moist=True, convection_scheme='ooyama', sigma_boundary_top=8/9,
+                 Vmax=15.0, Rmw=120.0e3):
         if moist and convection_scheme == 'ooyama' and nz != 2:
             raise ValueError(
                 "convection_scheme='ooyama' is only supported for nz=2 -- eqs. "
@@ -301,7 +306,7 @@ class Core:
 
         # initial vortex: same tangential wind at each layer (paper: "the
         # initial axisymmetric vortex is barotropic")
-        vtan = smith_vortex(self.rr)
+        vtan = smith_vortex(self.rr, Vmax, Rmw)
         theta_ang = np.arctan2(self.yy, self.xx)
         for k in range(n):
             self.u[k] = -vtan * np.sin(theta_ang)
@@ -318,7 +323,7 @@ class Core:
         # radial pressure perturbation via simplified gradient-wind balance,
         # using the boundary layer's (last layer's) sounding density
         r1d = np.linspace(0, self.rr.max(), 2000)
-        v1d = smith_vortex(r1d)
+        v1d = smith_vortex(r1d, Vmax, Rmw)
         f0_center = 2 * 7.292e-5 * np.sin(np.deg2rad(20.))
         p_b = self.sigma_mid[-1]*PSTAR_FAR + p_top
         T_b = sounding_T(self.sigma_mid[-1])

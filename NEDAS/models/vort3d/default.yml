@@ -37,3 +37,6 @@ Vslope: -3.   # background flow kinetic energy spectrum power law
 bg_seed: null  # RNG seed for the background flow; null uses the ensemble
                # member index in generate_init_ensemble (independent
                # per-member background-flow realization)
+
+Vmax: 15.0     # initial vortex peak tangential wind speed, m/s (smith_vortex's own default)
+Rmw: 120000.0  # initial vortex radius of maximum wind, m (smith_vortex's own default)
