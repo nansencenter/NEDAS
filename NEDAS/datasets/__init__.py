@@ -15,6 +15,7 @@ registry = {
     'rgps': 'RgpsObs',
     'topaz': 'TopazPrepObs',
     'vort2d': 'Vort2DObs',
+    'vort3d': 'Vort3DObs',
     'synthetic': 'SyntheticObs',
 }
 
