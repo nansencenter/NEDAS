@@ -87,7 +87,8 @@ class OpticalFlow:
         else:
             raise ValueError(f"Unsupported optical flow method: {self.method}")
 
-def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=None, alpha_squared=None, **kwargs):
+def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothness_weight=None,
+                             alpha_squared=None, local_weight=None, **kwargs):
     """smoothness_weight is applied to a field ALREADY normalized to [0,1] below (using THIS
     call's own xmax-xmin, recomputed fresh every call) -- so a fixed smoothness_weight only
     matches the paper's raw-field alpha^2 for field ranges close to whatever R was used to derive
@@ -101,6 +102,24 @@ def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothnes
     SAME xmax/xmin it already computes for normalization, self-consistently, every call.
     smoothness_weight is kept as a direct override for callers that want the old fixed-value
     behavior (e.g. DIS/Farneback callers never touch this function at all).
+
+    local_weight (2026-07-20, s in [0,1)): self-normalizing alternative to alpha_squared/
+    smoothness_weight, added after both were found to land in wildly different effective
+    regimes across models -- alpha_squared=100 (its own field-range-independent physical
+    constant) gave w/mean(data_term) ratios of 1517 (vort2d) vs 5022 (vort3d) at the coarsest
+    pyramid level, because neither parameter accounts for how the actual competing quantity
+    (xdx^2+xdy^2, the local squared gradient, i.e. the data term the smoothness weight w
+    competes against in the solver's denominator) depends on field roughness/resolution/pyramid
+    level -- only on the field's global value range. local_weight instead computes, AT EACH
+    PYRAMID LEVEL, d_ref = mean(xdx^2+xdy^2) over unmasked pixels at that level, then sets
+    w = d_ref * s/(1-s). Since the solver's local response scales as d(x,y)/(w+d(x,y)), at a
+    TYPICAL-strength location (d=d_ref) this makes s directly mean "fraction of the typical-
+    strength local response suppressed": s=0 -> no smoothing (pure local fit, noisy); s=0.5 ->
+    half the typical response passes; s->1 -> full suppression (matches what alpha_squared=100/
+    smoothness_weight=0.3 both did for vort3d). Stronger-than-typical local features (e.g. a
+    coherent vortex core) still get a proportionally larger fraction through even at high s --
+    naturally adaptive, unlike a single global w. Takes priority over alpha_squared/
+    smoothness_weight if given.
     """
     ni = int(2**np.ceil(np.log(np.max(fld1.shape))/np.log(2)))
     x1 = np.full((ni,ni), np.nan)
@@ -113,7 +132,9 @@ def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothnes
     ni, nj = x1.shape
     # normalize field so that w can be fixed
     xmax = np.max(x1[:, :]); xmin = np.min(x1[:, :])
-    if alpha_squared is not None:
+    if local_weight is not None:
+        w = None  # computed fresh per pyramid level below, from that level's own data term
+    elif alpha_squared is not None:
         w = alpha_squared / (xmax - xmin)**2 if xmax > xmin else alpha_squared
     else:
         w = smoothness_weight if smoothness_weight is not None else 1
@@ -131,6 +152,14 @@ def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothnes
         xdx = 0.5*(deriv_x(x1c) + deriv_x(x2c))
         xdy = 0.5*(deriv_y(x1c) + deriv_y(x2c))
         xdt = x2c - x1c
+        if local_weight is not None:
+            data_term = xdx**2 + xdy**2
+            active = ~maskc
+            d_ref = data_term[active].mean() if np.any(active) else data_term.mean()
+            s = local_weight
+            w_lev = d_ref * s / (1 - s) if d_ref > 0 else 0.0
+        else:
+            w_lev = w
         # #compute incremental flow using iterative solver
         du = np.zeros(xdx.shape)
         dv = np.zeros(xdx.shape)
@@ -145,8 +174,8 @@ def optical_flow_HS_pyramid(grid, fld1, fld2, nlevel=5, niter_max=100, smoothnes
             dv[maskc] = 0
             ubar = laplacian(du) + du
             vbar = laplacian(dv) + dv
-            du1 = ubar - xdx*(xdx*ubar + xdy*vbar + xdt)/(w + xdx**2 + xdy**2)
-            dv1 = vbar - xdy*(xdx*ubar + xdy*vbar + xdt)/(w + xdx**2 + xdy**2)
+            du1 = ubar - xdx*(xdx*ubar + xdy*vbar + xdt)/(w_lev + xdx**2 + xdy**2)
+            dv1 = vbar - xdy*(xdx*ubar + xdy*vbar + xdt)/(w_lev + xdx**2 + xdy**2)
             diff = np.max(np.abs(du1-du) + np.abs(dv1-dv))
             du = du1
             dv = dv1
