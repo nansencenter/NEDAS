@@ -31,13 +31,28 @@ Two convective closures are available (`convection_scheme`):
                     relaxation, formulated purely in terms of a per-layer
                     reference profile (no named layers), so it works for
                     any nz. Precedented for exactly this purpose: Baik,
-                    DeMaria & Raman (1990a,b, 1991) ran an 11-level
-                    axisymmetric TC model with the Betts scheme, and
+                    DeMaria & Raman (1990a) ran a 15-level axisymmetric TC
+                    model with the Betts scheme (their Table 2), and
                     ZSU2001 repeatedly compares its own results against
-                    theirs. See betts_miller_adjustment()'s docstring for
-                    the specific (simplified) formulation used here, and
-                    the dev log for why this is not literally the same
-                    model as ZSU2001 once nz != 2.
+                    theirs (though ZSU2001's own abstract says "11 levels"
+                    for that model -- a citation discrepancy against the
+                    primary source, not something to match here). See
+                    betts_miller_adjustment()'s docstring for the specific
+                    (simplified) formulation used here, and the dev log for
+                    why this is not literally the same model as ZSU2001
+                    once nz != 2, nor the same model as Baik et al. (their
+                    model is axisymmetric radius-height, not this module's
+                    Cartesian x-y channel).
+
+A quick (non-faithful) comparison at nz=14 (15 total layers) against Baik
+et al.'s reported control-simulation numbers landed in a broadly similar
+wind-speed range (fluctuating ~50-72 m/s vs. their reported 58 m/s at
+maturity) but shallower minimum pressure (~955-980 hPa vs. their 923 hPa)
+and a qualitatively different life cycle (rapid intensification by ~25-50h
+here vs. their slow 0-48h/rapid 96-144h/steady 144-192h three-stage
+progression) -- expected given the very different vortex/sounding/domain/
+geometry, not a discrepancy to chase. See dev log for the full comparison
+and radius-height cross sections.
 
 See techNotes/models/vort3d.md dev log for the paper's equations/parameters
 and running notes on simplifications made here.
@@ -81,14 +96,20 @@ SOUNDING_T = np.array([230.1, 278.9, 297.0])
 
 
 def theta_from_T_p(T, p):
+    """Potential temperature from temperature T (K) and pressure p (Pa)."""
     return T * (p0 / p) ** kappa
 
 
 def sounding_T(sigma):
+    """Far-field environmental temperature (K) at a given sigma, linearly
+    interpolated from the paper's Appendix A Table A1 (all 5 tabulated
+    sigma positions, not just the nz=2 layer midpoints)."""
     return np.interp(sigma, SOUNDING_SIGMA, SOUNDING_T_TABLE)
 
 
 def sounding_q(sigma):
+    """Far-field environmental specific humidity (kg/kg) at a given sigma,
+    linearly interpolated from the paper's Appendix A Table A1."""
     return np.interp(sigma, SOUNDING_SIGMA, SOUNDING_Q_TABLE)
 
 
@@ -140,6 +161,9 @@ def smith_vortex(r, vm=15.0, rm=120.0e3):
 
 
 def make_grid(nx, ny, dx):
+    """Cartesian (xx, yy) coordinate arrays, shape (ny, nx), centered on
+    the domain (origin at the middle grid point) -- where the initial
+    vortex is always placed."""
     x = (np.arange(nx) - nx // 2) * dx
     y = (np.arange(ny) - ny // 2) * dx
     xx, yy = np.meshgrid(x, y, indexing='xy')
@@ -197,6 +221,43 @@ def random_flow(nx, ny, dx, amp, power_law, seed=None):
 
 
 class Core:
+    """
+    Standalone (NEDAS-independent) integrator for the vort3d dynamical
+    core: sigma-coordinate primitive equations on an f/beta-plane, `nz`
+    free-atmosphere layers + 1 boundary layer, 3rd-order Adams-Bashforth
+    time stepping. See the module docstring for the vertical-structure
+    generalization and the two convective closures.
+
+    Args:
+        nx, ny (int): horizontal grid dimensions (paper: 200x200).
+        dx (float): horizontal grid spacing, m (paper: 20000).
+        nz (int): number of free-atmosphere layers (paper: 2). Total
+            prognostic layers = nz+1 (always +1 boundary layer at the
+            bottom). nz=2 uses the paper's own exact sigma levels; other
+            nz use equal-sigma-thickness free-tropospheric layers (see
+            make_sigma_levels).
+        Vbg (float): random background-flow wind speed amplitude, m/s
+            (0 = calm, matching the paper's own experiments).
+        Vslope (float): background-flow kinetic-energy spectrum power law.
+        bg_seed (int or None): RNG seed for the background flow.
+        beta (float): df/dy, Coriolis beta parameter, /m/s (0 = pure
+            f-plane, matching the paper's own experiments; >0 enables
+            beta-drift).
+        moist (bool): if False, run the dry dynamical core only (no
+            surface fluxes, radiative cooling, condensation, or
+            convection) -- valid for any nz.
+        convection_scheme (str): 'ooyama' (the paper's own closure, only
+            valid for nz=2) or 'betts_miller' (valid for any nz).
+        sigma_boundary_top (float): sigma at the top of the boundary layer
+            (paper's own value: 8/9). Only affects nz != 2 (the nz=2
+            sigma levels are always the paper's exact Fig. 1 values,
+            regardless of this argument).
+
+    Attributes set after construction: `u`, `v`, `theta`, `q` (each shape
+    `(nz+1, ny, nx)`), `pstar` (shape `(ny, nx)`, column mass p*=ps-p_top).
+    Advance the state in time with `step(dt)`.
+    """
+
     def __init__(self, nx=100, ny=100, dx=20e3, nz=2, Vbg=0.0, Vslope=-3, bg_seed=None,
                  beta=0.0, moist=True, convection_scheme='ooyama', sigma_boundary_top=8/9):
         if moist and convection_scheme == 'ooyama' and nz != 2:
@@ -369,6 +430,11 @@ class Core:
                     Phi_at_halflevel=Phi_at_halflevel)
 
     def rhs(self):
+        """Right-hand-side tendencies (du, dv, dtheta, dq, dpstar) for the
+        dynamical core (eqs. 2-8: momentum, hydrostatic PGF, sigma-dot
+        vertical advection, surface fluxes/radiative cooling if `moist`) --
+        does NOT include diffusion or the convective closure, both applied
+        separately in `step()`. Returns the tendency tuple used by AB3."""
         u, v, theta, q, pstar = self.u, self.v, self.theta, self.q, self.pstar
         n = self.n
         sigma_mid = self.sigma_mid
@@ -636,6 +702,13 @@ class Core:
             self.theta[k] += Lv*excess/(cp*Pi_k)
 
     def step(self, dt):
+        """Advance the model state by one time step `dt` (seconds), in
+        place: 3rd-order Adams-Bashforth for the dynamics (`rhs()`,
+        automatically dropping to lower-order AB for the first two calls
+        while `_prev_tendencies` fills up), then 4th-order horizontal
+        diffusion as a separate explicit-Euler correction (split from the
+        AB3-integrated tendency for stability, see dev log), then -- if
+        `moist` -- condensation and the selected convective closure."""
         tend = self.rhs()
         self._prev_tendencies.append(tend)
         if len(self._prev_tendencies) > 3:
@@ -682,6 +755,10 @@ class Core:
         self.v[:, -1, :] = 0.0
 
     def diagnostics(self):
+        """Per-layer summary statistics (max wind speed, theta range, q
+        range, all as plain lists indexed by layer 0..nz-1=free atmosphere
+        then nz=boundary) plus the domain pstar range -- a quick sanity/
+        progress check, not a substitute for the full state."""
         wind = np.hypot(self.u, self.v)
         return dict(
             max_wind=[float(wind[k].max()) for k in range(self.n)],

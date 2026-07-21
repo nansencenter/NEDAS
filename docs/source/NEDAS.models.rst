@@ -18,4 +18,5 @@ Subpackages
    NEDAS.models.qg
    NEDAS.models.topaz
    NEDAS.models.vort2d
+   NEDAS.models.vort3d
    NEDAS.models.wrf
