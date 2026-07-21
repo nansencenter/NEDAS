@@ -38,6 +38,7 @@ class Config:
     # experiment design parameters
     nens: int
     seed: int|None
+    cycling: bool|None
     run_preproc: bool
     run_forecast: bool
     run_analysis: bool

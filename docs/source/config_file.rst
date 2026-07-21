@@ -227,6 +227,16 @@ Analysis scheme design parameters
    * - ``nens``
      - Ensemble size.
      - 20
+   * - ``cycling``
+     - If True, cycles chain together: each cycle's forecast produces the
+       next cycle's restart files (real cycling DA). If False, cycles are
+       independent: every cycle reads pre-staged restart files via
+       ``model.ens_init_dir`` (resolved at that cycle's own time) instead of
+       the previous cycle's forecast output -- for offline DA or
+       reforecasting from an existing archive. If left unset (None), it is
+       inferred from ``run_forecast`` (no forecast step between cycles
+       implies independent cycles).
+     - None (inferred from ``run_forecast``)
    * - ``run_preproc``
      - Whether to run the preprocessing step.
      - True

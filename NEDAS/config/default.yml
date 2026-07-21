@@ -27,6 +27,12 @@ nproc_util:
 nens: 20            # ensemble size
 seed:               # random seed for reproducibility (truth/ensemble IC, synthetic obs,
                     # ETKF random rotation); leave empty for a random, non-reproducible seed
+cycling:            # if true, cycles chain together: each cycle's forecast produces the next
+                    # cycle's restart files (real cycling DA). If false, cycles are independent:
+                    # every cycle reads pre-staged restart files via model.ens_init_dir (resolved
+                    # at that cycle's own time), not from the previous cycle's forecast output --
+                    # for offline DA / reforecasting from an existing archive. Leave blank to infer
+                    # from run_forecast (no forecast step between cycles implies independent cycles).
 run_preproc: True   # if true, run the preprocessing step
 run_forecast: True  # if true, run the ensemble forecast step
 run_analysis: True  # if true, run the analysis step

@@ -349,7 +349,17 @@ class FilterAnalysisScheme(Scheme):
 
     def get_restart_dir(self, model_name) -> str:
         model = self.c.models[model_name]
-        if self.c.time == self.config.time_start and model.ens_init_dir is not None:
+        if not self.cycling:
+            # offline/independent-cycle mode: there is no forecast chaining
+            # between cycles (see Scheme.__init__'s cycling resolution), so
+            # every cycle -- not just the first -- reads pre-staged restart
+            # files via ens_init_dir, resolved at that cycle's own time.
+            assert model.ens_init_dir is not None, (
+                f"cycling=False requires model '{model_name}' to set ens_init_dir "
+                "(the pre-staged restart file source for every cycle)."
+            )
+            restart_dir = model.ens_init_dir.format(time=self.c.time)
+        elif self.c.time == self.config.time_start and model.ens_init_dir is not None:
             restart_dir = model.ens_init_dir.format(time=self.c.time)
         else:
             restart_dir = self.c.fs.forecast_dir(self.c.prev_time, model_name)
