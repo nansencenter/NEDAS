@@ -20,16 +20,23 @@ class Vort3DModel(Model[RegularGrid]):
     validation this was ported from (dev log: techNotes/models/vort3d.md).
 
     State is (nz+1) layers x 4 fields (u,v,theta,q) + one 2D field (p*,
-    column mass) -- represented here as separate NEDAS variables per layer
-    ('wind_0','theta_0','q_0', ..., suffix 'b' for the boundary layer)
-    plus 'pstar', rather than a single multi-level variable -- the
-    boundary layer in particular is physically distinct from the free-
-    atmosphere layers (different typical error/localization behavior),
-    and this keeps read/write as simple single-array-per-name operations
-    matching vort2d/lorenz96's pattern instead of needing a
-    read-modify-write per level within one native netCDF variable (the
-    pattern NEDAS's qg model uses, see dev log for why that was surveyed
-    and not adopted here).
+    column mass) -- represented as 3 multi-level NEDAS variables ('wind',
+    'theta', 'q', each with `levels` spanning all nz+1 layers, level index
+    k=0..nz-1 = free-atmosphere layers top-to-bottom, k=nz = boundary
+    layer) plus one single-level 'pstar', following the same
+    VarDesc(levels=...) + per-level `read_var(k=...)` pattern NEDAS's qg
+    model uses -- NOT the earlier (pre-2026-07-21) design of one separate
+    NEDAS variable per layer ('wind_0', 'wind_1', ..., 'wind_b', ...),
+    which was simpler to read/write but made state_def/variable-list
+    length scale with nz (3*(nz+1)+1 entries), an increasingly bad
+    tradeoff as nz grows. Unlike qg's own per-level file I/O (which
+    reloads and rewrites the ENTIRE multi-level array on every
+    single-level write, since it stores each level in a plain .npy file),
+    this uses a second "unlimited" netCDF dimension (`z`, alongside `t`)
+    so a single-level write only touches that level's slice -- verified
+    directly that netCDF4/HDF5 supports multiple unlimited dimensions per
+    variable and handles out-of-order/sparse writes correctly (unwritten
+    slices read back as NaN, not garbage).
 
     Args:
         nx, ny (int): grid dimensions (paper: 200x200)
@@ -94,22 +101,21 @@ class Vort3DModel(Model[RegularGrid]):
         self.grid = RegularGrid(None, x, y, cyclic_dim='x')
         self.grid.mask = np.full(self.grid.x.shape, False)  # no mask
 
-        names = layer_names(self.nz)
-        levels = np.array([0])
-        self.variables = {}
-        for name in names:
-            self.variables[f'wind_{name}'] = VarDesc(
-                name=(f'u{name}', f'v{name}'), dtype='float', is_vector=True,
-                dt=self.restart_dt, levels=levels, units='m/s', z_units='hPa')
-            self.variables[f'theta_{name}'] = VarDesc(
-                name=f'theta{name}', dtype='float', is_vector=False,
-                dt=self.restart_dt, levels=levels, units='K', z_units='hPa')
-            self.variables[f'q_{name}'] = VarDesc(
-                name=f'q{name}', dtype='float', is_vector=False,
-                dt=self.restart_dt, levels=levels, units='kg/kg', z_units='hPa')
-        self.variables['pstar'] = VarDesc(
-            name='pstar', dtype='float', is_vector=False,
-            dt=self.restart_dt, levels=levels, units='Pa', z_units='hPa')
+        self.n = self.nz + 1  # total prognostic layers (free-atmosphere + boundary), matches Core's own convention
+        self.layer_names = layer_names(self.nz)  # ['0','1',...,'nz-1','b'], index k -> layer name
+
+        multi_levels = np.arange(self.n, dtype=float)
+        single_level = np.array([0.])
+        self.variables = {
+            'wind': VarDesc(name=('u', 'v'), dtype='float', is_vector=True,
+                            dt=self.restart_dt, levels=multi_levels, units='m/s', z_units='hPa'),
+            'theta': VarDesc(name='theta', dtype='float', is_vector=False,
+                             dt=self.restart_dt, levels=multi_levels, units='K', z_units='hPa'),
+            'q': VarDesc(name='q', dtype='float', is_vector=False,
+                        dt=self.restart_dt, levels=multi_levels, units='kg/kg', z_units='hPa'),
+            'pstar': VarDesc(name='pstar', dtype='float', is_vector=False,
+                             dt=self.restart_dt, levels=single_level, units='Pa', z_units='hPa'),
+        }
 
         # nominal far-field pressure of each layer -- a static z-coordinate,
         # documented simplification since the layers are actually sigma
@@ -118,7 +124,7 @@ class Vort3DModel(Model[RegularGrid]):
         # discussion of this same simplification in the standalone prototype).
         sigma_mid, _ = make_sigma_levels(self.nz)
         layer_p = sigma_mid*PSTAR_FAR + p_top
-        self._layer_pressure = {name: float(layer_p[k]) for k, name in enumerate(names)}
+        self._layer_pressure = {name: float(layer_p[k]) for k, name in enumerate(self.layer_names)}
 
     def filename(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -132,36 +138,56 @@ class Vort3DModel(Model[RegularGrid]):
     def read_mask(self, **kwargs):
         pass
 
+    def _has_levels(self, name):
+        return len(self.variables[name].levels) > 1
+
     def read_var_from_file(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
-        rec = self.variables[kwargs['name']].asdict()
+        name = kwargs['name']
+        rec = self.variables[name].asdict()
         comm = None  # reading files doesn't require collective io (file locks)
+        has_z = self._has_levels(name)
+        iz = int(kwargs['k']) if has_z else None
+
+        def _read_one(varname):
+            arr = nc_read_var(fname, varname, comm=comm)
+            return arr[0, iz, ...] if has_z else arr[0, ...]
+
         if rec['is_vector']:
-            u = nc_read_var(fname, rec['name'][0], comm=comm)[0, ...]
-            v = nc_read_var(fname, rec['name'][1], comm=comm)[0, ...]
+            u = _read_one(rec['name'][0])
+            v = _read_one(rec['name'][1])
             var = np.array([u, v])
         else:
-            var = nc_read_var(fname, rec['name'], comm=comm)[0, ...]
+            var = _read_one(rec['name'])
         return var
 
     def write_var_to_file(self, var, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         fname = self.filename(**kwargs)
-        rec = self.variables[kwargs['name']].asdict()
+        name = kwargs['name']
+        rec = self.variables[name].asdict()
         comm = self.c.comm  # for async file io (netcdf without parallel support)
+        has_z = self._has_levels(name)
+        if has_z:
+            dims = {'t': None, 'z': None, 'y': self.ny, 'x': self.nx}
+            recno = {'t': 0, 'z': int(kwargs['k'])}
+        else:
+            dims = {'t': None, 'y': self.ny, 'x': self.nx}
+            recno = {'t': 0}
+
         if rec['is_vector']:
             for i in range(2):
-                nc_write_var(fname, {'t': None, 'y': self.ny, 'x': self.nx},
-                              rec['name'][i], var[i, ...], recno={'t': 0}, comm=comm)
+                nc_write_var(fname, dims, rec['name'][i], var[i, ...], recno=recno, comm=comm)
         else:
-            nc_write_var(fname, {'t': None, 'y': self.ny, 'x': self.nx},
-                          rec['name'], var, recno={'t': 0}, comm=comm)
+            nc_write_var(fname, dims, rec['name'], var, recno=recno, comm=comm)
 
     def z_coords(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
-        layer = kwargs['name'].rsplit('_', 1)[-1]
-        p = self._layer_pressure.get(layer, 0.0)  # pstar itself has no layer pressure
+        if kwargs['name'] == 'pstar':
+            p = 0.0  # pstar itself has no layer pressure
+        else:
+            p = self._layer_pressure[self.layer_names[int(kwargs['k'])]]
         return np.full(self.grid.x.shape, p)
 
     def generate_initial_condition(self):
@@ -176,24 +202,22 @@ class Vort3DModel(Model[RegularGrid]):
         needed because the dynamical core integrates all fields together
         as one coupled system, unlike vort2d's single-variable state."""
         state = {}
-        for var_name, rec in self.variables.items():
-            val = self.read_var(**{**kwargs, 'name': var_name})
-            if rec.is_vector:
-                layer = var_name.rsplit('_', 1)[-1]
-                state[f'u{layer}'] = val[0]
-                state[f'v{layer}'] = val[1]
-            else:
-                state[rec.name] = val
+        for k, layer in enumerate(self.layer_names):
+            u, v = self.read_var(**{**kwargs, 'name': 'wind', 'k': k})
+            state[f'u{layer}'] = u
+            state[f'v{layer}'] = v
+            state[f'theta{layer}'] = self.read_var(**{**kwargs, 'name': 'theta', 'k': k})
+            state[f'q{layer}'] = self.read_var(**{**kwargs, 'name': 'q', 'k': k})
+        state['pstar'] = self.read_var(**{**kwargs, 'name': 'pstar'})
         return state
 
     def _write_full_state(self, state: dict, **kwargs) -> None:
-        for var_name, rec in self.variables.items():
-            if rec.is_vector:
-                layer = var_name.rsplit('_', 1)[-1]
-                val = np.array([state[f'u{layer}'], state[f'v{layer}']])
-            else:
-                val = state[rec.name]
-            self.write_var(val, **{**kwargs, 'name': var_name})
+        for k, layer in enumerate(self.layer_names):
+            val = np.array([state[f'u{layer}'], state[f'v{layer}']])
+            self.write_var(val, **{**kwargs, 'name': 'wind', 'k': k})
+            self.write_var(state[f'theta{layer}'], **{**kwargs, 'name': 'theta', 'k': k})
+            self.write_var(state[f'q{layer}'], **{**kwargs, 'name': 'q', 'k': k})
+        self.write_var(state['pstar'], **{**kwargs, 'name': 'pstar'})
 
     def preprocess(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)

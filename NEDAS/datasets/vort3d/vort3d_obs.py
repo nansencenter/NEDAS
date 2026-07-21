@@ -168,7 +168,7 @@ class Vort3DObs(SyntheticObs):
         assert isinstance(model, Vort3DModel), 'get_wind_b: ERROR: model must be an instance of Vort3DModel'
         grid = kwargs['grid']
         # read the boundary-layer wind field from truth
-        model_wind_b = model.read_var(**{**kwargs, 'name':'wind_b'})
+        model_wind_b = model.read_var(**{**kwargs, 'name':'wind', 'k': model.nz})  # k=nz is the boundary layer, per layer_names(nz)
         # convert to target grid
         model.grid.set_destination_grid(grid)
         wind_b = model.grid.convert(model_wind_b, is_vector=True)
