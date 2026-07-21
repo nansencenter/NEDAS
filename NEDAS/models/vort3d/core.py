@@ -740,6 +740,13 @@ class Core:
             self.v[k] = self.v[k] + dt*self.diffuse4(self.v[k], k1_diff)
             self.theta[k] = self.theta[k] + dt*self.diffuse4(self.theta[k], k1_diff)
             self.q[k] = np.maximum(self.q[k] + dt*self.diffuse4(self.q[k], k1_diff), 0.0)
+        # pstar was missing this same 4th-order hyperdiffusion that every other prognostic
+        # field gets -- without it, the meridional (rigid-wall) centered-difference scheme's
+        # undamped 2-delta-y null mode grows unchecked in pstar specifically (confirmed via a
+        # 14-day truth run: pstar's y-profile showed a ~91% grid-point sign-flip rate, a
+        # near-perfect checkerboard, vs. 4-11% for every diffused field, with std growing from
+        # ~70 Pa at t=0 to 700-840 Pa by day 4-13).
+        self.pstar = self.pstar + dt*self.diffuse4(self.pstar, k1_diff)
 
         if self.moist:
             for k in range(self.n):
