@@ -238,6 +238,69 @@ def ensure_list(v) -> list:
 
 _ITER_KEY_RE = re.compile(r'iter(\d+)')
 
+def resolve_iter_dict(value, iter: int, niter: int):
+    """
+    Resolve a config value that may be given as a per-outer-loop-iteration
+    override dict, keyed ``'iter0'``, ``'iter1'``, ..., ``'iter{niter-1}'``
+    (optionally plus a ``'default'`` key).
+
+    Detection is purely by type (dict vs. anything else), never by list
+    length or shape -- so this can never collide with a value that is
+    legitimately a list (or nested list) for some other, unrelated reason
+    (e.g. a multiscale ``hcorr`` list for one perturbation variable, which
+    has nothing to do with the outer loop). An earlier design that tried
+    to infer per-iteration intent from ``len(value) == niter`` was rejected
+    for exactly this reason -- see NEDAS/DA-algorithms.md's "Outer-loop
+    design" notes.
+
+    If ``value`` is not a dict, it is returned unchanged: the same value
+    is used at every outer-loop iteration (today's behavior, for every
+    existing config).
+
+    If ``value`` is a dict, every key must be either ``'default'`` or
+    match ``iterN`` with ``0 <= N < niter`` -- anything else (e.g. a typo
+    like ``'itr0'``, or an out-of-range index) raises immediately rather
+    than being silently ignored. The current iteration's own ``iterN`` key
+    is used if present; otherwise ``'default'`` is used if present;
+    otherwise a ValueError is raised (no silent fallback to an
+    unspecified value).
+
+    Args:
+        value: the config value to resolve (any type).
+        iter (int): the current outer-loop iteration index.
+        niter (int): the total number of outer-loop iterations.
+
+    Returns:
+        The resolved value for this iteration.
+    """
+    if not isinstance(value, dict):
+        return value
+
+    for key in value:
+        if key == 'default':
+            continue
+        m = _ITER_KEY_RE.fullmatch(key)
+        if not m:
+            raise ValueError(
+                f"per-iteration override dict has invalid key '{key}' -- "
+                f"expected 'iterN' (0<=N<{niter}) or 'default', got keys {list(value.keys())}"
+            )
+        n = int(m.group(1))
+        if n >= niter:
+            raise ValueError(
+                f"per-iteration override key '{key}' is out of range for niter={niter}"
+            )
+
+    this_key = f'iter{iter}'
+    if this_key in value:
+        return value[this_key]
+    if 'default' in value:
+        return value['default']
+    raise ValueError(
+        f"per-iteration override dict has no '{this_key}' key and no 'default' "
+        f"fallback (keys present: {list(value.keys())})"
+    )
+
 def expand_scale_dict(value):
     """
     If value is a dict keyed ``'scale0'``, ``'scale1'``, ..., ``'scale{n-1}'``

@@ -146,8 +146,6 @@ niter: 1
 iter:
 resolution_level: [0]
 character_length: [1e6]
-localize_scale_fac: [1]
-obs_err_scale_fac: [1]
 
 assimilator_def:
   type: TopazDEnKF

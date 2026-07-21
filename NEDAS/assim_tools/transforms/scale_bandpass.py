@@ -42,13 +42,12 @@ class ScaleBandpass(Transform):
         if self.nscale == 1:
             return obs_seq
 
-        # inflate obs err std per scale component -- this must apply regardless of whether obs
-        # values themselves get decomposed (Ying 2019 keeps obs undecomposed and only scales
-        # err_std to account for the fact that at narrower scales, unfiltered obs innovations
-        # partly reflect content from other scales)
-        assert c.config.obs_err_scale_fac is not None
-        obs_seq['err_std'] *= c.config.obs_err_scale_fac[c.iter]
-
+        # per-scale obs err std (e.g. Ying 2019's narrower-scale err inflation, to account for
+        # unfiltered obs innovations partly reflecting content from other scales) is now the
+        # obs_def's own responsibility: obs_rec.err.std can be given as a per-iteration
+        # 'iter0'/'iter1'/... dict (resolved once, fresh, in ObsInfo.add_obs_record each
+        # iteration) -- already baked into obs_seq['err_std'] by collect_obs_seq before this
+        # transform runs, so nothing to scale here regardless of decompose_obs.
         if not self.decompose_obs:
             return obs_seq
 

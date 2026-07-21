@@ -39,6 +39,8 @@ class Config:
     nens: int
     seed: int|None
     cycling: bool|None
+    niter: int          # number of outer-loop iterations
+    iter: int|None      # current outer-loop iteration (avail in context, defaults to 0)
     run_preproc: bool
     run_forecast: bool
     run_analysis: bool
@@ -86,12 +88,8 @@ class Config:
 
     # more details in assimilation algorithm
     scheme: str
-    niter: int
-    iter: int  # avail in context
     resolution_level: list[int]
     character_length: list[float]
-    localize_scale_fac: list[float]
-    obs_err_scale_fac: list[float]
     assimilator_def: dict
     updator_def: dict
     covariance_def: dict
@@ -259,7 +257,6 @@ Analysis Scheme:
   Inflation:     {inf_str}
   Localization:  H: {h_loc} | V: {v_loc} | T: {loc.get('temporal', {}).get('type', 'N/A')}
   Multiscale:    Resolution Levels: {self.resolution_level} | Character Lengths: {self.character_length}
-                 Localization Factor: {self.localize_scale_fac} | Obs Err Factor: {self.obs_err_scale_fac}
 
 Definitions:
   Models Used:   {", ".join(self.model_def.keys()) if self.model_def else 'None'}

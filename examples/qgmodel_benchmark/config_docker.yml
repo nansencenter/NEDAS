@@ -91,8 +91,6 @@ transform_def:
   decompose_obs: False
 resolution_level: [0]
 character_length: [10]
-localize_scale_fac: [1]
-obs_err_scale_fac: [1]
 
 diag:
 - method: misc.convert_output

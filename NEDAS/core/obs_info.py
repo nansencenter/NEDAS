@@ -1,5 +1,5 @@
 import numpy as np
-from NEDAS.utils.conversion import dt1h, ensure_list, type_size, t2h, h2t
+from NEDAS.utils.conversion import dt1h, ensure_list, type_size, t2h, h2t, resolve_iter_dict
 from .types import ErrorModel, ObsRecord
 from .context import Context
 
@@ -107,7 +107,7 @@ class ObsInfo:
             err_opts = vrec['err']
             err = ErrorModel(
                 type=err_opts.get('type', 'normal'),
-                std=err_opts.get('std', 1.),
+                std=resolve_iter_dict(err_opts.get('std', 1.), c.iter, c.config.niter),
                 hcorr=err_opts.get('hcorr',0.),
                 vcorr=err_opts.get('vcorr',0.),
                 tcorr=err_opts.get('tcorr',0.),
@@ -127,7 +127,7 @@ class ObsInfo:
                 time=time,
                 dt=0,
                 err=err,
-                hroi=vrec['hroi'] * c.config.localize_scale_fac[c.iter],
+                hroi=resolve_iter_dict(vrec['hroi'], c.iter, c.config.niter),
                 vroi=vrec['vroi'],
                 troi=vrec['troi'],
                 impact_on_variable=impact_on_variable,

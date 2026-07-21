@@ -554,8 +554,16 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
 
        impact is tapered to zero.
 
-       In the same units as grid coordinates
-     - inf, 10, etc.
+       In the same units as grid coordinates.
+
+       Can be a plain scalar (used at every outer-loop
+       iteration), or a dict keyed ``iter0``, ``iter1``, ...,
+       ``iter{niter-1}`` (optionally + ``default``) for an
+       explicit per-iteration override -- see ``niter``/``iter``
+       under "Multiscale approach configuration" below.
+     - inf, 10, etc.;
+
+       {iter0: 300, iter1: 100, default: 100}
    * - ``vroi``
      - Vertical localization distance,
 
@@ -587,7 +595,11 @@ The ``obs_def`` entry is a list, each item is a dictionary that defines one obse
      - 'normal'
    * - ``std``
      - Observation error standard deviation.
-     - 1.0
+
+       Can be a plain scalar (used at every outer-loop iteration),
+       or a per-iteration ``iterN`` dict, same convention as
+       ``hroi`` above.
+     - 1.0; {iter0: 0.5, iter1: 0.2}
    * - ``hcorr``
      - Horizontal correlation length in observation error.
      - 0
@@ -860,12 +872,18 @@ Multiscale approach configuration:
      - Description
      - Example
    * - ``niter``
-     - Number of outer-loop iterations, e.g. number of 
-     
-       scale components in a multiscale approach.
+     - Number of outer-loop iterations, e.g. number of
+
+       scale components in a multiscale approach. Defined near the
+
+       top of the config file since values further down (e.g.
+
+       ``obs_def``'s ``hroi`` and ``err.std``, above) may reference
+
+       it via an ``iterN``-keyed per-iteration override.
      - 1
    * - ``iter``
-     - Current iteration number
+     - Current iteration number (given in runtime context)
      - 0
    * - ``resolution_level``
      - Resolution level (n) for the analysis grid.
@@ -875,16 +893,14 @@ Multiscale approach configuration:
        where ``dx`` is the grid spacing defined in ``grid_def``.
      - [0]
    * - ``character_length``
-     - Characteristic length (in grid coordinate units) 
-     
-       for each scale (large to small).
+     - Characteristic length (in grid coordinate units)
+
+       for each scale (large to small). Needs the whole list at
+
+       once to build the cross-scale filter bank, so this is not
+
+       a candidate for the ``iterN``-dict per-iteration override.
      - [16]
-   * - ``localize_scale_fac``
-     - Scale factor for localization distances.
-     - [1]
-   * - ``obs_err_scale_fac``
-     - Scale factor for observation error inflation.
-     - [1]
 
 Diagnostic methods
 ^^^^^^^^^^^^^^^^^^
