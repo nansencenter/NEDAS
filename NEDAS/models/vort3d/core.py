@@ -201,8 +201,12 @@ def surface_drag_coef(Vb):
     return (1.024 + 0.05366*R_F*np.minimum(Vb, V_cd_cap)) * 1e-3
 
 
-def random_flow(nx, ny, dx, amp, power_law, seed=None):
-    """Random background wind field with a prescribed KE power-law spectrum."""
+def random_pressure_field(nx, ny, dx, power_law, seed=None):
+    """Unit-std random pressure perturbation field with a prescribed spectral
+    slope -- paired with a geostrophic-wind derivation (Core.__init__) so the
+    background flow starts in mass/geostrophic balance, unlike generating
+    wind directly (the previous random_flow(), which left pstar with no
+    matching perturbation at all -- see vort3d.md dev log, 2026-07-21)."""
     rng = np.random.default_rng(seed)
     noise_hat = np.fft.fft2(rng.standard_normal((ny, nx)))
     ki = np.fft.fftfreq(nx, d=dx) * 2*np.pi
@@ -210,14 +214,10 @@ def random_flow(nx, ny, dx, amp, power_law, seed=None):
     KI, KJ = np.meshgrid(ki, kj)
     K = np.sqrt(KI**2 + KJ**2)
     K[0, 0] = 1.0
-    psi_hat = noise_hat * K**((power_law - 2) / 2.0)
-    psi_hat[0, 0] = 0.0
-    psi = np.real(np.fft.ifft2(psi_hat))
-    u = -(np.roll(psi, -1, axis=0) - np.roll(psi, 1, axis=0)) / (2*dx)
-    v = (np.roll(psi, -1, axis=1) - np.roll(psi, 1, axis=1)) / (2*dx)
-    u = amp * (u - u.mean()) / u.std()
-    v = amp * (v - v.mean()) / v.std()
-    return u, v
+    p_hat = noise_hat * K**((power_law - 2) / 2.0)
+    p_hat[0, 0] = 0.0
+    p = np.real(np.fft.ifft2(p_hat))
+    return (p - p.mean()) / p.std()
 
 
 class Core:
@@ -304,33 +304,57 @@ class Core:
 
         self.pstar = np.full((ny, nx), SOUNDING_P_FAR - p_top)
 
-        # initial vortex: same tangential wind at each layer (paper: "the
-        # initial axisymmetric vortex is barotropic")
+        # shared reference Coriolis parameter / boundary-layer density, used below both for
+        # the vortex's own gradient-wind pstar and the background flow's geostrophic pstar
+        f0_center = 2 * 7.292e-5 * np.sin(np.deg2rad(20.))
+        p_b = self.sigma_mid[-1]*PSTAR_FAR + p_top
+        T_b = sounding_T(self.sigma_mid[-1])
+        rho0 = p_b / (R * T_b)
+
+        # initial vortex: the paper's own vortex is barotropic (same tangential
+        # wind at every layer), but a strictly height-uniform wind is inconsistent
+        # with thermal wind balance for any vortex with a warm core aloft --
+        # deviation from the paper: taper vtan with height, full Vmax at the
+        # boundary layer decaying upward (sigma-proportional), a simple
+        # documented simplification not paired with a matching temperature
+        # perturbation (see vort3d.md dev log, 2026-07-21).
         vtan = smith_vortex(self.rr, Vmax, Rmw)
         theta_ang = np.arctan2(self.yy, self.xx)
+        taper = self.sigma_mid / self.sigma_mid[-1]
         for k in range(n):
-            self.u[k] = -vtan * np.sin(theta_ang)
-            self.v[k] = vtan * np.cos(theta_ang)
-
-        if Vbg > 0:
-            u_bg, v_bg = random_flow(nx, ny, dx, Vbg, Vslope, seed=bg_seed)
-            for k in range(n):
-                self.u[k] += u_bg
-                self.v[k] += v_bg
-            self.v[:, 0, :] = 0.0
-            self.v[:, -1, :] = 0.0
+            self.u[k] = -taper[k] * vtan * np.sin(theta_ang)
+            self.v[k] = taper[k] * vtan * np.cos(theta_ang)
 
         # radial pressure perturbation via simplified gradient-wind balance,
         # using the boundary layer's (last layer's) sounding density
         r1d = np.linspace(0, self.rr.max(), 2000)
         v1d = smith_vortex(r1d, Vmax, Rmw)
-        f0_center = 2 * 7.292e-5 * np.sin(np.deg2rad(20.))
-        p_b = self.sigma_mid[-1]*PSTAR_FAR + p_top
-        T_b = sounding_T(self.sigma_mid[-1])
-        rho0 = p_b / (R * T_b)
         pstar_pert_1d = gradient_wind_balance_pstar(r1d, v1d, f0_center, rho0)
         pstar_pert = np.interp(self.rr.ravel(), r1d, pstar_pert_1d).reshape(self.rr.shape)
         self.pstar += pstar_pert
+
+        if Vbg > 0:
+            # generate as a geostrophically-balanced (pressure-derived) field, not
+            # independent wind, so the background flow starts in mass/geostrophic balance --
+            # deriving u,v directly (the previous approach) left pstar with no matching
+            # perturbation at all, exciting a persistent gravity-wave adjustment (a "pstar
+            # sweep") once integration started (see vort3d.md dev log, 2026-07-21).
+            pstar_pert_bg = random_pressure_field(nx, ny, dx, Vslope, seed=bg_seed)
+            u_bg = -self.ddy_interior(pstar_pert_bg) / (f0_center * rho0)
+            v_bg = self.ddx(pstar_pert_bg) / (f0_center * rho0)
+            # the pressure amplitude needed to hit the target Vbg (rms wind amplitude) isn't
+            # known a priori for a general power-law spectrum -- generate at unit pressure-std
+            # then rescale wind and pressure together (a linear relation, so this preserves
+            # geostrophic balance) to hit it.
+            wind_rms = np.sqrt(np.mean(u_bg**2 + v_bg**2))
+            scale = Vbg / wind_rms if wind_rms > 0 else 0.0
+            u_bg, v_bg, pstar_pert_bg = u_bg*scale, v_bg*scale, pstar_pert_bg*scale
+            for k in range(n):
+                self.u[k] += u_bg
+                self.v[k] += v_bg
+            self.pstar += pstar_pert_bg
+            self.v[:, 0, :] = 0.0
+            self.v[:, -1, :] = 0.0
 
         self._prev_tendencies = []  # for Adams-Bashforth
 
