@@ -52,15 +52,28 @@ def unpack_state(state: dict, core: Core) -> None:
 
 
 def initial_condition(nx, ny, dx, nz=2, beta=0.0, moist=True, convection_scheme='ooyama',
-                       Vbg=0.0, Vslope=-3, bg_seed=None, Vmax=15.0, Rmw=120.0e3) -> dict:
+                       Vbg=0.0, Vslope=-3, bg_seed=None, Vmax=15.0, Rmw=120.0e3,
+                       vortex_x0=0.0, vortex_y0=-700.0e3, u_bkg=0.0, v_bkg=0.0,
+                       f0=2*7.292e-5*np.sin(np.deg2rad(20.)),
+                       theta_offset=0.0, q_offset=0.0) -> dict:
     """Generate a vort3d initial condition (Smith et al. 1990 vortex +
     Jordan 1957 sounding, per ZSU2001) -- reuses Core's own __init__,
     which already does this, then flattens the result. Vmax/Rmw set the
     initial vortex's peak tangential wind / radius of maximum wind
-    (smith_vortex's own defaults: 15.0 m/s, 120e3 m)."""
+    (smith_vortex's own defaults: 15.0 m/s, 120e3 m). vortex_x0/vortex_y0
+    set the vortex center relative to the domain center (default: displaced
+    toward the southern boundary, see Core's own docstring) -- pass
+    different values per ensemble member to perturb the initial position.
+    u_bkg/v_bkg add a uniform (spatially-constant) steering flow on top of
+    Vbg's turbulent background flow (see Core's own docstring for why this
+    is a distinct mechanism). f0 is the reference Coriolis parameter (default:
+    20N, matching the paper). theta_offset/q_offset add a domain-uniform
+    perturbation to the boundary layer only (see Core's own docstring)."""
     core = Core(nx=nx, ny=ny, dx=dx, nz=nz, beta=beta, moist=moist,
                 convection_scheme=convection_scheme, Vbg=Vbg, Vslope=Vslope, bg_seed=bg_seed,
-                Vmax=Vmax, Rmw=Rmw)
+                Vmax=Vmax, Rmw=Rmw, vortex_x0=vortex_x0, vortex_y0=vortex_y0,
+                u_bkg=u_bkg, v_bkg=v_bkg, f0=f0,
+                theta_offset=theta_offset, q_offset=q_offset)
     return pack_state(core)
 
 

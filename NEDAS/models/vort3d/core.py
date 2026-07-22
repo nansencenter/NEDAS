@@ -256,6 +256,48 @@ class Core:
             (smith_vortex's own default: 15.0).
         Rmw (float): initial vortex radius of maximum wind, m
             (smith_vortex's own default: 120e3).
+        vortex_x0, vortex_y0 (float): initial vortex center, m, relative to
+            the domain center (0,0) -- default places it away from the
+            domain center and toward the southern (negative-y) boundary
+            (vortex_y0=-700e3), giving the vortex room to drift poleward/
+            zonally over a long integration (observed beta-drift + Vbg
+            advection can otherwise run it into a wall if it starts
+            centered -- see vort3d.md dev log, 2026-07-22). Configurable
+            (rather than hardcoded to the domain center) so
+            generate_init_ensemble can perturb it per member, mirroring
+            vort2d's loc_sprd.
+        f0 (float): reference Coriolis parameter, /s, at beta=0 / y=0 (the
+            domain-center latitude) -- default 2*7.292e-5*sin(20 deg),
+            matching the paper's own fixed 20N assumption; beta then adds
+            the y-dependence on top of this reference value.
+        theta_offset, q_offset (float): domain-uniform (no horizontal
+            gradient) perturbation added ONLY to the boundary layer's
+            theta/q (K, kg/kg) -- all free-atmosphere layers, including the
+            top level, are left exactly at the reference sounding. Meant as
+            a simple ensemble IC-spread mechanism (domain-averaged
+            boundary-layer thermodynamic uncertainty), analogous to
+            vortex_x0/vortex_y0's position spread -- see
+            Vort3DModel.generate_init_ensemble for where these get drawn
+            per member. No accompanying dynamical adjustment needed since a
+            spatially-uniform perturbation has zero horizontal gradient
+            (same reasoning as u_bkg/v_bkg needing no matching pressure
+            term).
+        u_bkg, v_bkg (float): uniform (spatially-constant) steering flow,
+            m/s, added on top of Vbg's turbulent background flow -- the
+            standard simple "steering flow" scheme from the beta-drift/
+            beta-and-advection TC-motion literature (a constant vector
+            wind, distinct from Vbg's random field). Unlike Vbg, a uniform
+            flow has zero gradients, so it's invariant under the model's
+            (gradient-based) diffusion and doesn't get sheared apart by the
+            vortex -- it actually persists and steers, which a domain-scale
+            random field on a vortex-dominated small domain was observed
+            not to (see vort3d.md dev log, 2026-07-22). No matching
+            pressure perturbation is added: exactly balanced on an f-plane
+            (both sides of geostrophic balance are zero for a spatially
+            uniform field); for beta!=0 there's a small residual imbalance
+            from f varying with y, neglected here (documented
+            simplification, negligible next to the model's other
+            approximations).
 
     Attributes set after construction: `u`, `v`, `theta`, `q` (each shape
     `(nz+1, ny, nx)`), `pstar` (shape `(ny, nx)`, column mass p*=ps-p_top).
@@ -264,7 +306,9 @@ class Core:
 
     def __init__(self, nx=100, ny=100, dx=20e3, nz=2, Vbg=0.0, Vslope=-3, bg_seed=None,
                  beta=0.0, moist=True, convection_scheme='ooyama', sigma_boundary_top=8/9,
-                 Vmax=15.0, Rmw=120.0e3):
+                 Vmax=15.0, Rmw=120.0e3, vortex_x0=0.0, vortex_y0=-700.0e3,
+                 u_bkg=0.0, v_bkg=0.0, f0=2*7.292e-5*np.sin(np.deg2rad(20.)),
+                 theta_offset=0.0, q_offset=0.0):
         if moist and convection_scheme == 'ooyama' and nz != 2:
             raise ValueError(
                 "convection_scheme='ooyama' is only supported for nz=2 -- eqs. "
@@ -282,9 +326,10 @@ class Core:
         self.moist = moist
         self.convection_scheme = convection_scheme
         self.xx, self.yy = make_grid(nx, ny, dx)
-        self.rr = np.hypot(self.xx, self.yy)
+        self.vortex_x0, self.vortex_y0 = vortex_x0, vortex_y0
+        self.rr = np.hypot(self.xx - vortex_x0, self.yy - vortex_y0)
 
-        self.f = (2 * 7.292e-5 * np.sin(np.deg2rad(20.))) + beta * self.yy
+        self.f = f0 + beta * self.yy
 
         self.sigma_mid, self.sigma_int = make_sigma_levels(nz, sigma_boundary_top)
         # half-level (interface) sigmas, including top (0) and surface (1):
@@ -302,11 +347,18 @@ class Core:
             self.theta[k] = theta_from_T_p(sounding_T(self.sigma_mid[k]), p_k)
             self.q[k] = sounding_q(self.sigma_mid[k])
 
+        # domain-uniform boundary-layer perturbation (ensemble IC spread) -- only the
+        # boundary layer (last index), free-atmosphere layers (incl. the top) untouched
+        if theta_offset != 0.0:
+            self.theta[-1] = self.theta[-1] + theta_offset
+        if q_offset != 0.0:
+            self.q[-1] = np.maximum(self.q[-1] + q_offset, 0.0)
+
         self.pstar = np.full((ny, nx), SOUNDING_P_FAR - p_top)
 
         # shared reference Coriolis parameter / boundary-layer density, used below both for
         # the vortex's own gradient-wind pstar and the background flow's geostrophic pstar
-        f0_center = 2 * 7.292e-5 * np.sin(np.deg2rad(20.))
+        f0_center = f0
         p_b = self.sigma_mid[-1]*PSTAR_FAR + p_top
         T_b = sounding_T(self.sigma_mid[-1])
         rho0 = p_b / (R * T_b)
@@ -319,7 +371,7 @@ class Core:
         # documented simplification not paired with a matching temperature
         # perturbation (see vort3d.md dev log, 2026-07-21).
         vtan = smith_vortex(self.rr, Vmax, Rmw)
-        theta_ang = np.arctan2(self.yy, self.xx)
+        theta_ang = np.arctan2(self.yy - vortex_y0, self.xx - vortex_x0)
         taper = self.sigma_mid / self.sigma_mid[-1]
         for k in range(n):
             self.u[k] = -taper[k] * vtan * np.sin(theta_ang)
@@ -353,8 +405,20 @@ class Core:
                 self.u[k] += u_bg
                 self.v[k] += v_bg
             self.pstar += pstar_pert_bg
-            self.v[:, 0, :] = 0.0
-            self.v[:, -1, :] = 0.0
+
+        if u_bkg != 0.0 or v_bkg != 0.0:
+            # uniform steering flow, see class docstring -- no matching pressure
+            # perturbation (trivially balanced for beta=0, see docstring)
+            for k in range(n):
+                self.u[k] += u_bkg
+                self.v[k] += v_bkg
+
+        # rigid-wall BC: v=0 at the y-edges, enforced unconditionally (previously only
+        # applied inside the Vbg>0 branch, leaving it unenforced for Vbg=0 cases at t=0 even
+        # though step() re-enforces it every subsequent step -- incidental fix, harmless
+        # since it only zeroes what should already be zero there for a well-behaved case).
+        self.v[:, 0, :] = 0.0
+        self.v[:, -1, :] = 0.0
 
         self._prev_tendencies = []  # for Adams-Bashforth
 

@@ -72,6 +72,48 @@ class Vort3DModel(Model[RegularGrid]):
             (smith_vortex's own default: 15.0)
         Rmw (float): initial vortex radius of maximum wind, m
             (smith_vortex's own default: 120e3)
+        vortex_x0, vortex_y0 (float): initial vortex center, m, relative to
+            the domain center (Core's own default: displaced toward the
+            southern boundary, vortex_y0=-700e3, to give the vortex room to
+            drift over a long integration -- see vort3d.md dev log,
+            2026-07-22). This is the truth/reference center; ensemble
+            members perturb around it (see pos_sprd).
+        pos_sprd (float): initial vortex position spread, m -- each
+            ensemble member's vortex center is drawn from a Gaussian with
+            std=pos_sprd around (vortex_x0, vortex_y0), matching vort2d's
+            loc_sprd exactly (np.random.normal(0, loc_sprd), NOT a uniform
+            draw), seeded per member the same way as the background flow
+            (vort2d itself reseeds from system entropy every call instead,
+            which vort3d deliberately does not do -- reproducibility across
+            runs is needed for the model-comparison work this was built
+            for). The truth run always uses the exact configured center
+            (pos_sprd=0), matching vort2d's convention.
+        u_bkg, v_bkg (float): uniform (spatially-constant) steering flow,
+            m/s, added on top of Vbg's turbulent background flow -- see
+            Core's own docstring for why this is a distinct mechanism from
+            Vbg (persists/steers rather than getting sheared apart by the
+            vortex).
+        f0 (float): reference Coriolis parameter, /s, at beta=0/y=0 (default:
+            20N, matching the paper's own fixed-latitude assumption).
+        theta_sprd, q_sprd (float): ensemble spread (Gaussian std, K and
+            kg/kg) for a domain-uniform boundary-layer-only theta/q
+            perturbation per member -- same per-member-seeded Gaussian
+            mechanism as pos_sprd, applied to Core's theta_offset/q_offset
+            (see Core's own docstring for why only the boundary layer, and
+            why no dynamical adjustment is needed).
+        Vmax_sprd, Rmw_sprd (float): ensemble spread (Gaussian std, m/s and
+            m) for the initial vortex's own peak wind / radius of maximum
+            wind, drawn the same per-member-seeded way as pos_sprd; floored
+            (Vmax >= 1 m/s, Rmw >= 10 km) to avoid a degenerate/negative
+            vortex from an unlucky large negative draw.
+
+        All spread parameters (pos_sprd, theta_sprd, q_sprd, Vmax_sprd,
+        Rmw_sprd) draw from ONE shared per-member RNG stream (see
+        generate_init_ensemble/_perturb_ic), not independently re-seeded
+        streams -- re-seeding fresh for each quantity would make them draw
+        the same underlying random sample (just rescaled), spuriously
+        correlating position/thermodynamic/intensity perturbations across
+        the ensemble instead of sampling them independently.
     """
     nx: int
     ny: int
@@ -87,6 +129,16 @@ class Vort3DModel(Model[RegularGrid]):
     bg_seed: int | None
     Vmax: float
     Rmw: float
+    vortex_x0: float
+    vortex_y0: float
+    pos_sprd: float
+    u_bkg: float
+    v_bkg: float
+    f0: float
+    theta_sprd: float
+    q_sprd: float
+    Vmax_sprd: float
+    Rmw_sprd: float
     memory: dict = {}
 
     def __init__(self, **kwargs):
@@ -196,12 +248,51 @@ class Vort3DModel(Model[RegularGrid]):
             p = self._layer_pressure[self.layer_names[int(kwargs['k'])]]
         return np.full(self.grid.x.shape, p)
 
-    def generate_initial_condition(self):
+    def _perturb_ic(self, bg_seed, pos_sprd, theta_sprd, q_sprd, Vmax_sprd, Rmw_sprd):
+        """Draw per-member IC perturbations from ONE shared RNG stream (seeded per
+        member, same as the background flow) -- sharing one stream, rather than
+        re-seeding fresh for each quantity, avoids spuriously correlating the
+        different perturbed quantities (see class docstring)."""
+        vortex_x0, vortex_y0 = self.vortex_x0, self.vortex_y0
+        theta_offset, q_offset = 0.0, 0.0
+        Vmax, Rmw = self.Vmax, self.Rmw
+        if any(s > 0 for s in (pos_sprd, theta_sprd, q_sprd, Vmax_sprd, Rmw_sprd)):
+            rng = np.random.default_rng(bg_seed)
+            if pos_sprd > 0:
+                vortex_x0 = vortex_x0 + rng.normal(0, pos_sprd)
+                vortex_y0 = vortex_y0 + rng.normal(0, pos_sprd)
+            if theta_sprd > 0:
+                theta_offset = rng.normal(0, theta_sprd)
+            if q_sprd > 0:
+                q_offset = rng.normal(0, q_sprd)
+            if Vmax_sprd > 0:
+                Vmax = max(Vmax + rng.normal(0, Vmax_sprd), 1.0)
+            if Rmw_sprd > 0:
+                Rmw = max(Rmw + rng.normal(0, Rmw_sprd), 10.0e3)
+        return vortex_x0, vortex_y0, theta_offset, q_offset, Vmax, Rmw
+
+    def generate_initial_condition(self, pos_sprd=None, theta_sprd=None, q_sprd=None,
+                                    Vmax_sprd=None, Rmw_sprd=None):
         bg_seed = self.bg_seed
+        if pos_sprd is None:
+            pos_sprd = self.pos_sprd
+        if theta_sprd is None:
+            theta_sprd = self.theta_sprd
+        if q_sprd is None:
+            q_sprd = self.q_sprd
+        if Vmax_sprd is None:
+            Vmax_sprd = self.Vmax_sprd
+        if Rmw_sprd is None:
+            Rmw_sprd = self.Rmw_sprd
+        vortex_x0, vortex_y0, theta_offset, q_offset, Vmax, Rmw = self._perturb_ic(
+            bg_seed, pos_sprd, theta_sprd, q_sprd, Vmax_sprd, Rmw_sprd)
         return initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
                                   moist=self.moist, convection_scheme=self.convection_scheme,
                                   Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed,
-                                  Vmax=self.Vmax, Rmw=self.Rmw)
+                                  Vmax=Vmax, Rmw=Rmw,
+                                  vortex_x0=vortex_x0, vortex_y0=vortex_y0,
+                                  u_bkg=self.u_bkg, v_bkg=self.v_bkg, f0=self.f0,
+                                  theta_offset=theta_offset, q_offset=q_offset)
 
     def _read_full_state(self, **kwargs) -> dict:
         """Read all layer/pstar fields at kwargs['time'] into one flat
@@ -277,7 +368,11 @@ class Vort3DModel(Model[RegularGrid]):
             opts = {**kwargs, 'path': self.truth_dir, 'time': t}
 
             if t == self.c.config.time_start:
-                state = self.generate_initial_condition()
+                # truth uses the exact configured vortex/thermodynamic state, no
+                # ensemble spread applied (all sprd params 0), same convention as
+                # vort2d's loc_sprd
+                state = self.generate_initial_condition(
+                    pos_sprd=0, theta_sprd=0, q_sprd=0, Vmax_sprd=0, Rmw_sprd=0)
                 if debug:
                     print(f"generating initial condition in {self.truth_dir}")
                 self._write_full_state(state, **opts)
@@ -300,8 +395,19 @@ class Vort3DModel(Model[RegularGrid]):
         if debug:
             print(f"generating initial condition for member {member+1 if member is not None else 1}")
 
+        # perturb the initial vortex position/intensity/size and boundary-layer
+        # thermodynamics per member (mirrors vort2d's loc_sprd) -- previously the only
+        # IC-spread source was the background flow's own per-member realization, with
+        # the vortex itself always exactly the same across members (see vort3d.md dev
+        # log, 2026-07-22)
+        vortex_x0, vortex_y0, theta_offset, q_offset, Vmax, Rmw = self._perturb_ic(
+            bg_seed, self.pos_sprd, self.theta_sprd, self.q_sprd, self.Vmax_sprd, self.Rmw_sprd)
+
         state = initial_condition(self.nx, self.ny, self.dx, nz=self.nz, beta=self.beta,
                                    moist=self.moist, convection_scheme=self.convection_scheme,
                                    Vbg=self.Vbg, Vslope=self.Vslope, bg_seed=bg_seed,
-                                   Vmax=self.Vmax, Rmw=self.Rmw)
+                                   Vmax=Vmax, Rmw=Rmw,
+                                   vortex_x0=vortex_x0, vortex_y0=vortex_y0,
+                                   u_bkg=self.u_bkg, v_bkg=self.v_bkg, f0=self.f0,
+                                   theta_offset=theta_offset, q_offset=q_offset)
         self._write_full_state(state, **{**kwargs, 'path': self.ens_init_dir})

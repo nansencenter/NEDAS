@@ -22,6 +22,9 @@ restart_dt: 1  # model restart output interval in hours
 beta: 0.0   # Coriolis beta parameter, df/dy, /m/s (0 = pure f-plane, matching
             # the paper's own experiments; e.g. 2.3e-11 for beta-drift near 20N)
 
+f0: 4.98802e-05  # reference Coriolis parameter, /s, at beta=0/y=0 -- default is
+                 # 2*7.292e-5*sin(20 deg), the paper's own fixed-latitude assumption
+
 moist: true  # if false, run the dry dynamical core only (no surface fluxes,
              # radiative cooling, condensation, or convection)
 
@@ -40,3 +43,27 @@ bg_seed: null  # RNG seed for the background flow; null uses the ensemble
 
 Vmax: 15.0     # initial vortex peak tangential wind speed, m/s (smith_vortex's own default)
 Rmw: 120000.0  # initial vortex radius of maximum wind, m (smith_vortex's own default)
+
+vortex_x0: 0.0        # initial (truth) vortex center, m, relative to the domain center
+vortex_y0: -700000.0  # default displaces it toward the southern boundary, giving it room
+                      # to drift poleward/zonally over a long integration
+pos_sprd: 100000.0    # ensemble initial vortex position spread, m -- each member's
+                      # center is drawn from a Gaussian with this std around
+                      # (vortex_x0,vortex_y0), matching vort2d's loc_sprd exactly (NOT a
+                      # uniform draw); truth always uses the exact configured center
+                      # (pos_sprd=0 override)
+
+u_bkg: 0.0  # uniform (spatially-constant) steering flow, m/s, added on top of Vbg's
+v_bkg: 0.0  # turbulent background flow -- default off (0); see core.py's Core docstring
+            # for why a uniform flow is a distinct mechanism from Vbg (persists/steers
+            # rather than getting sheared apart by the vortex)
+
+theta_sprd: 0.0  # ensemble spread (Gaussian std, K), domain-uniform boundary-layer-only
+                 # theta perturbation per member -- default off (0); free-atmosphere
+                 # layers (incl. the top) are never perturbed regardless
+q_sprd: 0.0      # same, for boundary-layer q, kg/kg -- default off (0)
+
+Vmax_sprd: 0.0  # ensemble spread (Gaussian std, m/s) for the initial vortex's own
+                # Vmax per member -- default off (0); floored at 1 m/s
+Rmw_sprd: 0.0   # ensemble spread (Gaussian std, m) for the initial vortex's own Rmw
+                # per member -- default off (0); floored at 10 km
