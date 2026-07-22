@@ -64,6 +64,16 @@ class Inflation(ABC):
                  'vara': 0.0,  # obs_post (analysis) ensemble variances
                 }
 
+        # Whether obs_post is available, agreed on once across all ranks in comm_mem.
+        # c.obs.obs_post is populated all-or-nothing per rank (see
+        # Assimilator.transpose_to_field_complete), so different ranks in the same
+        # comm_mem group can locally disagree on its truthiness. Gating the
+        # allreduce calls below on each rank's own local truthiness (as before) lets
+        # ranks disagree on how many collective calls to make, which deadlocks MPI
+        # instead of raising an error -- so decide it once, globally, and branch on
+        # that everywhere instead.
+        have_obs_post = c.comm_mem.allreduce(1 if c.obs.obs_post else 0) > 0
+
         # go through each obs record
         for r, obs_rec_id in enumerate(c.obs.obs_rec_list[c.pid_rec]):
             obs_rec = c.obs.info.records[obs_rec_id]
@@ -86,11 +96,13 @@ class Inflation(ABC):
             mean_obs_prior = sum_obs_prior / c.nens
             mean_obs_post = None
 
-            if c.obs.obs_post:
-                # sum over all obs_prior_seq locally stored on pid
+            if have_obs_post:
+                # sum over all obs_prior_seq locally stored on pid (zero if this
+                # rank locally has no obs_post, so it still contributes to the
+                # collective and stays in step with the other ranks)
                 sum_obs_post_pid = np.zeros(shape)
                 for mem_id in c.mem_list[c.pid_mem]:
-                    sum_obs_post_pid += c.obs.obs_post[mem_id, obs_rec_id]
+                    sum_obs_post_pid += c.obs.obs_post.get((mem_id, obs_rec_id), np.zeros(shape))
                 # sum over all obs_prior_seq on differnet pids to get the total sum
                 sum_obs_post = c.comm_mem.allreduce(sum_obs_post_pid)
                 mean_obs_post = sum_obs_post / c.nens
@@ -103,10 +115,11 @@ class Inflation(ABC):
             variance_obs_prior = pert2_obs_prior / (c.nens - 1)
             variance_obs_post = None
 
-            if c.obs.obs_post:
+            if have_obs_post:
                 pert2_obs_post_pid = np.zeros(shape)
                 for mem_id in c.mem_list[c.pid_mem]:
-                    pert2_obs_post_pid += (c.obs.obs_post[mem_id, obs_rec_id] - mean_obs_post)**2
+                    if (mem_id, obs_rec_id) in c.obs.obs_post:
+                        pert2_obs_post_pid += (c.obs.obs_post[mem_id, obs_rec_id] - mean_obs_post)**2
                 pert2_obs_post = c.comm_mem.allreduce(pert2_obs_post_pid)
                 variance_obs_post = pert2_obs_post / (c.nens - 1)
 
@@ -115,7 +128,7 @@ class Inflation(ABC):
             stats['omb2'] += np.sum((obs_value - mean_obs_prior)**2)
             stats['varo'] += np.sum(c.obs.obs_seq[obs_rec_id]['err_std']**2) * nv
             stats['varb'] += np.sum(variance_obs_prior)
-            if c.obs.obs_post and variance_obs_post is not None:
+            if have_obs_post and variance_obs_post is not None:
                 stats['amb2'] += np.sum((mean_obs_post - mean_obs_prior)**2)
                 stats['omaamb'] += np.sum((obs_value - mean_obs_post)*(mean_obs_post - mean_obs_prior))
                 stats['vara'] += np.sum(variance_obs_post)
