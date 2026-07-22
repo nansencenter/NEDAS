@@ -233,6 +233,64 @@ class Scheme(ABC):
                            task_name: str,
                            func: Callable,
                            **opts) -> None:
+        """
+        Dispatch func(...) once per ensemble member, according to strategy:
+
+        - 'batch': func handles the whole ensemble itself in one call
+          (see _run_ensemble_tasks_batch).
+        - 'scheduler', online_mode: each rank runs func directly for the
+          members it owns (c.mem_list), no external job is submitted
+          (see _run_ensemble_tasks_online).
+        - 'scheduler', offline mode: each member is submitted as a job
+          managed by a local OfflineScheduler (see
+          _run_ensemble_tasks_offline_scheduler), whose worker-pool size
+          (nworker) depends on opts['nproc'] (nproc_per_task, the size of
+          each member's job) and opts['total_nproc'] (the budget nworker is
+          carved out of) via one of two branches:
+
+          1. nproc_per_task > 1, jsub is an HPCJobSubmitter, and we are not
+             already inside a job allocation: each member becomes its own
+             separate HPC job (submitted via sbatch); nproc_per_task is the
+             *cluster* job size, not a local CPU count, so total_nproc is
+             never consulted here -- nworker is opts['max_concurrent']
+             (default nens), and the HPC scheduler manages actual
+             concurrency once the jobs are queued.
+
+          2. every other case: nworker = total_nproc // nproc_per_task,
+             sized as a *local* multiprocessing.ProcessPoolExecutor pool
+             (see OfflineScheduler) on the driving process's own node. This
+             branch is reached three ways, and total_nproc means something
+             different (but is always a real, physical concurrency bound)
+             in each:
+               a. no HPC scheduler at all (LocalJobSubmitter/MacOSJobSubmitter)
+                  -- nworker literal local subprocesses each use
+                  nproc_per_task real local cores, so total_nproc must be
+                  the real local core budget.
+               b. nproc_per_task > 1 but already inside a job allocation --
+                  each member runs as a job *step* (srun -n nproc_per_task,
+                  see HPCJobSubmitter.run_job_as_step) sharing the current
+                  allocation's granted resources, so total_nproc must be
+                  that allocation's real size (nworker * nproc_per_task must
+                  not exceed what was actually granted).
+               c. nproc_per_task == 1 and HPC-but-not-yet-in-an-allocation
+                  (e.g. a login-node driver submitting single-proc member
+                  jobs before entering any allocation) -- each worker here
+                  is lightweight (just sbatch + squeue polling; the real
+                  compute happens in the separately-scheduled job), so
+                  total_nproc functions as a submission-concurrency
+                  throttle rather than a core count. nproc_util would also
+                  be defensible here, but nproc is never wrong -- it just
+                  makes the local orchestration pool bigger than strictly
+                  necessary, which SLURM itself still throttles downstream.
+
+          Because of (1)/(2a)/(2b), total_nproc should be the full
+          production nproc budget (paired with nproc_per_run) for
+          compute-heavy per-member steps like prepare_init_ensemble and
+          ensemble_forecast, not nproc_util (which is for the deliberately
+          separate, often smaller, nproc_per_util utility-task budget used
+          by preprocess/postprocess) -- see FilterAnalysisScheme's calls to
+          get_task_opts for those steps, and issue #26.
+        """
         if strategy == 'batch':
             self._run_ensemble_tasks_batch(tag, task_name, func, **opts)
 

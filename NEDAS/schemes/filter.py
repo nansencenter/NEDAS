@@ -134,7 +134,14 @@ class FilterAnalysisScheme(Scheme):
             if self.validate_init_ensemble_data(model_name):
                 self.c.message = "all initial ensemble states ready"
                 continue
-            opts = self.get_task_opts('prepare_init_ensemble', model_name, nproc=model.nproc_per_run)
+            # total_nproc must be the full nproc budget here, not the default nproc_util
+            # (get_task_opts falls back to nproc_util because prepare_init_ensemble doesn't
+            # itself run under mpi -- steps_need_mpi is False -- but the worker pool it sizes
+            # runs per-member tasks at nproc_per_run, the same pairing ensemble_forecast uses,
+            # not the nproc_per_util utility-task pairing preprocess/postprocess use). Leaving
+            # it at the nproc_util default silently caps concurrency to that (often much
+            # smaller) budget, so members ran one at a time instead of in parallel.
+            opts = self.get_task_opts('prepare_init_ensemble', model_name, nproc=model.nproc_per_run, total_nproc=self.config.nproc)
             self.c.logger(f'Generate {model_name} init ensemble')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'init_ens_{model_name}', model.generate_init_ensemble, **opts)
             model.save_memory('current', self.c.config.time_start)
 
@@ -187,7 +194,9 @@ class FilterAnalysisScheme(Scheme):
         for model_name, model in self.c.models.items():
             if not self.online_mode:
                 self.c.fs.make_dir(self.c.fs.forecast_dir(self.c.time, model_name))
-            opts = self.get_task_opts('ensemble_forecast', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_run, walltime=model.walltime)
+            # same total_nproc override as prepare_init_ensemble above, and for the same reason:
+            # this step also sizes its worker pool against nproc_per_run, not nproc_per_util.
+            opts = self.get_task_opts('ensemble_forecast', model_name, restart_dir=self.get_restart_dir(model_name), nproc=model.nproc_per_run, walltime=model.walltime, total_nproc=self.config.nproc)
             self.c.logger(f'Run {model_name} forecast')(self.run_ensemble_tasks)(model.ens_run_strategy, 'current', f'forecast_{model_name}', model.run, **opts)
 
     def filter(self) -> None:
