@@ -773,11 +773,21 @@ The following parameters help NEDAS locate the correct analysis scheme and assim
      
        (applies increments to produce posterior state).
 
-       Alignment-based updators are selected via 
-       
+       Alignment-based updators are selected via
+
        ``updator_def.type`` and further configured
-       
+
        through ``updator_def.config_file``.
+
+       ``type`` can also be a per-iteration dict, same
+
+       convention as ``assimilator_def.type`` above --
+
+       if given as a plain string instead, the last outer-loop
+
+       iteration always finalizes with ``additive`` regardless
+
+       (historical behavior, preserved for old configs).
      - See ``NEDAS/config/default.yml``
    * - ``covariance_def``
      - Covariance configuration dictionary.
@@ -790,7 +800,13 @@ The following parameters help NEDAS locate the correct analysis scheme and assim
      - Description
      - Default
    * - ``type``
-     - Assimilator type.
+     - Assimilator type. Can also be a per-iteration dict keyed
+
+       ``iter0``, ``iter1``, ..., ``iter{niter-1}`` (optionally + ``default``),
+
+       e.g. ``{iter0: ETKF, iter1: TopazDEnKF}``, same convention as
+
+       ``hroi``/``err.std`` above.
      - 'ETKF'
    * - ``config_file``
      - Optional YAML configuration file for the assimilator.
@@ -799,6 +815,10 @@ The following parameters help NEDAS locate the correct analysis scheme and assim
      - None
 
 Covariance inflation parameters are stored in the ``inflation_def`` entry as a dictionary.
+``type``, ``adaptive`` and ``coef`` can each also be given as a per-iteration dict (same
+``iterN``/``default`` convention as ``hroi``/``err.std`` above) to vary inflation across
+outer-loop iterations. Note ``once_after_outer_loop`` (part of ``type``) is inherently a
+cross-iteration concept -- it only makes sense if every iteration agrees on it.
 
 .. list-table::
    :header-rows: 1
@@ -808,13 +828,15 @@ Covariance inflation parameters are stored in the ``inflation_def`` entry as a d
      - Example
    * - ``type``
      - Type of inflation (post/prior, multiplicative/RTPP).
-     - 'post,multiplicative'
+     - 'post,multiplicative';
+
+       {iter0: 'prior,multiplicative', iter1: 'post,multiplicative,once_after_outer_loop'}
    * - ``adaptive``
      - Whether to run an adaptive inflation scheme.
      - False
    * - ``coef``
      - Static inflation coefficient.
-     - 1.0
+     - 1.0; {iter0: 1.0, iter1: 1.2}
    * - ``post_infl_formula``
      - Only used by adaptive posterior ``multiplicative`` inflation. Which Desroziers-derived
        estimator to use for the inflation ratio: ``omaamb`` (default, :math:`\langle(a-b)(o-a)\rangle/\mathrm{vara}`)
@@ -841,8 +863,21 @@ each pointing to a dictionary that defines its localization function parameters.
      - 'gaspari_cohn'
 
 State and observation transforms can be configured with the ``transform_def`` entry,
-which is a list of dictionaries each defining one transform to apply
-(see :mod:`NEDAS.assim_tools.transforms`).
+which is a list of dictionaries each defining one transform to apply, chained together
+within one outer-loop iteration (see :mod:`NEDAS.assim_tools.transforms`). That chaining
+list is a different axis from per-iteration variation, so it is not reused for it;
+instead the WHOLE ``transform_def`` value can be wrapped in a per-iteration dict keyed
+``iter0``, ``iter1``, ..., ``default``, each mapping to its own ``transform_def``
+list/dict, e.g.::
+
+  transform_def:
+    iter0: [{type: scale_bandpass, character_length: 42.67}]
+    iter1: [{type: identity}]
+
+Detection here is by the *shape* of the dict's keys (all ``iterN``/``default``), not
+merely dict-vs-other, since ``transform_def``'s old format can already legitimately be a
+bare dict (a single transform spec, e.g. ``{type: identity}``) -- so the two forms cannot
+collide.
 
 .. list-table:: Breakdown of a ``transform_def`` entry.
    :header-rows: 1

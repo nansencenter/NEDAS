@@ -1,6 +1,7 @@
 from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
+from NEDAS.utils.conversion import resolve_iter_dict
 if TYPE_CHECKING:
     from NEDAS.core import Context, Assimilator
 
@@ -27,7 +28,9 @@ def get_assimilator(c: Context) -> Assimilator:
         raise ValueError("assimilator_def not found in Config")
     if 'type' not in c.config.assimilator_def.keys():
         raise KeyError("'type' needs to be specified in assimilator_def")
-    assimilator_type = c.config.assimilator_def['type']
+    # 'type' can be a plain string (used at every outer-loop iteration, unchanged
+    # behavior) or a per-iteration dict, e.g. {iter0: ETKF, iter1: TopazDEnKF}
+    assimilator_type = resolve_iter_dict(c.config.assimilator_def['type'], c.iter, c.config.niter)
 
     if assimilator_type not in registry:
         raise NotImplementedError(f"Assimilator type '{assimilator_type}' is not implemented")

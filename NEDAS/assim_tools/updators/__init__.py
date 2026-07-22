@@ -1,6 +1,7 @@
 from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
+from NEDAS.utils.conversion import resolve_iter_dict
 if TYPE_CHECKING:
     from NEDAS.core import Context, Updator
 
@@ -25,15 +26,21 @@ def get_updator(c: Context) -> Updator:
         c.config.updator_def = {}
     if 'type' not in c.config.updator_def.keys():
         c.config.updator_def['type'] = 'additive'
-    updator_type = c.config.updator_def['type'].lower()
+    type_value = c.config.updator_def['type']
+
+    assert c.config.niter is not None
+    if isinstance(type_value, dict):
+        # explicit per-iteration override, e.g. {iter0: alignment, iter1: alignment,
+        # iter2: additive} -- user is fully in control here, so no implicit
+        # last-iteration override below (that special case exists only to preserve
+        # old single-type configs' historical behavior, see the else branch).
+        updator_type = resolve_iter_dict(type_value, c.iter, c.config.niter).lower()
+    else:
+        updator_type = type_value.lower()
 
     if updator_type not in registry:
         raise NotImplementedError(f"updator type '{updator_type}' is not implemented")
 
-    # TODO: last scale component doesn't need alignment, find a better general logic
-    assert c.config.niter is not None
-    if c.iter == c.config.niter-1:
-        updator_type = 'additive'
     module = importlib.import_module('NEDAS.assim_tools.updators.'+updator_type)
     UpdatorClass = getattr(module, registry[updator_type])
 

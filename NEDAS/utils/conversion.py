@@ -301,6 +301,32 @@ def resolve_iter_dict(value, iter: int, niter: int):
         f"fallback (keys present: {list(value.keys())})"
     )
 
+def is_iter_keyed_dict(value) -> bool:
+    """
+    True if `value` is a non-empty dict whose keys are ALL either 'default' or match
+    'iterN' -- i.e. exactly the shape resolve_iter_dict() treats as a per-iteration
+    override, as opposed to an ordinary dict whose keys mean something else entirely.
+
+    Needed only where the OLD format for a config value can ALREADY legitimately be a
+    bare dict (e.g. transform_def's single-transform-spec form, `{'type': ...,
+    'decompose_obs': ...}`) -- there, resolve_iter_dict's own type-based detection
+    (dict vs. anything else) is not enough on its own, since a dict already has an
+    established meaning at that nesting level; this lets a caller check the dict's
+    *shape* first, before deciding whether to run it through resolve_iter_dict at all.
+    Most callers (hroi, err.std, assimilator_def/updator_def's 'type', inflation_def's
+    'type'/'coef'/'adaptive') never had a legitimate bare-dict old format, so they don't
+    need this -- resolve_iter_dict's detection is already unambiguous for them.
+
+    Args:
+        value: the config value to check (any type).
+
+    Returns:
+        bool: True if `value` should be treated as a per-iteration override dict.
+    """
+    return isinstance(value, dict) and bool(value) and all(
+        k == 'default' or _ITER_KEY_RE.fullmatch(k) for k in value
+    )
+
 def expand_scale_dict(value):
     """
     If value is a dict keyed ``'scale0'``, ``'scale1'``, ..., ``'scale{n-1}'``

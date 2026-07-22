@@ -1,0 +1,152 @@
+work_dir: qg-msa
+
+python_env:
+
+job_submit:
+  host: local
+  parallel_mode: mpi
+
+nproc: 5
+
+nens: 20
+run_forecast: True
+run_analysis: True
+run_diagnose: True
+debug: False
+interactive:
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-02T00:00:00Z
+time_analysis_start: 2001-01-01T00:00:00Z
+time_analysis_end: 2001-01-02T00:00:00Z
+cycle_period: 12
+
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: 'qg.fortran'
+
+# Multiscale alignment (MSA) example, reproducing Ying (2019, MWR)'s "align-after" design
+# (see ~/Vaults/research/projects/NEDAS/qg_benchmark.md for the full research writeup this
+# is based on -- experiment D there). Two things this config demonstrates over the plain
+# 'local'/'olivia' single-scale examples:
+#  1. obs_def's hroi as a per-iteration dict ({iter0/iter1/iter2: ...}) -- the localization
+#     ROI tightens L -> M -> S across the 3 outer-loop scales (Table 1 of the paper, N=20
+#     column), replacing what used to be a single hroi times a global localize_scale_fac
+#     list (that mechanism has been removed).
+#  2. updator_def.type as a per-iteration dict -- alignment on the two coarser scales,
+#     plain additive on the finest (no displacement correction needed there). Previously
+#     this exact behavior was a hardcoded `if c.iter == niter-1: updator_type = 'additive'`
+#     special case in assim_tools/updators/__init__.py; now it's explicit here instead.
+
+state_def:
+- name: 'temperature'      # theta = -k*psi in spectral space -- the paper's actual state
+                            # variable (not streamfunc), and what AlignmentUpdator aligns on.
+  model_src: 'qg.fortran'
+  var_type: 'field'
+  err_type: 'normal'
+
+model_def:
+  qg.fortran:
+    config_file: '{nedas_root}/models/qg/fortran/default.yml'
+    model_env: '{nedas_root}/models/qg/fortran/env/setup_local.src'
+    model_code_dir: '{nedas_root}/models/qg/fortran'
+    nproc_per_run: 1
+    nproc_per_util: 1
+    walltime: 1000
+    restart_dt: 24
+    forcing_dt: 24
+    ens_run_strategy: scheduler
+    use_job_array: False
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+    kmax: 63          # -> 128x128 grid, matches the paper (not the tutorial default of 127)
+    k_cut: 40         # exponential cutoff filter for k>40 (paper Section 3); must scale down
+                      # together with kmax, otherwise energy piles up unphysically
+    dt: 0.0001
+
+obs_def:
+- name: 'temperature'
+  dataset_src: 'synthetic'
+  model_src: 'qg.fortran'
+  nobs: 1849          # ~ paper's every-3rd-gridpoint network on a 128x128 grid (43*43)
+  err:
+    type: 'normal'
+    std: 1.0
+  hroi:               # localization ROI (grid points), Table 1's N=20 column, L -> M -> S
+    iter0: 24
+    iter1: 16
+    iter2: 10
+  vroi: inf
+  troi: inf
+
+dataset_def:
+  synthetic:
+    model_src: qg.fortran
+    config_file:
+    obs_window_min: -6
+    obs_window_max: 0
+
+perturb:
+
+# more details in assimilation algorithm
+scheme: filter
+
+niter: 3
+iter:
+resolution_level: [0, 0, 0]
+character_length: [42.67, 16.0, 6.4]  # = 128/krange, krange=(3,8,20) -- see qg_benchmark.md
+
+assimilator_def:
+  type: EAKF      # serial, closest equivalent to the paper's EnSRF
+  config_file:
+
+updator_def:
+  type:
+    iter0: alignment
+    iter1: alignment
+    iter2: additive
+  variable: temperature
+  optical_flow:
+    method: HornSchunck_pyramid
+    nlevel: 5
+    niter_max: 100
+    alpha_squared: 100
+  interp_displaced_fields: True
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+# adaptive multiplicative inflation, applied ONCE to the full recombined state after all
+# outer-loop iterations complete (not per-scale) -- matches the paper's design exactly
+inflation_def:
+  type: post,multiplicative,once_after_outer_loop
+  adaptive: True
+  coef: 1.0
+
+localization_def:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+- type: scale_bandpass
+  decompose_obs: False
+
+# diagnostic methods configuration
+diag:
+- method: 'misc.convert_output'
+  is_ensemble: False
+  config_file: '{nedas_root}/diag/misc/convert_output/default.yml'
+  model_src: 'qg.fortran'
+  variables: ['streamfunc', 'temperature', 'vorticity']
+  grid_def:
+  file: '{work_dir}/output/mem{member:03}_b{time:%Y-%m-%d}T{time:%H}.nc'

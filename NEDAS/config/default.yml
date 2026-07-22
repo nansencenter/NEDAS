@@ -159,10 +159,12 @@ character_length: [16]      # characteristic length (in grid coord unit) for eac
 
 assimilator_def:
   type: ETKF      # assimilator type (for batch: ETKF, DEnKF..., for serial: EAKF, RHF...)
+                  # can also be a per-iteration dict, e.g. {iter0: ETKF, iter1: TopazDEnKF}
   config_file:    # configuration for the specific assimilator
 
 updator_def:
-  type: additive
+  type: additive  # can also be a per-iteration dict, e.g.
+                  # {iter0: alignment, iter1: alignment, iter2: additive}
   config_file:
 
 covariance_def:
@@ -171,7 +173,9 @@ covariance_def:
 
 # covariance inflation technique in assimilation
 inflation_def:
-  type: post,multiplicative  # type of inflation (post/prior, multiplicative/RTPP...)
+  type: post,multiplicative  # type of inflation (post/prior, multiplicative/RTPP...);
+                             # 'type'/'coef'/'adaptive' can each also be a per-iteration
+                             # dict, e.g. {iter0: 1.0, iter1: 1.2, default: 1.0}
   adaptive: False            # if true, run an adaptive version of the inflation scheme
   coef: 1.0                  # static inflation coefficient
 
@@ -184,6 +188,12 @@ localization_def:       # localization is configured separately for horizontal, 
   temporal:
     type: exponential
 
+# a list of transforms chained together within one outer-loop iteration; the WHOLE
+# transform_def value can instead be given as a per-iteration dict keyed 'iter0',
+# 'iter1', ..., 'default' (each mapping to its own transform_def list/dict), e.g.:
+#   transform_def:
+#     iter0: [{type: scale_bandpass, character_length: 42.67}]
+#     iter1: [{type: identity}]
 transform_def:
 - type: scale_bandpass        # e.g. used in multiscale approach
   decompose_obs: False        # if true, decompose observations as well

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
+from NEDAS.utils.conversion import resolve_iter_dict
 if TYPE_CHECKING:
     from NEDAS.core import Context, Inflation
 
@@ -25,14 +26,20 @@ def get_inflation_func(c: Context) -> Inflation:
         c.config.inflation_def = {}
     if 'type' not in c.config.inflation_def.keys():
         raise KeyError("'type' needs to be specified in inflation_def")
-    inflation_type = c.config.inflation_def['type'].split(',')
+    # 'type', 'coef' and 'adaptive' can each be a plain value (used at every outer-loop
+    # iteration, unchanged behavior) or a per-iteration dict, e.g.
+    # {iter0: 'prior,multiplicative', iter1: 'post,multiplicative,once_after_outer_loop'}.
+    # Note 'once_after_outer_loop' is inherently a cross-iteration concept (it defers
+    # to schemes/filter.py's final_inflation(), which runs once after all iterations) --
+    # varying it by iteration only makes sense if every iteration agrees on it.
+    inflation_type = resolve_iter_dict(c.config.inflation_def['type'], c.iter, c.config.niter).split(',')
 
     prior = ('prior' in inflation_type)
     post = ('post' in inflation_type)
     timing = 'once_after_outer_loop' if 'once_after_outer_loop' in inflation_type else 'per_iteration'
 
-    adaptive = c.config.inflation_def.get('adaptive', False)
-    coef = c.config.inflation_def.get('coef', 1.0)
+    adaptive = resolve_iter_dict(c.config.inflation_def.get('adaptive', False), c.iter, c.config.niter)
+    coef = resolve_iter_dict(c.config.inflation_def.get('coef', 1.0), c.iter, c.config.niter)
 
     for key in registry.keys():
         if key in inflation_type:
