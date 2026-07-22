@@ -16,7 +16,7 @@ from NEDAS import grid, models, datasets, assim_tools, io_backends, job_submitte
 from .file_system import FileSystem
 from .types import ProcIDMem, MemID, ParallelMode, ObsEns
 if TYPE_CHECKING:
-    from . import Model, Dataset, IOBackend, JobSubmitter, State, Obs, Transform, Inflation, Assimilator, Updator, Preconditioner
+    from . import Model, Dataset, IOBackend, JobSubmitter, State, Obs, Transform, Inflation, Assimilator, Updator
 
 class Context:
     """
@@ -43,7 +43,6 @@ class Context:
     datasets: dict[str, Dataset]
     assimilator: Assimilator
     updator: Updator
-    preconditioner: Preconditioner
     transform_funcs: list[Transform]
     localization_funcs: dict[str, Callable]
     inflation_func: Inflation
@@ -164,7 +163,6 @@ class Context:
         # initialize a few func components in the assimilation algorithm
         self.assimilator = assim_tools.assimilators.get_assimilator(self)
         self.updator = assim_tools.updators.get_updator(self)
-        self.preconditioner = assim_tools.preconditioners.get_preconditioner(self)
         self.localization_funcs = assim_tools.localization.get_localization_funcs(self)
         self.inflation_func = assim_tools.inflation.get_inflation_func(self)
         self.transform_funcs = assim_tools.transforms.get_transform_funcs(self)

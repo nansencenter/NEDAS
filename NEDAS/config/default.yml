@@ -165,11 +165,6 @@ updator_def:
   type: additive
   config_file:
 
-# optional pre/post-assimilation step (e.g. position-error correction); defaults to a no-op
-preconditioner_def:
-  type: identity
-  config_file:
-
 covariance_def:
   type: ensemble
   config_file:

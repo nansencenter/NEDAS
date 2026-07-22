@@ -10,13 +10,12 @@ from .assimilator import Assimilator
 from .updator import Updator
 from .inflation import Inflation
 from .transform import Transform
-from .preconditioner import Preconditioner
 from .state import State
 from .obs import Obs
 from .perturb import Perturbation
 from .diag import Diagnostics
 from .scheme import Scheme
 
-__all__ = ['Context', 'Assimilator', 'Updator', 'Inflation', 'Transform', 'Preconditioner',
+__all__ = ['Context', 'Assimilator', 'Updator', 'Inflation', 'Transform',
            'Model', 'Dataset', 'FileSystem', 'IOBackend', 'JobSubmitter', 'State', 'Obs',
            'Perturbation', 'Diagnostics', 'Scheme']
