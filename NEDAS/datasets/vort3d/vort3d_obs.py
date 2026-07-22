@@ -14,15 +14,26 @@ class Vort3DObs(SyntheticObs):
     notebook work. vort3d's other state variables (free-atmosphere layers, theta, q, pstar) are
     NOT wired up here; add them the same way if/when needed.
 
-    The vortex_position/vortex_intensity/vortex_size algorithms below are deliberately
-    byte-identical to Vort2DObs's own (same box-summed-vorticity search, same wind-speed-based
-    size/intensity definitions) -- this is not a coincidence or copy-paste laziness: the vort3d
-    alignment-testbed scripts and the vort3d tutorial notebook already reuse
-    Vort2DObs.vortex_position/vortex_size directly (via `Vort2DObs.__new__(Vort2DObs)`, since
-    they're pure functions of (u, v) with no vort2d-specific state) for exactly this model, and
-    all existing validated results were produced with this exact algorithm. Duplicating it here
-    (rather than only NOW factoring out a shared module) keeps this dataset's own results
-    consistent with everything already run, without touching the working vort2d_obs.py.
+    The vortex_position/vortex_size algorithms below are deliberately byte-identical to
+    Vort2DObs's own (same box-summed-vorticity search, same wind-speed-based size definition) --
+    this is not a coincidence or copy-paste laziness: the vort3d alignment-testbed scripts and the
+    vort3d tutorial notebook already reuse Vort2DObs.vortex_position/vortex_size directly (via
+    `Vort2DObs.__new__(Vort2DObs)`, since they're pure functions of (u, v) with no vort2d-specific
+    state) for exactly this model, and all existing validated results were produced with this
+    exact algorithm. Duplicating it here (rather than only NOW factoring out a shared module)
+    keeps this dataset's own results consistent with everything already run, without touching the
+    working vort2d_obs.py.
+
+    vortex_intensity is the one deliberate departure: Vort2DObs's own version is a domain-global
+    `max(|wind|)`, which silently reports the wrong vortex's intensity whenever a second (spurious
+    or genuinely distinct) vorticity feature anywhere in the domain happens to be windier than the
+    tracked one -- observed concretely in a 2026-07-22 IC-perturbation sensitivity sweep, where a
+    `Rmw_sprd`-perturbed member's compact vortex was sometimes out-competed in the *position*
+    search too (a separate, already-known failure mode of the fixed-size search box), but a
+    global-max intensity would have papered over that failure silently instead of surfacing it.
+    Here, intensity is a *local* max within a box around the already-found vortex_position center
+    (same box convention as vortex_size), so it reports the tracked vortex's own intensity or nan/
+    garbage-but-visibly-so if the position search itself failed -- not some other feature's wind.
     """
     network_type: str
     obs_range: float
@@ -112,28 +123,78 @@ class Vort3DObs(SyntheticObs):
 
         return obs_seq
 
-    # utility functions for obs diagnostics -- identical to Vort2DObs's, see class docstring
-    def vortex_position(self, u, v):
+    # utility functions for obs diagnostics -- vortex_position below now follows the
+    # vorticity-centroid + first-guess-window approach standard in the TC-tracking literature
+    # (e.g. Fang & Zhu 2019, https://www.mdpi.com/2073-4433/10/7/376) rather than Vort2DObs's
+    # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
+    # class docstring
+    def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5):
+        """Vorticity-centroid center search, anchored to a first-guess position.
+
+        Two problems with the original discrete box-summed-vorticity argmax (still used below
+        only to *bootstrap* a first guess when none is given):
+        (a) it can jump to a stronger, unrelated vorticity feature anywhere else in the domain --
+            observed concretely in a 2026-07-22 IC-perturbation sensitivity sweep, where a few
+            `Rmw_sprd`-perturbed members' compact vortices were passed over in favor of an
+            unrelated Vbg-driven feature, producing 900+ km single-cycle position "jumps";
+        (b) even when it stays on the right feature, picking a single integer grid cell as
+            "the" center every cycle is sensitive to grid-scale vorticity noise, producing visible
+            frame-to-frame jitter/zigzag in ensemble track spaghetti plots that isn't real vortex
+            motion.
+
+        Fix, following the standard TC-tracking approach: given `first_guess=(ci, cj)` (typically
+        the previous timestep's own found center -- see find_track's chaining in
+        vort3d/diagnostics.py), restrict the search to a `search_radius`-grid-cell window around
+        it (fixes (a)), then take the vorticity-weighted CENTROID of cyclonic vorticity exceeding
+        `vort_threshold_frac` of the window's peak (not a single-cell argmax) as the center
+        (fixes (b) -- averaging over many grid cells largely cancels grid-scale noise, and
+        thresholding first excludes the window's own weak background clutter from the centroid).
+        With `first_guess=None` (e.g. the very first timestep of a track), a coarse whole-domain
+        box-sum argmax bootstraps a first guess, which is then itself centroid-refined the same
+        way."""
         ny, nx = u.shape
 
         # compute vorticity
         zeta = (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
 
-        # search for max vorticity
-        zmax = -999
-        buff = 6
-        center_i, center_j = None, None
-        for j in range(buff, ny-buff):
-            for i in range(buff, nx-buff):
-                z = np.sum(zeta[j-buff:j+buff, i-buff:i+buff])
-                if z > zmax:
-                    zmax = z
-                    center_i, center_j = i, j
+        if first_guess is None:
+            buff = 6
+            zmax = -999
+            center_i, center_j = None, None
+            for j in range(buff, ny-buff):
+                for i in range(buff, nx-buff):
+                    z = np.sum(zeta[j-buff:j+buff, i-buff:i+buff])
+                    if z > zmax:
+                        zmax = z
+                        center_i, center_j = i, j
+            first_guess = (center_i, center_j)
+
+        gi, gj = first_guess
+        # x is periodic (see Core's own grid docstring); y is not
+        i_idx = [i % nx for i in range(gi-search_radius, gi+search_radius+1)]
+        j_idx = list(range(max(0, gj-search_radius), min(ny, gj+search_radius+1)))
+        sub = zeta[np.ix_(j_idx, i_idx)]
+        sub = np.clip(sub, 0, None)  # cyclonic (positive) vorticity only
+        if sub.max() <= 0:
+            return gi, gj  # nothing coherent in the window: stay at the first guess
+        weight = np.where(sub >= vort_threshold_frac*sub.max(), sub, 0.0)
+        jj, ii = np.meshgrid(j_idx, i_idx, indexing='ij')
+        center_j = int(round(np.sum(weight*jj) / weight.sum()))
+        center_i = int(round(np.sum(weight*ii) / weight.sum())) % nx
 
         return center_i, center_j
 
-    def vortex_intensity(self, u, v):
-        return np.max(np.hypot(u, v))
+    def vortex_intensity(self, u, v, center_i, center_j, box=11):
+        """local max wind speed within a box around the vortex center (NOT a domain-global
+        max -- see class docstring for why)."""
+        wind = np.hypot(u, v)
+        ny, nx = wind.shape
+        half = box // 2
+        vmax = -999.
+        for j in range(-half, half+1):
+            for i in range(-half, half+1):
+                vmax = max(vmax, wind[int(center_j+j)%ny, int(center_i+i)%nx])
+        return vmax
 
     def vortex_size(self, u, v, center_i, center_j):
         wind = np.hypot(u, v)
@@ -185,7 +246,8 @@ class Vort3DObs(SyntheticObs):
 
     def get_vortex_intensity(self, **kwargs):
         wind_b = self.get_wind_b(**kwargs)
-        Vmax = self.vortex_intensity(wind_b[0,...], wind_b[1,...])
+        center_i, center_j = self.vortex_position(wind_b[0,...], wind_b[1,...])
+        Vmax = self.vortex_intensity(wind_b[0,...], wind_b[1,...], center_i, center_j)
         return np.array([Vmax])
 
     def get_vortex_size(self, **kwargs):
