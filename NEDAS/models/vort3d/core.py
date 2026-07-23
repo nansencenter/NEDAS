@@ -385,6 +385,39 @@ class Core:
         pstar_pert = np.interp(self.rr.ravel(), r1d, pstar_pert_1d).reshape(self.rr.shape)
         self.pstar += pstar_pert
 
+        # warm-core temperature perturbation, thermal-wind-consistent with the
+        # tapered tangential wind above -- without this, the prescribed wind
+        # has no matching temperature anomaly to dynamically sustain it, and
+        # the vortex spends its first 1-2 days spinning down while the model's
+        # own WISHE feedback organically builds up the missing warm core (an
+        # initial-adjustment transient documented in vort3d.md dev log,
+        # 2026-07-22/23 -- confirmed via a Vmax/nz sensitivity sweep that this
+        # is a general dynamical/thermodynamical-imbalance-at-init effect, not
+        # something more vertical levels alone can fix).
+        #
+        # Same simplified radial-integral construction as pstar_pert above
+        # (gradient_wind_balance_pstar with rho0=1 gives geopotential-per-
+        # unit-mass instead of pressure), evaluated at each level's own
+        # taper*vtan, then converted to a temperature anomaly level-by-level
+        # via the hypsometric relation (thickness <-> mean layer temperature)
+        # -- a standard, order-of-magnitude-consistent simplification, not an
+        # exact inversion of the model's own discrete Arakawa-Suarez
+        # hydrostatic scheme, in the same documented-simplification spirit as
+        # gradient_wind_balance_pstar itself vs. the paper's full nonlinear
+        # balance equation. The boundary layer (k=n-1, taper=1) is left
+        # unperturbed -- its support already comes entirely from pstar_pert.
+        phi_pert_1d = np.array([gradient_wind_balance_pstar(r1d, taper[k]*v1d, f0_center, 1.0)
+                                 for k in range(n)])
+        theta_pert_1d = np.zeros((n, len(r1d)))
+        for k in range(n-2, -1, -1):
+            p_ref_k = self.sigma_mid[k]*PSTAR_FAR + p_top
+            p_ref_below = self.sigma_mid[k+1]*PSTAR_FAR + p_top
+            dT_1d = (phi_pert_1d[k] - phi_pert_1d[k+1]) / (R * np.log(p_ref_below/p_ref_k))
+            theta_pert_1d[k] = dT_1d * (p0/p_ref_k)**kappa
+        for k in range(n-1):
+            theta_pert = np.interp(self.rr.ravel(), r1d, theta_pert_1d[k]).reshape(self.rr.shape)
+            self.theta[k] += theta_pert
+
         if Vbg > 0:
             # generate as a geostrophically-balanced (pressure-derived) field, not
             # independent wind, so the background flow starts in mass/geostrophic balance --
