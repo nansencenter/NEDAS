@@ -78,7 +78,14 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ### Added
 - New `core` module consolidating the `Model`, `Dataset`, and `Scheme` base classes
-  (previously scattered across submodules)
+  (previously scattered across submodules), including a dedicated `Context` class
+  to hold runtime-living objects (previously done by `Config`)
+- `IOBackend` classes implementing both online and offline I/O modes; online mode
+  adds a memory save/load mechanism and is supported by the `lorenz96` and `vort2d`
+  (native Python) models
+- Generalized `Grid` class hierarchy (`Grid1D`, `RegularGrid`, `IrregularGrid`)
+- `Progress` class for runtime logging: interactive on/off modes, terminal-size
+  detection, Jupyter notebook support
 - AMSR2 dataset: SIC retrieval and obs_operator
 - CS2SMOS sea-ice thickness dataset
 - New synthetic-obs subclass with prescribed `obs_x`/`obs_y`/`obs_z` support, and
@@ -92,8 +99,6 @@ DA schemes, or other backward-compatible features land in the next minor release
   parameters, and memory dump-to-file in the runtime logger
 
 ### Changed
-- Online/offline I/O backend logic extracted out of the model classes and
-  refactored into `io_backend`
 - `assim_tools`, perturbation, and scheme base classes substantially refactored
 - `qg` model renamed to `qg.fortran` to make room for future backends
 - Config key `analysis_scheme` renamed to `scheme`; empty `model`/`dataset` config
