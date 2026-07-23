@@ -303,6 +303,13 @@ Time controls
    * - ``cycle_period``
      - Interval in hours between analysis cycles.
      - 12
+   * - ``forecast_period``
+     - Length in hours of each ensemble forecast run between cycles.
+
+       Can differ from ``cycle_period`` (e.g. for the forecast-only
+       scheme, see :mod:`NEDAS.schemes.forecast`). If not set, falls
+       back to ``cycle_period``.
+     - None (falls back to ``cycle_period``)
    * - ``time``
      - Time of the current analysis cycle,
      

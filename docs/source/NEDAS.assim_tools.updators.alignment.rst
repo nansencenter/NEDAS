@@ -13,4 +13,3 @@ Submodules
    :maxdepth: 4
 
    NEDAS.assim_tools.updators.alignment.alignment_updator
-   NEDAS.assim_tools.updators.alignment.optical_flow

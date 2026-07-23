@@ -14,6 +14,7 @@ Subpackages
 
    NEDAS.assim_tools.assimilators.EAKF
    NEDAS.assim_tools.assimilators.ETKF
+   NEDAS.assim_tools.assimilators.QCEF
    NEDAS.assim_tools.assimilators.TopazDEnKF
 
 Submodules

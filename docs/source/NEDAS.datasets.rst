@@ -21,3 +21,4 @@ Subpackages
    NEDAS.datasets.synthetic
    NEDAS.datasets.topaz
    NEDAS.datasets.vort2d
+   NEDAS.datasets.vort3d

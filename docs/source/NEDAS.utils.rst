@@ -18,6 +18,7 @@ Submodules
    NEDAS.utils.multiscale
    NEDAS.utils.netcdf_lib
    NEDAS.utils.njit
+   NEDAS.utils.optical_flow
    NEDAS.utils.parallel
    NEDAS.utils.progress
    NEDAS.utils.random_perturb

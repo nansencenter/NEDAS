@@ -13,7 +13,16 @@ project = 'NEDAS'
 copyright = '2025, Yue Ying'
 author = 'Yue Ying'
 
-from NEDAS import __version__ as release
+import subprocess
+try:
+    # last published tag, not setuptools_scm's guessed-next-dev version
+    _tag = subprocess.check_output(
+        ['git', 'describe', '--tags', '--abbrev=0'],
+        cwd=os.path.dirname(__file__), text=True,
+    ).strip()
+    release = _tag.lstrip('v')
+except (subprocess.CalledProcessError, FileNotFoundError):
+    from NEDAS import __version__ as release
 version = '.'.join(release.split('.')[:2])
 
 # -- General configuration ---------------------------------------------------
