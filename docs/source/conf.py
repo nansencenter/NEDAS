@@ -12,7 +12,9 @@ sys.path.insert(0, os.path.abspath('../..'))
 project = 'NEDAS'
 copyright = '2025, Yue Ying'
 author = 'Yue Ying'
-release = '1.2.1'
+
+from NEDAS import __version__ as release
+version = '.'.join(release.split('.')[:2])
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
