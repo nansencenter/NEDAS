@@ -33,6 +33,7 @@ well before committing resources to full-scale operational implementation.
    installation
    config_file
    examples
+   changelog
 
 .. toctree::
    :maxdepth: 2
