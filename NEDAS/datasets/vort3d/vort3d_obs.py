@@ -50,6 +50,7 @@ class Vort3DObs(SyntheticObs):
         }
 
         self.obs_operator = {
+            'wind_b': self.get_wind_b_obs,
             'vortex_position': self.get_vortex_position,
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
@@ -234,6 +235,26 @@ class Vort3DObs(SyntheticObs):
         model.grid.set_destination_grid(grid)
         wind_b = model.grid.convert(model_wind_b, is_vector=True)
         return wind_b
+
+    def get_wind_b_obs(self, **kwargs):
+        """wind_b obs operator (registered in self.obs_operator, 2026-07-24 -- previously
+        missing entirely: 'wind_b' matched neither a model.variables name (it's a dataset-
+        level name, distinct from the model's own 'wind' state variable) nor an obs_operator
+        entry, so state_to_obs raised "unable to obtain obs prior for 'wind_b'" for any
+        actual wind_b assimilation attempt -- get_wind_b itself was only ever called
+        internally by generate_obs_network and the vortex_* operators' own center-finding,
+        which need the FULL 2D field, not point values).
+
+        Interpolates the full boundary-layer wind field (from get_wind_b) to the scattered
+        obs locations kwargs['x']/['y'] -- the same horizontal interpolation
+        Obs.horizontal_interp does for the generic model.variables path, done directly here
+        since only `grid` (not the full Context) is available inside an obs_operator call."""
+        wind_b = self.get_wind_b(**kwargs)
+        grid = kwargs['grid']
+        obs_x, obs_y = np.array(kwargs['x']), np.array(kwargs['y'])
+        f1 = grid.interp(wind_b[0, ...], obs_x, obs_y, method='linear')
+        f2 = grid.interp(wind_b[1, ...], obs_x, obs_y, method='linear')
+        return np.array([f1, f2])
 
     def get_vortex_position(self, **kwargs):
         wind_b = self.get_wind_b(**kwargs)
