@@ -37,17 +37,46 @@ class Vort3DObs(SyntheticObs):
     """
     network_type: str
     obs_range: float
+    zmin: float | None = None  # z-distribution range for the generic 'wind' obs type, in
+    zmax: float | None = None  # `z_units` (default hPa) -- each obs draws its own z uniformly
+    z_units: str = 'hPa'       # at random within [zmin, zmax]; zmin==zmax degenerates to a
+    # single fixed level. 2026-07-25, replaces the earlier one-off 'wind_low' type (a second
+    # hardcoded single-level proxy alongside 'wind_b') with a configurable range, since 'wind'
+    # is already one of the model's own real state variables (model.variables['wind'], all
+    # nz+1 levels) and NEDAS's generic state_to_obs option-1 pathway (core/obs.py) already does
+    # correct vertical interpolation between levels given each obs's own z-coordinate -- no
+    # custom obs_operator needed for 'wind' at all, unlike 'wind_b' (a dataset-level synthetic
+    # proxy for one fixed level, NOT itself a model.variables entry, which is why it still needs
+    # its own get_wind_b_obs below). zmin/zmax default to the boundary layer's own pressure
+    # (i.e. a degenerate 'wind_b'-equivalent single level) if left unset.
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # SyntheticObs.__init__ (the super().__init__ call above) auto-copies every
+        # model.variables entry into self.variables, but ONLY if 'model_src' was itself part of
+        # the kwargs used to CONSTRUCT this dataset -- true for a per-obs-record call, but NOT
+        # true here: this project's dataset_def block (network_type/obs_range/zmin/zmax/z_units)
+        # never includes model_src, so that auto-copy silently never fires in practice. Confirmed
+        # 2026-07-25 the hard way: even after fixing the self.variables-overwrite bug below with
+        # update() instead of reassignment, 'wind' obs still failed with the identical
+        # "variable wind not defined in vort3d.dataset.variables" AssertionError, because there
+        # was nothing to update() onto -- self.variables was empty at this point, not
+        # auto-populated as assumed. Fixed by explicitly registering 'wind' from the vort3d model
+        # directly (this dataset is vort3d-specific throughout anyway, per the Vort3DModel
+        # isinstance asserts elsewhere in this file, so hardcoding the model name here is
+        # consistent with the rest of the class, not a new assumption).
+        self.variables['wind'] = self.c.models['vort3d'].variables['wind']
+
         restart_dt = 6
-        self.variables = {
+        # NOTE: update(), not a wholesale `self.variables = {...}` reassignment -- would wipe out
+        # the 'wind' entry just added above.
+        self.variables.update({
             'wind_b': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m/s'),
             'vortex_position': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m'),
             'vortex_intensity': VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m/s'),
             'vortex_size':  VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m'),
-        }
+        })
 
         self.obs_operator = {
             'wind_b': self.get_wind_b_obs,
@@ -55,6 +84,8 @@ class Vort3DObs(SyntheticObs):
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
         }
+        # 'wind' also has no obs_operator entry, deliberately -- option-1 in state_to_obs
+        # (obs_name in model.variables) handles it without needing one.
 
     def generate_obs_network(self, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
@@ -68,7 +99,7 @@ class Vort3DObs(SyntheticObs):
         i, j = self.vortex_position(wind_b[0,...], wind_b[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
-        if name == 'wind_b':
+        if name in ('wind_b', 'wind'):
             nobs = kwargs['nobs']
             if self.network_type == 'global':
                 if nobs is None:
@@ -93,9 +124,25 @@ class Vort3DObs(SyntheticObs):
             else:
                 raise ValueError('unknown network type: '+self.network_type)
 
+            if name == 'wind':
+                # z is physical pressure (Pa) -- same convention z_coords() itself uses, so it
+                # lines up with the levels state_to_obs's vertical_interp brackets against.
+                # zmin/zmax are given in z_units (default hPa); each obs draws its own z
+                # independently within [zmin, zmax] (zmin==zmax gives a single fixed level).
+                # Falls back to the boundary layer's own pressure (a degenerate single-level
+                # 'wind_b'-equivalent) if zmin/zmax aren't explicitly set via dataset_def.
+                if self.zmin is None or self.zmax is None:
+                    zmin_pa = zmax_pa = model._layer_pressure[model.layer_names[-1]]
+                else:
+                    unit_scale = 100.0 if self.z_units == 'hPa' else 1.0  # hPa -> Pa
+                    zmin_pa, zmax_pa = self.zmin * unit_scale, self.zmax * unit_scale
+                z = np.random.uniform(zmin_pa, zmax_pa, nobs)
+            else:
+                z = np.zeros(nobs)  # 'wind_b': unused by its own custom obs_operator, kept as before
+
             obs_seq = {'obs': np.full(nobs, np.nan),
                     't': np.full(nobs, kwargs['time']),
-                    'z': np.zeros(nobs),
+                    'z': z,
                     'y': y,
                     'x': x,
                     'err_std': np.ones(nobs) * kwargs['err']['std']
