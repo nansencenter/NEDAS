@@ -10,6 +10,30 @@ def _vorticity(u, v):
     return (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
 
 
+def _speed(u, v):
+    """Wind speed |V| as a scalar tracking image."""
+    return np.hypot(u, v)
+
+
+def _deformation(u, v):
+    """Total deformation sqrt(stretching^2 + shearing^2), same centered-difference stencil and
+    grid-index units as _vorticity. Stretching D1 = du/dx - dv/dy, shearing D2 = dv/dx + du/dy."""
+    dudx = (np.roll(u, -1, axis=1) - np.roll(u, 1, axis=1)) / 2.0
+    dvdx = (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1)) / 2.0
+    dudy = (np.roll(u, -1, axis=0) - np.roll(u, 1, axis=0)) / 2.0
+    dvdy = (np.roll(v, -1, axis=0) - np.roll(v, 1, axis=0)) / 2.0
+    return np.hypot(dudx - dvdy, dvdx + dudy)
+
+
+# scalar images derivable from a vector-valued alignment variable, selected via the
+# updator_def 'vector_image' option (default 'vorticity', the historical behavior)
+VECTOR_IMAGE_FUNCS = {
+    'vorticity': _vorticity,
+    'speed': _speed,
+    'deformation': _deformation,
+}
+
+
 class AlignmentUpdator(Updator):
     """Updator class with alignment technique.
 
@@ -21,11 +45,15 @@ class AlignmentUpdator(Updator):
 
     For a vector-valued `variable` (is_vector=True, e.g. a (u,v) wind field with no separate
     scalar diagnostic to align on): optical flow itself only operates on scalar images, so
-    compute_increment derives displacement from the field's own vorticity (a scalar proxy that
-    directly captures the coherent rotational feature, e.g. a vortex) rather than passing the
-    raw (2,ny,nx) vector array to the optical-flow solver -- the resulting single displacement
-    field is then applied to both vector components identically (update_files already handled
-    this correctly; only the displacement *derivation* was vector-unaware).
+    compute_increment derives displacement from a scalar image of the field rather than passing
+    the raw (2,ny,nx) vector array to the optical-flow solver -- the resulting single
+    displacement field is then applied to both vector components identically (update_files
+    already handled this correctly; only the displacement *derivation* was vector-unaware).
+    The scalar image is selectable via the updator_def 'vector_image' option:
+    'vorticity' (default -- a compact single-signed monopole at a vortex core, the sharpest
+    feature to track), 'speed' (|V| -- for a vortex an annulus with a central minimum, weaker
+    aperture properties but no differencing noise), or 'deformation' (total deformation
+    sqrt(stretching^2+shearing^2) -- highlights fronts/shear zones rather than rotation).
     """
     displace = {}
 
@@ -34,7 +62,33 @@ class AlignmentUpdator(Updator):
         alignment_opt = {k: v for k, v in c.config.updator_def.items() if k != 'type'}
         self.alignment_opt = alignment_opt
         self.interp_displaced_fields = alignment_opt.get('interp_displaced_fields', False)
+        # optional reference level: when set, displacement is derived ONLY from the alignment
+        # variable's record at this k, and that single displacement is applied to every level
+        # of every state variable ("align by a given level"). When unset (default), each level
+        # of a 3D alignment variable derives its own displacement ("align each level
+        # separately"), and records at levels the alignment variable does not cover fall back
+        # to the nearest available level's displacement (a 2D target like vort3d's pstar has
+        # only k=0, so its single displacement is applied to the whole column).
+        self.k_ref = alignment_opt.get('k', None)
+        # scalar image derived from a vector-valued alignment variable (see class docstring)
+        vector_image = alignment_opt.get('vector_image', 'vorticity')
+        if vector_image not in VECTOR_IMAGE_FUNCS:
+            raise ValueError(f"unknown vector_image '{vector_image}', "
+                             f"choose from {sorted(VECTOR_IMAGE_FUNCS)}")
+        self.vector_image_func = VECTOR_IMAGE_FUNCS[vector_image]
         self.optical_flow = OpticalFlow(**alignment_opt.get('optical_flow', {}))
+
+    def _get_displace(self, mem_id, k):
+        """Displacement for (member, level), with reference-level / nearest-level fallback."""
+        if self.k_ref is not None:
+            return self.displace[mem_id, self.k_ref]
+        if (mem_id, k) in self.displace:
+            return self.displace[mem_id, k]
+        ks = [kk for (m, kk) in self.displace.keys() if m == mem_id]
+        if not ks:
+            raise KeyError(f"no displacement computed for member {mem_id} at any level")
+        k_near = min(ks, key=lambda kk: abs(kk - k))
+        return self.displace[mem_id, k_near]
 
     def compute_increment(self, c: Context):
         """Compute optical flows from the prior/posterior state variable field pair."""
@@ -45,13 +99,15 @@ class AlignmentUpdator(Updator):
             model = c.models[rec['model_src']]
             if rec['name'] != self.alignment_opt['variable']:
                 continue
+            if self.k_ref is not None and rec['k'] != self.k_ref:
+                continue
 
             for mem_id in c.mem_list[c.pid_mem]:
                 fld_prior = c.state.fields_prior[mem_id, rec_id]
                 fld_post = c.state.fields_post[mem_id, rec_id]
                 if rec['is_vector']:
-                    img_prior = _vorticity(fld_prior[0], fld_prior[1])
-                    img_post = _vorticity(fld_post[0], fld_post[1])
+                    img_prior = self.vector_image_func(fld_prior[0], fld_prior[1])
+                    img_post = self.vector_image_func(fld_post[0], fld_post[1])
                 else:
                     img_prior, img_post = fld_prior, fld_post
                 displace = self.optical_flow(c.grid, img_prior, img_post)
@@ -110,7 +166,7 @@ class AlignmentUpdator(Updator):
         else:
             fld_shape = var_prior.shape
 
-        displace = self.displace[mem_id, rec['k']]
+        displace = self._get_displace(mem_id, rec['k'])
         u_ana = displace[0,...] / c.grid.dx
         v_ana = displace[1,...] / c.grid.dx
 
