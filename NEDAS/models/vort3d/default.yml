@@ -19,6 +19,13 @@ dt: 15   # internal model integration time step in seconds (paper: 15s)
 
 restart_dt: 1  # model restart output interval in hours
 
+output_dt: null  # sub-cycle output interval, hours -- if set and shorter than a given run()
+                 # call's forecast_period (cycle_period), the model writes intermediate full-
+                 # state snapshots every output_dt hours WITHIN the cycle, without changing
+                 # cycle_period itself (the DA scheme's own checkpointing/next-cycle logic still
+                 # runs at cycle_period). null (default) disables this -- one write per cycle,
+                 # as before.
+
 beta: 0.0   # Coriolis beta parameter, df/dy, /m/s (0 = pure f-plane, matching
             # the paper's own experiments; e.g. 2.3e-11 for beta-drift near 20N)
 
