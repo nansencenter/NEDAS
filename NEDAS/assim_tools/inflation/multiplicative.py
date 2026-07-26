@@ -3,7 +3,7 @@ import numpy as np
 from NEDAS.core.inflation import Inflation
 
 class MultiplicativeInflation(Inflation):
-    def __init__(self, *args, post_infl_formula: Literal['omaamb', 'omb2_amb2']='omaamb', **kwargs):
+    def __init__(self, *args, post_infl_formula: Literal['omaamb', 'omb2_amb2']='omaamb', max_coef: float=2.0, **kwargs):
         super().__init__(*args, **kwargs)
         # which Desroziers-derived estimator to use for the posterior-inflation ratio:
         # 'omaamb' (default): ratio = <(a-b)(o-a)>/vara -- matches Ying (2019)'s exact formula
@@ -12,6 +12,13 @@ class MultiplicativeInflation(Inflation):
         #   obtained by assuming o-a is uncorrelated with a-b; not the formula that produced
         #   the paper's published numbers, but kept available for comparison/testing.
         self.post_infl_formula = post_infl_formula
+        # per-cycle ceiling on the adaptive posterior coefficient (default 2.0, unchanged from
+        # before this option existed) -- exposed as a config knob (2026-07-26) since the 2x
+        # per-cycle cap does not bound CUMULATIVE growth across many cycles: a noisier obs-space
+        # diagnostic (e.g. a weaker/less-conditioned single-scale analysis under a sparse obs
+        # network) can repeatedly hit close to 2x and compound over dozens of cycles until the
+        # ensemble's own physical fields go unstable, even though no single cycle exceeds the cap.
+        self.max_coef = max_coef
 
     def adaptive_prior_inflation(self, c):
         """compute prior inflate coef by obs-space statistics (Desroziers et al. 2005)"""
@@ -60,8 +67,9 @@ class MultiplicativeInflation(Inflation):
             ratio = (omb2-varo-amb2)/vara
         else:
             raise ValueError(f"Unknown post_infl_formula '{self.post_infl_formula}', should be 'omaamb' or 'omb2_amb2'")
-        # clip to [1, 2]: never deflate (ratio<1 would give coef<1), and cap runaway inflation at 2x
-        self.coef = min(2.0, np.sqrt(max(1.0, ratio)))
+        # clip to [1, max_coef]: never deflate (ratio<1 would give coef<1), and cap runaway
+        # inflation at max_coef (default 2x, see __init__ docstring)
+        self.coef = min(self.max_coef, np.sqrt(max(1.0, ratio)))
         c.message = f"varb = {varb}, vara = {vara}, varo={varo}; ratio={ratio}; coef = {self.coef}"
 
     def apply_inflation(self, c, flag):

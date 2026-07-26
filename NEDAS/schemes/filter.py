@@ -214,9 +214,9 @@ class FilterAnalysisScheme(Scheme):
 
         # if inflation_def specifies 'once_after_outer_loop' timing, the per-iteration inflation
         # calls in core/assimilator.py were skipped -- apply it here, once, on the full
-        # recombined state (see final_inflation docstring)
+        # recombined state (see core/inflation.py::Inflation.final_post_inflation docstring)
         if self.c.inflation_func.post and self.c.inflation_func.timing == 'once_after_outer_loop':
-            self.c.logger('Final posterior inflation (once, full recombined state)')(self.final_inflation)()
+            self.c.logger('Final posterior inflation (once, full recombined state)')(self.c.inflation_func.final_post_inflation)(self.c)
 
     def filter_iter(self) -> None:
         self.c.update_assim_tools()
@@ -231,12 +231,6 @@ class FilterAnalysisScheme(Scheme):
         self.c.logger('Prepare obs')(self.c.obs.prepare_obs)(self.c)
         self.c.logger('Prepare obs from prior state')(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
         self.c.logger('Output obs prior')(self.c.obs.output_obs)(self.c, 'prior')
-
-        # cache the true cycle-start prior (iteration 0, before any of this cycle's outer-loop
-        # DA), for final_inflation's Desroziers stats -- by the last iteration, c.obs.obs_prior
-        # reflects the intermediate state from iterations 0..iter-1, not the original prior
-        if self.c.iter == 0 and self.c.inflation_func.timing == 'once_after_outer_loop':
-            self.c._cycle_obs_prior_full = {k: v.copy() for k, v in self.c.obs.obs_prior.items()}
 
         # run assimilate algorithm
         self.c.logger('Assimilator')(self.c.assimilator.assimilate)(self.c)
@@ -263,48 +257,6 @@ class FilterAnalysisScheme(Scheme):
                 or self.c.inflation_func.timing == 'once_after_outer_loop'):
             self.c.logger('Prepare obs from post state')(self.c.obs.prepare_obs_from_state)(self.c, 'post')
         self.c.logger('Output obs post')(self.c.obs.output_obs)(self.c, 'post')
-
-    def final_inflation(self) -> None:
-        """
-        Apply posterior inflation once, after all outer-loop iterations complete, to the full
-        recombined state -- matching Ying (2019)'s design where the inflation factor is a single
-        domain-wide Desroziers (2005) coefficient computed from the full state's obs-space
-        statistics, applied once (not per scale-band iteration).
-
-        Uses the true cycle-start prior cached at iteration 0 (self.c._cycle_obs_prior_full) and
-        the current c.obs.obs_post, which by this point reflects the fully recombined analysis
-        (the last filter_iter() call recomputed it from the post-updator state, in batch mode).
-        The model's 'current' tag files hold this same fully recombined state in native model
-        space (assim_tools/updators/additive.py writes increments there each iteration), so this
-        method reads/writes 'current' directly rather than going through c.state.fields_post,
-        which only ever holds the last iteration's own scale-filtered field.
-        """
-        c = self.c
-        orig_obs_prior = c.obs.obs_prior
-        c.obs.obs_prior = c._cycle_obs_prior_full
-        c.inflation_func.adaptive_post_inflation(c)
-        c.obs.obs_prior = orig_obs_prior
-        coef = c.inflation_func.coef
-        c.log_event(f"final posterior inflation coef={coef:.4f} (once, full recombined state)")
-
-        for rec_id in c.state.rec_list[c.pid_rec]:
-            rec = c.state.info.fields[rec_id]
-            model = c.models[rec.model_src]
-
-            sum_fld_pid = None
-            for mem_id in c.mem_list[c.pid_mem]:
-                fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
-                if sum_fld_pid is None:
-                    sum_fld_pid = np.zeros_like(fld)
-                sum_fld_pid += fld
-            sum_fld = c.comm_mem.allreduce(sum_fld_pid)
-            mean_fld = sum_fld / c.nens
-
-            for mem_id in c.mem_list[c.pid_mem]:
-                fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
-                fld_new = mean_fld + coef*(fld - mean_fld)
-                c.io.call_method(c, 'current', model.write_var, fld_new, member=mem_id, **rec.asdict())
-        c.comm.Barrier()
 
     def perturb(self) -> None:
         """
