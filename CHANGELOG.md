@@ -11,6 +11,10 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ## [Unreleased]
 
+### Fixed
+- `Vort3DObs.__init__` `KeyError` when the `vort3d` model is not registered in the
+  context (hit by the generic dataset smoke test)
+
 ## [1.3.0] - 2026-07-23
 
 ### Added
