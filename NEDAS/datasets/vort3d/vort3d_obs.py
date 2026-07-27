@@ -66,7 +66,12 @@ class Vort3DObs(SyntheticObs):
         # directly (this dataset is vort3d-specific throughout anyway, per the Vort3DModel
         # isinstance asserts elsewhere in this file, so hardcoding the model name here is
         # consistent with the rest of the class, not a new assumption).
-        self.variables['wind'] = self.c.models['vort3d'].variables['wind']
+        # Guard: a generic smoke test (test_dataset_interface.py) constructs every
+        # registered Dataset class against a bare Context() with no models registered at
+        # all, so 'vort3d' is not guaranteed to be in self.c.models here -- only wire up
+        # 'wind' when the model is actually present (true for any real vort3d config).
+        if 'vort3d' in self.c.models:
+            self.variables['wind'] = self.c.models['vort3d'].variables['wind']
 
         restart_dt = 6
         # NOTE: update(), not a wholesale `self.variables = {...}` reassignment -- would wipe out
