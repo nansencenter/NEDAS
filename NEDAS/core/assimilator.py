@@ -21,8 +21,15 @@ class Assimilator(ABC):
         """
         Main method to run the batch assimilation algorithm
         """
-        # prior inflation step
-        c.logger('Prior inflation')(c.inflation_func)(c, 'prior')
+        # prior inflation step: 'once_after_outer_loop'-style timing (see
+        # core/inflation.py::Inflation.timing) skips this per-iteration application --
+        # schemes/filter.py::filter() applies it once, before the outer loop, via
+        # apply_inflation_once() instead (found and fixed 2026-07-28, Yue: this call was
+        # previously unconditional, so prior inflation had no "once" mode at all regardless of
+        # the configured timing -- only posterior inflation's per-iteration call already had
+        # this gate).
+        if c.inflation_func.timing == 'per_iteration':
+            c.logger('Prior inflation')(c.inflation_func)(c, 'prior')
 
         # transpose c.state.fields_prior to ensemble-complete c.state.state_prior
         self.partition_grid(c)

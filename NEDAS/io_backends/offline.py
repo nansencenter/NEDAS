@@ -139,7 +139,21 @@ class OfflineIO(IOBackend):
             path = c.fs.forecast_dir(c.time, model_name)
         elif tag == 'prior':
             if kwargs['time'] == c.time:
-                path = c.fs.forecast_dir(c.prev_time, model_name)
+                if c.time == c.config.time_start and model.ens_init_dir is not None:
+                    # very first cycle: c.prev_time collapses to c.time itself here (there is
+                    # no earlier cycle), so forecast_dir(c.prev_time,...) would self-referentially
+                    # resolve to the SAME directory as tag='current'/'post' -- reading it after
+                    # this cycle's own analysis has run would silently return the POSTERIOR, not
+                    # the prior. The true original prior for the first cycle is the pre-staged
+                    # restart files in ens_init_dir instead (mirrors
+                    # schemes/filter.py::Scheme.get_restart_dir(), which already resolves this
+                    # exact case the same way for the preprocess/postprocess/ensemble_forecast
+                    # steps -- found and fixed 2026-07-28, Yue, while adding a proper
+                    # once-before-outer-loop path for prior inflation, RTPP in particular, which
+                    # needs a genuine prior/post distinction even at the very first cycle).
+                    path = model.ens_init_dir.format(time=c.time)
+                else:
+                    path = c.fs.forecast_dir(c.prev_time, model_name)
             else:
                 path = c.fs.forecast_dir(c.time, model_name)
         elif tag == 'truth':

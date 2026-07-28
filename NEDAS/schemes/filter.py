@@ -203,6 +203,33 @@ class FilterAnalysisScheme(Scheme):
         """
         Main method for performing the analysis step
         """
+        # 'once_after_outer_loop' timing (name kept for config/backward compatibility -- see
+        # core/inflation.py::Inflation.timing's own docstring for the 2026-07-28 revision this
+        # implements): inflation runs OUTSIDE the outer loop entirely, on the true
+        # full-resolution state -- prior inflation ONCE BEFORE any iteration begins, posterior
+        # inflation ONCE AFTER all iterations complete. Both bypass the per-iteration,
+        # per-config.inflation_func's own apply_inflation_once() (see that abstract method's
+        # docstring) is the only per-flag entry point; the per-iteration calls in
+        # core/assimilator.py are skipped for both flags under this timing (gated there on
+        # timing == 'per_iteration').
+        #
+        # inflation_func itself is normally (re)built inside update_assim_tools(), called at
+        # the top of each filter_iter() -- call it once here too, pinned to iter=0's own
+        # settings, so inflation_func/c.grid/etc. exist before the outer loop starts for the
+        # prior-once call and its own State() scaffolding below.
+        self.c.iter = 0
+        self.c.update_assim_tools()
+
+        if self.c.inflation_func.timing != 'per_iteration':
+            if self.c.inflation_func.prior or self.c.inflation_func.post:
+                # need a State instance for its info/rec_list (field bookkeeping for
+                # apply_inflation_once()'s own I/O helpers) -- filter_iter() creates its own
+                # fresh State per iteration regardless, this is just scaffolding for the
+                # before-outer-loop call, cheap to redo.
+                self.c.state = State(self.c)
+            if self.c.inflation_func.prior:
+                self.c.logger('Prior inflation (once, before outer loop)')(self.c.inflation_func.apply_inflation_once)(self.c, 'prior')
+
         # outer loop (iter = 0, ..., niter-1)
         # multiscale approach: loop over scale components and perform assimilation on each scale
         # more complex outer loops can be implemented here
@@ -212,11 +239,8 @@ class FilterAnalysisScheme(Scheme):
             else:
                 self.filter_iter()
 
-        # if inflation_def specifies 'once_after_outer_loop' timing, the per-iteration inflation
-        # calls in core/assimilator.py were skipped -- apply it here, once, on the full
-        # recombined state (see core/inflation.py::Inflation.final_post_inflation docstring)
-        if self.c.inflation_func.post and self.c.inflation_func.timing == 'once_after_outer_loop':
-            self.c.logger('Final posterior inflation (once, full recombined state)')(self.c.inflation_func.final_post_inflation)(self.c)
+        if self.c.inflation_func.post and self.c.inflation_func.timing != 'per_iteration':
+            self.c.logger('Posterior inflation (once, after outer loop)')(self.c.inflation_func.apply_inflation_once)(self.c, 'post')
 
     def filter_iter(self) -> None:
         self.c.update_assim_tools()
@@ -231,6 +255,16 @@ class FilterAnalysisScheme(Scheme):
         self.c.logger('Prepare obs')(self.c.obs.prepare_obs)(self.c)
         self.c.logger('Prepare obs from prior state')(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
         self.c.logger('Output obs prior')(self.c.obs.output_obs)(self.c, 'prior')
+
+        # cache the true cycle-start obs-prior (iteration 0 only) for the once-timing posterior
+        # inflation's own adaptive Desroziers estimate (core/inflation.py's
+        # apply_inflation_once()) -- by later iterations, c.obs.obs_prior reflects that
+        # iteration's own intermediate, scale-filtered state, not the true full-resolution
+        # prior. (Moved here 2026-07-28 from Inflation.__call__'s 'prior' branch, which no
+        # longer runs at all under 'once' timing now that core/assimilator.py properly gates
+        # the per-iteration prior-inflation call on timing == 'per_iteration'.)
+        if self.c.inflation_func.timing != 'per_iteration' and self.c.inflation_func.post and self.c.iter == 0:
+            self.c._cycle_obs_prior_full = {k: v.copy() for k, v in self.c.obs.obs_prior.items()}
 
         # run assimilate algorithm
         self.c.logger('Assimilator')(self.c.assimilator.assimilate)(self.c)

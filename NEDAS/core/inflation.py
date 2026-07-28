@@ -16,36 +16,46 @@ class Inflation(ABC):
         self.prior = prior
         self.post = post
         # 'per_iteration' (default): apply inflation inside every outer-loop iteration, to
-        # that iteration's scale-filtered field, as usual.
-        # 'once_after_outer_loop': skip inflation during each iteration's assimilate() call;
-        # schemes/filter.py::filter() instead calls final_post_inflation() once, after all
-        # outer-loop iterations recombine into the full state. Matches the original design in
-        # Ying (2019) where posterior inflation is domain-wide and computed/applied once on the
-        # fully recombined analysis, not per scale. This can't be triggered from inside __call__
-        # itself even on the last iteration: __call__ runs from Assimilator.assimilate(), which
-        # happens BEFORE that same iteration's own Updator.update() call writes its increment to
-        # the model's 'current' tag files -- final_post_inflation needs all iterations' updators
-        # to have already run, so it has to be invoked from filter() after the whole outer loop.
+        # that iteration's scale-filtered field, via __call__ -> apply_inflation().
+        #
+        # 'once_after_outer_loop' (name kept for config/backward compatibility -- e.g.
+        # qg_benchmark's configs already use this string; see 2026-07-28 revision note below):
+        # inflation is applied ONCE, OUTSIDE the outer loop, on the true full-resolution state,
+        # rather than per-iteration on each iteration's own scale-filtered field. The name is a
+        # historical carryover from when only POSTERIOR inflation used this path -- "after" is
+        # NOT generic enough to describe prior inflation under the same timing. The actual
+        # invariant is "outside the outer loop": for flag='post' this means once AFTER all
+        # outer-loop iterations complete (matching Ying (2019)'s domain-wide posterior
+        # Desroziers coefficient, applied once on the fully recombined analysis, not per scale);
+        # for flag='prior' this means once BEFORE any outer-loop iteration begins, on the
+        # unmodified cycle-start forecast. schemes/filter.py::filter() is responsible for
+        # calling apply_inflation_once() at the correct point for each flag -- see that
+        # method's own docstring, and apply_inflation_once's, for the full mechanics.
+        #
+        # REVISION (2026-07-28, Yue): previously this was posterior-only (an ad hoc
+        # final_post_inflation() method with its own hardcoded, multiplicative-only formula,
+        # reused verbatim regardless of which Inflation subclass was active -- so e.g. RTPP's
+        # own coef, which means something entirely different in RTPP's blend-with-prior formula
+        # than in multiplicative's mean+coef*(pert) formula, was silently applied via the WRONG
+        # formula whenever RTPP used this timing, actively deflating the ensemble instead of
+        # relaxing it). Replaced with a proper abstract apply_inflation_once(), implemented per
+        # subclass (mirrors apply_inflation's existing per-subclass pattern for the per-iteration
+        # case), and prior inflation now gets its own once-before-outer-loop call instead of
+        # being silently stuck on per-iteration application regardless of this timing setting.
         self.timing = timing
 
     def __call__(self, c: Context, flag: Literal['prior', 'post']) -> None:
         """
-        Perform the covariance inflation method
+        Perform the covariance inflation method -- PER-ITERATION application only. Callers
+        (core/assimilator.py) only invoke this when self.timing == 'per_iteration'; the 'once'
+        (outside-the-outer-loop) case is scheduled directly by schemes/filter.py::filter() via
+        apply_inflation_once() instead, both before (prior) and after (post) the outer loop.
         """
-        if flag == 'prior':
-            # cache the true cycle-start prior (iteration 0, before any of this cycle's outer-
-            # loop DA) for final_post_inflation's own Desroziers stats later -- by the last
-            # iteration, c.obs.obs_prior reflects the intermediate state from iterations
-            # 0..iter-1, not the original prior. Not gated on self.prior (prior INFLATION being
-            # enabled is a separate, orthogonal setting from timing) -- runs whenever this
-            # Inflation instance uses once_after_outer_loop timing, regardless of self.prior.
-            if self.timing == 'once_after_outer_loop' and c.iter == 0:
-                c._cycle_obs_prior_full = {k: v.copy() for k, v in c.obs.obs_prior.items()}
-            if self.prior:
-                if self.adaptive:
-                    assert self.validate_obs_ens(c, c.obs.obs_prior), "obs.obs_prior is corrupted, cannot compute obs_space_stats for adaptive inflation."
-                    self.adaptive_prior_inflation(c)
-                self.apply_inflation(c, flag)
+        if flag == 'prior' and self.prior:
+            if self.adaptive:
+                assert self.validate_obs_ens(c, c.obs.obs_prior), "obs.obs_prior is corrupted, cannot compute obs_space_stats for adaptive inflation."
+                self.adaptive_prior_inflation(c)
+            self.apply_inflation(c, flag)
 
         if flag == 'post' and self.post:
             if self.adaptive:
@@ -54,62 +64,87 @@ class Inflation(ABC):
                 self.adaptive_post_inflation(c)
             self.apply_inflation(c, flag)
 
-    def final_post_inflation(self, c: Context) -> None:
-        """
-        Apply posterior inflation once, after all outer-loop iterations complete, to the full
-        recombined state -- matching Ying (2019)'s design where the inflation factor is a single
-        domain-wide Desroziers (2005) coefficient computed from the full state's obs-space
-        statistics, applied once (not per scale-band iteration). Called by
-        schemes/filter.py::filter() when self.timing == 'once_after_outer_loop', after the
-        for-iter outer loop (see that timing's own docstring above for why this can't run from
-        inside __call__).
+    def _read_prior_field(self, c: Context, rec_id) -> tuple[dict, np.ndarray]:
+        """Read the model's TRUE prior for every member of one record on this rank, directly
+        from restart files on disk (tag='prior') rather than caching the full prior state in
+        memory (2026-07-28, Yue: offline io_mode's whole design point is to avoid holding full
+        ensemble states in memory -- restart files are the only efficient way). The offline io
+        backend (io_backends/offline.py::OfflineIO.call_method) resolves tag='prior' to
+        ens_init_dir's pre-staged restart files at c.time == c.config.time_start (the very
+        first cycle, where there is no earlier forecast to read), or to the previous cycle's
+        own forecast output otherwise -- the same resolution schemes/filter.py's own
+        get_restart_dir() already uses for preprocess/postprocess/ensemble_forecast. Returns
+        ({mem_id: fld}, ensemble_mean_fld), same shape as _read_current_field()."""
+        rec = c.state.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        flds = {}
+        sum_fld_pid = None
+        for mem_id in c.mem_list[c.pid_mem]:
+            fld = c.io.call_method(c, 'prior', model.read_var, member=mem_id, **rec.asdict())
+            flds[mem_id] = fld
+            if sum_fld_pid is None:
+                sum_fld_pid = np.zeros_like(fld)
+            sum_fld_pid += fld
+        sum_fld = c.comm_mem.allreduce(sum_fld_pid)
+        mean_fld = sum_fld / c.nens
+        return flds, mean_fld
 
-        Uses the true cycle-start prior cached at iteration 0 (c._cycle_obs_prior_full, see
-        __call__'s 'prior' branch) and the current c.obs.obs_post, which by this point reflects
-        the fully recombined analysis (the last filter_iter() call recomputed it from the
-        post-updator state). The model's 'current' tag files hold this same fully recombined
-        state in native model space (assim_tools/updators/additive.py writes increments there
-        each iteration), so this method reads/writes 'current' directly rather than going
-        through c.state.fields_post, which only ever holds the last iteration's own
-        scale-filtered field.
-        """
-        orig_obs_prior = c.obs.obs_prior
-        c.obs.obs_prior = c._cycle_obs_prior_full
-        self.adaptive_post_inflation(c)
-        c.obs.obs_prior = orig_obs_prior
-        coef = self.coef
-        c.log_event(f"final posterior inflation coef={coef:.4f} (once, full recombined state)")
+    def _read_current_field(self, c: Context, rec_id) -> tuple[dict, np.ndarray]:
+        """Read the model's 'current' tag field for every member of one record on this rank.
+        Returns ({mem_id: fld}, ensemble_mean_fld). Shared I/O helper for
+        apply_inflation_once() implementations, which all operate on 'current' directly rather
+        than c.state.fields_{prior,post} (see apply_inflation_once's own docstring for why)."""
+        rec = c.state.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        flds = {}
+        sum_fld_pid = None
+        for mem_id in c.mem_list[c.pid_mem]:
+            fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
+            flds[mem_id] = fld
+            if sum_fld_pid is None:
+                sum_fld_pid = np.zeros_like(fld)
+            sum_fld_pid += fld
+        sum_fld = c.comm_mem.allreduce(sum_fld_pid)
+        mean_fld = sum_fld / c.nens
+        return flds, mean_fld
 
-        # the last filter_iter()'s own updator.update() call already cleaned up its file locks
-        # (core/updator.py::Updator.update(), c.comm.cleanup_file_locks() at the end) before
-        # returning control here -- re-initialize locks for the SAME 'current' tag files this
-        # method reads and writes below, otherwise acquire_file_lock's assertion fails with
-        # "file lock ... not initialized" in offline (non-parallel-netcdf) io_mode. Reuses
-        # c.updator's own init_all_file_locks (core/updator.py) rather than re-deriving the same
-        # file list here -- c.updator is the same live instance filter_iter() already called
-        # update() on, and init_all_file_locks is generic (keyed off c.mem_list/c.state.rec_list,
-        # not anything updator-subclass-specific), so it's exactly the right file set.
+    def _field_variance(self, c: Context, flds: dict, mean_fld: np.ndarray) -> np.ndarray:
+        """Ensemble variance (across the FULL ensemble, reduced over all ranks) of a set of
+        per-member fields already read on this rank (e.g. from _read_prior_field() or
+        _read_current_field()), given their pre-computed cross-rank ensemble mean. Shared by
+        apply_inflation_once() implementations that need spread rather than the raw prior
+        field itself (e.g. RTPS -- see assim_tools/inflation/RTPS.py)."""
+        sum_sq_pid = None
+        for fld in flds.values():
+            d = fld - mean_fld
+            if sum_sq_pid is None:
+                sum_sq_pid = np.zeros_like(mean_fld)
+            sum_sq_pid += d * d
+        sum_sq = c.comm_mem.allreduce(sum_sq_pid)
+        return sum_sq / (c.nens - 1)
+
+    def _write_current_field(self, c: Context, rec_id, flds: dict) -> None:
+        """Write {mem_id: fld} back to the model's 'current' tag for one record. Pairs with
+        _read_current_field(); shared by apply_inflation_once() implementations."""
+        rec = c.state.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        for mem_id, fld in flds.items():
+            c.io.call_method(c, 'current', model.write_var, fld, member=mem_id, **rec.asdict())
+
+    def _init_current_file_locks(self, c: Context) -> None:
+        """The last filter_iter()'s own updator.update() call already cleaned up its file locks
+        (core/updator.py::Updator.update(), c.comm.cleanup_file_locks() at the end) -- or, for
+        a prior-once call, no iteration has run yet at all -- either way, re-initialize locks
+        for the SAME 'current' tag files apply_inflation_once() reads/writes, otherwise
+        acquire_file_lock's assertion fails with "file lock ... not initialized" in offline
+        (non-parallel-netcdf) io_mode. Reuses c.updator's own init_all_file_locks
+        (core/updator.py) rather than re-deriving the same file list here -- generic (keyed off
+        c.mem_list/c.state.rec_list, not anything updator-subclass-specific), so it's exactly
+        the right file set regardless of when this is called."""
         if c.config.io_mode == 'offline':
             c.updator.init_all_file_locks(c)
 
-        for rec_id in c.state.rec_list[c.pid_rec]:
-            rec = c.state.info.fields[rec_id]
-            model = c.models[rec.model_src]
-
-            sum_fld_pid = None
-            for mem_id in c.mem_list[c.pid_mem]:
-                fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
-                if sum_fld_pid is None:
-                    sum_fld_pid = np.zeros_like(fld)
-                sum_fld_pid += fld
-            sum_fld = c.comm_mem.allreduce(sum_fld_pid)
-            mean_fld = sum_fld / c.nens
-
-            for mem_id in c.mem_list[c.pid_mem]:
-                fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
-                fld_new = mean_fld + coef*(fld - mean_fld)
-                c.io.call_method(c, 'current', model.write_var, fld_new, member=mem_id, **rec.asdict())
-        c.comm.Barrier()
+    def _cleanup_current_file_locks(self, c: Context) -> None:
         if c.config.io_mode == 'offline':
             c.comm.cleanup_file_locks()
 
@@ -206,6 +241,54 @@ class Inflation(ABC):
                 stats['vara'] += np.sum(variance_obs_post)
         return stats
 
+    def relaxation_adaptive_coef(self, c: Context) -> float:
+        """Adaptive relaxation coefficient (Ying and Zhang 2015, QJRMS) -- shared by RTPP and
+        RTPS's own adaptive_post_inflation(), since the coefficient estimate itself doesn't
+        depend on which relaxation formula (pointwise blend vs spread ratio) it's then used in.
+        Ported 2026-07-28 directly from Yue's own original Fortran reference implementation
+        (github.com/myying/PSU_WRF_EnKF, EnKF/src/enkf.f, relax_opt==1's adaptive branch) --
+        corrects a bug in the previous NEDAS RTPP implementation, which computed:
+            lamb = sqrt(max(0, (omb2-varo-amb2)/vara)); coef = (lamb-1)/(beta-1)
+        an accidental reuse of MultiplicativeInflation's alternate 'omb2_amb2' POSTERIOR
+        formula. The correct formula per the Fortran reference is:
+            la = max(sqrt((omb2-varo)/varb), 1.0)     -- note: divides by varb (PRIOR
+                                                            variance), no amb2 term at all
+            beta = sqrt(varb/vara); ka = beta - 1
+            coef = (la - 1.0) / ka
+        Dividing by varb instead of vara matters: vara (posterior variance) is exactly the
+        quantity a working relaxation scheme keeps from collapsing, so the old formula's
+        vara-in-the-denominator was numerically fragile -- confirmed 2026-07-28 by a live
+        36-cycle run where the coefficient estimate went unstable and hit NaN as vara shrank
+        over cycles, corrupting the state on write. varb (prior/forecast variance) doesn't
+        collapse the same way, so this formula is far more stable in practice.
+        """
+        stats = self.obs_space_stats(c)
+        if stats['total_nobs'] < 3:
+            if c.debug:
+                c.log_event("insufficient nobs to establish statistics, setting coef=0", flag='warning')
+            return 0.
+        if stats['vara'] == 0 or stats['varb'] == 0:
+            if c.debug:
+                c.log_event("vara or varb == 0 detected, setting coef=0 (no relaxation)", flag='warning')
+            return 0.
+        varb = stats['varb'] / stats['total_nobs']
+        vara = stats['vara'] / stats['total_nobs']
+        varo = stats['varo'] / stats['total_nobs']
+        omb2 = stats['omb2'] / stats['total_nobs']
+        la = max(np.sqrt(max(0.0, (omb2 - varo) / varb)), 1.0)
+        beta = np.sqrt(varb / vara)
+        if c.debug:
+            c.log_event(f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}; la = {la}, beta = {beta}", flag='stats')
+        if beta <= 1:
+            return 0.
+        coef = (la - 1.0) / (beta - 1.0)
+        if not np.isfinite(coef):
+            if c.debug:
+                c.log_event(f"non-finite relaxation coef (la={la}, beta={beta}), falling back to coef=0", flag='warning')
+            return 0.
+        c.message = f"varb = {varb}, vara = {vara}, varo={varo}; omb2 = {omb2}; la={la}, beta={beta}; coef = {coef}"
+        return coef
+
     @abstractmethod
     def adaptive_prior_inflation(self, c: Context):
         pass
@@ -216,4 +299,27 @@ class Inflation(ABC):
 
     @abstractmethod
     def apply_inflation(self, c: Context, flag: Literal['prior', 'post']):
+        """Per-iteration application, on that iteration's own (possibly scale-filtered)
+        c.state.fields_{prior,post}. Called by __call__(), i.e. only when
+        self.timing == 'per_iteration'."""
+        pass
+
+    @abstractmethod
+    def apply_inflation_once(self, c: Context, flag: Literal['prior', 'post']):
+        """
+        Apply inflation ONCE, outside the outer loop -- for flag='prior', called by
+        schemes/filter.py::filter() once BEFORE any outer-loop iteration begins, on the true,
+        unmodified cycle-start state; for flag='post', called once AFTER all outer-loop
+        iterations complete, on the fully recombined state. Operates on the model's 'current'
+        tag directly via _read_current_field()/_write_current_field() (not
+        c.state.fields_{prior,post}, which are per-iteration and scale-filtered by that
+        iteration's own transform_funcs, and don't survive past the iteration that created
+        them) -- mirrors apply_inflation's role for the per-iteration case, but implemented per
+        subclass since the required inputs differ: multiplicative inflation only needs the
+        field currently being inflated (and its own ensemble mean); RTPP's blend-with-prior
+        formula additionally needs the true prior, which for flag='post' is read via
+        _read_prior_field() (restart files on disk, tag='prior' -- NOT cached in memory, per
+        Yue's 2026-07-28 note that offline io_mode's whole point is to avoid holding full
+        ensemble states in memory).
+        """
         pass

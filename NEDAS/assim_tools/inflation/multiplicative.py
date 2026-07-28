@@ -111,3 +111,35 @@ class MultiplicativeInflation(Inflation):
             c.comm.Barrier()
         finally:
             c.pid_show = original_pid_show
+
+    def apply_inflation_once(self, c, flag):
+        """Once-outside-the-outer-loop application, on the true full-resolution state via the
+        model's 'current' tag (see Inflation.apply_inflation_once's own docstring). For
+        flag='prior' this runs before the outer loop, when 'current' still holds the
+        unmodified forecast -- so mean+coef*(fld-mean) around 'current's own mean is already
+        the correct prior-inflation formula, same as the per-iteration case just timed
+        differently. For flag='post' this runs after the outer loop, when 'current' holds the
+        fully recombined analysis -- matches the original Ying (2019) domain-wide posterior
+        inflation design (previously implemented ad hoc as Inflation.final_post_inflation();
+        replaced 2026-07-28 by this proper per-subclass method, called by
+        schemes/filter.py::filter() for both flags now instead of just post)."""
+        if flag not in ['prior', 'post']:
+            raise ValueError(f"Unknown flag {flag}, should be prior or post")
+        if self.adaptive:
+            if flag == 'prior':
+                self.adaptive_prior_inflation(c)
+            else:
+                orig_obs_prior = c.obs.obs_prior
+                c.obs.obs_prior = c._cycle_obs_prior_full
+                self.adaptive_post_inflation(c)
+                c.obs.obs_prior = orig_obs_prior
+        coef = self.coef
+        c.log_event(f"{flag} inflation (once, outside outer loop, coef={coef:.4f})")
+
+        self._init_current_file_locks(c)
+        for rec_id in c.state.rec_list[c.pid_rec]:
+            flds, mean_fld = self._read_current_field(c, rec_id)
+            new_flds = {mem_id: mean_fld + coef * (fld - mean_fld) for mem_id, fld in flds.items()}
+            self._write_current_field(c, rec_id, new_flds)
+        c.comm.Barrier()
+        self._cleanup_current_file_locks(c)

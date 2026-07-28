@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 registry = {
     'multiplicative': 'MultiplicativeInflation',
     'RTPP': 'RTPPInflation',
+    'RTPS': 'RTPSInflation',
 }
 
 def get_inflation_func(c: Context) -> Inflation:
