@@ -14,6 +14,18 @@ DA schemes, or other backward-compatible features land in the next minor release
 ### Fixed
 - `Vort3DObs.__init__` `KeyError` when the `vort3d` model is not registered in the
   context (hit by the generic dataset smoke test)
+- Sphinx `release`/`version` now derived from `NEDAS.__version__` instead of being
+  hardcoded in `docs/conf.py`
+- `topaz5model.postprocess`: `fixhycom` iced input now links to the posterior state,
+  not the background
+- `alignment_updator`: target level `k` is now configurable; added `vector_image`
+  option for vector-to-scalar conversion
+- Adaptive posterior inflation for multiscale (`once_after_outer_loop` timing):
+  configurable `max_coef` cap, and a file-lock re-initialization bug fix
+- `qg/python`: bottom/top Ekman drag now uses time-lagged `psi_o` (matching Fortran
+  `qg_driver.f90::Get_rhs`) instead of current `psi`; multi-layer spectral initial
+  condition now matches the Fortran model's modal-to-layer projection, so results
+  reproduce the Fortran version closely
 
 ## [1.3.0] - 2026-07-23
 
