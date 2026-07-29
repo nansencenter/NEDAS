@@ -21,12 +21,12 @@ class TestTopazEnsembleTransformWeights(unittest.TestCase):
 
     def test_shape(self):
         obs, obs_err, obs_prior, lfactor = _make_data(nens=12, nlobs=5)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
+        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
         self.assertEqual(W.shape, (12, 12))
 
     def test_column_sums_one(self):
         obs, obs_err, obs_prior, lfactor = _make_data(nens=12, nlobs=5)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
+        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
         np.testing.assert_allclose(W.sum(axis=0), 1.0, atol=1e-5)
 
     def test_huge_obs_error_gives_near_identity(self):
@@ -36,7 +36,7 @@ class TestTopazEnsembleTransformWeights(unittest.TestCase):
         obs = rng.normal(0, 1, 2)
         obs_err = np.array([1e8, 1e8])
         lfactor = np.ones(2)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
+        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
         np.testing.assert_allclose(W, np.eye(nens), atol=1e-3)
 
     def test_obs_dominated_case_reduces_spread(self):
@@ -47,7 +47,7 @@ class TestTopazEnsembleTransformWeights(unittest.TestCase):
         obs = rng.normal(0, 1, 3)
         obs_err = np.ones(3) * 0.01
         lfactor = np.ones(3)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
+        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
         prior_ens = rng.normal(0, 2, nens)
         post_ens = apply_ensemble_transform(prior_ens, W)
         self.assertLess(np.std(post_ens), np.std(prior_ens))
@@ -62,8 +62,8 @@ class TestTopazEnsembleTransformWeights(unittest.TestCase):
         lfactor = np.ones(3)
         prior_ens = rng.normal(0, 2, nens)
 
-        W1 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
-        W4 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=4.0, kfactor=1e6)
+        W1 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
+        W4 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=4.0)
 
         std1 = np.std(apply_ensemble_transform(prior_ens, W1))
         std4 = np.std(apply_ensemble_transform(prior_ens, W4))
@@ -72,7 +72,7 @@ class TestTopazEnsembleTransformWeights(unittest.TestCase):
     def test_obs_space_regime_nlobs_less_than_nens(self):
         # nlobs < nens → obs-space Cholesky branch
         obs, obs_err, obs_prior, lfactor = _make_data(nens=20, nlobs=4, seed=11)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0, kfactor=1e6)
+        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, rfactor=1.0)
         self.assertEqual(W.shape, (20, 20))
         np.testing.assert_allclose(W.sum(axis=0), 1.0, atol=1e-5)
 
@@ -123,7 +123,7 @@ class TestLocalAnalysisMain(unittest.TestCase):
             state_prior, obs_prior, obs, obs_err, hlfactor,
             state_z, obs_z, vroi, step_func,
             state_t, obs_t, troi, step_func,
-            impact_on_variable, 1.0, 1e6, nlobs_max,
+            impact_on_variable, 1.0, nlobs_max,
         )
         return prior_copy, state_prior  # (before, after)
 
@@ -155,7 +155,7 @@ class TestLocalAnalysisMain(unittest.TestCase):
             state_prior, obs_prior, obs, obs_err, hlfactor,
             state_z, obs_z, 1.0, step_func,
             state_t, obs_t, 1.0, step_func,
-            impact_on_variable, 1.0, 1e6, nlobs,
+            impact_on_variable, 1.0, nlobs,
         )
         np.testing.assert_array_equal(state_prior, before)
 
@@ -179,12 +179,12 @@ class TestLocalAnalysisMain(unittest.TestCase):
         local_analysis_main(state1, obs_prior, obs, obs_err, hlfactor,
                             state_z, obs_z, 1.0, step_func,
                             state_t, obs_t, 1.0, step_func,
-                            impact_on_variable, 1.0, 1e6, 1)
+                            impact_on_variable, 1.0, 1)
 
         local_analysis_main(state2, obs_prior, obs, obs_err, hlfactor,
                             state_z, obs_z, 1.0, step_func,
                             state_t, obs_t, 1.0, step_func,
-                            impact_on_variable, 1.0, 1e6, nlobs)
+                            impact_on_variable, 1.0, nlobs)
 
         self.assertFalse(np.allclose(state1, state2))
 
