@@ -12,6 +12,17 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Fixed
+- `TopazDEnKF`: align with Fortran reference `enkf-topaz` (develop @ 0f4c74b):
+  - `rfactor1` parameter added: global obs error inflation factor matching
+    Fortran's `RFACTOR1` (applied before local analysis)
+  - `kfactor` moved from inside `ensemble_transform_weights()` to a one-time
+    adjustment in `local_analysis()` before the field loop, matching Fortran's
+    `obs_QC()` flow (applied once, not re-computed per field)
+  - `nlobs_max` default changed from 2848 to 0 (no limit), matching Fortran's
+    default (`nlobs = 0` → use all obs within localization radius)
+  - (Inflation formula verified: Fortran's `infl`-based matrix `IM` produces
+    standard multiplicative inflation, *not* relaxation-to-prior — no change
+    required on the NEDAS side)
 - `Vort3DObs.__init__` `KeyError` when the `vort3d` model is not registered in the
   context (hit by the generic dataset smoke test)
 - Sphinx `release`/`version` now derived from `NEDAS.__version__` instead of being
@@ -26,6 +37,19 @@ DA schemes, or other backward-compatible features land in the next minor release
   `qg_driver.f90::Get_rhs`) instead of current `psi`; multi-layer spectral initial
   condition now matches the Fortran model's modal-to-layer projection, so results
   reproduce the Fortran version closely
+- `ice_drift` obs operator: `iced`/`seaice_velocity` restart lookup now rounds the
+  obs valid time to the start of day before the `iced` attempt, matching the
+  day-level tolerance `iceh` already had; previously the exact-hour requirement
+  for `iced_variables` could never be met (restarts are only ever written at hour
+  0), so the lookup silently fell through to the `iceh` fallback, which also fails
+  for a cycle prior state before any forecast has run
+
+### Added
+- `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
+  `use_dataset_uncertainty` (per-pixel uncertainty from the source file) and
+  `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
+  formulas ported from `enkf-topaz`) toggles; both default to `False`, no
+  behavior change unless enabled in `dataset_def`
 
 ## [1.3.0] - 2026-07-23
 
