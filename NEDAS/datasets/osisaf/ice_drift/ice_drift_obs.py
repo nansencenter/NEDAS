@@ -167,10 +167,17 @@ class OsisafSeaIceDriftObs(Dataset):
         for t in np.unique(obs_t):
             obs_mask = (obs_t == t)
             try:
-                # try to obtain seaice velocity from iced files
-                model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity', 'units':drift_units})
+                # try to obtain seaice velocity from iced (restart) files. iced files are
+                # only ever written at cycle boundaries (always hour 0 in this setup), and
+                # topaz5model.filename() requires an exact hour match for iced_variables
+                # (unlike iceh_variables, whose filename is day-only and hour-agnostic) --
+                # so round the obs time down to the start of day to give iced the same
+                # day-level tolerance iceh already has, rather than requiring the obs's
+                # exact (usually noon) valid time to coincide with a restart write.
+                t_iced = t.replace(hour=0, minute=0, second=0, microsecond=0)
+                model_si_velocity = model.read_var(**{**kwargs, 'time':t_iced, 'name':'seaice_velocity', 'units':drift_units})
             except FileNotFoundError:
-                # if not available, try to get from iceh files
+                # if not available, try to get from iceh files (already day-only, hour-agnostic)
                 model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity_daily', 'units':drift_units})
             grid_si_velocity = model.grid.convert(model_si_velocity, is_vector=True)
             # find obs location velocity
