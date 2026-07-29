@@ -19,6 +19,7 @@ class Cs2SmosObs(Dataset):
     obs_file_dt: int
     obs_days: int
     use_dataset_uncertainty: bool
+    use_adaptive_err: bool
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -142,7 +143,16 @@ class Cs2SmosObs(Dataset):
 
                     obs_value = obs[p]
 
-                    if self.use_dataset_uncertainty:
+                    if self.use_adaptive_err and name == 'seaice_thick':
+                        # cf. read_cysmos_hice (CYSMOS_Error branch) in enkf-topaz:
+                        # var = (hvar + thickness-dependent offset)^2
+                        hice = obs_value
+                        if hice < 3:
+                            offset = max(0.02, 0.1 * np.exp(-1.5 * hice))
+                        else:
+                            offset = min(0.2, 0.02 * np.exp(1.8 * (hice - 3)))
+                        obs_err_std = obs_err[p] + offset
+                    elif self.use_dataset_uncertainty:
                         obs_err_std = obs_err[p]  # use uncertainty from dataset
                     else:
                         obs_err_std = kwargs['err']['std']

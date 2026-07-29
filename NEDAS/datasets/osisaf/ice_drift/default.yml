@@ -11,3 +11,7 @@ yend: -5251000.
 dy: -62500.
 
 obs_file_dt: 24  #time interval (hours) between obs files
+
+use_dataset_uncertainty: False  # if True, use per-pixel 'uncert_dX_and_dY' field from file instead of err.std
+use_adaptive_err: False  # if True, use min(drift_err_cap, 4*uncert_dX_and_dY^2) cf. read_OSISAF_data_lv4 in enkf-topaz; overrides use_dataset_uncertainty
+drift_err_cap: 49.0  # km^2, error variance cap from idrft_osisaf.hdr (2-day OSISAF drift product, used post-2009)
