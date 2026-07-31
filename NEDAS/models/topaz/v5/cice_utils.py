@@ -96,7 +96,7 @@ def fix_zsin_profile(Nlay, saltmax, depressT, nsal, msal):
 
 def adjust_ice_variables(prior_ice_file, post_ice_file,
                          fice, hice, mask,
-                         aice_thresh, fice_thresh, hice_impact,
+                         aice_thresh, fice_thresh, seaice_thick_obs_impact,
                          zSin, Tmlt) -> None:
     """
     Adjust the iced model restart file variables based on analysis of seaice properties: fice, hice
@@ -157,7 +157,7 @@ def adjust_ice_variables(prior_ice_file, post_ice_file,
     # when ice pack area assimilating hice
     ind1 = np.where(ficem[ind] > 0.75)
     sum_vice = np.sum(vicen, axis=0)[ind][ind1]
-    Vtemp = ficem[ind][ind1] * (hice[ind][ind1]*hice_impact + sum_vice*(1-hice_impact)) / sum_vice
+    Vtemp = ficem[ind][ind1] * (hice[ind][ind1]*seaice_thick_obs_impact + sum_vice*(1-seaice_thick_obs_impact)) / sum_vice
     for k in range(ncat):
         ind2 = np.where(aicen[k,...][ind][ind1] > 0)
         vicen[k,...][ind][ind1][ind2] *= Vtemp[ind2]

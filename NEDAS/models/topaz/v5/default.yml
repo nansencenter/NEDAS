@@ -268,4 +268,4 @@ thref: 1.e-3
 
 aice_thresh: 1e-4
 fice_thresh: 5e-4
-hice_impact: 0
+seaice_thick_obs_impact: 0

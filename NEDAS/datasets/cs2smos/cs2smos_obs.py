@@ -128,14 +128,25 @@ class Cs2SmosObs(Dataset):
             ntime = f.dimensions['time'].size
             for n in range(ntime):
                 t = f['time'][n].data * timedelta(seconds=1) + datetime(1978, 1, 1, tzinfo=timezone.utc)
-                obs = f[native_name][n,...].data.flatten()
+                # netCDF4 auto-masks using each variable's _FillValue; using .data directly
+                # (as before) bypasses the mask and leaks the raw fill-value sentinel
+                # (e.g. -2147483647 for analysis_sea_ice_thickness) in as a bogus obs value
+                # for every no-data pixel -- filled(nan) + an explicit finite check below
+                # is required to actually exclude those points.
+                obs_masked = f[native_name][n,...]
+                obs = np.ma.filled(obs_masked, np.nan).flatten()
+                obs_invalid = np.ma.getmaskarray(obs_masked).flatten()
 
                 if 'analysis_sea_ice_thickness_unc' in f.variables:
-                    obs_err = f['analysis_sea_ice_thickness_unc'][n,...].data.flatten()
+                    err_masked = f['analysis_sea_ice_thickness_unc'][n,...]
+                    obs_err = np.ma.filled(err_masked, np.nan).flatten()
+                    obs_invalid = obs_invalid | np.ma.getmaskarray(err_masked).flatten()
                 else:
                     obs_err = 0.1 * np.ones(obs.shape)  # Default error if not available
 
                 for p in range(obs.size):
+                    if obs_invalid[p] or not np.isfinite(obs[p]):
+                        continue
                     if mask_[p] > 0:
                         continue
                     if x_[p] < grid.xmin or x_[p] > grid.xmax or y_[p] < grid.ymin or y_[p] > grid.ymax:
