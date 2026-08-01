@@ -12,6 +12,20 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Fixed
+- `BatchAssimilator` localization prefilter: L1 (Manhattan) distance check for the
+  `hroi` obs filter now scaled by √2, making the prefilter disk a correct superset
+  of the true L2 Gaspari-Cohn support — fixes hard diamond-shaped edges in the
+  analysis from obs incorrectly excluded along diagonal directions
+- `cs2smos_obs`: netCDF4 fill-value leak — `_FillValue` sentinel was read as a
+  literal observation for every no-data pixel (~90% of one test-case grid),
+  silently folding the sentinel value into the analysis; now uses `filled(nan)`
+  with an explicit finite-validity check before the obs sequence
+- `topaz5model`: `hice_impact` (renamed to `seaice_thick_obs_impact`) is now wired
+  through `postprocess()` into the external `fixhycom` binary call, which
+  previously hardcoded a literal 0 for that argument — the SIT analysis increment
+  was computed by the EnKF but never redistributed into the restart's per-category
+  ice volume regardless of the configured value. Default remains 0 (no behavior
+  change unless explicitly raised)
 - `TopazDEnKF`: align with Fortran reference `enkf-topaz` (develop @ 0f4c74b):
   - `rfactor1` parameter added: global obs error inflation factor matching
     Fortran's `RFACTOR1` (applied before local analysis)
