@@ -37,6 +37,28 @@ class Vort3DObs(SyntheticObs):
     """
     network_type: str
     obs_range: float
+    core_bias_scale: float | None = None  # 2026-07-30, Yue: "make the network itself
+    # core-weighted". None (default, backward compatible -- every experiment run before this
+    # date keeps its exact original network) = uniform density over the obs_range disk, the
+    # original 'targeted' behavior. Set to a length scale (e.g. comparable to Rmw) to instead
+    # concentrate obs density near the vortex center: radius is drawn from a half-Gaussian with
+    # this scale (rejected beyond obs_range) instead of uniformly over the disk area. Motivation:
+    # uniform-over-disk sampling gives an EXPECTED core-hit count of only
+    # nobs*(Rmw/obs_range)^2 -- e.g. ~0.4 obs within a 50km-radius core at nobs=100,
+    # obs_range=800km -- so most draws put literally zero obs near the vortex core regardless of
+    # nobs being "enough" in aggregate; core-weighting fixes that directly rather than requiring
+    # nobs large enough to compensate statistically.
+    core_bias_fraction: float = 1.0  # 2026-07-30, Yue: "the distribution of obs is now too
+    # clustered in vortex core, tune the radial distribution down to more uniform version" --
+    # pure core-biased sampling (fraction=1.0, the default once core_bias_scale is set) starves
+    # the periphery of obs entirely, letting a single stray far-out obs dominate a wide area with
+    # no local competition (confirmed 2026-07-30: an isolated 3-obs cluster ~650-690km out was
+    # enough to make an edge pixel read HIGHER than the true, densely-observed vortex center,
+    # which paradoxically gets the MOST diluted value of any point in the disk once hroi is
+    # comparable to obs_range -- a geometry artifact, not a sign bug, see conversation). Setting
+    # this < 1.0 draws that fraction of obs core-biased and the REST via the original
+    # uniform-over-disk sampling, so the periphery keeps meaningful coverage too. Only used when
+    # core_bias_scale is not None.
     zmin: float | None = None  # z-distribution range for the generic 'wind' obs type, in
     zmax: float | None = None  # `z_units` (default hPa) -- each obs draws its own z uniformly
     z_units: str = 'hPa'       # at random within [zmin, zmax]; zmin==zmax degenerates to a
@@ -115,14 +137,39 @@ class Vort3DObs(SyntheticObs):
             elif self.network_type == 'targeted':
                 if nobs is None:
                     nobs = 800
-                x, y = [], []
-                while len(x) < nobs:
-                    x1 = np.random.uniform(true_center_x - self.obs_range, true_center_x + self.obs_range)
-                    y1 = np.random.uniform(true_center_y - self.obs_range, true_center_y + self.obs_range)
-                    dist = np.hypot(x1 - true_center_x, y1 - true_center_y)
-                    if dist <= self.obs_range:
-                        x.append(x1)
-                        y.append(y1)
+
+                def sample_uniform_disk(n):
+                    xs, ys = [], []
+                    while len(xs) < n:
+                        x1 = np.random.uniform(true_center_x - self.obs_range, true_center_x + self.obs_range)
+                        y1 = np.random.uniform(true_center_y - self.obs_range, true_center_y + self.obs_range)
+                        dist = np.hypot(x1 - true_center_x, y1 - true_center_y)
+                        if dist <= self.obs_range:
+                            xs.append(x1)
+                            ys.append(y1)
+                    return xs, ys
+
+                def sample_core_biased(n):
+                    xs, ys = [], []
+                    while len(xs) < n:
+                        r = abs(np.random.normal(0, self.core_bias_scale))
+                        if r <= self.obs_range:
+                            theta = np.random.uniform(0, 2 * np.pi)
+                            xs.append(true_center_x + r * np.cos(theta))
+                            ys.append(true_center_y + r * np.sin(theta))
+                    return xs, ys
+
+                if self.core_bias_scale is None:
+                    # original behavior: uniform density over the obs_range disk
+                    x, y = sample_uniform_disk(nobs)
+                else:
+                    # mixture: core_bias_fraction of obs drawn core-weighted (half-Gaussian
+                    # radius, see core_bias_scale's docstring), the rest uniform-over-disk so the
+                    # periphery keeps real coverage too (see core_bias_fraction's docstring)
+                    n_core = int(round(nobs * self.core_bias_fraction))
+                    x_core, y_core = sample_core_biased(n_core)
+                    x_unif, y_unif = sample_uniform_disk(nobs - n_core)
+                    x, y = x_core + x_unif, y_core + y_unif
                 x = np.array(x)
                 y = np.array(y)
 
