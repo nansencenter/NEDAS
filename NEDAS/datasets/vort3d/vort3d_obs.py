@@ -228,7 +228,8 @@ class Vort3DObs(SyntheticObs):
     # (e.g. Fang & Zhu 2019, https://www.mdpi.com/2073-4433/10/7/376) rather than Vort2DObs's
     # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
     # class docstring
-    def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5):
+    def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5,
+                        debug=False):
         """Vorticity-centroid center search, anchored to a first-guess position.
 
         Two problems with the original discrete box-summed-vorticity argmax (still used below
@@ -251,7 +252,21 @@ class Vort3DObs(SyntheticObs):
         thresholding first excludes the window's own weak background clutter from the centroid).
         With `first_guess=None` (e.g. the very first timestep of a track), a coarse whole-domain
         box-sum argmax bootstraps a first guess, which is then itself centroid-refined the same
-        way."""
+        way.
+
+        Periodic-x wrap: the search window is anchored at `first_guess` and wraps around the
+        cyclic x boundary whenever the vortex is within `search_radius` of it. The centroid is
+        therefore averaged over the window's CONTINUOUS offsets and only then shifted back to
+        grid coordinates (and taken mod nx). Averaging over the wrapped grid-column indices
+        instead biases the result to a bogus mid-domain value whenever vorticity weight
+        straddles the wrap -- the tracker then chases that bogus center, loses the vortex, and
+        stays frozen at the (now wrong) first guess on every later call (observed: vort3d pool
+        member 154 pinning at a fixed cell as its vortex crossed x=0, 2026-08-03).
+
+        `debug=True` prints diagnostics for the wrap case: when the window straddles the cyclic
+        boundary (weight on both sides), and when the window contains no coherent cyclonic
+        vorticity and the first guess is returned unchanged (the stuck signature).
+        """
         ny, nx = u.shape
 
         # compute vorticity
@@ -269,18 +284,51 @@ class Vort3DObs(SyntheticObs):
                         center_i, center_j = i, j
             first_guess = (center_i, center_j)
 
+        # x is periodic (see Core's own grid docstring); y is not. Near the y-walls a
+        # clipped window would be asymmetric and pull the vorticity-weighted centroid
+        # toward the interior (observed: tracks bending/stopping south of the north wall
+        # as vortices approach it, 2026-08-03). Pad zeta with its own reflection in y so
+        # the search window is always symmetric; the padded rows carry no physical
+        # meaning, they only keep the centroid unbiased.
+        zeta = np.pad(zeta, ((search_radius, search_radius), (0, 0)), mode='reflect')
         gi, gj = first_guess
-        # x is periodic (see Core's own grid docstring); y is not
-        i_idx = [i % nx for i in range(gi-search_radius, gi+search_radius+1)]
-        j_idx = list(range(max(0, gj-search_radius), min(ny, gj+search_radius+1)))
-        sub = zeta[np.ix_(j_idx, i_idx)]
+        # Window offsets (continuous, anchored at gi) are the coordinate frame for the x
+        # centroid; i_idx is only the periodic grid-column map used to index into zeta.
+        # See the wrap note in the docstring for why the centroid must NOT average over
+        # i_idx itself.
+        off = np.arange(-search_radius, search_radius + 1)
+        i_idx = [i % nx for i in range(gi - search_radius, gi + search_radius + 1)]
+        j_idx = list(range(gj - search_radius, gj + search_radius + 1))
+        sub = zeta[np.ix_([j + search_radius for j in j_idx], i_idx)]
         sub = np.clip(sub, 0, None)  # cyclonic (positive) vorticity only
         if sub.max() <= 0:
+            if debug:
+                print(f'[vort3d_obs.vortex_position] DEBUG: no cyclonic vorticity in the '
+                      f'{2*search_radius+1}x{2*search_radius+1} window around first guess '
+                      f'({gi}, {gj}); returning the first guess unchanged -- if this repeats '
+                      f'across consecutive calls the track is stuck.')
             return gi, gj  # nothing coherent in the window: stay at the first guess
         weight = np.where(sub >= vort_threshold_frac*sub.max(), sub, 0.0)
-        jj, ii = np.meshgrid(j_idx, i_idx, indexing='ij')
-        center_j = int(round(np.sum(weight*jj) / weight.sum()))
-        center_i = int(round(np.sum(weight*ii) / weight.sum())) % nx
+        w_sum = weight.sum()
+        center_i = int(round(np.sum(weight * off[None, :]) / w_sum)) + gi  # mod nx below
+        center_i %= nx
+        center_j = int(round(np.sum(weight * np.asarray(j_idx)[:, None]) / w_sum))
+        center_j = int(np.clip(center_j, 0, ny - 1))
+
+        if debug:
+            # wrap diagnostic: weight on both sides of the cyclic boundary (a grid column
+            # is on the wrapped side only if its actual coordinate crossed 0 or nx, not
+            # merely because its window offset is negative), and the value the old
+            # wrapped-grid-index average would have produced (the 2026-08-03 bug)
+            w_col = weight.sum(axis=0)
+            wrapped = ((gi + off) < 0) | ((gi + off) >= nx)
+            w_wrap, w_open = w_col[wrapped].sum(), w_col[~wrapped].sum()
+            if w_wrap > 0 and w_open > 0:
+                old_i = int(round(np.sum(weight * np.asarray(i_idx)[None, :]) / w_sum)) % nx
+                print(f'[vort3d_obs.vortex_position] DEBUG: window straddles the cyclic x '
+                      f'boundary (first guess x={gi}); wrapped-side weight {w_wrap:.2f} vs '
+                      f'open-side {w_open:.2f}; new center x={center_i} '
+                      f'(the wrapped-index average would have been {old_i}).')
 
         return center_i, center_j
 
@@ -292,8 +340,11 @@ class Vort3DObs(SyntheticObs):
         half = box // 2
         vmax = -999.
         for j in range(-half, half+1):
+            jj = int(center_j) + j
+            if jj < 0 or jj >= ny:
+                continue          # y is a rigid wall, not periodic -- skip cells outside
             for i in range(-half, half+1):
-                vmax = max(vmax, wind[int(center_j+j)%ny, int(center_i+i)%nx])
+                vmax = max(vmax, wind[jj, int(center_i + i) % nx])
         return vmax
 
     def vortex_size(self, u, v, center_i, center_j):
@@ -305,12 +356,17 @@ class Vort3DObs(SyntheticObs):
         wind_rad = np.zeros(nr)
         count_rad = np.zeros(nr)
         for j in range(-nr, nr+1):
+            jj = int(center_j) + j
+            if jj < 0 or jj >= ny:
+                continue          # y is a rigid wall, not periodic -- skip cells outside
             for i in range(-nr, nr+1):
                 r = int(np.sqrt(i**2+j**2))
                 if r < nr:
-                    wind_rad[r] += wind[int(center_j+j)%ny, int(center_i+i)%nx]
+                    wind_rad[r] += wind[jj, int(center_i + i) % nx]
                     count_rad[r] += 1
-        wind_rad = wind_rad/count_rad
+        # bins with no samples (center close to a wall) are below-threshold, not NaN
+        wind_rad = np.divide(wind_rad, count_rad, out=np.full_like(wind_rad, -1.0),
+                             where=count_rad > 0)
 
         if np.max(wind_rad)<wind_min or np.where(wind_rad>=wind_min)[0].size==0:
             Rsize = -1
