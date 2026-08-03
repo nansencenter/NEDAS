@@ -229,7 +229,7 @@ class Vort3DObs(SyntheticObs):
     # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
     # class docstring
     def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5,
-                        debug=False):
+                        cyclic_dim='x', debug=False):
         """Vorticity-centroid center search, anchored to a first-guess position.
 
         Two problems with the original discrete box-summed-vorticity argmax (still used below
@@ -266,8 +266,19 @@ class Vort3DObs(SyntheticObs):
         `debug=True` prints diagnostics for the wrap case: when the window straddles the cyclic
         boundary (weight on both sides), and when the window contains no coherent cyclonic
         vorticity and the first guess is returned unchanged (the stuck signature).
+
+        `cyclic_dim` is the model grid's cyclic dimension(s), same convention as
+        `Grid2DBase.cyclic_dim` ('x' for vort3d: periodic x, rigid wall y). The search window
+        is built honoring these boundary conditions -- cyclic dims wrap around the domain;
+        non-cyclic (rigid-wall) dims reflect-pad the vorticity so a window touching the wall
+        stays symmetric and the centroid is not biased toward the interior (the 2026-08-03
+        y-wall fix, generalized here to any cyclic_dim). The centroid is always averaged over
+        the window's continuous offsets (one coherent coordinate frame), then mapped back to
+        grid coordinates per dimension: mod n for cyclic dims, clipped for non-cyclic dims.
         """
         ny, nx = u.shape
+        cyc_x = cyclic_dim is not None and 'x' in cyclic_dim
+        cyc_y = cyclic_dim is not None and 'y' in cyclic_dim
 
         # compute vorticity
         zeta = (np.roll(v, -1, axis=1) - np.roll(v, 1, axis=1) - np.roll(u, -1, axis=0) + np.roll(u, 1, axis=0)) / 2.0
@@ -284,22 +295,28 @@ class Vort3DObs(SyntheticObs):
                         center_i, center_j = i, j
             first_guess = (center_i, center_j)
 
-        # x is periodic (see Core's own grid docstring); y is not. Near the y-walls a
-        # clipped window would be asymmetric and pull the vorticity-weighted centroid
-        # toward the interior (observed: tracks bending/stopping south of the north wall
-        # as vortices approach it, 2026-08-03). Pad zeta with its own reflection in y so
-        # the search window is always symmetric; the padded rows carry no physical
-        # meaning, they only keep the centroid unbiased.
-        zeta = np.pad(zeta, ((search_radius, search_radius), (0, 0)), mode='reflect')
+        # Build the search window honoring the grid's boundary conditions (cyclic_dim).
+        # Cyclic dims wrap (periodic); non-cyclic (rigid-wall) dims reflect-pad zeta so a
+        # window touching the wall stays symmetric and the centroid is not pulled toward
+        # the interior (2026-08-03 y-wall fix, generalized to any cyclic_dim). The
+        # centroid is averaged over the window's CONTINUOUS offsets (a single coherent
+        # coordinate frame -- averaging over wrapped grid indices biases it to a bogus
+        # mid-domain value when weight straddles the wrap), then mapped back to grid
+        # coordinates per dimension: mod n for cyclic dims, clip for non-cyclic dims.
+        pad_y = (search_radius, search_radius) if not cyc_y else (0, 0)
+        pad_x = (search_radius, search_radius) if not cyc_x else (0, 0)
+        zeta = np.pad(zeta, (pad_y, pad_x), mode='reflect')
         gi, gj = first_guess
-        # Window offsets (continuous, anchored at gi) are the coordinate frame for the x
-        # centroid; i_idx is only the periodic grid-column map used to index into zeta.
-        # See the wrap note in the docstring for why the centroid must NOT average over
-        # i_idx itself.
         off = np.arange(-search_radius, search_radius + 1)
-        i_idx = [i % nx for i in range(gi - search_radius, gi + search_radius + 1)]
-        j_idx = list(range(gj - search_radius, gj + search_radius + 1))
-        sub = zeta[np.ix_([j + search_radius for j in j_idx], i_idx)]
+        if cyc_x:
+            i_idx = (gi + off) % nx
+        else:
+            i_idx = gi + off + search_radius
+        if cyc_y:
+            j_idx = (gj + off) % ny
+        else:
+            j_idx = gj + off + search_radius
+        sub = zeta[np.ix_(j_idx, i_idx)]
         sub = np.clip(sub, 0, None)  # cyclonic (positive) vorticity only
         if sub.max() <= 0:
             if debug:
@@ -310,13 +327,13 @@ class Vort3DObs(SyntheticObs):
             return gi, gj  # nothing coherent in the window: stay at the first guess
         weight = np.where(sub >= vort_threshold_frac*sub.max(), sub, 0.0)
         w_sum = weight.sum()
-        center_i = int(round(np.sum(weight * off[None, :]) / w_sum)) + gi  # mod nx below
-        center_i %= nx
-        center_j = int(round(np.sum(weight * np.asarray(j_idx)[:, None]) / w_sum))
-        center_j = int(np.clip(center_j, 0, ny - 1))
+        center_i = int(round(np.sum(weight * off[None, :]) / w_sum)) + gi
+        center_i = center_i % nx if cyc_x else int(np.clip(center_i, 0, nx - 1))
+        center_j = int(round(np.sum(weight * off[:, None]) / w_sum)) + gj
+        center_j = center_j % ny if cyc_y else int(np.clip(center_j, 0, ny - 1))
 
-        if debug:
-            # wrap diagnostic: weight on both sides of the cyclic boundary (a grid column
+        if debug and cyc_x:
+            # wrap diagnostic: weight on both sides of the cyclic x boundary (a grid column
             # is on the wrapped side only if its actual coordinate crossed 0 or nx, not
             # merely because its window offset is negative), and the value the old
             # wrapped-grid-index average would have produced (the 2026-08-03 bug)
