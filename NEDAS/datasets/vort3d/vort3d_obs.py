@@ -229,7 +229,7 @@ class Vort3DObs(SyntheticObs):
     # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
     # class docstring
     def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5,
-                        cyclic_dim='x', debug=False):
+                        cyclic_dim='x', proximity_sigma=8.0, debug=False):
         """Vorticity-centroid center search, anchored to a first-guess position.
 
         Two problems with the original discrete box-summed-vorticity argmax (still used below
@@ -275,6 +275,17 @@ class Vort3DObs(SyntheticObs):
         y-wall fix, generalized here to any cyclic_dim). The centroid is always averaged over
         the window's continuous offsets (one coherent coordinate frame), then mapped back to
         grid coordinates per dimension: mod n for cyclic dims, clipped for non-cyclic dims.
+
+        `proximity_sigma` (grid cells, default 8): the vorticity weight is additionally
+        multiplied by a Gaussian exp(-d^2/2 sigma^2) centred on the first guess, so the
+        centroid stays locked onto the vortex that was anchored (the feature being tracked)
+        rather than being pulled to unrelated features elsewhere in the search window. This
+        is what lets the main vortex be traced through its full life cycle: when it weakens
+        (vmax down to ~10 m/s) and its vorticity becomes comparable to background/split-off
+        blobs, the nearby anchored feature still dominates the centroid; and near a rigid
+        wall the reflected (mirror) part of the window is far from the anchor and down-
+        weighted, preventing the track from being pulled onto the wall itself (observed:
+        tracks jumping to y=nx-1 as vortices approached the north wall, 2026-08-03).
         """
         ny, nx = u.shape
         cyc_x = cyclic_dim is not None and 'x' in cyclic_dim
@@ -325,6 +336,16 @@ class Vort3DObs(SyntheticObs):
                       f'({gi}, {gj}); returning the first guess unchanged -- if this repeats '
                       f'across consecutive calls the track is stuck.')
             return gi, gj  # nothing coherent in the window: stay at the first guess
+        if proximity_sigma is not None:
+            # proximity taper, applied BEFORE the threshold: down-weights vorticity far
+            # from the anchored vortex so the threshold stays anchored-relative and the
+            # tracked vortex's core always qualifies (a weak anchored vortex would
+            # otherwise fall below 50% of the window max set by an unrelated stronger
+            # blob). Keeps the centroid locked onto the feature being tracked -- the main
+            # vortex is then traceable through its full life cycle (weak, split and
+            # wall-mirror cases, 2026-08-03).
+            taper = np.exp(-(off[:, None]**2 + off[None, :]**2) / (2 * proximity_sigma**2))
+            sub = sub * taper
         weight = np.where(sub >= vort_threshold_frac*sub.max(), sub, 0.0)
         w_sum = weight.sum()
         center_i = int(round(np.sum(weight * off[None, :]) / w_sum)) + gi
