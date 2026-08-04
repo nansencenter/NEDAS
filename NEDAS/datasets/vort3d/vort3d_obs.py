@@ -128,6 +128,8 @@ class Vort3DObs(SyntheticObs):
 
         if name in ('wind_b', 'wind'):
             nobs = kwargs['nobs']
+            # seed by cycle time so obs network is reproducible across cases, still random over time
+            np.random.seed(int(kwargs['time'].timestamp()) % (2**32 - 1))
             if self.network_type == 'global':
                 if nobs is None:
                     nobs = 1000

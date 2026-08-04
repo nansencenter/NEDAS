@@ -379,6 +379,8 @@ class Obs:
 
                     # perturb with obs err
                     # TODO: only support normal err_type here
+                    # seed by (time, obs_rec_id) so noise is reproducible across cases/cycles
+                    np.random.seed((int(obs_rec.time.timestamp()) + obs_rec_id) % (2**32 - 1))
                     seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
 
                     c._synthetic_obs_cache[obs_rec_id] = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in seq.items()}
