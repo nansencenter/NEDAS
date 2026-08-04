@@ -89,7 +89,6 @@ class Config:
     # more details in assimilation algorithm
     scheme: str
     resolution_level: list[int]
-    character_length: list[float]
     assimilator_def: dict
     updator_def: dict
     covariance_def: dict
@@ -225,6 +224,16 @@ class Config:
         inf_str = f"{inf.get('type', 'None')} (coef: {inf.get('coef', 1.0)}, adaptive: {inf.get('adaptive', False)})"
         state_vars = [f"{d.get('name')} ({d.get('model_src')})" for d in (self.state_def or [])]
         obs_vars = [f"{d.get('name')} ({d.get('dataset_src')})" for d in (self.obs_def or [])]
+        # character_length now lives inside a scale_bandpass transform_def entry, not as a
+        # standalone config field -- best-effort display only, so a simple flat search over
+        # whatever shape transform_def has (dict, list, or per-iter dict of either) is enough.
+        char_len = 'N/A'
+        transform_def = self.transform_def or {}
+        top_entries = transform_def.values() if isinstance(transform_def, dict) and 'type' not in transform_def else [transform_def]
+        for entry in top_entries:
+            for item in entry if isinstance(entry, list) else [entry]:
+                if isinstance(item, dict) and item.get('type') == 'scale_bandpass' and 'character_length' in item:
+                    char_len = item['character_length']
 
         # Construct the summary block
         summary_text = f"""
@@ -256,7 +265,7 @@ Analysis Scheme:
   Updator:       Type: {self.updator_def.get('type') if self.updator_def else 'None'}
   Inflation:     {inf_str}
   Localization:  H: {h_loc} | V: {v_loc} | T: {loc.get('temporal', {}).get('type', 'N/A')}
-  Multiscale:    Resolution Levels: {self.resolution_level} | Character Lengths: {self.character_length}
+  Multiscale:    Resolution Levels: {self.resolution_level} | Character Lengths: {char_len}
 
 Definitions:
   Models Used:   {", ".join(self.model_def.keys()) if self.model_def else 'None'}
