@@ -387,6 +387,11 @@ class Obs:
                 else:
                     seq = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in c._synthetic_obs_cache[obs_rec_id].items()}
 
+                # err_std for the assimilator's R, re-applied fresh every iteration (not cached
+                # with the rest of seq) so obs values/generation noise stay fixed per cycle while
+                # R can still be inflated per iteration (e.g. tempering) independent of them
+                seq['err_std'] = np.full_like(seq['err_std'], obs_rec.err.std * obs_rec.err.infl)
+
             else:
                 # read dataset files and obtain obs sequence
                 seq = dataset.read_obs(model=model, grid=c.grid, mask=c.grid.mask, z=ref_z, **obs_rec.asdict(), tag='raw')
