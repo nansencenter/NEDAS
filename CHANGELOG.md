@@ -11,6 +11,21 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ## [Unreleased]
 
+### Added
+- `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
+  `use_dataset_uncertainty` (per-pixel uncertainty from the source file) and
+  `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
+  formulas ported from `enkf-topaz`) toggles; both default to `False`, no
+  behavior change unless enabled in `dataset_def`
+- `InterpolationAssimilator`: Cressman/OI local obs-only analysis (`interp`
+  assimilator type)
+- `vort3d` obs: core-biased radial sampling option for targeted obs networks
+- DIS optical flow: `variational_refine_alpha` now configurable
+- `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
+  `max_dt_retries`, `min_dt`)
+
+## [1.3.1] - 2026-08-06
+
 ### Fixed
 - `BatchAssimilator` localization prefilter: L1 (Manhattan) distance check for the
   `hroi` obs filter now scaled by √2, making the prefilter disk a correct superset
@@ -71,19 +86,6 @@ DA schemes, or other backward-compatible features land in the next minor release
   iterations without scale decomposition no longer assume it exists
 - `vort3d`: extended NaN detection to all prognostic fields (previously only
   `u`/`pstar`) and clip qsat iterates inside the loop, not just after
-
-### Added
-- `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
-  `use_dataset_uncertainty` (per-pixel uncertainty from the source file) and
-  `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
-  formulas ported from `enkf-topaz`) toggles; both default to `False`, no
-  behavior change unless enabled in `dataset_def`
-- `InterpolationAssimilator`: Cressman/OI local obs-only analysis (`interp`
-  assimilator type)
-- `vort3d` obs: core-biased radial sampling option for targeted obs networks
-- DIS optical flow: `variational_refine_alpha` now configurable
-- `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
-  `max_dt_retries`, `min_dt`)
 
 ## [1.3.0] - 2026-07-23
 
