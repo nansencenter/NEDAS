@@ -25,7 +25,7 @@ class Vort3DModel(Model[RegularGrid]):
     k=0..nz-1 = free-atmosphere layers top-to-bottom, k=nz = boundary
     layer) plus one single-level 'pstar', following the same
     VarDesc(levels=...) + per-level `read_var(k=...)` pattern NEDAS's qg
-    model uses -- NOT the earlier (pre-2026-07-21) design of one separate
+    model uses -- NOT the earlier design of one separate
     NEDAS variable per layer ('wind_0', 'wind_1', ..., 'wind_b', ...),
     which was simpler to read/write but made state_def/variable-list
     length scale with nz (3*(nz+1)+1 entries), an increasingly bad
@@ -145,6 +145,12 @@ class Vort3DModel(Model[RegularGrid]):
     # snapshots within a single DA cycle without changing cycle_period (which the scheme's own
     # checkpointing/next-cycle bookkeeping still depends on). None (default) reproduces the
     # original single-shot-per-cycle behavior exactly.
+    dt_reduction_factor: float = 0.5  # adaptive-dt retry: if a forecast segment
+    # blows up (NaN) at `dt`, util.advance_time retries the SAME segment from the same starting
+    # state with dt multiplied by this factor, up to max_dt_retries times, before giving up
+    max_dt_retries: int = 3
+    min_dt: float | None = None  # floor for the adaptive-dt retries; None (default) uses
+    # dt * dt_reduction_factor**max_dt_retries (i.e. exactly max_dt_retries halvings/reductions)
     memory: dict = {}
 
     def __init__(self, **kwargs):
@@ -360,7 +366,9 @@ class Vort3DModel(Model[RegularGrid]):
         t = kwargs['time']
         for _ in range(n_chunks):
             state = advance_time(state, self.nx, self.ny, self.dx, self.nz, self.beta,
-                                  self.moist, self.convection_scheme, self.dt, chunk_h)
+                                  self.moist, self.convection_scheme, self.dt, chunk_h,
+                                  dt_reduction_factor=self.dt_reduction_factor,
+                                  max_dt_retries=self.max_dt_retries, min_dt=self.min_dt)
             if any(np.any(np.isnan(v)) for v in state.values()):
                 raise RuntimeError(f"{self.__class__.__name__}: NaN detected in model run")
             t = t + chunk_h * dt1h
