@@ -57,6 +57,20 @@ DA schemes, or other backward-compatible features land in the next minor release
   for `iced_variables` could never be met (restarts are only ever written at hour
   0), so the lookup silently fell through to the `iceh` fallback, which also fails
   for a cycle prior state before any forecast has run
+- `vort3d` obs: fixed cyclic-boundary wrap bias in `vortex_position` centroid
+  (tracks no longer pin at the domain wrap point)
+- `vort3d` obs: `vortex_position` search window now respects `grid.cyclic_dim`
+  per axis (wrap vs. reflect-pad), generalizing the wrap/wall fixes above
+- `vort3d` obs: proximity-taper the vorticity centroid toward the anchored
+  vortex, so tracks stop jumping to unrelated blobs or pinning at walls
+- Seeded obs network/noise RNG by cycle time (and `obs_rec_id`) so synthetic
+  obs are reproducible across schemes at a given cycle
+- Separated obs error inflation (tempering) from obs generation noise, so
+  inflating R for tempering no longer corrupts the generated obs values
+- Moved `character_length` into `scale_bandpass`'s own `transform_def` scope;
+  iterations without scale decomposition no longer assume it exists
+- `vort3d`: extended NaN detection to all prognostic fields (previously only
+  `u`/`pstar`) and clip qsat iterates inside the loop, not just after
 
 ### Added
 - `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
@@ -64,6 +78,12 @@ DA schemes, or other backward-compatible features land in the next minor release
   `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
   formulas ported from `enkf-topaz`) toggles; both default to `False`, no
   behavior change unless enabled in `dataset_def`
+- `InterpolationAssimilator`: Cressman/OI local obs-only analysis (`interp`
+  assimilator type)
+- `vort3d` obs: core-biased radial sampling option for targeted obs networks
+- DIS optical flow: `variational_refine_alpha` now configurable
+- `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
+  `max_dt_retries`, `min_dt`)
 
 ## [1.3.0] - 2026-07-23
 
