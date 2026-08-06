@@ -11,3 +11,6 @@ dy: -10000.
 
 source: amsr2   # multi
 obs_file_dt: 24 # time interval (hours) between obs files
+
+use_dataset_uncertainty: False  # if True, use per-pixel 'total_uncertainty' field from file instead of err.std
+use_adaptive_err: False  # if True, use concentration-dependent adaptive error (cf. TOPAZ enkf-topaz formula), overridden by use_dataset_uncertainty

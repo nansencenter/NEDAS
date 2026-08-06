@@ -185,11 +185,20 @@ class BatchAssimilator(Assimilator):
                 state_x = state_data['x'][loc_id]
                 state_y = state_data['y'][loc_id]
 
-                # filter out obs outside the hroi in each direction first (using L1 norm to speed up)
+                # filter out obs outside the hroi first, using L1 norm (cheaper than L2) to speed
+                # up -- L1 distance is always >= L2 distance, so an L1<=hroi threshold would be a
+                # SMALLER region than the true L2<=hroi disk the localization function defines,
+                # incorrectly dropping obs along diagonal directions before hlfactor ever gets a
+                # chance to taper them smoothly (hard diamond-shaped edges in the analysis field
+                # far from dense obs clusters, 2026-07-30). L1 <= sqrt(2)*L2 always, so inflating
+                # the threshold by sqrt(2) makes this prefilter a safe, mathematically exact
+                # superset of the L2 disk -- any obs the L2/GC weight would ever give nonzero
+                # credit to is guaranteed to survive this screen, so the two-pass result below is
+                # identical to computing hlfactor directly with no prefilter at all.
                 obs_rec_id = obs_data['obs_rec_id']
                 hroi = obs_data['hroi'][obs_rec_id]
                 hdist = c.grid.distance(state_x, obs_data['x'], state_y, obs_data['y'], p=1)
-                ind = np.where(hdist<=hroi)[0]
+                ind = np.where(hdist<=hroi*np.sqrt(2))[0]
 
                 # compute horizontal localization factor (using L2 norm for distance)
                 obs_rec_id = obs_data['obs_rec_id'][ind]

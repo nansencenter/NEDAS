@@ -411,14 +411,12 @@ class QGModel:
             rhs[nz-1] += self._toposhift
 
         # Bottom / top Ekman drag.
-        # Use current psi (not time-lagged psi_o) so the drag acts as a
-        # semi-implicit term: ψ_{n+1} = ψ_{n-1}/(1+2*dt*drag) — unconditionally
-        # stable, avoiding the leapfrog computational-mode growth that occurs
-        # when drag*k²*dt >> 1 near the de-aliasing cutoff.
+        # Use time-lagged psi_o (matching Fortran qg_driver.f90::Get_rhs) so
+        # that results are reproducible between Python and Fortran model versions.
         if self.bot_drag != 0.0:
-            rhs[nz-1] += self.bot_drag * ksqd_ * self.psi[nz-1]
+            rhs[nz-1] += self.bot_drag * ksqd_ * self.psi_o[nz-1]
         if self.top_drag != 0.0:
-            rhs[0]    += self.top_drag * ksqd_ * self.psi[0]
+            rhs[0]    += self.top_drag * ksqd_ * self.psi_o[0]
 
         # Markovian stochastic forcing on top layer
         if self.use_forcing:

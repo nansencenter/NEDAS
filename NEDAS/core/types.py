@@ -69,6 +69,8 @@ class ErrorModel:
             any lru_cache'd function fed **obs_rec.asdict() as kwargs (e.g.
             a model's z_coords); a tuple is hashable and frozen=True makes
             the whole ErrorModel hashable as long as every field is.
+        infl (float): multiplier on std applied only when packed into obs_data
+            for the assimilator's R, not to the generated obs noise itself
     """
     type: str
     std: float
@@ -76,6 +78,7 @@ class ErrorModel:
     vcorr: float
     tcorr: float
     cross_corr: tuple[float, ...]
+    infl: float = 1.0
     def __getitem__(self, key):
         # keeps kwargs['err']['std']-style access working (used by several
         # obs_operator modules, e.g. amsr2_obs.py, ice_conc_obs.py) even

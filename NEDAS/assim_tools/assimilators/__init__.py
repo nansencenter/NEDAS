@@ -12,6 +12,7 @@ registry = {
     'QCEF': 'QCEFAssimilator',
     #'PDAF': 'PDAFAssimilator',
     #'RHF'
+    'interp': 'InterpolationAssimilator',
 }
 
 def get_assimilator(c: Context) -> Assimilator:

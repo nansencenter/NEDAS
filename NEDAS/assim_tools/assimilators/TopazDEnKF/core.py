@@ -2,10 +2,12 @@ import numpy as np
 from NEDAS.utils.njit import njit
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
+
 class TopazDEnKFAssimilator(BatchAssimilator):
+    rfactor1: float
     rfactor: float
     kfactor: float
-    nlobs_max: int|None
+    nlobs_max: int | None
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  # variable id for each field (nfld)
@@ -14,7 +16,7 @@ class TopazDEnKFAssimilator(BatchAssimilator):
 
         # vertical, time and cross-variable (impact_on_variable) localization
         obs_value = obs_data['obs'][ind]
-        obs_err = obs_data['err_std'][ind]
+        obs_err_raw = obs_data['err_std'][ind]
         obs_z = obs_data['z'][ind]
         obs_t = obs_data['t'][ind]
         obs_rec_id = obs_data['obs_rec_id'][ind]
@@ -22,19 +24,53 @@ class TopazDEnKFAssimilator(BatchAssimilator):
         troi = obs_data['troi'][obs_rec_id]
         impact_on_variable = obs_data['impact_on_variable'][:, state_var_id][obs_rec_id]
 
-        local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
+        # ---------------------------------------------------------------
+        # Pre-analysis obs error adjustment (matches Fortran's obs_QC +
+        # RFACTOR1 in m_prep_4_EnKF/m_obs):
+        #
+        # Fortran rfactor1:  obs(o)%var = obs(o)%var * RFACTOR1
+        # Fortran kfactor:   obs(o)%var = sqrt((svar+ovar)^2 + svar*(inn/kf)^2) - svar
+        #
+        # Fortran's obs_QC computes svar/inn once per observation, before the
+        # per-gridpoint local-analysis loop starts, using that observation's
+        # own ensemble of model-predicted values (S(o,:)). obs_data['obs_prior']
+        # is likewise fixed per observation regardless of which location's
+        # `ind` selects it, so recomputing this here per location (rather than
+        # once globally beforehand) gives the exact same svar/inn per
+        # observation, not merely an approximation -- it's just redundant
+        # computation, repeated once per location instead of once overall.
+        # ---------------------------------------------------------------
+        obs_err = obs_err_raw * np.sqrt(self.rfactor1)
+
+        nens, nlobs = obs_data['obs_prior'][:, ind].shape
+        obs_prior_mean = np.mean(obs_data['obs_prior'][:, ind], axis=0)
+        obs_prior_var = np.var(obs_data['obs_prior'][:, ind], axis=0, ddof=1)
+        innov = obs_value - obs_prior_mean
+        obs_var = obs_err**2
+        obs_var = np.sqrt((obs_prior_var + obs_var)**2
+                          + obs_prior_var * (innov / self.kfactor)**2) - obs_prior_var
+        obs_err = np.sqrt(obs_var)
+
+        local_analysis_main(state_data['state_prior'][..., loc_id],
+                            obs_data['obs_prior'][:, ind],
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
-                            impact_on_variable, self.rfactor, self.kfactor, self.nlobs_max)
+                            impact_on_variable, self.rfactor, self.nlobs_max)
+
 
 @njit
 def local_analysis_main(state_prior, obs_prior,
                         obs, obs_err, hlfactor,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
-                        impact_on_variable, rfactor, kfactor, nlobs_max) -> None:
-    """perform local analysis for one location in the analysis grid partition"""
+                        impact_on_variable, rfactor, nlobs_max) -> None:
+    """perform local analysis for one location in the analysis grid partition
+
+    obs_err: already adjusted by rfactor1 and kfactor (applied once per
+             location in the parent method) — matches Fortran's convention
+             of a single modified obs variance used throughout.
+    """
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
     if nens_obs != nens:
@@ -49,18 +85,18 @@ def local_analysis_main(state_prior, obs_prior,
         # vertical localization
         vdist = np.abs(obs_z - state_z[n])
         vlfactor = vlocal_func(vdist, vroi)
-        if (vlfactor==0).all():
+        if (vlfactor == 0).all():
             continue  # the state is outside of vroi of all obs, skip
 
         # temporal localization
         tdist = np.abs(obs_t - state_t[n])
         tlfactor = tlocal_func(tdist, troi)
-        if (tlfactor==0).all():
+        if (tlfactor == 0).all():
             continue  # the state is outside of troi of all obs, skip
 
         # total lfactor
-        lfactor =  hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
-        if (lfactor==0).all():
+        lfactor = hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
+        if (lfactor == 0).all():
             continue
 
         # if prior spread is zero, don't update
@@ -68,26 +104,27 @@ def local_analysis_main(state_prior, obs_prior,
             continue
 
         # only need to assimilate obs with lfactor>0
-        ind = np.where(lfactor>0)[0]
+        ind = np.where(lfactor > 0)[0]
 
         # TODO:get rid of obs if obs_prior is nan
         # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
         # ind = ind[valid]
 
-        # sort the obs from high to low lfactor
-        sort_ind = np.argsort(lfactor[ind])[::-1]
-        ind = ind[sort_ind]
-
         # limit number of local obs if needed
-        # #e.g. topaz only keep the first 3000 obs with highest lfactor
-        # nlobs_max = 3000
-        ind = ind[:nlobs_max]
+        # Fortran (get_local_obs): sorts by distance, keeps nlobs closest
+        # Python: sorts by lfactor (descending), keeps nlobs_max highest-impact
+        if nlobs_max > 0 and len(ind) > nlobs_max:
+            sort_ind = np.argsort(lfactor[ind])[::-1]
+            ind = ind[sort_ind]
+            ind = ind[:nlobs_max]
 
         # use cached weight if no localization is applied, to avoid repeated computation
-        if n>0 and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all():
+        if n > 0 and len(ind) == len(lfactor_old) and (lfactor[ind] == lfactor_old).all():
             weights = weights_old
         else:
-            weights = ensemble_transform_weights(obs[ind], obs_err[ind], obs_prior[:, ind], lfactor[ind], rfactor, kfactor)
+            weights = ensemble_transform_weights(obs[ind], obs_err[ind],
+                                                  obs_prior[:, ind], lfactor[ind],
+                                                  rfactor)
 
         # perform local analysis and update the ensemble state
         state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
@@ -95,8 +132,22 @@ def local_analysis_main(state_prior, obs_prior,
         lfactor_old = lfactor[ind]
         weights_old = weights
 
+
 @njit
-def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, kfactor):
+def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor):
+    """Compute ensemble transform weight matrix (X5 in Evensen/Sakov notation).
+
+    obs_err: observation error standard deviation, already adjusted by
+             rfactor1 and kfactor (one-time adjustment, not inside this
+             function — matches Fortran's obs_QC convention).
+
+    rfactor : additional error inflation for the *anomaly* (spread) update
+              only — matches Fortran's RFACTOR2 / ``rfactor`` argument to
+              calc_X5().
+
+    Returns  weights — the ensemble transform matrix T (nens x nens) where
+             E_post = E_prior @ weights  (weights[:, m] for member m).
+    """
     nens, nlobs = obs_prior.shape
 
     # ensemble weight matrix, weights[:, m] is for the m-th member
@@ -108,18 +159,6 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     for m in range(nens):
         obs_prior_mean += obs_prior[m, :]
     obs_prior_mean /= nens
-    # find variance of obs_prior
-    obs_prior_var = np.zeros(nlobs)
-    for m in range(nens):
-        obs_prior_var += (obs_prior[m, :] - obs_prior_mean)**2
-    obs_prior_var /= nens-1
-
-    innov = obs - obs_prior_mean
-    obs_var = obs_err**2
-
-    # inflate obs error by rfactor, and kfactor where innovation is large
-    obs_var = np.sqrt((obs_prior_var + obs_var)**2 + obs_prior_var*(innov/kfactor)**2) - obs_prior_var
-    obs_err = np.sqrt(obs_var)
 
     # obs_prior_pert S and innovation dy, normalized by sqrt(nens-1) R^-0.5
     S = np.zeros((nlobs, nens))
@@ -127,8 +166,8 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     for p in range(nlobs):
         S[p, :] = (obs_prior[:, p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
         dy[p] = (obs[p] - obs_prior_mean[p]) * local_factor[p] / obs_err[p]
-    S /= np.sqrt(nens-1)
-    dy /= np.sqrt(nens-1)
+    S /= np.sqrt(nens - 1)
+    dy /= np.sqrt(nens - 1)
 
     # ----first part of weights: update of mean
     # find singular values of the inverse variance ratio matrix (I + S^T S)
@@ -144,7 +183,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
             # namely, var_ratio * obs_prior_var / obs_var * dy = G dy
             var_ratio = L_inv.T @ L_inv
             gain = var_ratio @ S.T
-        except:
+        except Exception:
             # if inversion failed just return equal weights (no update)
             print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
             return np.eye(nens)
@@ -158,7 +197,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
             # namely, var_ratio * obs_prior_var / obs_var * dy = G dy
             var_ratio = L_inv.T @ L_inv
             gain = S.T @ var_ratio
-        except:
+        except Exception:
             # if inversion failed just return equal weights (no update)
             print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
             return np.eye(nlobs)
@@ -177,7 +216,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
                 L_inv = np.linalg.inv(L)
                 var_ratio = L_inv.T @ L_inv
                 gain = var_ratio @ S.T
-            except:
+            except Exception:
                 # if failed just return equal weights (no update)
                 print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
                 return np.eye(nens)
@@ -189,7 +228,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
                 L_inv = np.linalg.inv(L)
                 var_ratio = L_inv.T @ L_inv
                 gain = S.T @ var_ratio
-            except:
+            except Exception:
                 # if failed just return equal weights (no update)
                 print('Error: failed to invert var_ratio_inv=', var_ratio_inv)
                 return np.eye(nlobs)
@@ -200,6 +239,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, local_factor, rfactor, k
     weights += var_ratio_sqrt
 
     return weights
+
 
 @njit
 def apply_ensemble_transform(ens_prior, weights):
@@ -219,4 +259,3 @@ def apply_ensemble_transform(ens_prior, weights):
         ens_post[m] = np.sum(ens_prior * weights[:, m])
 
     return ens_post
-

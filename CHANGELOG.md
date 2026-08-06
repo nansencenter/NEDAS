@@ -11,6 +11,82 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ## [Unreleased]
 
+### Added
+- `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
+  `use_dataset_uncertainty` (per-pixel uncertainty from the source file) and
+  `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
+  formulas ported from `enkf-topaz`) toggles; both default to `False`, no
+  behavior change unless enabled in `dataset_def`
+- `InterpolationAssimilator`: Cressman/OI local obs-only analysis (`interp`
+  assimilator type)
+- `vort3d` obs: core-biased radial sampling option for targeted obs networks
+- DIS optical flow: `variational_refine_alpha` now configurable
+- `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
+  `max_dt_retries`, `min_dt`)
+
+## [1.3.1] - 2026-08-06
+
+### Fixed
+- `BatchAssimilator` localization prefilter: L1 (Manhattan) distance check for the
+  `hroi` obs filter now scaled by √2, making the prefilter disk a correct superset
+  of the true L2 Gaspari-Cohn support — fixes hard diamond-shaped edges in the
+  analysis from obs incorrectly excluded along diagonal directions
+- `cs2smos_obs`: netCDF4 fill-value leak — `_FillValue` sentinel was read as a
+  literal observation for every no-data pixel (~90% of one test-case grid),
+  silently folding the sentinel value into the analysis; now uses `filled(nan)`
+  with an explicit finite-validity check before the obs sequence
+- `topaz5model`: `hice_impact` (renamed to `seaice_thick_obs_impact`) is now wired
+  through `postprocess()` into the external `fixhycom` binary call, which
+  previously hardcoded a literal 0 for that argument — the SIT analysis increment
+  was computed by the EnKF but never redistributed into the restart's per-category
+  ice volume regardless of the configured value. Default remains 0 (no behavior
+  change unless explicitly raised)
+- `TopazDEnKF`: align with Fortran reference `enkf-topaz` (develop @ 0f4c74b):
+  - `rfactor1` parameter added: global obs error inflation factor matching
+    Fortran's `RFACTOR1` (applied before local analysis)
+  - `kfactor` moved from inside `ensemble_transform_weights()` to a one-time
+    adjustment in `local_analysis()` before the field loop, matching Fortran's
+    `obs_QC()` flow (applied once, not re-computed per field)
+  - `nlobs_max` default changed from 2848 to 0 (no limit), matching Fortran's
+    default (`nlobs = 0` → use all obs within localization radius)
+  - (Inflation formula verified: Fortran's `infl`-based matrix `IM` produces
+    standard multiplicative inflation, *not* relaxation-to-prior — no change
+    required on the NEDAS side)
+- `Vort3DObs.__init__` `KeyError` when the `vort3d` model is not registered in the
+  context (hit by the generic dataset smoke test)
+- Sphinx `release`/`version` now derived from `NEDAS.__version__` instead of being
+  hardcoded in `docs/conf.py`
+- `topaz5model.postprocess`: `fixhycom` iced input now links to the posterior state,
+  not the background
+- `alignment_updator`: target level `k` is now configurable; added `vector_image`
+  option for vector-to-scalar conversion
+- Adaptive posterior inflation for multiscale (`once_after_outer_loop` timing):
+  configurable `max_coef` cap, and a file-lock re-initialization bug fix
+- `qg/python`: bottom/top Ekman drag now uses time-lagged `psi_o` (matching Fortran
+  `qg_driver.f90::Get_rhs`) instead of current `psi`; multi-layer spectral initial
+  condition now matches the Fortran model's modal-to-layer projection, so results
+  reproduce the Fortran version closely
+- `ice_drift` obs operator: `iced`/`seaice_velocity` restart lookup now rounds the
+  obs valid time to the start of day before the `iced` attempt, matching the
+  day-level tolerance `iceh` already had; previously the exact-hour requirement
+  for `iced_variables` could never be met (restarts are only ever written at hour
+  0), so the lookup silently fell through to the `iceh` fallback, which also fails
+  for a cycle prior state before any forecast has run
+- `vort3d` obs: fixed cyclic-boundary wrap bias in `vortex_position` centroid
+  (tracks no longer pin at the domain wrap point)
+- `vort3d` obs: `vortex_position` search window now respects `grid.cyclic_dim`
+  per axis (wrap vs. reflect-pad), generalizing the wrap/wall fixes above
+- `vort3d` obs: proximity-taper the vorticity centroid toward the anchored
+  vortex, so tracks stop jumping to unrelated blobs or pinning at walls
+- Seeded obs network/noise RNG by cycle time (and `obs_rec_id`) so synthetic
+  obs are reproducible across schemes at a given cycle
+- Separated obs error inflation (tempering) from obs generation noise, so
+  inflating R for tempering no longer corrupts the generated obs values
+- Moved `character_length` into `scale_bandpass`'s own `transform_def` scope;
+  iterations without scale decomposition no longer assume it exists
+- `vort3d`: extended NaN detection to all prognostic fields (previously only
+  `u`/`pstar`) and clip qsat iterates inside the loop, not just after
+
 ## [1.3.0] - 2026-07-23
 
 ### Added
@@ -78,7 +154,14 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ### Added
 - New `core` module consolidating the `Model`, `Dataset`, and `Scheme` base classes
-  (previously scattered across submodules)
+  (previously scattered across submodules), including a dedicated `Context` class
+  to hold runtime-living objects (previously done by `Config`)
+- `IOBackend` classes implementing both online and offline I/O modes; online mode
+  adds a memory save/load mechanism and is supported by the `lorenz96` and `vort2d`
+  (native Python) models
+- Generalized `Grid` class hierarchy (`Grid1D`, `RegularGrid`, `IrregularGrid`)
+- `Progress` class for runtime logging: interactive on/off modes, terminal-size
+  detection, Jupyter notebook support
 - AMSR2 dataset: SIC retrieval and obs_operator
 - CS2SMOS sea-ice thickness dataset
 - New synthetic-obs subclass with prescribed `obs_x`/`obs_y`/`obs_z` support, and
@@ -92,8 +175,6 @@ DA schemes, or other backward-compatible features land in the next minor release
   parameters, and memory dump-to-file in the runtime logger
 
 ### Changed
-- Online/offline I/O backend logic extracted out of the model classes and
-  refactored into `io_backend`
 - `assim_tools`, perturbation, and scheme base classes substantially refactored
 - `qg` model renamed to `qg.fortran` to make room for future backends
 - Config key `analysis_scheme` renamed to `scheme`; empty `model`/`dataset` config

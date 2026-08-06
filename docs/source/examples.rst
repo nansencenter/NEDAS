@@ -4,7 +4,8 @@ Examples
 .. toctree::
    :maxdepth: 2
 
-   examples.vort2d
    examples.lorenz96
+   examples.vort2d
+   examples.vort3d
    examples.qg
    examples.nextsimdg

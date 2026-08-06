@@ -379,11 +379,18 @@ class Obs:
 
                     # perturb with obs err
                     # TODO: only support normal err_type here
+                    # seed by (time, obs_rec_id) so noise is reproducible across cases/cycles
+                    np.random.seed((int(obs_rec.time.timestamp()) + obs_rec_id) % (2**32 - 1))
                     seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
 
                     c._synthetic_obs_cache[obs_rec_id] = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in seq.items()}
                 else:
                     seq = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in c._synthetic_obs_cache[obs_rec_id].items()}
+
+                # err_std for the assimilator's R, re-applied fresh every iteration (not cached
+                # with the rest of seq) so obs values/generation noise stay fixed per cycle while
+                # R can still be inflated per iteration (e.g. tempering) independent of them
+                seq['err_std'] = np.full_like(seq['err_std'], obs_rec.err.std * obs_rec.err.infl)
 
             else:
                 # read dataset files and obtain obs sequence

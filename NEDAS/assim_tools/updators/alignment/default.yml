@@ -3,5 +3,6 @@ optical_flow:
   nlevel: 3
   niter_max: 100
   smoothness_weight: 1.0
+  vector_image: vorticity
 interp_displaced_fields: True
 variable:

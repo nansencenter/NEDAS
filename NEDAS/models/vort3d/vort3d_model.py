@@ -139,6 +139,15 @@ class Vort3DModel(Model[RegularGrid]):
     q_sprd: float
     Vmax_sprd: float
     Rmw_sprd: float
+    output_dt: float | None = None  # sub-cycle output interval, hours -- if set and shorter
+    # than a given run() call's forecast_period, run() chunks the integration into output_dt-
+    # sized segments and writes the full state to file after each one, giving intermediate
+    # snapshots within a single DA cycle without changing cycle_period (which the scheme's own
+    # checkpointing/next-cycle bookkeeping still depends on). None (default) reproduces the
+    # original single-shot-per-cycle behavior exactly.
+    dt_reduction_factor: float = 0.5  # adaptive-dt retry on NaN blowup, see util.advance_time
+    max_dt_retries: int = 3
+    min_dt: float | None = None  # None uses dt * dt_reduction_factor**max_dt_retries
     memory: dict = {}
 
     def __init__(self, **kwargs):
@@ -343,14 +352,25 @@ class Vort3DModel(Model[RegularGrid]):
 
         state = self._read_full_state(**kwargs)
         forecast_period = kwargs['forecast_period']
-        next_time = kwargs['time'] + forecast_period * dt1h
 
-        new_state = advance_time(state, self.nx, self.ny, self.dx, self.nz, self.beta,
-                                  self.moist, self.convection_scheme, self.dt, forecast_period)
-        if any(np.any(np.isnan(v)) for v in new_state.values()):
-            raise RuntimeError(f"{self.__class__.__name__}: NaN detected in model run")
+        # chunk into output_dt-sized segments if requested (see output_dt field docstring) --
+        # each chunk is its own advance_time call (cold-restarted AB3 tendency history, same
+        # documented simplification advance_time's own docstring already accepts for
+        # forecast_period-sized calls); with output_dt unset or >= forecast_period this reduces
+        # to exactly one chunk of length forecast_period, i.e. the original behavior.
+        chunk_h = self.output_dt if (self.output_dt and self.output_dt < forecast_period) else forecast_period
+        n_chunks = int(round(forecast_period / chunk_h))
+        t = kwargs['time']
+        for _ in range(n_chunks):
+            state = advance_time(state, self.nx, self.ny, self.dx, self.nz, self.beta,
+                                  self.moist, self.convection_scheme, self.dt, chunk_h,
+                                  dt_reduction_factor=self.dt_reduction_factor,
+                                  max_dt_retries=self.max_dt_retries, min_dt=self.min_dt)
+            if any(np.any(np.isnan(v)) for v in state.values()):
+                raise RuntimeError(f"{self.__class__.__name__}: NaN detected in model run")
+            t = t + chunk_h * dt1h
+            self._write_full_state(state, **{**kwargs, 'time': t})
 
-        self._write_full_state(new_state, **{**kwargs, 'time': next_time})
         self.run_status = 'complete'
 
     def generate_truth(self, *args, **kwargs) -> None:

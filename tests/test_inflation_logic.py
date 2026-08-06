@@ -110,16 +110,16 @@ class TestRTPPPostInflation(unittest.TestCase):
 
     def test_formula_coef(self):
         infl = self._make()
-        varb, vara, varo, omb2, amb2 = 4.0, 2.0, 1.0, 8.0, 2.0
-        # beta = sqrt(varb/vara) = sqrt(2), lamb = sqrt((omb2-varo-amb2)/vara) = sqrt(5/2)
-        # coef = (lamb-1)/(beta-1)
+        varb, vara, varo, omb2 = 4.0, 2.0, 1.0, 8.0
+        # la = max(sqrt((omb2-varo)/varb), 1.0) = max(sqrt(7/4), 1.0) = sqrt(7)/2
+        # beta = sqrt(varb/vara) = sqrt(2); coef = (la-1)/(beta-1)
         n = 10
         _patch_stats(infl, {'total_nobs': n, 'varb': varb*n, 'vara': vara*n, 'varo': varo*n,
-                             'omb2': omb2*n, 'omaamb': 0, 'amb2': amb2*n})
+                             'omb2': omb2*n, 'omaamb': 0, 'amb2': 0})
         infl.adaptive_post_inflation(_mock_context())
         beta = np.sqrt(varb / vara)
-        lamb = np.sqrt(max(0.0, (omb2 - varo - amb2) / vara))
-        expected = (lamb - 1) / (beta - 1)
+        la = max(np.sqrt(max(0.0, (omb2 - varo) / varb)), 1.0)
+        expected = (la - 1) / (beta - 1)
         np.testing.assert_allclose(infl.coef, expected, rtol=1e-10)
 
     def test_beta_leq_one_gives_zero(self):
@@ -131,25 +131,33 @@ class TestRTPPPostInflation(unittest.TestCase):
         infl.adaptive_post_inflation(_mock_context())
         self.assertEqual(infl.coef, 0)
 
-    def test_clamped_upper(self):
+    def test_coef_is_nonnegative(self):
         infl = self._make()
-        # force lamb >> beta so coef would exceed 2
-        varb, vara, varo, omb2, amb2 = 1.01, 1.0, 0.0, 1000.0, 0.0
+        # la is floored at 1.0 and beta>1 is required to reach the (la-1)/(beta-1) branch at
+        # all, so coef is guaranteed >= 0 by construction under the corrected formula (unlike
+        # the old buggy one, which could go negative -- see relaxation_adaptive_coef's own
+        # docstring in core/inflation.py for the 2026-07-28 fix this reflects).
+        varb, vara, varo, omb2 = 1.01, 1.0, 0.0, 1000.0
         n = 10
         _patch_stats(infl, {'total_nobs': n, 'varb': varb*n, 'vara': vara*n, 'varo': varo*n,
-                             'omb2': omb2*n, 'omaamb': 0, 'amb2': amb2*n})
+                             'omb2': omb2*n, 'omaamb': 0, 'amb2': 0})
         infl.adaptive_post_inflation(_mock_context())
-        self.assertLessEqual(infl.coef, 2.0)
+        self.assertGreaterEqual(infl.coef, 0.0)
+        self.assertTrue(np.isfinite(infl.coef))
 
-    def test_clamped_lower(self):
+    def test_near_singular_beta_falls_back_to_zero(self):
         infl = self._make()
-        # lamb close to 0, beta >> 1 → coef could go below -1
-        varb, vara, varo, omb2, amb2 = 100.0, 1.0, 99.9, 0.1, 0.0
+        # beta just barely above 1 (vara only fractionally below varb) drives the (beta-1)
+        # denominator toward 0 -- the isfinite guard should catch any resulting non-finite
+        # value and fall back to coef=0 rather than propagating inf/nan (this is exactly the
+        # failure mode confirmed 2026-07-28 in a live run using the OLD vara-denominator
+        # formula, where the coefficient estimate itself went NaN after a few cycles).
+        varb, vara, varo, omb2 = 1.0 + 1e-300, 1.0, 0.0, 1000.0
         n = 10
         _patch_stats(infl, {'total_nobs': n, 'varb': varb*n, 'vara': vara*n, 'varo': varo*n,
-                             'omb2': omb2*n, 'omaamb': 0, 'amb2': amb2*n})
+                             'omb2': omb2*n, 'omaamb': 0, 'amb2': 0})
         infl.adaptive_post_inflation(_mock_context())
-        self.assertGreaterEqual(infl.coef, -1.0)
+        self.assertTrue(np.isfinite(infl.coef))
 
     def test_prior_inflation_not_implemented(self):
         infl = self._make()

@@ -18,6 +18,9 @@ class OsisafSeaIceDriftObs(Dataset):
     dx: float
     dy: float
     obs_file_dt: int
+    use_dataset_uncertainty: bool
+    use_adaptive_err: bool
+    drift_err_cap: float
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -117,8 +120,17 @@ class OsisafSeaIceDriftObs(Dataset):
                     obs_v = obs_dy[p] / obs_dt
                     obs_value = [obs_u, obs_v]
 
-                    #obs_err_std = obs_err[p] / obs_dt  # uncertainty from dataset, convert from km to km/day
-                    obs_err_std = kwargs['err']['std']  # use constant err std from config
+                    if self.use_adaptive_err:
+                        # cf. read_OSISAF_data_lv4 in enkf-topaz: var = min(header_var, 4*uncert_dX_and_dY^2),
+                        # both in km^2 (obs is raw displacement over obs_dt days in the Fortran system);
+                        # NEDAS uses velocity (km/day) instead, so propagate the displacement std through
+                        # the same /obs_dt scaling used to convert dX/dY to obs_u/obs_v above.
+                        var_disp = min(self.drift_err_cap, 4.0 * obs_err[p]**2)
+                        obs_err_std = np.sqrt(var_disp) / obs_dt
+                    elif self.use_dataset_uncertainty:
+                        obs_err_std = obs_err[p] / obs_dt  # per-pixel uncertainty from dataset, convert from km to km/day
+                    else:
+                        obs_err_std = kwargs['err']['std']  # use constant err std from config
 
                     # assignn to obs_seq
                     obs_seq['obs'].append(obs_value)
@@ -155,10 +167,17 @@ class OsisafSeaIceDriftObs(Dataset):
         for t in np.unique(obs_t):
             obs_mask = (obs_t == t)
             try:
-                # try to obtain seaice velocity from iced files
-                model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity', 'units':drift_units})
+                # try to obtain seaice velocity from iced (restart) files. iced files are
+                # only ever written at cycle boundaries (always hour 0 in this setup), and
+                # topaz5model.filename() requires an exact hour match for iced_variables
+                # (unlike iceh_variables, whose filename is day-only and hour-agnostic) --
+                # so round the obs time down to the start of day to give iced the same
+                # day-level tolerance iceh already has, rather than requiring the obs's
+                # exact (usually noon) valid time to coincide with a restart write.
+                t_iced = t.replace(hour=0, minute=0, second=0, microsecond=0)
+                model_si_velocity = model.read_var(**{**kwargs, 'time':t_iced, 'name':'seaice_velocity', 'units':drift_units})
             except FileNotFoundError:
-                # if not available, try to get from iceh files
+                # if not available, try to get from iceh files (already day-only, hour-agnostic)
                 model_si_velocity = model.read_var(**{**kwargs, 'time':t, 'name':'seaice_velocity_daily', 'units':drift_units})
             grid_si_velocity = model.grid.convert(model_si_velocity, is_vector=True)
             # find obs location velocity

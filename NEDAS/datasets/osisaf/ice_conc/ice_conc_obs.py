@@ -19,6 +19,8 @@ class OsisafSeaIceConcObs(Dataset):
     dx: float
     dy: float
     obs_file_dt: int
+    use_dataset_uncertainty: bool
+    use_adaptive_err: bool
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -133,10 +135,13 @@ class OsisafSeaIceConcObs(Dataset):
 
                     obs_value = obs[p] * 0.01   # convert percent to 0-1
 
-                    #obs_err_var = (obs_err[p]*0.01)**2  # uncertainty from dataset
-                    #obs_err_var = 0.01 + (0.5 - np.abs(0.5-obs_value))**2  # adaptive error used in topaz
-                    #obs_err_std = np.sqrt(obs_err_var)
-                    obs_err_std = kwargs['err']['std']  # use fixed error from config
+                    if self.use_dataset_uncertainty:
+                        obs_err_std = obs_err[p] * 0.01  # per-pixel uncertainty from dataset, percent -> 0-1
+                    elif self.use_adaptive_err:
+                        obs_err_var = 0.01 + (0.5 - np.abs(0.5-obs_value))**2  # adaptive error, cf. m_read_metno_icec.F90 in enkf-topaz
+                        obs_err_std = np.sqrt(obs_err_var)
+                    else:
+                        obs_err_std = kwargs['err']['std']  # use fixed error from config
 
                     # assignn to obs_seq
                     obs_seq['obs'].append(obs_value)

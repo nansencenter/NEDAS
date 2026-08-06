@@ -66,7 +66,7 @@ class Topaz5Model(Model[RegularGrid]):
     msal: float
     aice_thresh: float
     fice_thresh: float
-    hice_impact: float
+    seaice_thick_obs_impact: float
     preproc_copy_forcing: bool = True
     preproc_link_runtime_files: bool = True
     preproc_copy_restart: bool = True
@@ -738,7 +738,7 @@ class Topaz5Model(Model[RegularGrid]):
             file1 = os.path.join(kwargs['restart_dir'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
             file2 = f'forecast{member+1:03}{ext}'
             commands += f"ln -fs {file1} {file2}; "
-        file1 = os.path.join(kwargs['restart_dir'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
+        file1 = os.path.join(kwargs['path'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
         file2 = f'ice_forecast{member+1:03}.nc'
         commands += f"ln -fs {file1} {file2}; "
         commands += f"ln -fs {self.reanalysis_code}/FILES/depths{self.idm}x{self.jdm}.uf .; "
@@ -772,7 +772,15 @@ class Topaz5Model(Model[RegularGrid]):
         if self.model_env:
             commands += f". {self.model_env}; "
         commands += f"cd {run_dir}; "
-        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'fixhycom')} analysis{member+1:03}.a {member+1} forecast{member+1:03}.nc ice_forecast{member+1:03}.nc {time:%j} 0; "
+        # 6th arg (Hflag/Ahice in fixhycom's Fortran source, enkf-topaz/Tools/p_fixhycom.F90
+        # -> fix_cice in m_put_mod_fld_nc.F90) gates whether the sea-ice-thickness
+        # analysis increment gets redistributed into the restart's per-category ice
+        # volume (vicen) at all -- Ahice<=0 skips that block entirely, so with the
+        # previous hardcoded 0 here, SIT's EnKF update was computed (visible in
+        # obs_post.bin/diag_obs_validate.py) but never reached the model state used
+        # to seed the next forecast. Now config-controlled via seaice_thick_obs_impact
+        # (same knob postprocess_native's adjust_ice_variables call uses).
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'fixhycom')} analysis{member+1:03}.a {member+1} forecast{member+1:03}.nc ice_forecast{member+1:03}.nc {time:%j} {self.seaice_thick_obs_impact} > fixhycom{member+1:03}.log 2>&1; "
         commands += f"cat fixanalysis{member+1:03}.b >> tmp{member+1:03}.b; mv tmp{member+1:03}.b fixanalysis{member+1:03}.b; "
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, f'fixanalysis{member+1:03}{ext}')
@@ -836,7 +844,7 @@ class Topaz5Model(Model[RegularGrid]):
         hice = self.read_var(**{**kwargs, 'name':'seaice_thick', 'k':0, 'units':'m'})
         zSin, Tmlt = fix_zsin_profile(self.Nilayer+1, self.saltmax, self.depressT, self.nsal, self.msal)
         adjust_ice_variables(prior_ice_file, post_ice_file, fice, hice, self.grid.mask,
-                             self.aice_thresh, self.fice_thresh, self.hice_impact, zSin, Tmlt)
+                             self.aice_thresh, self.fice_thresh, self.seaice_thick_obs_impact, zSin, Tmlt)
 
         # update the diagnostic ice variables
         self.write_var(fice, **{**kwargs, 'name':'seaice_conc', 'k':0, 'units':1})

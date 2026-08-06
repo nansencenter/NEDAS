@@ -9,8 +9,9 @@ class ScaleBandpass(Transform):
     """
     nscale: int
     decompose_obs: bool
+    character_length: list[float]
 
-    def __init__(self, c, decompose_obs=True, **kwargs):
+    def __init__(self, c, decompose_obs=True, character_length=None, **kwargs):
         self.decompose_obs = decompose_obs
 
         # validate config parameters
@@ -18,10 +19,18 @@ class ScaleBandpass(Transform):
         # forward_state/forward_obs both no-op when nscale==1 (see below) -- see Transform.is_identity
         self.is_identity = (self.nscale == 1)
 
-        for key in ['resolution_level', 'character_length',]:
-            value = getattr(c.config, key)
-            assert isinstance(value, list), f"{value} is not a list"
-            assert len(value) == self.nscale, f"{value} length != {self.nscale}"
+        # character_length is this transform's own parameter (given directly in its
+        # transform_def entry), not a standalone top-level config field -- it belongs here
+        # because it only means something in the context of a real spectral decomposition;
+        # resolution_level stays a top-level config field since core/context.py uses it
+        # generically every iteration regardless of which transform is active.
+        assert isinstance(character_length, list), f"{character_length} is not a list"
+        assert len(character_length) == self.nscale, f"{character_length} length != {self.nscale}"
+        self.character_length = character_length
+
+        value = c.config.resolution_level
+        assert isinstance(value, list), f"{value} is not a list"
+        assert len(value) == self.nscale, f"{value} length != {self.nscale}"
 
     def forward_state(self, c, rec, field):
         if self.nscale == 1:
@@ -31,7 +40,7 @@ class ScaleBandpass(Transform):
         # pad voids with zero
         mask = np.isnan(field)
         field[mask] = 0.0
-        field = get_scale_component(c.grid, field, c.config.character_length, c.iter)
+        field = get_scale_component(c.grid, field, self.character_length, c.iter)
         field[mask] = np.nan
         return field
 
@@ -75,7 +84,7 @@ class ScaleBandpass(Transform):
         obs_fld[mask] = 0.0
 
         # get scale component on analysis grid
-        obs_fld_new = get_scale_component(c.grid, obs_fld, c.config.character_length, c.iter)
+        obs_fld_new = get_scale_component(c.grid, obs_fld, self.character_length, c.iter)
         if obs_rec.is_vector:
             for i in range(2):
                 obs_seq['obs'][i,...] = c.grid.interp(obs_fld_new[i,...], obs_seq['x'], obs_seq['y'], method='nearest')

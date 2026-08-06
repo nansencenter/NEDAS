@@ -52,6 +52,13 @@ class OpticalFlow:
                 dis.setGradientDescentIterations(self.kwargs['grad_descent_iter'])
             if 'variational_refine_iter' in self.kwargs:
                 dis.setVariationalRefinementIterations(self.kwargs['variational_refine_iter'])
+            # variational refinement's own smoothness-regularization weight (default 20.0) --
+            # this is DIS's built-in mechanism for blending independently-matched patches into a
+            # spatially coherent dense flow field (same role as Horn-Schunck's smoothness term),
+            # so raising it is the principled way to stitch out residual patch-boundary seams
+            # rather than post-hoc smoothing the flow field outside of DIS's own optimization.
+            if 'variational_refine_alpha' in self.kwargs:
+                dis.setVariationalRefinementAlpha(self.kwargs['variational_refine_alpha'])
             frame1, frame2 = self._to_uint8_pair(fld1, fld2)
             flow = dis.calc(frame1, frame2, None)
             u, v = flow[...,0], flow[...,1]

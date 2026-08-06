@@ -34,6 +34,7 @@ from NEDAS.core.types import VarDesc
 
 from .model import QGModel
 from .spectral import setup_spectral_grid, spec2grid
+from .strat import get_vmodes, mode2layer
 
 
 # ---------------------------------------------------------------------------
@@ -406,12 +407,62 @@ class QGPythonModel(Model):
         psi0 = np.zeros((nz, nky, nkx), dtype=complex)
 
         if psi_init_type in ('spectral_m', 'spectral_z', 'spectral'):
+            # Build initial spectrum matching Fortran Init_streamfunction(spectral_m).
+            #   psi ~ sqrt(espec) / sqrt(k² + kz²) * exp(i * 2π * uniform_phase)
+            # then projected from modal to layer space (multi-layer case).
             kr = np.sqrt(ksqd_)
-            ring = np.exp(-0.5 * ((kr - k_o) / max(delk, 0.5)) ** 2) * filt
-            for iz in range(nz):
-                noise = (rng.standard_normal((nky, nkx))
-                         + 1j * rng.standard_normal((nky, nkx)))
-                psi0[iz] = noise * ring
+            # Fortran: espec = exp(-(kr - k_o)² / delk²)  (no 0.5 factor)
+            espec = np.exp(-((kr - k_o) / max(delk, 0.5)) ** 2) * filt
+
+            if nz > 1:
+                # Multi-layer: build in modal space, then project to layers
+                m_o = int(getattr(self, 'm_o', 0))
+                surface_bc = getattr(self, 'surface_bc', 'rigid_lid')
+                Fe = getattr(self, 'Fe', 0.0)
+                dz, rho = self._make_dz_rho()
+                drho_raw = np.diff(rho)
+                # Normalise drho to match Fortran Init_strat:
+                #   drho = drho / (sum(drho) / size(drho))
+                drho = drho_raw / (np.sum(drho_raw) / max(len(drho_raw), 1))
+                _, vmode = get_vmodes(dz, drho, self.F, Fe, surface_bc)
+
+                # Total wavenumber including vertical mode eigenvalue kz.
+                # Fortran Init_streamfunction(spectral_m):
+                #   mu = sqrt(k² + kz(m_o+1)²),  psim = sqrt(espec)/mu * phase
+                # Re-compute kz from the stratification operator eigensolve:
+                from .strat import strat_params
+                psiq_op = strat_params(dz, drho, self.F, Fe, surface_bc)
+                mat = (np.diag(psiq_op[:nz, 1])
+                       + np.diag(psiq_op[1:nz, 0], -1)
+                       + np.diag(psiq_op[:nz-1, 2], 1))
+                from scipy import linalg
+                evals = linalg.eigh(mat, eigvals_only=True)
+                # eigh returns ascending (most negative first), but Fortran
+                # convention is mode 0 = barotropic (kz=0) -> reverse.
+                kz = np.where(evals < 0, np.sqrt(-evals), 0.0)[::-1]
+
+                mu = np.sqrt(ksqd_ + kz[m_o]**2)
+                mu_safe = np.where(mu > 0, mu, 1.0)
+
+                # Uniform random phases on unit circle (same distribution
+                # as Fortran's cexp(i*2*pi*Ran(...)))
+                phase = rng.uniform(0, 2 * np.pi, size=(nky, nkx))
+                phase_c = np.cos(phase) + 1j * np.sin(phase)
+
+                psim = np.zeros((nz, nky, nkx), dtype=complex)
+                psim[m_o] = np.sqrt(espec) / mu_safe * phase_c
+
+                psi0 = mode2layer(psim, vmode)
+
+            else:
+                # Barotropic: mu = sqrt(k²)  (kz = 0 for nz=1)
+                mu = np.sqrt(ksqd_)
+                mu_safe = np.where(mu > 0, mu, 1.0)
+
+                phase = rng.uniform(0, 2 * np.pi, size=(1, nky, nkx))
+                phase_c = np.cos(phase) + 1j * np.sin(phase)
+
+                psi0 = np.sqrt(espec[np.newaxis]) / mu_safe * phase_c
         else:
             # white-spectrum fallback
             for iz in range(nz):
