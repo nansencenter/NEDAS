@@ -26,12 +26,9 @@ output_dt: null  # sub-cycle output interval, hours -- if set and shorter than a
                  # runs at cycle_period). null (default) disables this -- one write per cycle,
                  # as before.
 
-dt_reduction_factor: 0.5  # adaptive dt: on a NaN blowup, retry the same forecast
-                          # segment from the same starting state at dt * this factor, up to
-                          # max_dt_retries times, before giving up (same RuntimeError as before)
-max_dt_retries: 3        # number of dt-reduction retries; 0 disables adaptive dt entirely,
-                          # reproducing the original fail-immediately-on-NaN behavior
-min_dt: null              # floor for the retries; null uses dt * dt_reduction_factor**max_dt_retries
+dt_reduction_factor: 0.5  # adaptive dt: on a NaN blowup, retry at dt * this factor
+max_dt_retries: 3        # number of retries; 0 disables adaptive dt
+min_dt: null              # floor for retries; null uses dt * dt_reduction_factor**max_dt_retries
 
 beta: 0.0   # Coriolis beta parameter, df/dy, /m/s (0 = pure f-plane, matching
             # the paper's own experiments; e.g. 2.3e-11 for beta-drift near 20N)

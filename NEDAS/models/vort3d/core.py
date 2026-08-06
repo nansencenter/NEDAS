@@ -719,7 +719,9 @@ class Core:
         Tw4 = T[1].copy()
         for _ in range(20):
             Tw4_new = (h[1] - Phi4 - Lv*qsat(Tw4, p4)) / cp
-            Tw4 = 0.5*Tw4 + 0.5*Tw4_new
+            # clip inside the loop, not just after -- np.clip can't rescue an iterate that's
+            # already gone NaN, only one that's finite but out of range
+            Tw4 = np.clip(0.5*Tw4 + 0.5*Tw4_new, 150.0, 330.0)
         Tw4 = np.clip(Tw4, 150.0, 330.0)
         qd4 = qsat(Tw4, p4)
         sd4 = cp*Tw4 + Phi4
@@ -804,7 +806,8 @@ class Core:
             T_ref = T[k].copy()
             for _ in range(20):
                 T_ref_new = (h_b - Phi[k] - Lv*qsat(T_ref, p[k])) / cp
-                T_ref = 0.5*T_ref + 0.5*T_ref_new
+                # clip inside the loop -- see the matching fix on Tw4 above
+                T_ref = np.clip(0.5*T_ref + 0.5*T_ref_new, 150.0, 330.0)
             T_ref = np.clip(T_ref, 150.0, 330.0)
             theta_ref = T_ref / Pi[k]
             q_ref = qsat(T_ref, p[k])

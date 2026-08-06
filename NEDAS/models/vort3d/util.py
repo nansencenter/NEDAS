@@ -93,9 +93,8 @@ def advance_time(state: dict, nx, ny, dx, nz, beta, moist, convection_scheme, dt
     simplification (loses one AB-order of accuracy for the first couple of
     steps after each restart, negligible for the paper's dt=15s).
 
-    Adaptive dt: if the model blows up (NaN) at `dt`, retry this SAME duration_h
-    segment from the SAME starting `state` with dt reduced by `dt_reduction_factor`, up to
-    `max_dt_retries` times, floored at `min_dt` (default: dt * dt_reduction_factor**max_dt_retries).
+    Adaptive dt: on a NaN blowup, retry the same segment from the same state at
+    dt * dt_reduction_factor, up to max_dt_retries times.
     """
     if min_dt is None:
         min_dt = dt * (dt_reduction_factor ** max_dt_retries)
@@ -109,7 +108,9 @@ def advance_time(state: dict, nx, ny, dx, nz, beta, moist, convection_scheme, dt
         blew_up = False
         for _ in range(nsteps):
             core.step(attempt_dt)
-            if np.any(np.isnan(core.u)) or np.any(np.isnan(core.pstar)):
+            # checks all 5 fields, not just u/pstar -- qsat()'s convective-closure iteration can
+            # leave theta/q NaN without touching u/pstar (see core.py's clip-inside-loop fix)
+            if any(np.any(np.isnan(f)) for f in (core.u, core.v, core.theta, core.q, core.pstar)):
                 blew_up = True
                 break
         if not blew_up:
