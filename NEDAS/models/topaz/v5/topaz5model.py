@@ -749,7 +749,7 @@ class Topaz5Model(Model[RegularGrid]):
         if self.model_env:
             commands += f". {self.model_env}; "
         commands += f"cd {run_dir}; "
-        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc"
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc > restart2nc{member+1:03}.log 2>&1"
         self.c.run_job(commands, nproc=1)
 
         # add posterior ice variables in analysis abfile
@@ -909,10 +909,33 @@ class Topaz5Model(Model[RegularGrid]):
                         'job_name': 'topaz5',
                         'run_dir': run_dir,
                         'parallel_mode': 'mpi',
-                        'log_file': log_file,
+                        # NOTE: deliberately NOT passing 'log_file': log_file here.
+                        # log_file (run.log) is where JOB_EXECUTE's stdout is
+                        # redirected (shell_cmd's '>& run.log') and what
+                        # find_keyword_in_file() below checks for completion --
+                        # that coupling must stay intact. job_opts['log_file'] is a
+                        # separate thing: it tells submit_job_and_monitor which file
+                        # to tail and stream live to nedas-run's own stdout. Not
+                        # passing it makes the monitor fall back to the SLURM
+                        # '--output=' file (topaz5-%j.out) instead of run.log, so the
+                        # verbose per-timestep hycom_cice output no longer floods the
+                        # nedas-run console -- run.log itself is untouched and still
+                        # written/checked exactly as before.
                         'nproc': self.nproc,
                         'offset': task_id * self.nproc_per_run,
                     }
+                    # run_job's kwarg loop only *sets* jsub attributes for truthy
+                    # values (see Context.run_job), so it can never reset a
+                    # previously-set jsub.log_file back to None on its own -- and
+                    # since ensemble_forecast dispatches members through a
+                    # ProcessPoolExecutor whose workers get reused across multiple
+                    # members' run() calls (see OfflineScheduler in
+                    # utils/parallel.py), a stale log_file from an earlier member
+                    # handled by the same worker could otherwise leak into this
+                    # member's monitor. Clear it explicitly right before every job
+                    # submission so each run always gets the log_file behavior
+                    # above, regardless of what any prior call on this worker set.
+                    self.c.jsub.log_file = None
                     self.c.run_job(shell_cmd, **job_opts)
                 except RuntimeError as e:
                     print(f"{e}, retrying ({self.max_num_attempts - attempt} attempts remain)")
