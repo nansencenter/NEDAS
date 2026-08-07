@@ -31,6 +31,7 @@ class JobSubmitter(ABC):
         self._offset = offset
         self.parallel_mode = parallel_mode
         self.debug = debug
+        self.stream_log = True
 
     @property
     def nproc(self) -> int:

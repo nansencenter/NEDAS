@@ -444,6 +444,7 @@ class Context:
                 parallel_mode: ParallelMode='serial',
                 nproc: int=1,
                 offset: int=0,
+                stream_log: bool=True,
                 **kwargs) -> None:
         """
         The user-facing method for running command on a computer.
@@ -454,12 +455,16 @@ class Context:
             parallel_mode (ParallelMode, optional): parallel mode ('serial', 'mpi', 'openmp'), default is 'serial'
             nproc (int, optional): number of processors (default is 1)
             offset (int, optional): offset in full list of processors (default is 0)
+            stream_log (bool, optional): stream the submitted job's log content to
+                stdout while waiting for it to finish (default True). Set False to
+                suppress this for jobs with verbose logs.
             **kwargs: other keyword arguments to update the job submitter configuration
         """
         # update the state of the job submitter for this specific task
         self.jsub.parallel_mode = parallel_mode
         self.jsub.nproc = nproc
         self.jsub.offset = offset
+        self.jsub.stream_log = stream_log
 
         for key, value in kwargs.items():
             if value and hasattr(self.jsub, key):

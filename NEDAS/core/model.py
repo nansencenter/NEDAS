@@ -29,6 +29,7 @@ class Model(Generic[GridT], ABC):
     nproc_per_run: int = 1
     nproc_per_util: int = 1
     walltime: int|None = None
+    stream_log: bool = True  # stream job log content to stdout while running (see Context.run_job)
     run_process = None
     run_status: str = 'pending'
     restart_dir: str
