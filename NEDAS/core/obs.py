@@ -222,7 +222,18 @@ class Obs:
                 raise RuntimeError(f"field '{kwargs['name']}' at t={kwargs['time']} k={kwargs['k']} not found in state.info.fields")
             rec_id = rec_id_found[0]
             fld = c.io.read_field(c, tag, rec_id, kwargs['member'])
-            zfld = c.io.read_field(c, 'z', rec_id, kwargs['member'])
+            # z reference is stored under 'z_mean' or 'z' depending on
+            # config.z_coords_from -- same branching as get_ref_z. Hardcoding
+            # 'z' here was previously masked by read_field's in-memory
+            # cache short-circuit at the default nproc_mem=nproc (every active
+            # rank's own fields_z entry was always already cached), and only
+            # surfaced as a FileNotFoundError once nproc_mem<nproc (nproc_rec>1)
+            # made cache misses -- and the real fields_{ztag}.bin disk read --
+            # actually happen.
+            # both 'z' and 'z_mean' are single-slot reference fields, always
+            # written/read at mem_id=0 (see get_ref_z) -- never per kwargs['member'].
+            ztag = 'z_mean' if c.config.z_coords_from == 'mean' else 'z'
+            zfld = c.io.read_field(c, ztag, rec_id, mem_id=0)
 
         else:
             # otherwise, we get the field by calling model.read_var. When a transform is active

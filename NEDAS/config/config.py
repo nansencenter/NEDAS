@@ -177,10 +177,25 @@ class Config:
             config_dict['nproc'] = 1
 
         # In parallel schemes, the communicator is divided into mem/rec groups
-        # nproc_mem and nproc_rec are the number of groups in each direction
-        # set default values if they are not defined
+        # nproc_mem and nproc_rec are the number of groups in each direction.
+        # nproc_mem also sets the size of comm_mem, which the state transpose's
+        # per-record fan-out (send to every rank in comm_mem, see
+        # core/state.py::transpose_to_ensemble_complete) scales with -- too
+        # large a comm_mem (e.g. nproc_mem=nproc, no record parallelism at all)
+        # turns that into a full all-to-all that can overwhelm the MPI
+        # implementation's message-matching at high nproc (observed: explicit
+        # MPI_Mprobe failures / hangs on Cray MPICH+OFI at nproc_mem=nproc=1024).
+        # Default: the largest divisor of nproc that is <= nens, so member-
+        # parallelism is capped where it stops helping (more mem-groups than
+        # members just idles ranks) and the remainder goes to nproc_rec,
+        # shrinking comm_mem instead of maximizing it.
         if 'nproc_mem' not in config_dict or config_dict['nproc_mem'] is None:
-            config_dict['nproc_mem'] = config_dict['nproc']
+            nproc = config_dict['nproc']
+            nens = config_dict.get('nens')
+            if nens:
+                config_dict['nproc_mem'] = max(d for d in range(1, nproc + 1) if nproc % d == 0 and d <= nens)
+            else:
+                config_dict['nproc_mem'] = nproc
         # check if division works
         if config_dict['nproc'] % config_dict['nproc_mem'] != 0:
             raise ValueError(f"nproc={config_dict['nproc']} is not evenly divided by nproc_mem={config_dict['nproc_mem']}")

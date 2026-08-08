@@ -375,7 +375,7 @@ class Perturbation:
         except Exception as e:
             error = e
         all_files = c.comm.allgather(files)
-        unique_files = {f for sublist in all_files for f in sublist if f}
+        unique_files = sorted({f for sublist in all_files for f in sublist if f})
         for file in unique_files:
             c.comm.init_file_lock(file)
         c.comm.Barrier()

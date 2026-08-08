@@ -60,6 +60,15 @@ class Updator(ABC):
 
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
+        # Win.Free() (inside cleanup_file_locks) is itself collective per-window;
+        # without a barrier here, a rank that finishes freeing quickly can race
+        # ahead into the NEXT update() call's init_all_file_locks() -- issuing
+        # fresh Win.Create() for the new lock generation -- while other ranks are
+        # still mid-teardown of the OLD generation on the same communicator.
+        # bench_driver.py runs the filter step twice (warmup + timed pass), so
+        # update() runs twice per process; this barrier makes sure every rank
+        # has fully finished freeing before anyone starts creating again.
+        c.comm.Barrier()
 
     def init_all_file_locks(self, c: Context) -> None:
         """
@@ -76,8 +85,18 @@ class Updator(ABC):
                     files.append(file)
         # collect files from all pids
         all_files = c.comm.allgather(files)
-        # flatten and filter to unique files
-        unique_files = {f for sublist in all_files for f in sublist if f}
+        # flatten and filter to unique files. sorted() is required, not
+        # cosmetic: Win.Create (inside init_file_lock) is a strict MPI
+        # collective, so every rank must call it the same number of times in
+        # the same order. Python randomizes string hashing per-process
+        # (PYTHONHASHSEED) unless fixed, so iterating a plain set here would
+        # give each of the ~1000 separately-launched rank processes its own
+        # hash seed and thus a potentially different set-iteration order for
+        # the identical set of filenames -- silently breaking the collective
+        # and causing an MPI_Fetch_and_op failure inside acquire_file_lock
+        # further down (observed 2026-08-08 at nproc_mem<nproc, where more
+        # than one file made the ordering ambiguity actually matter).
+        unique_files = sorted({f for sublist in all_files for f in sublist if f})
         # create the file locks
         for file in unique_files:
             c.comm.init_file_lock(file)
