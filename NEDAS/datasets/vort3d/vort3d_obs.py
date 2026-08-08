@@ -71,6 +71,10 @@ class Vort3DObs(SyntheticObs):
     # proxy for one fixed level, NOT itself a model.variables entry, which is why it still needs
     # its own get_wind_b_obs below). zmin/zmax default to the boundary layer's own pressure
     # (i.e. a degenerate 'wind_b'-equivalent single level) if left unset.
+    z_dist: str = 'uniform'  # 'uniform' | 'exp': 'exp' = truncated exponential in z, t ~ exp(-z_lambda*t)
+    # on [0,1], z = zmax - t*(zmax-zmin) (peaks at zmax, decays toward zmin; λ=3 mirrors the
+    # truth/obs figure's 950->300 hPa draw).
+    z_lambda: float = 3.0
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -190,7 +194,15 @@ class Vort3DObs(SyntheticObs):
                 else:
                     unit_scale = 100.0 if self.z_units == 'hPa' else 1.0  # hPa -> Pa
                     zmin_pa, zmax_pa = self.zmin * unit_scale, self.zmax * unit_scale
-                z = np.random.uniform(zmin_pa, zmax_pa, nobs)
+                if self.z_dist == 'exp':
+                    u = np.random.random(nobs)
+                    if self.z_lambda == 0:
+                        t = u  # uniform limit as z_lambda->0, avoids 0/0 below
+                    else:
+                        t = -np.log(1 - u * (1 - np.exp(-self.z_lambda))) / self.z_lambda
+                    z = zmax_pa - t * (zmax_pa - zmin_pa)
+                else:
+                    z = np.random.uniform(zmin_pa, zmax_pa, nobs)
             else:
                 z = np.zeros(nobs)  # 'wind_b': unused by its own custom obs_operator, kept as before
 
