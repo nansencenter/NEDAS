@@ -125,20 +125,24 @@ def nc_write_var(filename: str,
 
     nc_close(filename, f, comm)
 
-def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray:
+def nc_read_var(filename: str, varname: str, comm: Comm|None=None, index: tuple|None=None) -> np.ndarray:
     """
     Read a variable from a netCDF file.
 
-    This function by default reads the entire variable, if you only want a slice, it is more efficient to use
-    netCDF4.Dataset handle directly.
+    By default reads the entire variable. Pass `index` (a tuple of ints/slices,
+    numpy-indexing style) to read only a slice directly at the netCDF4 level --
+    e.g. for a multi-level variable, `index=(0, k, slice(None), slice(None))`
+    reads only level k instead of materializing every level in memory first.
 
     Args:
         filename (str): Path to the netCDF file for reading.
         varname (str): Name of the variable to read.
         comm (Comm, optional): MPI communicator object.
+        index (tuple, optional): numpy-style index applied at the netCDF4 level
+            to read only a slice of the variable, instead of the whole array.
 
     Returns:
-        np.ndarray: Variable read from the file.
+        np.ndarray: Variable (or slice thereof) read from the file.
     """
     f = nc_open(filename, 'r', comm)
 
@@ -154,7 +158,7 @@ def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray
 
     assert varname in group.variables, f"variable '{varname}' is not defined in {filename}"
 
-    dat = group[varname][...]
+    dat = group[varname][index] if index is not None else group[varname][...]
     dat_out = dat.data
     dat_out[dat.mask] = np.nan
 
