@@ -58,23 +58,25 @@ class Updator(ABC):
                 c.debug_message = debug_msg
                 c.current_task = m*nr_max+r
 
+        # send each locked file's handoff to its successor BEFORE the
+        # barrier -- a rank still blocked inside acquire_file_lock() waiting
+        # on ITS OWN predecessor's handoff can't reach the barrier, so
+        # sending handoffs only after it (e.g. from cleanup_file_locks())
+        # deadlocks whenever a file has more than one writer.
+        c.comm.finish_file_locks()
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
-        # Win.Free() (inside cleanup_file_locks) is itself collective per-window;
-        # without a barrier here, a rank that finishes freeing quickly can race
-        # ahead into the NEXT update() call's init_all_file_locks() -- issuing
-        # fresh Win.Create() for the new lock generation -- while other ranks are
-        # still mid-teardown of the OLD generation on the same communicator.
-        # bench_driver.py runs the filter step twice (warmup + timed pass), so
-        # update() runs twice per process; this barrier makes sure every rank
-        # has fully finished freeing before anyone starts creating again.
-        c.comm.Barrier()
 
     def init_all_file_locks(self, c: Context) -> None:
         """
         Prepare file locks for asynchronous io, needed for blocking write (e.g. in netcdf without parallel support)
         """
-        # get file names for async io
+        # get file names for async io -- register only the files THIS rank
+        # will personally write; build_file_locks() does its own internal
+        # allgather to reconstruct the full per-file writer ordering
+        # (point-to-point handoff chain, see utils/parallel.py -- this
+        # replaced an RMA/Fetch_and_op design that failed outright on Cray
+        # MPICH+OFI at nproc=1024 on Olivia).
         files = []
         for mem_id in c.mem_list[c.pid_mem]:
             for rec_id in c.state.rec_list[c.pid_rec]:
@@ -83,23 +85,9 @@ class Updator(ABC):
                 file = c.io.call_method(c, 'current', getattr(model, 'filename'), member=mem_id, **rec)
                 if file:
                     files.append(file)
-        # collect files from all pids
-        all_files = c.comm.allgather(files)
-        # flatten and filter to unique files. sorted() is required, not
-        # cosmetic: Win.Create (inside init_file_lock) is a strict MPI
-        # collective, so every rank must call it the same number of times in
-        # the same order. Python randomizes string hashing per-process
-        # (PYTHONHASHSEED) unless fixed, so iterating a plain set here would
-        # give each of the ~1000 separately-launched rank processes its own
-        # hash seed and thus a potentially different set-iteration order for
-        # the identical set of filenames -- silently breaking the collective
-        # and causing an MPI_Fetch_and_op failure inside acquire_file_lock
-        # further down (observed 2026-08-08 at nproc_mem<nproc, where more
-        # than one file made the ordering ambiguity actually matter).
-        unique_files = sorted({f for sublist in all_files for f in sublist if f})
-        # create the file locks
-        for file in unique_files:
+        for file in files:
             c.comm.init_file_lock(file)
+        c.comm.build_file_locks()
         c.comm.Barrier()
 
     @abstractmethod

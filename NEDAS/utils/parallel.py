@@ -54,8 +54,46 @@ class Comm:
 
         self.parallel_io = self.check_parallel_io()
 
-        # file lock to ensure only one processor access a file at a time
-        self._locks = {}
+        # File lock to ensure only one process accesses a file at a time,
+        # implemented as a point-to-point handoff chain -- NOT RMA
+        # (Win.Create/Fetch_and_op via passive-target Win.Lock/Unlock was
+        # tried first and found to fail outright, not just slowly, on Cray
+        # MPICH+OFI at nproc=1024 on Olivia -- confirmed independent of
+        # window count, so it's a stack-level issue, not something fixable
+        # by tuning NEDAS's usage of it).
+        #
+        # For each locked filename, every rank that registers it (via
+        # init_file_lock) is placed in a fixed, globally-agreed order (see
+        # build_file_locks); a rank waits for a handoff message from its
+        # predecessor in that order before proceeding, and passes the
+        # handoff on to its successor once it is fully done with the file
+        # for this generation. This assumes each rank's use of a given
+        # file's lock is one contiguous block relative to other ranks --
+        # true for NEDAS's actual usage (a file always belongs to exactly
+        # one owning rank, e.g. one ensemble member per rank, so in
+        # practice the chain length is 1 and no messages are exchanged at
+        # all) -- not a fully general re-entrant mutex for arbitrary
+        # interleaved acquire/release ordering across ranks.
+        #
+        # self._locks: filenames this rank participates in this generation
+        #   (registered via init_file_lock, then built by build_file_locks).
+        # self._lock_pred / self._lock_succ: filename -> rank id of the
+        #   writer immediately before/after this rank in the fixed order,
+        #   or None if this rank is first/last for that file.
+        # self._lock_tag_map: filename -> a small unique int, used as the
+        #   MPI tag for that file's handoff messages.
+        # self._lock_synced: filenames for which this rank has already
+        #   waited on its predecessor this generation (so repeated
+        #   acquire_file_lock calls for the same file don't wait twice).
+        # self._pending_lock_files: filenames registered via
+        #   init_file_lock() since the last build_file_locks()/
+        #   cleanup_file_locks().
+        self._locks = set()
+        self._lock_pred = {}
+        self._lock_succ = {}
+        self._lock_tag_map = {}
+        self._lock_synced = set()
+        self._pending_lock_files = []
 
     def __getattr__(self, attr):
         if attr == '_comm':
@@ -67,21 +105,65 @@ class Comm:
 
     def init_file_lock(self, filename):
         """
-        Initialize file locks for thread-safe I/O.
+        Register a filename that THIS rank will personally acquire/release
+        the lock for. Actual chain construction is deferred to
+        build_file_locks(), which must be called collectively afterward
+        (once every rank has registered its own files) and before any
+        acquire_file_lock()/release_file_lock() call.
+
+        Unlike the old RMA design, callers should register only the files
+        each rank itself intends to write -- NOT the global union of every
+        file across all ranks (build_file_locks() does its own internal
+        allgather to reconstruct the full per-file writer ordering).
 
         Args:
             filename (str): Path to the file.
         """
         if self._MPI is None or isinstance(self._comm, DummyComm) or not filename:
             return
-        if filename not in self._locks:
-            # create the lock memory
-            if self.Get_rank() == 0:
-                lock_mem = np.zeros(1, dtype='B')
-            else:
-                lock_mem = None
-            lock_win = self._MPI.Win.Create(lock_mem, comm=self._comm)
-            self._locks[filename] = lock_win
+        if filename not in self._locks and filename not in self._pending_lock_files:
+            self._pending_lock_files.append(filename)
+
+    def build_file_locks(self):
+        """
+        Build the handoff chain for every filename registered via
+        init_file_lock() since the last build_file_locks()/
+        cleanup_file_locks(). Must be called collectively by every rank
+        (each rank may have registered a different, possibly empty, set of
+        files) before any acquire_file_lock()/release_file_lock() call.
+
+        See the class-level comment above self._locks for the design.
+        """
+        if self._MPI is None or isinstance(self._comm, DummyComm):
+            return
+        my_files = list(dict.fromkeys(self._pending_lock_files))  # dedup, preserve order
+        self._pending_lock_files = []
+        my_rank = self.Get_rank()
+        # gather every rank's own file list so each rank can independently
+        # compute, for every file it touches, its position (and thus
+        # predecessor/successor) in a fixed order shared by all ranks
+        all_files = self._comm.allgather(my_files)
+        file_writers: dict = {}
+        for rank, flist in enumerate(all_files):
+            for f in flist:
+                file_writers.setdefault(f, []).append(rank)
+        for i, f in enumerate(sorted(file_writers.keys())):
+            self._lock_tag_map[f] = i
+        for f in my_files:
+            writers = file_writers[f]
+            idx = writers.index(my_rank)
+            self._lock_pred[f] = writers[idx - 1] if idx > 0 else None
+            self._lock_succ[f] = writers[idx + 1] if idx < len(writers) - 1 else None
+            self._locks.add(f)
+
+    def _ensure_lock_synced(self, filename):
+        """Wait on the predecessor handoff for filename, once per generation."""
+        if filename in self._lock_synced:
+            return
+        pred = self._lock_pred.get(filename)
+        if pred is not None:
+            self._comm.recv(source=pred, tag=self._lock_tag_map[filename])
+        self._lock_synced.add(filename)
 
     def check_parallel_io(self) -> bool:
         """
@@ -97,45 +179,63 @@ class Comm:
         except Exception:
             return False
 
+    def finish_file_locks(self):
+        """
+        Send the handoff to each registered file's successor, once this
+        rank is done with all its own writes for the current generation.
+
+        Must be called by every rank BEFORE any barrier that other ranks'
+        pending acquire_file_lock() calls might be blocking on. Sending the
+        handoff from cleanup_file_locks() instead (i.e. after such a
+        barrier) deadlocks whenever a file has more than one writer (e.g.
+        nproc_mem<nproc, where several rec-groups sharing a member all
+        write into that member's one file): the successor, still blocked
+        inside acquire_file_lock() waiting for this rank's handoff, can
+        never reach the barrier itself, so the predecessor never gets past
+        it either to send anything.
+        """
+        if self._MPI is None or isinstance(self._comm, DummyComm):
+            return
+        for filename in self._locks:
+            # make sure we actually took our turn (matters if a rank
+            # registered a file but never called acquire_file_lock for it)
+            # before handing off, so the successor never starts before
+            # this rank's predecessor-wait would have completed
+            self._ensure_lock_synced(filename)
+            succ = self._lock_succ.get(filename)
+            if succ is not None:
+                self._comm.send(None, dest=succ, tag=self._lock_tag_map[filename])
+
     def cleanup_file_locks(self):
+        """
+        Clear all lock bookkeeping for the current generation. Purely
+        local (no MPI calls) -- call finish_file_locks() first to send any
+        outstanding handoffs.
+        """
         try:
-            for file, lock_win in self._locks.items():
-                try:
-                    lock_win.Free()
-                except Exception as e:
-                    print(f"Rank {self.Get_rank()}: warning freeing win for {file}: {e}", flush=True)
             self._locks.clear()
+            self._lock_pred = {}
+            self._lock_succ = {}
+            self._lock_tag_map = {}
+            self._lock_synced = set()
+            self._pending_lock_files = []
         except Exception as e:
             print(f"Rank {self.Get_rank()}: error cleaning locks: {e}", file=sys.stderr, flush=True)
 
     def acquire_file_lock(self, filename):
         if self._MPI is None or isinstance(self._comm, DummyComm):
             return
-        assert filename in self._locks, f"Comm: file lock for {filename} not initialized"
-        lock_win = self._locks[filename]
-        check_dt = 0.1  # check file locks every 0.1 seconds, can make this configurable
-        while True:
-            # print(f"pid {self.Get_rank()} waiting for lock on {filename}", flush=True)
-            lock_mem = np.zeros(1, dtype='B')
-            one = np.array([1], dtype='B')
-            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
-            lock_win.Fetch_and_op(one, lock_mem, 0, 0, self._MPI.REPLACE)
-            lock_win.Unlock(0)
-            if lock_mem[0] == 0:
-                # print(f"pid {self.Get_rank()} acquires lock on {filename}", flush=True)
-                break
-            time.sleep(check_dt)
+        assert filename in self._locks, f"Comm: file lock for {filename} not initialized (call build_file_locks() first)"
+        self._ensure_lock_synced(filename)
 
     def release_file_lock(self, filename):
-        if self._MPI is None or isinstance(self._comm, DummyComm):
-            return
-        if filename in self._locks:
-            zero = np.array([0], dtype='B')
-            lock_win = self._locks[filename]
-            lock_win.Lock(0, self._MPI.LOCK_EXCLUSIVE)
-            lock_win.Put(zero, 0, 0)
-            lock_win.Unlock(0)
-            # print(f"pid {self.Get_rank()} releases lock on {filename}", flush=True)
+        # no-op: the handoff to this file's successor is sent once, in
+        # cleanup_file_locks(), after this rank is fully done with the file
+        # for the generation -- not per acquire/release call (see the
+        # class-level design comment above self._locks). Kept as a
+        # separate method for API symmetry with acquire_file_lock and so
+        # call sites don't need to change.
+        pass
 
     def finalize(self):
         """Clean up MPI resources cleanly to avoid hangs on exit."""
