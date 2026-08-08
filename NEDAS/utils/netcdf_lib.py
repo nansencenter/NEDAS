@@ -1,9 +1,33 @@
+import time
+import random
 from typing import Literal, Mapping
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
 
 AccessMode = Literal['r', 'w', 'a', 'r+']
+
+# Independent (uncoordinated) reads bypass comm/file-locking entirely by
+# design -- e.g. vort3d_model.py's read_var_from_file sets comm=None since
+# "reading files doesn't require collective io". At hundreds-to-thousands of
+# ranks opening files in the same shared-scratch (Lustre) directory with no
+# synchronization, this occasionally surfaces as a transient
+# "OSError: [Errno -101] NetCDF: HDF error" on Dataset() -- confirmed
+# transient (not corruption) by re-opening the same file serially right
+# after a failure and getting a clean read every time. A short bounded
+# retry absorbs this without adding any collective/blocking synchronization.
+_OPEN_RETRIES = 5
+_OPEN_BACKOFF_S = 0.5
+
+def _open_dataset(filename: str, mode: AccessMode, **kwargs) -> Dataset:
+    for attempt in range(_OPEN_RETRIES):
+        try:
+            return Dataset(filename, mode, format='NETCDF4', **kwargs)
+        except OSError:
+            if attempt == _OPEN_RETRIES - 1:
+                raise
+            time.sleep(_OPEN_BACKOFF_S * (attempt + 1) + random.uniform(0, 0.2))
+    raise AssertionError("unreachable")
 
 def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
     """
@@ -20,14 +44,14 @@ def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
         netCDF4.Dataset: netCDF file handle.
     """
     if comm is None:
-        return Dataset(filename, mode, format='NETCDF4')
+        return _open_dataset(filename, mode)
     else:
         if comm.parallel_io:
-            return Dataset(filename, mode, format='NETCDF4', parallel=True)
+            return _open_dataset(filename, mode, parallel=True)
         else:
             comm.acquire_file_lock(filename)
             try:
-                return Dataset(filename, mode, format='NETCDF4')
+                return _open_dataset(filename, mode)
             except Exception:
                 comm.release_file_lock(filename)
                 raise
