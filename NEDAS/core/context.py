@@ -342,10 +342,16 @@ class Context:
             return func
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # bracket with barriers so elapsed_time reflects true collective
+            # completion time, not just pid_show's own (possibly lightly
+            # loaded) local wall-clock -- without these, load imbalance in
+            # one step silently leaks into the next collective step's timing.
+            self.comm.Barrier()
             t0 = time.time()
             try:
                 return func(*args, **kwargs)
             finally:
+                self.comm.Barrier()
                 t1 = time.time()
                 self.progress.node['elapsed_time'] = t1 - t0
         return wrapper
