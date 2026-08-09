@@ -1,2 +1,2 @@
 random_rotation: True
-transform_solver: 'svd'  # 'svd' or 'eigen'
+transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)

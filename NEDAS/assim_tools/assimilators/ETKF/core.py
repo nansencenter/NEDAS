@@ -5,7 +5,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
-    transform_solver: str  # 'svd' or 'eigen'
+    transform_solver: str  # 'svd', 'eigen', or 'auto'
 
     def assimilation_algorithm(self, c):
         # Generate ONE mean-preserving random orthogonal rotation per analysis
@@ -19,6 +19,7 @@ class ETKFAssimilator(BatchAssimilator):
             self.rotation_matrix = bcast_by_root(c.comm)(mean_preserving_rotation)(c.nens)
         else:
             self.rotation_matrix = np.eye(c.nens)
+        self._warned_eigen_fallback = False
         super().assimilation_algorithm(c)
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
@@ -37,8 +38,17 @@ class ETKFAssimilator(BatchAssimilator):
         impact_on_variable = obs_data['impact_on_variable'][:, state_var_id][obs_rec_id]
 
         # the string solver option is mapped to a boolean here so that the njit
-        # kernels do not need to perform string comparisons
-        use_eigen = (self.transform_solver == 'eigen')
+        # kernels do not need to perform string comparisons. 'auto' (default,
+        # unset by the user) picks eigen when nlobs >> nens, since svd's
+        # full_matrices=True is O(nlobs^3) there vs eigen's O(nens^3) -- an
+        # explicit 'svd' or 'eigen' choice is always respected as-is.
+        if self.transform_solver == 'auto':
+            use_eigen = len(ind) > 4 * c.nens
+            if use_eigen and not self._warned_eigen_fallback:
+                c.debug_message = 'ETKF: nlobs >> nens, auto-selected eigen transform_solver'
+                self._warned_eigen_fallback = True
+        else:
+            use_eigen = (self.transform_solver == 'eigen')
 
         local_analysis_main(state_data['state_prior'][...,loc_id], obs_data['obs_prior'][:,ind],
                             obs_value, obs_err, hlfactor,
