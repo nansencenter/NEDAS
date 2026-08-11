@@ -138,9 +138,9 @@ class AlignmentUpdator(Updator):
 
                 # debug dump: actual prior/post/displace seen this cycle (c.debug only)
                 if c.debug:
-                    dbg_dir = os.path.join(c.config.work_dir, 'align_debug')
+                    dbg_dir = os.path.join(c.fs.analysis_dir(c.time, c.iter), 'align_debug')
                     os.makedirs(dbg_dir, exist_ok=True)
-                    np.savez(os.path.join(dbg_dir, f'align_mem{mem_id}_rec{rec_id}_iter{c.iter}.npz'),
+                    np.savez(os.path.join(dbg_dir, f'align_mem{mem_id}_rec{rec_id}.npz'),
                              fld_prior=fld_prior, fld_post=fld_post, displace=displace)
 
         c.comm.Barrier()
