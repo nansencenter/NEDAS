@@ -329,6 +329,7 @@ class Topaz5Model(Model[RegularGrid]):
                     # calculate the diag variable
                     var = self.operator[name](**kwargs)
                     # save the variable to npy file
+                    self.c.fs.make_dir(os.path.dirname(fname))
                     np.save(fname, var)
             # otherwise, fall back to read the variable from daily output files
             else:
@@ -418,6 +419,7 @@ class Topaz5Model(Model[RegularGrid]):
         elif name in self.diag_variables:
             # if restart file exists, the diag variable should be save to a npy cache file
             if self._restart_file_exists(kwargs):
+                self.c.fs.make_dir(os.path.dirname(fname))
                 np.save(fname, var)
             # otherwise, save the variable to daily output files
             else:
