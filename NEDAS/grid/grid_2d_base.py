@@ -48,7 +48,7 @@ class Grid2DBase(ABC):
     regular: bool
     cyclic_dim: str|None
 
-    def __init__(self, proj, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian', dst_grid=None):
+    def __init__(self, proj: Proj|None, x, y, bounds=None, cyclic_dim=None, distance_type='cartesian', dst_grid=None):
         assert x.shape == y.shape, "x, y shape does not match"
 
         if proj is None:
@@ -57,17 +57,18 @@ class Grid2DBase(ABC):
             self.proj = proj
 
         # name of the projection
-        if hasattr(proj, 'name'):
-            self.proj_name = proj.name
-        else:
-            self.proj_name = ''
+        # getattr with a default keeps the pre-existing semantics ('' when the
+        # projection has no name, e.g. the proj=None default above) while
+        # letting static analysis see a non-None access
+        self.proj_name = getattr(proj, 'name', '')
 
         # proj info, ellps is used in Geod for distance calculation
         self.proj_ellps = 'WGS84'
         self.proj_lon0 = 0
         self.proj_lat0 = 0
-        if hasattr(proj, 'definition'):
-            for e in proj.definition.split():
+        proj_definition = getattr(proj, 'definition', None)
+        if proj_definition is not None:
+            for e in proj_definition.split():
                 es = e.split('=')
                 if es[0]=='ellps':
                     self.proj_ellps = es[1]

@@ -275,7 +275,7 @@ Parallel Scheme:
 Analysis Scheme:
   General:       Scheme: {self.scheme} | Ensemble Size: {self.nens} | IO: {self.io_mode}
   Grid Type:     {self.grid_def.get('type', 'N/A') if self.grid_def else 'N/A'}
-  Iteration:     {self.iter + 1} of {self.niter} (Outer Loops)
+  Iteration:     {(self.iter or 0) + 1} of {self.niter} (Outer Loops)
   Assimilator:   Type: {self.assimilator_def.get('type') if self.assimilator_def else 'None'}
   Updator:       Type: {self.updator_def.get('type') if self.updator_def else 'None'}
   Inflation:     {inf_str}

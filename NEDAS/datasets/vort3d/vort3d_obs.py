@@ -156,6 +156,9 @@ class Vort3DObs(SyntheticObs):
                     return xs, ys
 
                 def sample_core_biased(n):
+                    # only called when self.core_bias_scale is not None (see the
+                    # core_bias_scale branch below); assert keeps static analysis honest
+                    assert self.core_bias_scale is not None
                     xs, ys = [], []
                     while len(xs) < n:
                         r = abs(np.random.normal(0, self.core_bias_scale))
@@ -242,7 +245,8 @@ class Vort3DObs(SyntheticObs):
     # (e.g. Fang & Zhu 2019, https://www.mdpi.com/2073-4433/10/7/376) rather than Vort2DObs's
     # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
     # class docstring
-    def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5,
+    def vortex_position(self, u, v, first_guess: tuple[int, int] | None = None, search_radius=20,
+                        vort_threshold_frac=0.5,
                         cyclic_dim='x', proximity_sigma=8.0, debug=False):
         """Vorticity-centroid center search, anchored to a first-guess position.
 
@@ -318,6 +322,11 @@ class Vort3DObs(SyntheticObs):
                     if z > zmax:
                         zmax = z
                         center_i, center_j = i, j
+            # a domain with no positive vorticity anywhere would leave the bootstrap guess
+            # at None and crash with a confusing TypeError in the centroid math below; the
+            # fallback anchors the search at the domain center instead.
+            if center_i is None or center_j is None:
+                center_i, center_j = nx // 2, ny // 2
             first_guess = (center_i, center_j)
 
         # Build the search window honoring the grid's boundary conditions (cyclic_dim).

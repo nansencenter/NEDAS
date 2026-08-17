@@ -728,6 +728,8 @@ class Topaz5Model(Model[RegularGrid]):
             mstr = '_mem{:03d}'.format(member+1)
         else:
             mstr = ''
+        # the rest of postprocess builds member-suffixed filenames, so a member index is required
+        assert member is not None, "topaz5model.postprocess requires a member index"
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
         self.c.fs.make_dir(run_dir)
 

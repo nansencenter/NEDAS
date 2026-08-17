@@ -247,7 +247,7 @@ class Comm:
 
         self._comm.Barrier()
 
-        self._locks = {}
+        self._locks = set()
         self._MPI = None
 
 def abort_all_ranks(comm: 'Comm|None' = None, code: int = 1) -> None:

@@ -4,7 +4,7 @@ import sys
 import shutil
 import copy
 import time
-from typing import get_args, Callable, TYPE_CHECKING
+from typing import get_args, Any, Callable, TYPE_CHECKING
 from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
@@ -49,6 +49,7 @@ class Context:
     state: State
     obs: Obs
     _cycle_obs_prior_full: ObsEns
+    _synthetic_obs_cache: dict[int, dict[str, Any]]
 
     def __init__(self, config: Config|None=None,
                  config_file: str|None=None,
@@ -69,7 +70,8 @@ class Context:
         # prev_time and next_time properties provide the time for previous/next analysis cycle
         self.time = self.config.time
         # initialize the current iteration
-        self.iter = self.config.iter
+        # config.iter defaults to None pre-analysis; treat it as 0 (the documented default)
+        self.iter = self.config.iter or 0
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
         self._prev_msg = ''

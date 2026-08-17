@@ -174,7 +174,7 @@ class AMSR2Obs(Dataset):
 
             self.ow_bias = dict()
             for ch in self.channels:
-                self.ow_bias[ch] = df[df['Month'] == int(date[4:6])][f'Mean_Value_{ch[2::]}'].values[0]
+                self.ow_bias[ch] = np.asarray(df[df['Month'] == int(date[4:6])][f'Mean_Value_{ch[2::]}'])[0]
 
     def _simulated_tb(self, channel, **kwargs):
         kwargs = super().parse_kwargs(kwargs)

@@ -333,7 +333,7 @@ class State:
         state = {}
 
         nr = len(self.rec_list[c.pid_rec])
-        nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
+        nm_max = int(np.max([len(lst) for p,lst in c.mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
@@ -402,7 +402,7 @@ class State:
 
         # all pid goes through their own task list simultaneously
         nr = len(self.rec_list[c.pid_rec])
-        nm_max = np.max([len(lst) for p,lst in c.mem_list.items()])
+        nm_max = int(np.max([len(lst) for p,lst in c.mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 

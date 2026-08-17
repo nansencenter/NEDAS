@@ -38,8 +38,8 @@ class Updator(ABC):
         # process the fields, each processor goes through its own subset of
         # mem_id,rec_id simultaneously
         # but need to keep every rank in sync to coordinate multiprocess file access
-        nm_max = np.max([len(lst) for _,lst in c.mem_list.items()])
-        nr_max = np.max([len(lst) for _,lst in c.state.rec_list.items()])
+        nm_max = int(np.max([len(lst) for _,lst in c.mem_list.items()]))
+        nr_max = int(np.max([len(lst) for _,lst in c.state.rec_list.items()]))
         c.total_tasks = nr_max * nm_max
         for r in range(nr_max):
             for m in range(nm_max):

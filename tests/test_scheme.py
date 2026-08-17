@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from typing import cast
 from datetime import datetime
 from NEDAS.schemes import get_scheme
 from NEDAS.schemes.filter import FilterAnalysisScheme
@@ -24,7 +25,9 @@ class TestGetTaskOpts(unittest.TestCase):
         )
         fake.c = SimpleNamespace(time=datetime(2026, 1, 1))
         fake.steps_need_mpi = FilterAnalysisScheme.steps_need_mpi
-        return fake
+        # the fake stands in for a real scheme instance when calling the
+        # unbound get_task_opts() -- tell the type checker so
+        return cast(FilterAnalysisScheme, fake)
 
     def test_default_falls_back_to_nproc_util(self):
         # unaffected steps (preprocess/postprocess) keep the nproc_util default

@@ -24,6 +24,12 @@ DA schemes, or other backward-compatible features land in the next minor release
 - `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
   `max_dt_retries`, `min_dt`)
 
+### Fixed
+- Pylance/pyright type-checking cleanup across several modules (None-guards,
+  numpy-scalar casts, `getattr` over `hasattr`+attribute access); includes an
+  `nx`/`ny` swap bug in `vort3d_obs.vortex_position`'s no-vorticity fallback
+  that mis-anchored the search window on non-square grids
+
 ## [1.3.1] - 2026-08-06
 
 ### Fixed

@@ -542,7 +542,7 @@ class Obs:
         tmp_obs = {}  # local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
-        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        nm_max = int(np.max([len(lst) for p,lst in mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
@@ -644,7 +644,7 @@ class Obs:
         tmp_obs = {}  # local obs at intermediate stage
 
         nr = len(self.obs_rec_list[c.pid_rec])
-        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        nm_max = int(np.max([len(lst) for p,lst in mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
@@ -728,7 +728,7 @@ class Obs:
 
         obs_seq = {}
         nr = len(self.obs_rec_list[c.pid_rec])
-        nm_max = np.max([len(lst) for p,lst in mem_list.items()])
+        nm_max = int(np.max([len(lst) for p,lst in mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
 
