@@ -23,6 +23,12 @@ DA schemes, or other backward-compatible features land in the next minor release
 - `stream_log` option (`Context.run_job`/`Model`) to control job-log
   streaming to stdout; `topaz5` sets it `False`
 
+### Changed
+- `vort3d`: netCDF reads now slice at the netCDF4 level instead of reading
+  all levels into memory
+
+## [1.3.2] - 2026-08-17
+
 ### Fixed
 - ETKF: `transform_solver` now auto-picks `eigen` over `svd` at high nlobs,
   avoiding O(nlobs^3) cost (up to 116x slower at scale)
@@ -39,10 +45,6 @@ DA schemes, or other backward-compatible features land in the next minor release
 - `alignment_updator`: retain `align_debug` output in the analysis iter dir
 - Pylance/pyright type-checking cleanup across several modules; includes an
   `nx`/`ny` swap bug fix in `vort3d_obs.vortex_position`'s fallback
-
-### Changed
-- `vort3d`: netCDF reads now slice at the netCDF4 level instead of reading
-  all levels into memory
 
 ## [1.3.1] - 2026-08-06
 
