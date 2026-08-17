@@ -12,17 +12,39 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Added
-- `ice_conc`, `ice_drift`, and `cs2smos` sea ice datasets: opt-in
-  `use_dataset_uncertainty` (per-pixel uncertainty from the source file) and
-  `use_adaptive_err` (concentration-/displacement-/thickness-dependent error
-  formulas ported from `enkf-topaz`) toggles; both default to `False`, no
-  behavior change unless enabled in `dataset_def`
-- `InterpolationAssimilator`: Cressman/OI local obs-only analysis (`interp`
-  assimilator type)
-- `vort3d` obs: core-biased radial sampling option for targeted obs networks
+- `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error
+  options ported from `enkf-topaz`, default off
+- `InterpolationAssimilator`: Cressman/OI local obs-only analysis
+- `vort3d` obs: core-biased radial sampling option for targeted networks
 - DIS optical flow: `variational_refine_alpha` now configurable
 - `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
   `max_dt_retries`, `min_dt`)
+- `vort3d` obs: `z_dist=exp` option for near-surface-weighted obs levels
+- `stream_log` option (`Context.run_job`/`Model`) to control job-log
+  streaming to stdout; `topaz5` sets it `False`
+
+### Changed
+- `vort3d`: netCDF reads now slice at the netCDF4 level instead of reading
+  all levels into memory
+
+## [1.3.2] - 2026-08-17
+
+### Fixed
+- ETKF: `transform_solver` now auto-picks `eigen` over `svd` at high nlobs,
+  avoiding O(nlobs^3) cost (up to 116x slower at scale)
+- Step timer now barrier-bracketed for accurate per-step MPI timing
+- `nc_open`: retry with backoff on transient HDF errors under concurrent reads
+- Replaced MPI RMA file locking (failed at nproc=1024 on Cray MPICH+OFI)
+  with a point-to-point handoff chain
+- Multi-node MPI fixes at `nproc_mem<nproc` scale: `nproc_mem` default,
+  `z_coords_from` lookup, sorted file-lock iteration order
+- `Scheme`: allow `cycling=False` with `run_forecast=True`
+- `topaz5model`: stopped `restart2nc`/`run.log` output from flooding
+  `nedas-run`'s stdout
+- `topaz5model`/`nextsimdg_model`: ensure output dir exists before `np.save`
+- `alignment_updator`: retain `align_debug` output in the analysis iter dir
+- Pylance/pyright type-checking cleanup across several modules; includes an
+  `nx`/`ny` swap bug fix in `vort3d_obs.vortex_position`'s fallback
 
 ## [1.3.1] - 2026-08-06
 

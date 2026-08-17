@@ -147,6 +147,7 @@ class NextsimDGModel(Model[RegularGrid]):
             #  but here we always calculate the variable from the model state, and refresh to the npy file, to be safe
             if not os.path.exists(fname):
                 var = self.operator[name](**kwargs)
+                self.c.fs.make_dir(os.path.dirname(fname))
                 np.save(fname, var)
             else:
                 var = np.load(fname)
@@ -201,6 +202,7 @@ class NextsimDGModel(Model[RegularGrid]):
                     nc_write_var(fname, dims, rec['name'], var, comm=self.c.comm)
 
         elif name in self.diag_variables:
+            self.c.fs.make_dir(os.path.dirname(fname))
             np.save(fname, var)
 
         else:

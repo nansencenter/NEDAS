@@ -71,6 +71,10 @@ class Vort3DObs(SyntheticObs):
     # proxy for one fixed level, NOT itself a model.variables entry, which is why it still needs
     # its own get_wind_b_obs below). zmin/zmax default to the boundary layer's own pressure
     # (i.e. a degenerate 'wind_b'-equivalent single level) if left unset.
+    z_dist: str = 'uniform'  # 'uniform' | 'exp': 'exp' = truncated exponential in z, t ~ exp(-z_lambda*t)
+    # on [0,1], z = zmax - t*(zmax-zmin) (peaks at zmax, decays toward zmin; λ=3 mirrors the
+    # truth/obs figure's 950->300 hPa draw).
+    z_lambda: float = 3.0
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -152,6 +156,9 @@ class Vort3DObs(SyntheticObs):
                     return xs, ys
 
                 def sample_core_biased(n):
+                    # only called when self.core_bias_scale is not None (see the
+                    # core_bias_scale branch below); assert keeps static analysis honest
+                    assert self.core_bias_scale is not None
                     xs, ys = [], []
                     while len(xs) < n:
                         r = abs(np.random.normal(0, self.core_bias_scale))
@@ -190,7 +197,15 @@ class Vort3DObs(SyntheticObs):
                 else:
                     unit_scale = 100.0 if self.z_units == 'hPa' else 1.0  # hPa -> Pa
                     zmin_pa, zmax_pa = self.zmin * unit_scale, self.zmax * unit_scale
-                z = np.random.uniform(zmin_pa, zmax_pa, nobs)
+                if self.z_dist == 'exp':
+                    u = np.random.random(nobs)
+                    if self.z_lambda == 0:
+                        t = u  # uniform limit as z_lambda->0, avoids 0/0 below
+                    else:
+                        t = -np.log(1 - u * (1 - np.exp(-self.z_lambda))) / self.z_lambda
+                    z = zmax_pa - t * (zmax_pa - zmin_pa)
+                else:
+                    z = np.random.uniform(zmin_pa, zmax_pa, nobs)
             else:
                 z = np.zeros(nobs)  # 'wind_b': unused by its own custom obs_operator, kept as before
 
@@ -230,7 +245,8 @@ class Vort3DObs(SyntheticObs):
     # (e.g. Fang & Zhu 2019, https://www.mdpi.com/2073-4433/10/7/376) rather than Vort2DObs's
     # original discrete box-sum argmax; vortex_size stays byte-identical to Vort2DObs's, see
     # class docstring
-    def vortex_position(self, u, v, first_guess=None, search_radius=20, vort_threshold_frac=0.5,
+    def vortex_position(self, u, v, first_guess: tuple[int, int] | None = None, search_radius=20,
+                        vort_threshold_frac=0.5,
                         cyclic_dim='x', proximity_sigma=8.0, debug=False):
         """Vorticity-centroid center search, anchored to a first-guess position.
 
@@ -306,6 +322,11 @@ class Vort3DObs(SyntheticObs):
                     if z > zmax:
                         zmax = z
                         center_i, center_j = i, j
+            # a domain with no positive vorticity anywhere would leave the bootstrap guess
+            # at None and crash with a confusing TypeError in the centroid math below; the
+            # fallback anchors the search at the domain center instead.
+            if center_i is None or center_j is None:
+                center_i, center_j = nx // 2, ny // 2
             first_guess = (center_i, center_j)
 
         # Build the search window honoring the grid's boundary conditions (cyclic_dim).

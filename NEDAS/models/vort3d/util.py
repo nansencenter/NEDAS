@@ -52,7 +52,7 @@ def unpack_state(state: dict, core: Core) -> None:
 
 
 def initial_condition(nx, ny, dx, nz=2, beta=0.0, moist=True, convection_scheme='ooyama',
-                       Vbg=0.0, Vslope=-3, bg_seed=None, Vmax=15.0, Rmw=120.0e3,
+                       Vbg=0.0, Vslope: float = -3, bg_seed=None, Vmax=15.0, Rmw=120.0e3,
                        vortex_x0=0.0, vortex_y0=-700.0e3, u_bkg=0.0, v_bkg=0.0,
                        f0=2*7.292e-5*np.sin(np.deg2rad(20.)),
                        theta_offset=0.0, q_offset=0.0) -> dict:

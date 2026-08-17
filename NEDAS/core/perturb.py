@@ -334,6 +334,9 @@ class Perturbation:
         except Exception as e:
             error = e
 
+        # send handoffs BEFORE the barrier -- see finish_file_locks() docstring
+        # (a rank blocked inside acquire_file_lock() can't reach the barrier)
+        c.comm.finish_file_locks()
         # all ranks must reach the barrier; re-raise after so a failed rank exits cleanly
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
@@ -344,14 +347,16 @@ class Perturbation:
     def init_file_locks(self, c: Context) -> None:
         """Initialize file locks for nc-backed perturb variables (e.g. iced, iceh).
 
-        Mirrors the updator pattern: collect all output file paths across every rank,
-        gather them globally so every rank knows about every file, then init a lock
-        for each unique path before any parallel write begins.
+        Mirrors the updator pattern: register only the output file paths THIS
+        rank will personally write, then call build_file_locks(), which does
+        its own internal allgather to reconstruct the full per-file writer
+        ordering (point-to-point handoff chain, see utils/parallel.py).
 
         The file-collection loop is wrapped in try/except so that a rank that fails
-        mid-loop still participates in the collective allgather and Barrier, preventing
-        an MPI deadlock.  Any error is re-raised after the barrier so the outer
-        try/except in __call__ can handle it uniformly.
+        mid-loop still participates in the collective allgather (inside
+        build_file_locks) and Barrier, preventing an MPI deadlock. Any error is
+        re-raised after the barrier so the outer try/except in __call__ can
+        handle it uniformly.
         """
         files = []
         error = None
@@ -374,10 +379,9 @@ class Perturbation:
                                 files.append(file)
         except Exception as e:
             error = e
-        all_files = c.comm.allgather(files)
-        unique_files = {f for sublist in all_files for f in sublist if f}
-        for file in unique_files:
+        for file in files:
             c.comm.init_file_lock(file)
+        c.comm.build_file_locks()
         c.comm.Barrier()
         if error is not None:
             raise error

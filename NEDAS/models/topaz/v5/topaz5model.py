@@ -419,6 +419,7 @@ class Topaz5Model(Model[RegularGrid]):
         elif name in self.diag_variables:
             # if restart file exists, the diag variable should be save to a npy cache file
             if self._restart_file_exists(kwargs):
+                self.c.fs.make_dir(os.path.dirname(fname))
                 np.save(fname, var)
             # otherwise, save the variable to daily output files
             else:
@@ -727,6 +728,8 @@ class Topaz5Model(Model[RegularGrid]):
             mstr = '_mem{:03d}'.format(member+1)
         else:
             mstr = ''
+        # the rest of postprocess builds member-suffixed filenames, so a member index is required
+        assert member is not None, "topaz5model.postprocess requires a member index"
         run_dir = os.path.join(kwargs['path'], mstr[1:], 'SCRATCH')
         self.c.fs.make_dir(run_dir)
 
@@ -750,7 +753,7 @@ class Topaz5Model(Model[RegularGrid]):
         if self.model_env:
             commands += f". {self.model_env}; "
         commands += f"cd {run_dir}; "
-        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc"
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'restart2nc')} forecast{member+1:03}.a ice_forecast{member+1:03}.nc > restart2nc{member+1:03}.log 2>&1"
         self.c.run_job(commands, nproc=1)
 
         # add posterior ice variables in analysis abfile
@@ -911,6 +914,7 @@ class Topaz5Model(Model[RegularGrid]):
                         'run_dir': run_dir,
                         'parallel_mode': 'mpi',
                         'log_file': log_file,
+                        'stream_log': self.stream_log,
                         'nproc': self.nproc,
                         'offset': task_id * self.nproc_per_run,
                     }

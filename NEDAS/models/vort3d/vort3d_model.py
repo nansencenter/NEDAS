@@ -218,8 +218,12 @@ class Vort3DModel(Model[RegularGrid]):
         iz = int(kwargs['k']) if has_z else None
 
         def _read_one(varname):
-            arr = nc_read_var(fname, varname, comm=comm)
-            return arr[0, iz, ...] if has_z else arr[0, ...]
+            # slice directly at the netCDF4 level (index=) instead of reading
+            # every level into memory first -- for large nz this is the
+            # difference between an O(ny*nx) read and an O(nz*ny*nx) one,
+            # done once per (member, level, variable) in collect_prior_fields.
+            index = (0, iz, slice(None), slice(None)) if has_z else (0, slice(None), slice(None))
+            return nc_read_var(fname, varname, comm=comm, index=index)
 
         if rec['is_vector']:
             u = _read_one(rec['name'][0])

@@ -1,9 +1,33 @@
+import time
+import random
 from typing import Literal, Mapping
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.utils.parallel import Comm
 
 AccessMode = Literal['r', 'w', 'a', 'r+']
+
+# Independent (uncoordinated) reads bypass comm/file-locking entirely by
+# design -- e.g. vort3d_model.py's read_var_from_file sets comm=None since
+# "reading files doesn't require collective io". At hundreds-to-thousands of
+# ranks opening files in the same shared-scratch (Lustre) directory with no
+# synchronization, this occasionally surfaces as a transient
+# "OSError: [Errno -101] NetCDF: HDF error" on Dataset() -- confirmed
+# transient (not corruption) by re-opening the same file serially right
+# after a failure and getting a clean read every time. A short bounded
+# retry absorbs this without adding any collective/blocking synchronization.
+_OPEN_RETRIES = 5
+_OPEN_BACKOFF_S = 0.5
+
+def _open_dataset(filename: str, mode: AccessMode, **kwargs) -> Dataset:
+    for attempt in range(_OPEN_RETRIES):
+        try:
+            return Dataset(filename, mode, format='NETCDF4', **kwargs)
+        except OSError:
+            if attempt == _OPEN_RETRIES - 1:
+                raise
+            time.sleep(_OPEN_BACKOFF_S * (attempt + 1) + random.uniform(0, 0.2))
+    raise AssertionError("unreachable")
 
 def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
     """
@@ -20,14 +44,14 @@ def nc_open(filename: str, mode: AccessMode, comm: Comm|None=None) -> Dataset:
         netCDF4.Dataset: netCDF file handle.
     """
     if comm is None:
-        return Dataset(filename, mode, format='NETCDF4')
+        return _open_dataset(filename, mode)
     else:
         if comm.parallel_io:
-            return Dataset(filename, mode, format='NETCDF4', parallel=True)
+            return _open_dataset(filename, mode, parallel=True)
         else:
             comm.acquire_file_lock(filename)
             try:
-                return Dataset(filename, mode, format='NETCDF4')
+                return _open_dataset(filename, mode)
             except Exception:
                 comm.release_file_lock(filename)
                 raise
@@ -125,20 +149,24 @@ def nc_write_var(filename: str,
 
     nc_close(filename, f, comm)
 
-def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray:
+def nc_read_var(filename: str, varname: str, comm: Comm|None=None, index: tuple|None=None) -> np.ndarray:
     """
     Read a variable from a netCDF file.
 
-    This function by default reads the entire variable, if you only want a slice, it is more efficient to use
-    netCDF4.Dataset handle directly.
+    By default reads the entire variable. Pass `index` (a tuple of ints/slices,
+    numpy-indexing style) to read only a slice directly at the netCDF4 level --
+    e.g. for a multi-level variable, `index=(0, k, slice(None), slice(None))`
+    reads only level k instead of materializing every level in memory first.
 
     Args:
         filename (str): Path to the netCDF file for reading.
         varname (str): Name of the variable to read.
         comm (Comm, optional): MPI communicator object.
+        index (tuple, optional): numpy-style index applied at the netCDF4 level
+            to read only a slice of the variable, instead of the whole array.
 
     Returns:
-        np.ndarray: Variable read from the file.
+        np.ndarray: Variable (or slice thereof) read from the file.
     """
     f = nc_open(filename, 'r', comm)
 
@@ -154,7 +182,7 @@ def nc_read_var(filename: str, varname: str, comm: Comm|None=None) -> np.ndarray
 
     assert varname in group.variables, f"variable '{varname}' is not defined in {filename}"
 
-    dat = group[varname][...]
+    dat = group[varname][index] if index is not None else group[varname][...]
     dat_out = dat.data
     dat_out[dat.mask] = np.nan
 

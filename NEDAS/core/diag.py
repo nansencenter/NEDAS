@@ -32,6 +32,9 @@ class Diagnostics:
             # perform the diag task
             mod.run(c, **rec)
 
+        # send handoffs BEFORE the barrier -- see finish_file_locks() docstring
+        # (a rank blocked inside acquire_file_lock() can't reach the barrier)
+        c.comm.finish_file_locks()
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
 
@@ -66,3 +69,4 @@ class Diagnostics:
             for file in files:
                 # create the file lock across mpi ranks for this file
                 c.comm.init_file_lock(file)
+        c.comm.build_file_locks()

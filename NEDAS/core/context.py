@@ -4,7 +4,7 @@ import sys
 import shutil
 import copy
 import time
-from typing import get_args, Callable, TYPE_CHECKING
+from typing import get_args, Any, Callable, TYPE_CHECKING
 from functools import wraps
 import numpy as np
 from datetime import datetime, timedelta
@@ -49,6 +49,7 @@ class Context:
     state: State
     obs: Obs
     _cycle_obs_prior_full: ObsEns
+    _synthetic_obs_cache: dict[int, dict[str, Any]]
 
     def __init__(self, config: Config|None=None,
                  config_file: str|None=None,
@@ -69,7 +70,8 @@ class Context:
         # prev_time and next_time properties provide the time for previous/next analysis cycle
         self.time = self.config.time
         # initialize the current iteration
-        self.iter = self.config.iter
+        # config.iter defaults to None pre-analysis; treat it as 0 (the documented default)
+        self.iter = self.config.iter or 0
         # initialize the pid that shows progress (default to the root process pid=0)
         self.pid_show = 0
         self._prev_msg = ''
@@ -342,10 +344,16 @@ class Context:
             return func
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # bracket with barriers so elapsed_time reflects true collective
+            # completion time, not just pid_show's own (possibly lightly
+            # loaded) local wall-clock -- without these, load imbalance in
+            # one step silently leaks into the next collective step's timing.
+            self.comm.Barrier()
             t0 = time.time()
             try:
                 return func(*args, **kwargs)
             finally:
+                self.comm.Barrier()
                 t1 = time.time()
                 self.progress.node['elapsed_time'] = t1 - t0
         return wrapper
@@ -444,6 +452,7 @@ class Context:
                 parallel_mode: ParallelMode='serial',
                 nproc: int=1,
                 offset: int=0,
+                stream_log: bool=True,
                 **kwargs) -> None:
         """
         The user-facing method for running command on a computer.
@@ -454,12 +463,16 @@ class Context:
             parallel_mode (ParallelMode, optional): parallel mode ('serial', 'mpi', 'openmp'), default is 'serial'
             nproc (int, optional): number of processors (default is 1)
             offset (int, optional): offset in full list of processors (default is 0)
+            stream_log (bool, optional): stream the submitted job's log content to
+                stdout while waiting for it to finish (default True). Set False to
+                suppress this for jobs with verbose logs.
             **kwargs: other keyword arguments to update the job submitter configuration
         """
         # update the state of the job submitter for this specific task
         self.jsub.parallel_mode = parallel_mode
         self.jsub.nproc = nproc
         self.jsub.offset = offset
+        self.jsub.stream_log = stream_log
 
         for key, value in kwargs.items():
             if value and hasattr(self.jsub, key):

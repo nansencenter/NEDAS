@@ -138,9 +138,9 @@ class AlignmentUpdator(Updator):
 
                 # debug dump: actual prior/post/displace seen this cycle (c.debug only)
                 if c.debug:
-                    dbg_dir = os.path.join(c.config.work_dir, 'align_debug')
+                    dbg_dir = os.path.join(c.fs.analysis_dir(c.time, c.iter), 'align_debug')
                     os.makedirs(dbg_dir, exist_ok=True)
-                    np.savez(os.path.join(dbg_dir, f'align_mem{mem_id}_rec{rec_id}_iter{c.iter}.npz'),
+                    np.savez(os.path.join(dbg_dir, f'align_mem{mem_id}_rec{rec_id}.npz'),
                              fld_prior=fld_prior, fld_post=fld_post, displace=displace)
 
         c.comm.Barrier()
@@ -205,6 +205,10 @@ class AlignmentUpdator(Updator):
         if interp_displaced_fields:
             # Interpolation approach: evaluate the target field at displaced model-grid
             # positions -- grid points themselves do not move.
+            # frozen/fld_post components only exist when a scale bandpass decomposition is
+            # active this iteration; keep them None otherwise (guards pyright/static analysis).
+            frozen_m = None
+            fld_post_m = None
             displace_m = c.grid.convert(displace, is_vector=True, method='linear')
             u, v = displace_m[0,...], displace_m[1,...]
             # taper_boundary is only relevant for models with a physical (non-cyclic) domain edge;
@@ -244,7 +248,7 @@ class AlignmentUpdator(Updator):
                     target_warp_m = np.array([target_warp_x, target_warp_y])
                 else:
                     target_warp_m = model.grid.interp(target_native[...], model.grid.x-u, model.grid.y-v)
-                if character_length is not None:
+                if frozen_m is not None and fld_post_m is not None:
                     var_post = frozen_m + fld_post_m + target_warp_m
                 else:
                     var_post = target_warp_m
@@ -252,7 +256,7 @@ class AlignmentUpdator(Updator):
                 u_elem = np.mean(u[...,model.grid.tri.triangles], axis=-1)
                 v_elem = np.mean(v[...,model.grid.tri.triangles], axis=-1)
                 target_warp_m = model.grid.interp(target_native, model.grid.x_elem-u_elem, model.grid.y_elem-v_elem)
-                if character_length is not None:
+                if frozen_m is not None and fld_post_m is not None:
                     var_post = (target_warp_m
                                 + np.mean(frozen_m[...,model.grid.tri.triangles], axis=-1)
                                 + np.mean(fld_post_m[...,model.grid.tri.triangles], axis=-1))

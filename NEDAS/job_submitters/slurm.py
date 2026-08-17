@@ -178,8 +178,8 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                                            f"(reason: {job_reason})")
                     continue  # transient pending reason, keep waiting
 
-                # stream new log output to the tty, if a log file is available
-                if not os.path.exists(current_log_file):
+                # stream new log output to the tty, if enabled and a log file is available
+                if not self.stream_log or not os.path.exists(current_log_file):
                     continue
 
                 # open log file and seek to the last position
@@ -192,7 +192,7 @@ class SLURMJobSubmitter(HPCJobSubmitter):
                         file_pointer = f.tell()  # update file pointer to the new position
 
         # flush any log content written between the last poll and the job leaving the queue
-        if os.path.exists(current_log_file):
+        if self.stream_log and os.path.exists(current_log_file):
             with open(current_log_file, 'r', newline='') as f:
                 f.seek(file_pointer)
                 tail = f.read()

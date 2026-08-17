@@ -58,28 +58,12 @@ class Scheme(ABC):
         # check if io mode is online:
         self.online_mode = (self.config.io_mode == 'online')
 
-        # resolve cycling mode: real cycling DA chains each cycle's forecast
-        # into the next cycle's restart files (get_restart_dir in
-        # FilterAnalysisScheme); offline/independent-cycle mode (cycling=False)
-        # instead re-reads pre-staged restart files at every cycle via
-        # model.ens_init_dir. If not set explicitly, infer from run_forecast:
-        # no forecast step between cycles means there is nothing to chain, so
-        # cycles must be independent.
+        # resolve cycling mode: if not set explicitly, run_forecast supersedes
+        # (run_forecast=True implies cycling=True)
         if self.config.cycling is not None:
             self.cycling = self.config.cycling
         else:
             self.cycling = self.config.run_forecast
-
-        # an explicit cycling=False with run_forecast=True is a contradiction:
-        # the forecast would run every cycle but its output would never be
-        # used as the next cycle's restart source (silently wasted compute).
-        if not self.cycling and self.config.run_forecast:
-            raise ValueError(
-                "cycling=False (offline/independent cycles) is incompatible with "
-                "run_forecast=True -- there is no next cycle to chain the forecast "
-                "into. Set run_forecast=False for offline DA, or cycling=True (or "
-                "leave cycling unset) for real cycling DA."
-            )
 
         # check if one or more of the datasets is synthetic type:
         for dataset in self.c.datasets.values():

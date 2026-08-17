@@ -227,9 +227,13 @@ class QGFortranModel(Model):
 
         log_file = os.path.join(run_dir, 'run.log')
 
+        # member can be None for deterministic (non-ensemble) runs; namelist() seeds its
+        # idum from member, so fall back to member 0 (the namelist default) in that case.
+        member = kwargs['member'] if kwargs['member'] is not None else 0
+
         # give it several tries, each time decreasing time step
         for dt_ratio in [1, 0.6, 0.2]:
-            namelist(vars(self), time, forecast_period, psi_init_type, kwargs['member'], dt_ratio, run_dir)
+            namelist(vars(self), time, forecast_period, psi_init_type, member, dt_ratio, run_dir)
 
             self.c.run_job(shell_cmd, job_name=job_name, offset=task_id*self.nproc_per_run, **kwargs)
 

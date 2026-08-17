@@ -58,6 +58,7 @@ See techNotes/models/vort3d.md dev log for the paper's equations/parameters
 and running notes on simplifications made here.
 """
 import numpy as np
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # constants (paper's values / standard atmospheric constants)
@@ -304,7 +305,7 @@ class Core:
     Advance the state in time with `step(dt)`.
     """
 
-    def __init__(self, nx=100, ny=100, dx=20e3, nz=2, Vbg=0.0, Vslope=-3, bg_seed=None,
+    def __init__(self, nx=100, ny=100, dx=20e3, nz=2, Vbg=0.0, Vslope: float = -3, bg_seed=None,
                  beta=0.0, moist=True, convection_scheme='ooyama', sigma_boundary_top=8/9,
                  Vmax=15.0, Rmw=120.0e3, vortex_x0=0.0, vortex_y0=-700.0e3,
                  u_bkg=0.0, v_bkg=0.0, f0=2*7.292e-5*np.sin(np.deg2rad(20.)),
@@ -496,7 +497,7 @@ class Core:
             return lx + ly
         return -k1 * lap(lap(f))
 
-    def hydrostatic(self, theta, pstar):
+    def hydrostatic(self, theta, pstar) -> dict[str, Any]:
         """
         Geopotential at each layer midpoint, via the Arakawa & Suarez
         (1983) layer-mean-Exner-function scheme the paper adopts (Appendix
@@ -532,14 +533,14 @@ class Core:
             Ph_hi, ph_hi = Phat[k+1], phat_p[k+1]
             P.append((Ph_hi*ph_hi - Ph_lo*ph_lo) / ((1+kappa)*(ph_hi-ph_lo)))
 
-        theta_hat = [None] * (n + 1)
+        theta_hat: list[Any] = [None] * (n + 1)
         for m in range(1, n):
             Ph_mid = Phat[m]
             th_lo, P_lo = theta[m-1], P[m-1]
             th_hi, P_hi = theta[m], P[m]
             theta_hat[m] = ((Ph_mid-P_lo)*th_lo + (P_hi-Ph_mid)*th_hi) / (P_hi-P_lo)
 
-        Phi = [None] * n
+        Phi: list[Any] = [None] * n
         Phi_s = np.zeros_like(pstar)
         Phi[n-1] = Phi_s + cp*theta[n-1]*(Phat[n] - P[n-1])
         for k in range(n-2, -1, -1):
@@ -617,6 +618,13 @@ class Core:
         dv = np.zeros_like(v)
         dtheta = np.zeros_like(theta)
         dq = np.zeros_like(q)
+
+        # moist-only surface-flux/radiation terms -- only read inside `self.moist`
+        # guards below, where they are always (re)assigned; the defaults here just
+        # make the (unreachable) non-moist access statically well-defined
+        Fu = Fv = Fq = F_SH = 0.0
+        mass_b = 1.0
+        rad_active = 0.0
 
         if self.moist:
             Vb = np.hypot(u[n-1], v[n-1])

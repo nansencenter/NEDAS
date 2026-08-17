@@ -269,3 +269,5 @@ thref: 1.e-3
 aice_thresh: 1e-4
 fice_thresh: 5e-4
 seaice_thick_obs_impact: 0
+
+stream_log: False  # hycom_cice's per-timestep output is too verbose to stream to nedas-run's stdout

@@ -94,8 +94,9 @@ class TestMultiplicativePostInflation(unittest.TestCase):
         np.testing.assert_allclose(infl.coef, np.sqrt((omb2 - varo - amb2) / vara), rtol=1e-10)
 
     def test_unknown_post_infl_formula_raises(self):
+        # 'bogus' is deliberately invalid -- adaptive_post_inflation must raise
         infl = MultiplicativeInflation(coef=1.0, adaptive=True, prior=False, post=True,
-                                        post_infl_formula='bogus')
+                                        post_infl_formula='bogus')  # type: ignore[arg-type]
         n = 10
         _patch_stats(infl, {'total_nobs': n, 'varb': 3*n, 'vara': 2*n, 'varo': 1*n,
                              'omb2': 8*n, 'omaamb': 5*n, 'amb2': 2*n})

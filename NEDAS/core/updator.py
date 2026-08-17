@@ -38,8 +38,8 @@ class Updator(ABC):
         # process the fields, each processor goes through its own subset of
         # mem_id,rec_id simultaneously
         # but need to keep every rank in sync to coordinate multiprocess file access
-        nm_max = np.max([len(lst) for _,lst in c.mem_list.items()])
-        nr_max = np.max([len(lst) for _,lst in c.state.rec_list.items()])
+        nm_max = int(np.max([len(lst) for _,lst in c.mem_list.items()]))
+        nr_max = int(np.max([len(lst) for _,lst in c.state.rec_list.items()]))
         c.total_tasks = nr_max * nm_max
         for r in range(nr_max):
             for m in range(nm_max):
@@ -58,6 +58,12 @@ class Updator(ABC):
                 c.debug_message = debug_msg
                 c.current_task = m*nr_max+r
 
+        # send each locked file's handoff to its successor BEFORE the
+        # barrier -- a rank still blocked inside acquire_file_lock() waiting
+        # on ITS OWN predecessor's handoff can't reach the barrier, so
+        # sending handoffs only after it (e.g. from cleanup_file_locks())
+        # deadlocks whenever a file has more than one writer.
+        c.comm.finish_file_locks()
         c.comm.Barrier()
         c.comm.cleanup_file_locks()
 
@@ -65,7 +71,12 @@ class Updator(ABC):
         """
         Prepare file locks for asynchronous io, needed for blocking write (e.g. in netcdf without parallel support)
         """
-        # get file names for async io
+        # get file names for async io -- register only the files THIS rank
+        # will personally write; build_file_locks() does its own internal
+        # allgather to reconstruct the full per-file writer ordering
+        # (point-to-point handoff chain, see utils/parallel.py -- this
+        # replaced an RMA/Fetch_and_op design that failed outright on Cray
+        # MPICH+OFI at nproc=1024 on Olivia).
         files = []
         for mem_id in c.mem_list[c.pid_mem]:
             for rec_id in c.state.rec_list[c.pid_rec]:
@@ -74,13 +85,9 @@ class Updator(ABC):
                 file = c.io.call_method(c, 'current', getattr(model, 'filename'), member=mem_id, **rec)
                 if file:
                     files.append(file)
-        # collect files from all pids
-        all_files = c.comm.allgather(files)
-        # flatten and filter to unique files
-        unique_files = {f for sublist in all_files for f in sublist if f}
-        # create the file locks
-        for file in unique_files:
+        for file in files:
             c.comm.init_file_lock(file)
+        c.comm.build_file_locks()
         c.comm.Barrier()
 
     @abstractmethod
