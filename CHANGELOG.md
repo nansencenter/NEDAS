@@ -31,6 +31,7 @@ DA schemes, or other backward-compatible features land in the next minor release
 - `test_file_system.py` no longer creates a stray `test/` dir at repo root
   (used `work_dir='test'` instead of the `work_dir` default); `work/` is now
   gitignored
+- numba warning now includes the actual `ImportError` message
 
 ## [1.3.2] - 2026-08-17
 
