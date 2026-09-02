@@ -8,7 +8,7 @@ import numpy as np
 import pyproj # type: ignore
 
 from NEDAS.grid import RegularGrid
-from NEDAS.models.nextsim.dg.perturb import gen_perturb, apply_perturb
+from NEDAS.models.nextsim.v3.perturb import gen_perturb, apply_perturb
 
 _proj:pyproj.Proj = pyproj.Proj(proj='stere', a=6378273, b=6356889.448910593, lat_0=90., lon_0=-45., lat_ts=60.)
 

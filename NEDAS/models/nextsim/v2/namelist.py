@@ -14,7 +14,7 @@ def value_str(value):
     return vstr
 
 def namelist(m, time, forecast_period, run_dir='.'):
-    """Generate namelist for nextsim v1 model
+    """Generate namelist for neXtSIM v2 model
     Input:
     -m: Model class object with model configurations
     -time: start time (datetime obj)

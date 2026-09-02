@@ -15,7 +15,7 @@ from .namelist import namelist
 
 class NextsimModel(Model):
     """
-    Class for configuring and running the nextsim v1 model (lagrangian version)
+    Class for configuring and running the neXtSIM v2 model (lagrangian version)
     """
     nextsim_dir: str
     model_env: str
@@ -312,10 +312,10 @@ class NextsimModel(Model):
         else:
             mstr = ''
 
-        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t1), 'nextsim.v1', mstr, 'restart', f"mesh_{t1:%Y%m%dT%H%M%SZ}.bin")
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t1), 'nextsim.v2', mstr, 'restart', f"mesh_{t1:%Y%m%dT%H%M%SZ}.bin")
         self.read_grid(meshfile=meshfile, **kwargs)
         grid1 = self.grid_bank[meshfile]
-        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t2-dt1day), 'nextsim.v1', mstr, 'restart', f"mesh_{t2:%Y%m%dT%H%M%SZ}.bin")
+        meshfile = os.path.join(kwargs['path'], '..', '..', t2s(t2-dt1day), 'nextsim.v2', mstr, 'restart', f"mesh_{t2:%Y%m%dT%H%M%SZ}.bin")
         self.read_grid(meshfile=meshfile, **kwargs)
         grid2 = self.grid_bank[meshfile]
         ids_cmn_12, ids1i, ids2i = np.intersect1d(grid1.id, grid2.id, return_indices=True)

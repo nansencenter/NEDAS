@@ -1,7 +1,7 @@
-NEDAS.models.nextsim.dg.forcing module
+NEDAS.models.nextsim.v3.restart module
 ======================================
 
-.. automodule:: NEDAS.models.nextsim.dg.forcing
+.. automodule:: NEDAS.models.nextsim.v3.restart
    :members:
    :show-inheritance:
    :undoc-members:

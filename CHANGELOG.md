@@ -26,6 +26,9 @@ DA schemes, or other backward-compatible features land in the next minor release
 ### Changed
 - `vort3d`: netCDF reads now slice at the netCDF4 level instead of reading
   all levels into memory
+- neXtSIM model module naming aligned with `topaz.v4`/`topaz.v5`:
+  `nextsim.v1` -> `nextsim.v2`, `nextsim.dg` -> `nextsim.v3` (no active use
+  of this interface yet, minor change)
 
 ### Fixed
 - `test_file_system.py` no longer creates a stray `test/` dir at repo root

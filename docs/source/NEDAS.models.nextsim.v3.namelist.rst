@@ -1,7 +1,7 @@
-NEDAS.models.nextsim.dg.namelist module
+NEDAS.models.nextsim.v3.namelist module
 =======================================
 
-.. automodule:: NEDAS.models.nextsim.dg.namelist
+.. automodule:: NEDAS.models.nextsim.v3.namelist
    :members:
    :show-inheritance:
    :undoc-members:

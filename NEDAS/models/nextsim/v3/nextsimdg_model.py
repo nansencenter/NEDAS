@@ -85,7 +85,7 @@ class NextsimDGModel(Model[RegularGrid]):
             ens_mem_dir = f'ens_{str(ens_mem_id).zfill(2)}'
 
         time = kwargs['time']
-        assert time is not None, 'nextsim.dg.filename: time needs to be specified, wildcard searching is not implemented.'
+        assert time is not None, 'nextsim.v3.filename: time needs to be specified, wildcard searching is not implemented.'
 
         name = kwargs['name']  # name of the variable
         if name in self.native_variables:
@@ -233,7 +233,7 @@ class NextsimDGModel(Model[RegularGrid]):
         return self.read_var(**{**kwargs, 'name':'seaice_thick_dg', 'k':0, 'units':'m'})
 
     def preprocess(self, task_id:int=0, **kwargs):
-        """Preprocessing method for nextsim.dg.
+        """Preprocessing method for nextsim.v3.
 
         Parameters
         ----------
@@ -245,7 +245,7 @@ class NextsimDGModel(Model[RegularGrid]):
             Runtime keyword arguments (member, time, time_start, path,
             forecast_period, restart_dir). Additional class attributes
             self.files and self.perturb are populated from the
-            model_def nextsim.dg config_file entry by parse_config.
+            model_def nextsim.v3 config_file entry by parse_config.
         """
         kwargs = super().parse_kwargs(kwargs)
 
@@ -334,7 +334,7 @@ class NextsimDGModel(Model[RegularGrid]):
             forcing.perturb_forcing(forcing_options, file_options_forcing, ens_mem_id, time, next_time, debug)
 
     def postprocess(self, task_id=0, **kwargs):
-        """Postprocessing method for nextsim.dg
+        """Postprocessing method for nextsim.v3
         Parameters: same as preprocess
         """
         kwargs = super().parse_kwargs(kwargs)
@@ -373,7 +373,7 @@ class NextsimDGModel(Model[RegularGrid]):
             raise ValueError(f"{self.__class__.__name__}: unsupported run_strategy '{self.ens_run_strategy}'")
 
     def run_single(self, task_id=0, **kwargs):
-        """Run nextsim.dg model forecast"""
+        """Run nextsim.v3 model forecast"""
         kwargs = super().parse_kwargs(kwargs)
 
         nproc = self.nproc_per_run
@@ -398,16 +398,16 @@ class NextsimDGModel(Model[RegularGrid]):
         shell_cmd += f"cd {run_dir}; "
         shell_cmd += "JOB_EXECUTE $NDG_BLD_DIR/nextsim --config-file nextsim.cfg > time.step"
 
-        self.c.run_job(shell_cmd, job_name='nextsim.dg.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
+        self.c.run_job(shell_cmd, job_name='nextsim.v3.run', parallel_mode=self.parallel_mode, nproc=nproc, offset=offset, run_dir=run_dir, **kwargs)
 
         # check if the restart file at next_time is produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
         fname_out = os.path.join(run_dir, os.path.basename(fname_restart))
         if not os.path.exists(fname_out):
-            raise RuntimeError(f"nextsim.dg.run: failed to produce {fname_out}, check {run_dir}")
+            raise RuntimeError(f"nextsim.v3.run: failed to produce {fname_out}, check {run_dir}")
 
     def run_batch(self, task_id=0, **kwargs):
-        """Run nextsim.dg model ensemble forecast, use job array to spawn the member runs"""
+        """Run nextsim.v3 model ensemble forecast, use job array to spawn the member runs"""
         kwargs = super().parse_kwargs(kwargs)
         assert self.use_job_array, \
             "use_job_array shall be True if running ensemble in batch mode."
@@ -443,7 +443,7 @@ class NextsimDGModel(Model[RegularGrid]):
         else:
             raise TypeError(f"unknown parallel mode '{self.parallel_mode}'")
 
-        self.c.run_job(shell_cmd, job_name='nextsim.dg.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
+        self.c.run_job(shell_cmd, job_name='nextsim.v3.ens_run', use_job_array=self.use_job_array, nproc=self.nproc_per_run, walltime=self.walltime, array_size=nens, run_dir=run_dir, **kwargs)
 
         # check if the restart files at next_time are produced
         fname_restart = restart.get_restart_filename(self.files['restart'], 1, next_time)
@@ -451,7 +451,7 @@ class NextsimDGModel(Model[RegularGrid]):
             ens_dir = os.path.join(run_dir, f"ens_{member+1:02}")
             fname_out = os.path.join(ens_dir, os.path.basename(fname_restart))
             if not os.path.exists(fname_out):
-                raise RuntimeError(f"nextsim.dg.run_batch: failed to produce {fname_out}, check {ens_dir}")
+                raise RuntimeError(f"nextsim.v3.run_batch: failed to produce {fname_out}, check {ens_dir}")
 
     def generate_truth(self, *args, **kwargs) -> None:
         return super().generate_truth(*args, **kwargs)

@@ -11,8 +11,8 @@ registry = {
     'qg.python': 'QGPythonModel',
     'vort2d': 'Vort2DModel',
     'topaz.v5': 'Topaz5Model',
-    'nextsim.v1': 'NextsimModel',
-    'nextsim.dg': 'NextsimDGModel',
+    'nextsim.v2': 'NextsimModel',
+    'nextsim.v3': 'NextsimDGModel',
     'wrf': 'WRFModel',
     'vort3d': 'Vort3DModel',
 }

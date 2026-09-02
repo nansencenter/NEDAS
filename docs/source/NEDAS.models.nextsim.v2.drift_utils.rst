@@ -1,7 +1,7 @@
-NEDAS.models.nextsim.v1.drift\_utils module
+NEDAS.models.nextsim.v2.drift\_utils module
 ===========================================
 
-.. automodule:: NEDAS.models.nextsim.v1.drift_utils
+.. automodule:: NEDAS.models.nextsim.v2.drift_utils
    :members:
    :show-inheritance:
    :undoc-members:

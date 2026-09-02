@@ -1,7 +1,7 @@
-NEDAS.models.nextsim.dg.perturb module
+NEDAS.models.nextsim.v2.gmshlib module
 ======================================
 
-.. automodule:: NEDAS.models.nextsim.dg.perturb
+.. automodule:: NEDAS.models.nextsim.v2.gmshlib
    :members:
    :show-inheritance:
    :undoc-members:

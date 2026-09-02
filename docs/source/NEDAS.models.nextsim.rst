@@ -9,5 +9,5 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   NEDAS.models.nextsim.dg
-   NEDAS.models.nextsim.v1
+   NEDAS.models.nextsim.v3
+   NEDAS.models.nextsim.v2
