@@ -1,5 +1,6 @@
 import os
 import glob
+import json
 import inspect
 from typing import Generic, TypeVar, Any
 from abc import ABC, abstractmethod
@@ -279,8 +280,9 @@ class Model(Generic[GridT], ABC):
         """
         Read a scalar parameter from the model.
 
-        Default implementation reads from self.memory['param'][mstr][name].
-        Falls back to getattr(self, name) if not in param memory.
+        Default implementation reads from self.memory['param'][mstr][name],
+        falling back to the on-disk param store in offline mode (see
+        write_param), then to getattr(self, name) if nowhere else.
 
         Args:
             name (str): parameter name
@@ -295,13 +297,19 @@ class Model(Generic[GridT], ABC):
         try:
             return self.memory['param'][mstr][name]
         except KeyError:
+            val = self._read_param_file(member, name)
+            if val is not None:
+                return val
             return float(getattr(self, name))
 
     def write_param(self, value: float, **kwargs) -> None:
         """
         Write a scalar parameter to the model.
 
-        Default implementation stores in self.memory['param'][mstr][name].
+        Default implementation stores in self.memory['param'][mstr][name] and,
+        in offline mode, also persists to an on-disk per-member store so the
+        value survives across the per-step/per-member subprocesses (see
+        _param_file).
 
         Args:
             value (float): the parameter value to write
@@ -316,6 +324,46 @@ class Model(Generic[GridT], ABC):
         if mstr not in self.memory['param']:
             self.memory['param'][mstr] = {}
         self.memory['param'][mstr][name] = float(value)
+
+        # offline mode: persist to disk so the value survives across the
+        # per-step/per-member subprocesses (offline runs have no shared
+        # process memory -- init-ensemble workers, forecast workers and each
+        # cycle's analysis step are separate processes). Without this a
+        # posterior/perturbed parameter silently reverted to the class
+        # default in the next process (SSPE no-op'd in offline mode).
+        param_file = self._param_file(member)
+        if param_file is not None:
+            params = {}
+            if os.path.exists(param_file):
+                with open(param_file) as f:
+                    params = json.load(f)
+            params[name] = float(value)
+            os.makedirs(os.path.dirname(param_file), exist_ok=True)
+            with open(param_file, 'w') as f:
+                json.dump(params, f)
+
+    def _param_file(self, member: int | None) -> str | None:
+        """
+        On-disk param store for one ensemble member, used only in offline mode.
+
+        One JSON file per member under ``{work_dir}/param/{model_name}/``,
+        mapping param name to value. Returns None in online mode (params live
+        in self.memory for the whole run there) or when member is None.
+        """
+        if self.io_mode != 'offline' or member is None:
+            return None
+        return os.path.join(self.c.config.work_dir, 'param', self.model_name,
+                            self.get_mstr(member) + '.json')
+
+    def _read_param_file(self, member: int | None, name: str) -> float | None:
+        """Read one param value from the on-disk store, None if absent."""
+        param_file = self._param_file(member)
+        if param_file is None or not os.path.exists(param_file):
+            return None
+        with open(param_file) as f:
+            params = json.load(f)
+        val = params.get(name)
+        return float(val) if val is not None else None
 
     def generate_truth(self, *args, **kwargs) -> None:
         """
