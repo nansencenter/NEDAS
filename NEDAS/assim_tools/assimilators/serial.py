@@ -103,6 +103,7 @@ class SerialAssimilator(Assimilator):
                 # collect obs info
                 obs_p = {}
                 obs_p['prior'] = obs_data['obs_prior'][:, i]
+                obs_p['prior_static'] = obs_data['obs_prior_static'][:, i]
                 for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
                     obs_p[key] = obs_data[key][i]
                 for key in ('hroi', 'vroi', 'troi', 'impact_on_variable'):
@@ -114,18 +115,19 @@ class SerialAssimilator(Assimilator):
                 obs_p = None
             obs_p = c.comm_mem.bcast(obs_p, root=owner_pid)
 
-            if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['obs']):
+            if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['prior_static']).any() or np.isnan(obs_p['obs']):
                 continue
 
             # compute obs-space increment
-            obs_incr = self.obs_increment(obs_p['prior'], obs_p['obs'], obs_p['err_std'])
+            obs_incr = self.obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
 
             # 2. all pid update their own locally stored state:
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
-            self.update_local_state(state_data['state_prior'], obs_p['prior'], obs_incr,
+            self.update_local_state(state_data['state_prior'], state_data['state_static'],
+                                    obs_p['prior'], obs_p['prior_static'], obs_incr,
                                     state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                     c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
@@ -136,7 +138,8 @@ class SerialAssimilator(Assimilator):
             obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
             obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])
             obs_impact = obs_data['obs_impact']
-            self.update_local_obs(obs_data['obs_prior'], obs_data['used'], obs_p['prior'], obs_incr,
+            self.update_local_obs(obs_data['obs_prior'], obs_data['obs_prior_static'], obs_data['used'],
+                                  obs_p['prior'], obs_p['prior_static'], obs_incr,
                                   obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
@@ -150,12 +153,13 @@ class SerialAssimilator(Assimilator):
         c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
 
     @abstractmethod
-    def obs_increment(self, obs_prior, obs, obs_err) -> np.ndarray:
+    def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err) -> np.ndarray:
         """
         Compute observation-space analysis increments.
 
         Args:
             obs_prior (np.ndarray): Observation priors, 1-D float array of length nens
+            obs_prior_static (np.ndarray): Observation priors of the static members (covariance_def.nens_static)
             obs (float): The real observation value
             obs_err (float): Observation error std
 
@@ -165,7 +169,7 @@ class SerialAssimilator(Assimilator):
         pass
 
     @abstractmethod
-    def update_local_state(self, state_prior, obs_prior, obs_incr,
+    def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
                            h_local_func, v_local_func, t_local_func,
@@ -175,14 +179,16 @@ class SerialAssimilator(Assimilator):
 
         Args:
             state_prior (np.ndarray): Local state vector, shape (nens, nfld, nloc)
+            state_static (np.ndarray): Local state of the static members, shape (nens_static, nfld, nloc), not updated
             obs_prior (np.ndarray): Observation priors, shape (nens,)
+            obs_prior_static (np.ndarray): Observation priors of the static members, shape (nens_static,)
             obs_incr (np.ndarray): Analysis increments, shape (nens,)
             impact_on_variable (np.ndarray): Cross-variable localization factor per variable, shape (nfld,)
         """
         pass
 
     @abstractmethod
-    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
+    def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
                          h_local_func, v_local_func, t_local_func,
@@ -192,6 +198,7 @@ class SerialAssimilator(Assimilator):
 
         Args:
             obs_data (np.ndarray): obs prior ensemble, shape (nens, nlobs)
+            obs_data_static (np.ndarray): obs priors of the static members, shape (nens_static, nlobs), not updated
             used (np.ndarray): boolean mask of already-assimilated obs
         """
         pass

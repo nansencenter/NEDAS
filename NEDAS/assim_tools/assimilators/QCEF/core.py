@@ -4,10 +4,10 @@ from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
 from scipy.optimize import root_scalar
 
 class QCEFAssimilator(SerialAssimilator):
-    def obs_increment(self, obs_prior, obs, obs_err):
+    def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err):
         return obs_increment_qcef(obs_prior, obs, obs_err)
 
-    def update_local_state(self, state_prior, obs_prior, obs_incr,
+    def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
                         state_h_dist, state_v_dist, state_t_dist,
                         hroi, vroi, troi,
                         h_local_func, v_local_func, t_local_func,
@@ -18,7 +18,7 @@ class QCEFAssimilator(SerialAssimilator):
                                          h_local_func, v_local_func, t_local_func,
                                          impact_on_variable)
 
-    def update_local_obs(self, obs_data, used, obs_prior, obs_incr,
+    def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
                          h_local_func, v_local_func, t_local_func,

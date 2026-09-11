@@ -23,11 +23,12 @@ class TestAnalysisScheme(unittest.TestCase):
             self.c.config.assimilator_def = {'type': assimilator_name}
             get_assimilator(self.c).check_capabilities(self.c)
 
-        # a hybrid covariance: ETKF supports it, EAKF lists exactly the unsupported settings
+        # a hybrid covariance: ETKF, EAKF and TopazDEnKF support it, QCEF lists exactly the unsupported settings
         self.c.covariance = Covariance(self.c.nens, beta=0.5, nens_static=5, hybrid_perturbation=True)
-        self.c.config.assimilator_def = {'type': 'ETKF'}
-        get_assimilator(self.c).check_capabilities(self.c)
-        self.c.config.assimilator_def = {'type': 'EAKF'}
+        for assimilator_name in ('ETKF', 'EAKF', 'TopazDEnKF'):
+            self.c.config.assimilator_def = {'type': assimilator_name}
+            get_assimilator(self.c).check_capabilities(self.c)
+        self.c.config.assimilator_def = {'type': 'QCEF'}
         with self.assertRaises(NotImplementedError) as err:
             get_assimilator(self.c).check_capabilities(self.c)
         for name in ('nens_static', 'hybrid_perturbation'):
