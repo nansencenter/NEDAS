@@ -163,7 +163,7 @@ class TestRandomRotation(unittest.TestCase):
 
 class TestHybridCovariance(unittest.TestCase):
     """Hybrid ETKF-OI with nens_dynamic dynamic members and a separate batch of nens_static
-    static members, P = (1-beta)*P_d + beta*alpha*P_s. H picks the first nobs state
+    static members, P = (1-beta)*P_d + beta*static_var_scaling*P_s. H picks the first nobs state
     components; uniform obs error, so the Whitaker-Hamill reduced gain is unambiguous."""
 
     def setUp(self):
@@ -173,12 +173,12 @@ class TestHybridCovariance(unittest.TestCase):
         self.ens_static = rng.normal(0.5, 2, (self.nens_static, self.nstate))
         self.obs = rng.normal(0, 1, self.nobs)
         self.obs_err = np.ones(self.nobs) * 0.8
-        self.beta, self.alpha = 0.4, 0.3
+        self.beta, self.static_var_scaling = 0.4, 0.3
 
     def _weights(self, hybrid_perturbation, beta=None, use_eigen=False):
         beta = self.beta if beta is None else beta
         fac_dynamic = np.sqrt(1 - beta) / np.sqrt(self.nens_dynamic - 1)
-        fac_static = np.sqrt(beta * self.alpha) / np.sqrt(self.nens_static - 1)
+        fac_static = np.sqrt(beta * self.static_var_scaling) / np.sqrt(self.nens_static - 1)
         return ensemble_transform_weights(self.obs, self.obs_err,
                                           self.ens_dynamic[:, :self.nobs].copy(), self.ens_static[:, :self.nobs].copy(),
                                           np.ones(self.nobs), _eye(self.nens_dynamic), use_eigen,
@@ -193,7 +193,7 @@ class TestHybridCovariance(unittest.TestCase):
         return weights, (self.ens_dynamic.T @ weights).T
 
     def _gain_terms(self):
-        P = (1 - self.beta) * np.cov(self.ens_dynamic.T) + self.beta * self.alpha * np.cov(self.ens_static.T)
+        P = (1 - self.beta) * np.cov(self.ens_dynamic.T) + self.beta * self.static_var_scaling * np.cov(self.ens_static.T)
         H = np.eye(self.nstate)[:self.nobs]
         R = np.diag(self.obs_err**2)
         return P, H, R

@@ -167,10 +167,10 @@ updator_def:
   config_file:
 
 # background error covariance, a blend of the dynamic ensemble and a static ensemble:
-#   P = (1-beta)*P_dynamic + beta*alpha*P_static   (Hamill & Snyder 2000, Wang et al. 2007)
+#   P = (1-beta)*P_dynamic + beta*static_var_scaling*P_static
 covariance_def:
   beta: 0.0         # weight of the static covariance (0: pure ensemble, 1: static only)
-  alpha: 1.0        # amplitude scale of the static covariance
+  static_var_scaling: 1.0  # scaling of the static covariance (static members are climatological states)
   nens_static: 0    # number of static members, added to the nens dynamic members in the analysis
   static_dir:       # bank of static members: restart files named as the model's own member files
   static_list:      # file listing the static members, one line each: <time> [<source member>]; first nens_static used

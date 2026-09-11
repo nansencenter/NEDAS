@@ -10,7 +10,7 @@ class Covariance:
     Background error covariance model: a weighted blend of the dynamic (forecast) ensemble
     covariance and a static covariance sampled by an ensemble from a climatological bank,
 
-        P = (1-beta) * P_dynamic + beta * alpha * P_static
+        P = (1-beta) * P_dynamic + beta * static_var_scaling * P_static
 
     (Hamill & Snyder 2000; Wang et al. 2007; Counillon et al. 2009).
 
@@ -20,8 +20,10 @@ class Covariance:
 
     Args:
         nens (int): dynamic ensemble size
-        beta (float): weight of the static covariance, in [0, 1]
-        alpha (float): amplitude scale of the static covariance
+        beta (float): weight of the static covariance, in [0, 1] (the alpha of Wang et al. 2007, Eq. 1;
+            named beta as the covariance weights in variational hybrids)
+        static_var_scaling (float): scaling of the static covariance, reducing the climatological
+            variance of the static members to a background-error level (the alpha of EnOI, Evensen 2003)
         nens_static (int): number of static ensemble members
         static_dir (str): the bank of static members, restart files named as the model's own
             member files, read with io tag 'static' in both io modes (IOBackend.static_member_kwargs)
@@ -29,12 +31,12 @@ class Covariance:
             are updated with the dynamic ensemble covariance alone if False (Wang et al. 2007),
             or with P (reduced Kalman gain, Counillon et al. 2009) if True
     """
-    def __init__(self, nens: int, beta: float=0.0, alpha: float=1.0, nens_static: int=0,
+    def __init__(self, nens: int, beta: float=0.0, static_var_scaling: float=1.0, nens_static: int=0,
                  hybrid_perturbation: bool=False, static_dir: str|None=None):
         if not 0 <= beta <= 1:
             raise ValueError(f"covariance_def: beta={beta} is outside [0, 1]")
-        if alpha <= 0:
-            raise ValueError(f"covariance_def: alpha={alpha} should be positive")
+        if static_var_scaling <= 0:
+            raise ValueError(f"covariance_def: static_var_scaling={static_var_scaling} should be positive")
         if nens_static < 0:
             raise ValueError(f"covariance_def: nens_static={nens_static} should be >= 0")
         if beta > 0 and nens_static < 2:
@@ -43,7 +45,7 @@ class Covariance:
             raise ValueError(f"covariance_def: beta={beta} < 1 needs nens >= 2 dynamic members, got {nens}")
         self.nens = nens
         self.beta = beta
-        self.alpha = alpha
+        self.static_var_scaling = static_var_scaling
         self.nens_static = nens_static
         self.hybrid_perturbation = bool(hybrid_perturbation)
         self.static_dir = static_dir
@@ -57,7 +59,7 @@ class Covariance:
         about its own mean), so that Z = [fac_dynamic*A_d, fac_static*A_s] gives Z Z^T = P
         """
         fac_dynamic = math.sqrt(1 - self.beta) / math.sqrt(max(self.nens - 1, 1))
-        fac_static = math.sqrt(self.beta * self.alpha) / math.sqrt(max(self.nens_static - 1, 1))
+        fac_static = math.sqrt(self.beta * self.static_var_scaling) / math.sqrt(max(self.nens_static - 1, 1))
         return fac_dynamic, fac_static
 
 def get_covariance(config: Config) -> Covariance:
@@ -69,7 +71,7 @@ def get_covariance(config: Config) -> Covariance:
     covariance_def.pop('config_file', None)
     if covariance_type != 'ensemble':
         raise NotImplementedError(f"covariance_def: type '{covariance_type}' is not supported, "
-                                  "set beta/alpha/nens_static for a static or hybrid covariance")
+                                  "set beta/static_var_scaling/nens_static for a static or hybrid covariance")
     static_list = covariance_def.pop('static_list', None)
     covariance = Covariance(config.nens, **covariance_def)
 

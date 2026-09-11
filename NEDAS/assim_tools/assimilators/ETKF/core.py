@@ -160,7 +160,7 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
     dynamic members and obs_prior_static (nens_static, nlobs) from the static members.
     Their anomalies A_d, A_s (each about its own mean) scaled by ``fac_dynamic`` and
     ``fac_static`` form Z = [fac_dynamic*A_d, fac_static*A_s], with
-    Z Z^T = P = (1-beta)*P_d + beta*alpha*P_s. The ensemble mean is updated with P
+    Z Z^T = P = (1-beta)*P_d + beta*static_var_scaling*P_s. The ensemble mean is updated with P
     (hybrid ETKF-OI, Wang et al. 2007); the dynamic perturbations are updated
       - hybrid_perturbation=False: by the ETKF transform of the dynamic ensemble alone,
         the static covariance only affects the mean (Wang et al. 2007);

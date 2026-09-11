@@ -23,7 +23,7 @@ class TestGetCovariance(unittest.TestCase):
             self._get(type='static')
 
     def test_anomaly_factors_blend_covariances(self):
-        cov = Covariance(6, beta=0.4, alpha=0.3, nens_static=9)
+        cov = Covariance(6, beta=0.4, static_var_scaling=0.3, nens_static=9)
         fac_dynamic, fac_static = cov.anomaly_factors()
         rng = np.random.default_rng(3)
         ens_dynamic, ens_static = rng.normal(0, 1, (6, 4)), rng.normal(0, 2, (9, 4))
@@ -35,7 +35,7 @@ class TestGetCovariance(unittest.TestCase):
     def test_invalid_settings_raise(self):
         for nens, covariance_def in ((10, {'beta': 1.5, 'nens_static': 5}),  # beta outside [0, 1]
                                      (10, {'beta': 0.5}),                    # beta > 0 without static members
-                                     (10, {'alpha': 0.0}),
+                                     (10, {'static_var_scaling': 0.0}),
                                      (1, {'beta': 0.5, 'nens_static': 5})):  # hybrid needs 2 dynamic members
             with self.assertRaises(ValueError, msg=str(covariance_def)):
                 self._get(nens, **covariance_def)
