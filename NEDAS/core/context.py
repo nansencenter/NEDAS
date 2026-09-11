@@ -175,6 +175,9 @@ class Context:
         self.inflation_func = assim_tools.inflation.get_inflation_func(self)
         self.transform_funcs = assim_tools.transforms.get_transform_funcs(self)
 
+        # check that the assimilator supports the settings of the other components
+        self.assimilator.check_capabilities(self)
+
     @property
     def prev_time(self) -> datetime:
         """

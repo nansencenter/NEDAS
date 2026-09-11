@@ -172,6 +172,9 @@ covariance_def:
   beta: 0.0         # weight of the static covariance (0: pure ensemble, 1: static only)
   alpha: 1.0        # amplitude scale of the static covariance
   nens_static: 0    # number of static members, added to the nens dynamic members in the analysis
+  hybrid_perturbation: False  # the mean is always updated with P; the dynamic perturbations with
+                              # False: the dynamic ensemble covariance alone (Wang et al. 2007)
+                              # True: the hybrid covariance P, reduced Kalman gain (Counillon et al. 2009)
 
 # covariance inflation technique in assimilation
 inflation_def:

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from NEDAS.config import Config
@@ -21,8 +22,12 @@ class Covariance:
         beta (float): weight of the static covariance, in [0, 1]
         alpha (float): amplitude scale of the static covariance
         nens_static (int): number of static ensemble members
+        hybrid_perturbation (bool): the mean is always updated with P; the dynamic perturbations
+            are updated with the dynamic ensemble covariance alone if False (Wang et al. 2007),
+            or with P (reduced Kalman gain, Counillon et al. 2009) if True
     """
-    def __init__(self, nens: int, beta: float=0.0, alpha: float=1.0, nens_static: int=0):
+    def __init__(self, nens: int, beta: float=0.0, alpha: float=1.0, nens_static: int=0,
+                 hybrid_perturbation: bool=False):
         if not 0 <= beta <= 1:
             raise ValueError(f"covariance_def: beta={beta} is outside [0, 1]")
         if alpha <= 0:
@@ -37,6 +42,16 @@ class Covariance:
         self.beta = beta
         self.alpha = alpha
         self.nens_static = nens_static
+        self.hybrid_perturbation = bool(hybrid_perturbation)
+
+    def anomaly_factors(self) -> tuple[float, float]:
+        """
+        Scaling (fac_dynamic, fac_static) of the dynamic and static anomalies A_d, A_s (each
+        about its own mean), so that Z = [fac_dynamic*A_d, fac_static*A_s] gives Z Z^T = P
+        """
+        fac_dynamic = math.sqrt(1 - self.beta) / math.sqrt(max(self.nens - 1, 1))
+        fac_static = math.sqrt(self.beta * self.alpha) / math.sqrt(max(self.nens_static - 1, 1))
+        return fac_dynamic, fac_static
 
 def get_covariance(config: Config) -> Covariance:
     """Get the Covariance instance from config.covariance_def"""

@@ -9,18 +9,31 @@ from .types import ObsRecordID, PartitionID, ProcIDMem
 
 class Assimilator(ABC):
     assim_mode: str
-    # whether the algorithm handles the static members of a hybrid covariance (covariance_def);
-    # one that doesn't would silently treat them as extra dynamic members
-    supports_static_members: bool = False
+
+    # capabilities of the algorithm, subclasses set the ones they support to True;
+    # check_capabilities() matches them against the settings of the other components
+    supports_static_members: bool = False       # covariance_def.nens_static > 0
+    supports_hybrid_perturbation: bool = False  # covariance_def.hybrid_perturbation
 
     def __init__(self, c: Context):
-        if c.nens_static > 0 and not self.supports_static_members:
-            raise NotImplementedError(f"{self.__class__.__name__} does not support covariance_def.nens_static > 0")
         # get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, parse_args=False, **c.config.assimilator_def)
         for key, value in config_dict.items():
             setattr(self, key, value)
+
+    def check_capabilities(self, c: Context) -> None:
+        """
+        Check that the algorithm supports the settings of the other assimilation components,
+        an unsupported one would otherwise be silently ignored by the algorithm
+        """
+        unsupported = []
+        if c.covariance.nens_static > 0 and not self.supports_static_members:
+            unsupported.append('covariance_def.nens_static > 0')
+        if c.covariance.hybrid_perturbation and c.covariance.beta > 0 and not self.supports_hybrid_perturbation:
+            unsupported.append('covariance_def.hybrid_perturbation')
+        if unsupported:
+            raise NotImplementedError(f"{self.__class__.__name__} does not support: {', '.join(unsupported)}")
 
     def assimilate(self, c: Context):
         """

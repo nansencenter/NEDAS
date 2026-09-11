@@ -11,11 +11,21 @@ class TestGetCovariance(unittest.TestCase):
 
     def test_legacy_config_loads_as_pure_ensemble(self):
         cov = self._get(type='ensemble', config_file=None)
-        self.assertEqual((cov.beta, cov.nens_static), (0.0, 0))
+        self.assertEqual((cov.beta, cov.nens_static, cov.hybrid_perturbation), (0.0, 0, False))
 
     def test_unknown_legacy_type_raises(self):
         with self.assertRaises(NotImplementedError):
             self._get(type='static')
+
+    def test_anomaly_factors_blend_covariances(self):
+        cov = self._get(nens=6, beta=0.4, alpha=0.3, nens_static=9)
+        fac_dynamic, fac_static = cov.anomaly_factors()
+        rng = np.random.default_rng(3)
+        ens_dynamic, ens_static = rng.normal(0, 1, (6, 4)), rng.normal(0, 2, (9, 4))
+        scaled_anomalies = np.vstack([fac_dynamic * (ens_dynamic - ens_dynamic.mean(0)),
+                                      fac_static * (ens_static - ens_static.mean(0))])
+        np.testing.assert_allclose(scaled_anomalies.T @ scaled_anomalies,
+                                   0.6 * np.cov(ens_dynamic.T) + 0.4 * 0.3 * np.cov(ens_static.T), atol=1e-12)
 
     def test_invalid_settings_raise(self):
         for kwargs in ({'beta': 1.5, 'nens_static': 5},   # beta outside [0, 1]
