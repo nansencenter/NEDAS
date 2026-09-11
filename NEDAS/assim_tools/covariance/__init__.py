@@ -2,7 +2,6 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-import dateutil.parser
 if TYPE_CHECKING:
     from NEDAS.config import Config
 
@@ -25,7 +24,7 @@ class Covariance:
         alpha (float): amplitude scale of the static covariance
         nens_static (int): number of static ensemble members
         static_dir (str): the bank of static members, restart files named as the model's own
-            member files (read with io tag 'static', see io_backends/offline.py)
+            member files, read with io tag 'static' in both io modes (IOBackend.static_member_kwargs)
         hybrid_perturbation (bool): the mean is always updated with P; the dynamic perturbations
             are updated with the dynamic ensemble covariance alone if False (Wang et al. 2007),
             or with P (reduced Kalman gain, Counillon et al. 2009) if True
@@ -75,9 +74,6 @@ def get_covariance(config: Config) -> Covariance:
     covariance = Covariance(config.nens, **covariance_def)
 
     if covariance.nens_static > 0:
-        if config.io_mode != 'offline':
-            raise NotImplementedError("covariance_def: static members are read from a bank of restart files, "
-                                      "which needs io_mode: offline")
         if not covariance.static_dir or not static_list:
             raise ValueError("covariance_def: nens_static > 0 needs static_dir and static_list")
         covariance.static_members = read_static_list(static_list, covariance.nens_static)
@@ -96,7 +92,7 @@ def read_static_list(static_list: str, nens_static: int) -> list[tuple[datetime,
             items = line.split('#')[0].split()
             if not items:
                 continue
-            time = dateutil.parser.parse(items[0])
+            time = datetime.fromisoformat(items[0])
             if time.tzinfo is None:
                 time = time.replace(tzinfo=timezone.utc)
             member = int(items[1]) if len(items) > 1 else None

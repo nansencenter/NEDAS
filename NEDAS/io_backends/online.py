@@ -54,6 +54,17 @@ class OnlineIO(IOBackend):
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
 
+        # static member (covariance_def.nens_static): the bank is a set of restart files, so the
+        # model reads it from file (temporarily in offline io_mode) instead of from memory
+        if tag == 'static':
+            model = c.models[kwargs['model_src']]
+            io_mode = model.io_mode
+            model.io_mode = 'offline'
+            try:
+                return method(*args, **self.static_member_kwargs(c, kwargs))
+            finally:
+                model.io_mode = io_mode
+
         # 'post' is an alias for 'current' in online mode: the updator always writes
         # the posterior under 'current'; there is no separate 'post' memory slot.
         # In offline mode 'post' already routes to the same path as 'current'.

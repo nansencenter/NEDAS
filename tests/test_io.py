@@ -112,6 +112,18 @@ class TestStaticBank(unittest.TestCase):
         var = self.io.call_method(self.c, 'static', model.read_var, name=name, member=0, time=self.time)
         np.testing.assert_array_equal(var, bank_state)
 
+    def test_read_lorenz96_bank_online(self):
+        """in online io mode the bank is still read from its restart files, not from memory"""
+        model = Lorenz96Model(io_mode='online')
+        name = list(model.variables.keys())[0]
+        bank_state = np.arange(model.nx, dtype=float)
+        model.write_var_to_file(bank_state, name=name, member=3, time=self.static_members[0][0], path=self.tmpdir.name)
+        self.c.models = {'lorenz96': model}
+        var = OnlineIO().call_method(self.c, 'static', model.read_var, name=name, member=0, time=self.time,
+                                     model_src='lorenz96')
+        np.testing.assert_array_equal(var, bank_state)
+        self.assertEqual(model.io_mode, 'online')
+
 
 if __name__ == '__main__':
     unittest.main()

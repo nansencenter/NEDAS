@@ -172,7 +172,7 @@ covariance_def:
   beta: 0.0         # weight of the static covariance (0: pure ensemble, 1: static only)
   alpha: 1.0        # amplitude scale of the static covariance
   nens_static: 0    # number of static members, added to the nens dynamic members in the analysis
-  static_dir:       # bank of static members: restart files named as the model's own member files (io_mode offline)
+  static_dir:       # bank of static members: restart files named as the model's own member files
   static_list:      # file listing the static members, one line each: <time> [<source member>]; first nens_static used
   hybrid_perturbation: False  # the mean is always updated with P; the dynamic perturbations with
                               # False: the dynamic ensemble covariance alone (Wang et al. 2007)

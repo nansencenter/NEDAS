@@ -128,15 +128,9 @@ class OfflineIO(IOBackend):
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
 
-        # static member (covariance_def.nens_static): a restart file in the bank static_dir, at the
-        # time and source member listed for it in static_list; the time offset from the analysis
-        # time (state/obs at multiple time steps) is kept
+        # static member (covariance_def.nens_static): read from its restart file in the bank
         if tag == 'static':
-            static_time, static_member = c.covariance.static_members[kwargs['member']]
-            kwargs['time'] = static_time + (kwargs['time'] - c.time)
-            kwargs['member'] = static_member
-            kwargs['path'] = c.covariance.static_dir
-            return method(*args, **kwargs)
+            return method(*args, **self.static_member_kwargs(c, kwargs))
 
         # if path is already specified, directly call the method
         if 'path' in kwargs and kwargs['path'] is not None:

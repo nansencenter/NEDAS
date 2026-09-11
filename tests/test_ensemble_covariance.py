@@ -4,13 +4,15 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import cast
+from NEDAS.config import Config
 from NEDAS.assim_tools.covariance import Covariance, get_covariance, read_static_list
 from NEDAS.assim_tools.covariance.ensemble import ensemble_covariance
 
 
 class TestGetCovariance(unittest.TestCase):
     def _get(self, nens=10, **covariance_def):
-        return get_covariance(SimpleNamespace(nens=nens, io_mode='offline', covariance_def=covariance_def))
+        return get_covariance(cast(Config, SimpleNamespace(nens=nens, io_mode='offline', covariance_def=covariance_def)))
 
     def test_legacy_config_loads_as_pure_ensemble(self):
         cov = self._get(type='ensemble', config_file=None)
@@ -31,12 +33,12 @@ class TestGetCovariance(unittest.TestCase):
                                    0.6 * np.cov(ens_dynamic.T) + 0.4 * 0.3 * np.cov(ens_static.T), atol=1e-12)
 
     def test_invalid_settings_raise(self):
-        for kwargs in ({'beta': 1.5, 'nens_static': 5},   # beta outside [0, 1]
-                       {'beta': 0.5},                     # beta > 0 without static members
-                       {'alpha': 0.0},
-                       {'nens': 1, 'beta': 0.5, 'nens_static': 5}):  # hybrid needs 2 dynamic members
-            with self.assertRaises(ValueError, msg=kwargs):
-                self._get(**kwargs)
+        for nens, covariance_def in ((10, {'beta': 1.5, 'nens_static': 5}),  # beta outside [0, 1]
+                                     (10, {'beta': 0.5}),                    # beta > 0 without static members
+                                     (10, {'alpha': 0.0}),
+                                     (1, {'beta': 0.5, 'nens_static': 5})):  # hybrid needs 2 dynamic members
+            with self.assertRaises(ValueError, msg=str(covariance_def)):
+                self._get(nens, **covariance_def)
 
 
 class TestStaticList(unittest.TestCase):
@@ -64,14 +66,12 @@ class TestStaticList(unittest.TestCase):
 
     def test_get_covariance_loads_static_members(self):
         covariance_def = {'beta': 0.5, 'nens_static': 3, 'static_dir': self.tmpdir.name, 'static_list': self.static_list}
-        cov = get_covariance(SimpleNamespace(nens=10, io_mode='offline', covariance_def=dict(covariance_def)))
+        cov = get_covariance(cast(Config, SimpleNamespace(nens=10, io_mode='offline', covariance_def=dict(covariance_def))))
         self.assertEqual(len(cov.static_members), 3)
         self.assertEqual(cov.static_dir, self.tmpdir.name)
-        with self.assertRaises(NotImplementedError):  # the bank is a set of restart files
-            get_covariance(SimpleNamespace(nens=10, io_mode='online', covariance_def=dict(covariance_def)))
         del covariance_def['static_list']
         with self.assertRaises(ValueError):
-            get_covariance(SimpleNamespace(nens=10, io_mode='offline', covariance_def=covariance_def))
+            get_covariance(cast(Config, SimpleNamespace(nens=10, io_mode='offline', covariance_def=covariance_def)))
 
 
 class TestEnsembleCovariance(unittest.TestCase):

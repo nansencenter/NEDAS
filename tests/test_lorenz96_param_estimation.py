@@ -12,7 +12,9 @@ import os
 import unittest
 import tempfile
 import shutil
+from typing import cast
 from NEDAS.config import Config
+from NEDAS.models.lorenz96.lorenz96_model import Lorenz96Model
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), '..', 'examples', 'lorenz96', 'config.yml')
 
@@ -22,6 +24,7 @@ def build_offline_config(work_dir, nens=5):
     config.io_mode = 'offline'
     config.nens = nens
     config.work_dir = work_dir
+    assert config.model_def is not None
     config.model_def['lorenz96']['ens_init_dir'] = os.path.join(work_dir, 'init_ens')
     config.model_def['lorenz96']['truth_dir'] = os.path.join(work_dir, 'truth')
     config.model_def['lorenz96']['F_std'] = 1.5
@@ -42,7 +45,7 @@ class TestScalarParamPersistence(unittest.TestCase):
         work_dir = os.path.join(self.tmpdir, 'work')
         config = build_offline_config(work_dir)
 
-        model = get_scheme(config).c.models['lorenz96']
+        model = cast(Lorenz96Model, get_scheme(config).c.models['lorenz96'])
         self.assertEqual(model.io_mode, 'offline')
         model.write_param(8.7, name='F', member=3)
         model.write_param(6.4, name='F', member=0)
