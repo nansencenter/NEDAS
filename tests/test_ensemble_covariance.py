@@ -1,13 +1,16 @@
 import numpy as np
 import unittest
+import os
+import tempfile
+from datetime import datetime, timezone
 from types import SimpleNamespace
-from NEDAS.assim_tools.covariance import get_covariance
+from NEDAS.assim_tools.covariance import Covariance, get_covariance, read_static_list
 from NEDAS.assim_tools.covariance.ensemble import ensemble_covariance
 
 
 class TestGetCovariance(unittest.TestCase):
     def _get(self, nens=10, **covariance_def):
-        return get_covariance(SimpleNamespace(nens=nens, covariance_def=covariance_def))
+        return get_covariance(SimpleNamespace(nens=nens, io_mode='offline', covariance_def=covariance_def))
 
     def test_legacy_config_loads_as_pure_ensemble(self):
         cov = self._get(type='ensemble', config_file=None)
@@ -18,7 +21,7 @@ class TestGetCovariance(unittest.TestCase):
             self._get(type='static')
 
     def test_anomaly_factors_blend_covariances(self):
-        cov = self._get(nens=6, beta=0.4, alpha=0.3, nens_static=9)
+        cov = Covariance(6, beta=0.4, alpha=0.3, nens_static=9)
         fac_dynamic, fac_static = cov.anomaly_factors()
         rng = np.random.default_rng(3)
         ens_dynamic, ens_static = rng.normal(0, 1, (6, 4)), rng.normal(0, 2, (9, 4))
@@ -34,6 +37,41 @@ class TestGetCovariance(unittest.TestCase):
                        {'nens': 1, 'beta': 0.5, 'nens_static': 5}):  # hybrid needs 2 dynamic members
             with self.assertRaises(ValueError, msg=kwargs):
                 self._get(**kwargs)
+
+
+class TestStaticList(unittest.TestCase):
+    """covariance_def.static_list: the bank restart file (time, source member) of each static member"""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.static_list = os.path.join(self.tmpdir.name, 'members.txt')
+        with open(self.static_list, 'w') as f:
+            f.write("# time  member\n"
+                    "2001-01-05T00:00:00  3\n"
+                    "\n"
+                    "2001-02-10T12:00:00        # a file without member suffix\n"
+                    "2001-03-15T00:00:00  0\n")
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_read_static_list(self):
+        static_members = read_static_list(self.static_list, 2)
+        self.assertEqual(static_members, [(datetime(2001, 1, 5, tzinfo=timezone.utc), 3),
+                                          (datetime(2001, 2, 10, 12, tzinfo=timezone.utc), None)])
+        with self.assertRaises(ValueError):  # fewer members listed than nens_static
+            read_static_list(self.static_list, 4)
+
+    def test_get_covariance_loads_static_members(self):
+        covariance_def = {'beta': 0.5, 'nens_static': 3, 'static_dir': self.tmpdir.name, 'static_list': self.static_list}
+        cov = get_covariance(SimpleNamespace(nens=10, io_mode='offline', covariance_def=dict(covariance_def)))
+        self.assertEqual(len(cov.static_members), 3)
+        self.assertEqual(cov.static_dir, self.tmpdir.name)
+        with self.assertRaises(NotImplementedError):  # the bank is a set of restart files
+            get_covariance(SimpleNamespace(nens=10, io_mode='online', covariance_def=dict(covariance_def)))
+        del covariance_def['static_list']
+        with self.assertRaises(ValueError):
+            get_covariance(SimpleNamespace(nens=10, io_mode='offline', covariance_def=covariance_def))
 
 
 class TestEnsembleCovariance(unittest.TestCase):

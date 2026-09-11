@@ -1,11 +1,14 @@
 import os
 import numpy as np
 import unittest
-from datetime import datetime
+import tempfile
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import cast
 from NEDAS.core import Context
 from NEDAS.io_backends.offline import OfflineIO
 from NEDAS.io_backends.online import OnlineIO
+from NEDAS.models.lorenz96.lorenz96_model import Lorenz96Model
 
 class TestOfflineIO(unittest.TestCase):
 
@@ -74,6 +77,40 @@ class TestOnlineIO(unittest.TestCase):
         fld = np.zeros(3)
         with self.assertRaises(Exception):
             self.io.write_field(fld, self.c, 'invalid_tag', rec_id=0, mem_id=0)
+
+
+class TestStaticBank(unittest.TestCase):
+    """io tag 'static': a static member is read from its restart file in the bank (covariance_def)"""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.time = datetime(2023, 1, 1, tzinfo=timezone.utc)
+        self.static_members = [(datetime(2001, 1, 5, tzinfo=timezone.utc), 3),
+                               (datetime(2001, 2, 10, 12, tzinfo=timezone.utc), None)]
+        covariance = SimpleNamespace(static_dir=self.tmpdir.name, static_members=self.static_members)
+        self.c = cast(Context, SimpleNamespace(time=self.time, covariance=covariance))
+        self.io = OfflineIO()
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_static_redirect(self):
+        received = {}
+        def method(**kwargs):
+            received.update(kwargs)
+        # a state 6 h after the analysis time keeps that offset from the static member's time
+        self.io.call_method(self.c, 'static', method, name='x', member=1, time=self.time + timedelta(hours=6))
+        self.assertEqual(received['path'], self.tmpdir.name)
+        self.assertIsNone(received['member'])
+        self.assertEqual(received['time'], datetime(2001, 2, 10, 18, tzinfo=timezone.utc))
+
+    def test_read_lorenz96_bank(self):
+        model = Lorenz96Model(io_mode='offline')
+        name = list(model.variables.keys())[0]
+        bank_state = np.arange(model.nx, dtype=float)
+        model.write_var_to_file(bank_state, name=name, member=3, time=self.static_members[0][0], path=self.tmpdir.name)
+        var = self.io.call_method(self.c, 'static', model.read_var, name=name, member=0, time=self.time)
+        np.testing.assert_array_equal(var, bank_state)
 
 
 if __name__ == '__main__':

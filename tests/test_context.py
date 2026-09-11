@@ -1,5 +1,6 @@
 import unittest
 import os
+import tempfile
 from datetime import datetime, timezone
 from NEDAS.core import Context
 
@@ -14,7 +15,12 @@ class TestContext(unittest.TestCase):
         self.assertIsInstance(self.c.mem_list[self.c.pid_mem], list)
 
     def test_static_members_have_their_own_mem_list(self):
-        c = Context(nens=4, covariance_def={'beta': 0.5, 'nens_static': 3})
+        with tempfile.TemporaryDirectory() as bank:
+            static_list = os.path.join(bank, 'members.txt')
+            with open(static_list, 'w') as f:
+                f.write('2001-01-01T00:00:00\n' * 3)
+            c = Context(nens=4, covariance_def={'beta': 0.5, 'nens_static': 3,
+                                                'static_dir': bank, 'static_list': static_list})
         self.assertEqual((c.nens, c.nens_static), (4, 3))
         self.assertEqual(sorted(sum(c.mem_list.values(), [])), [0, 1, 2, 3])
         self.assertEqual(sorted(sum(c.mem_list_static.values(), [])), [0, 1, 2])

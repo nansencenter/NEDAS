@@ -246,7 +246,8 @@ class Obs:
             # since there is no separate transformed model-format file for 'prior'/'post'.
             read_tag = 'current' if (tag in ('prior', 'post') and not transforms_are_identity) else tag
             model_fld = c.io.call_method(c, read_tag, model.read_var, **kwargs)
-            model_z = c.io.call_method(c, 'z', model.z_coords, **kwargs)
+            # a static member's z coords come from its own restart file in the bank
+            model_z = c.io.call_method(c, 'static' if tag == 'static' else 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)
             fld = model.grid.convert(model_fld, is_vector=kwargs['is_vector'], method=c.config.interp_method)
@@ -506,7 +507,7 @@ class Obs:
             for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
                 c.debug_message = f"obs_prior static mem{mem_id+1:03} {self.info.records[obs_rec_id].name:20}"
                 c.current_task = m*nr+r
-                self.obs_prior_static[mem_id, obs_rec_id] = self.compute_obs_seq(c, 'prior', obs_rec_id, mem_id)['obs']
+                self.obs_prior_static[mem_id, obs_rec_id] = self.compute_obs_seq(c, 'static', obs_rec_id, mem_id)['obs']
         c.comm.Barrier()
 
     def compute_obs_seq(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> dict:

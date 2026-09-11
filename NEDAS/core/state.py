@@ -125,7 +125,7 @@ class State:
                 c.debug_message = f"prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
                 c.current_task = m*nr+r
 
-                self.fields_prior[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id)
+                self.fields_prior[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id, 'current')
 
                 model = c.models[rec.model_src]
 
@@ -158,17 +158,17 @@ class State:
                 rec = self.info.fields[rec_id]
                 c.debug_message = f"prepare_state static mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
                 c.current_task = m*nr+r
-                self.fields_static[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id)
+                self.fields_static[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id, 'static')
         c.comm.Barrier()
 
-    def read_field_on_grid(self, c: Context, rec_id: int, mem_id: int) -> np.ndarray:
+    def read_field_on_grid(self, c: Context, rec_id: int, mem_id: int, tag: str) -> np.ndarray:
         """
         Read the model field for record rec_id of member mem_id, convert it to the analysis grid
-        and apply the transforms
+        and apply the transforms; tag is 'current' for a dynamic member, 'static' for a static one
         """
         rec = self.info.fields[rec_id]
         model = c.models[rec.model_src]
-        model_fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
+        model_fld = c.io.call_method(c, tag, model.read_var, member=mem_id, **rec.asdict())
         model.grid.set_destination_grid(c.grid)
         fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
         if rec.is_vector:

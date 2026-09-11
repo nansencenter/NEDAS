@@ -6,6 +6,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
     transform_solver: str  # 'svd', 'eigen', or 'auto'
+    supports_static_members = True
     supports_hybrid_perturbation = True
 
     def assimilation_algorithm(self, c):
