@@ -1,6 +1,29 @@
 import numpy as np
 import unittest
+from types import SimpleNamespace
+from NEDAS.assim_tools.covariance import get_covariance
 from NEDAS.assim_tools.covariance.ensemble import ensemble_covariance
+
+
+class TestGetCovariance(unittest.TestCase):
+    def _get(self, nens=10, **covariance_def):
+        return get_covariance(SimpleNamespace(nens=nens, covariance_def=covariance_def))
+
+    def test_legacy_config_loads_as_pure_ensemble(self):
+        cov = self._get(type='ensemble', config_file=None)
+        self.assertEqual((cov.beta, cov.nens_static), (0.0, 0))
+
+    def test_unknown_legacy_type_raises(self):
+        with self.assertRaises(NotImplementedError):
+            self._get(type='static')
+
+    def test_invalid_settings_raise(self):
+        for kwargs in ({'beta': 1.5, 'nens_static': 5},   # beta outside [0, 1]
+                       {'beta': 0.5},                     # beta > 0 without static members
+                       {'alpha': 0.0},
+                       {'nens': 1, 'beta': 0.5, 'nens_static': 5}):  # hybrid needs 2 dynamic members
+            with self.assertRaises(ValueError, msg=kwargs):
+                self._get(**kwargs)
 
 
 class TestEnsembleCovariance(unittest.TestCase):

@@ -13,6 +13,12 @@ class TestContext(unittest.TestCase):
         self.assertIsInstance(self.c.mem_list, dict)
         self.assertIsInstance(self.c.mem_list[self.c.pid_mem], list)
 
+    def test_static_members_have_their_own_mem_list(self):
+        c = Context(nens=4, covariance_def={'beta': 0.5, 'nens_static': 3})
+        self.assertEqual((c.nens, c.nens_static), (4, 3))
+        self.assertEqual(sorted(sum(c.mem_list.values(), [])), [0, 1, 2, 3])
+        self.assertEqual(sorted(sum(c.mem_list_static.values(), [])), [0, 1, 2])
+
     def test_prev_next_time_variable_type(self):
         self.assertIsInstance(self.c.prev_time, datetime)
         self.assertIsInstance(self.c.next_time, datetime)

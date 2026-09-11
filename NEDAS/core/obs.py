@@ -38,6 +38,8 @@ class Obs:
     obs_prior: ObsEns         # will be created by self.prepare_obs_from_state()
     lobs: LocalObsSeq         # will be created by self.transpose_to_ensemble_complete()
     lobs_prior: LocalObsEns
+    obs_prior_static: ObsEns  # will be created by self.prepare_obs_from_static(), for static members
+    lobs_prior_static: LocalObsEns  # (covariance_def.nens_static), a separate batch from the dynamic members
     lobs_post: LocalObsEns    # will be created by assimilator.assimilate()
     obs_post: ObsEns          # will be created by self.transpose_to_field_complete()
     data: dict                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
@@ -50,6 +52,8 @@ class Obs:
         self.obs_prior = {}
         self.lobs = {}
         self.lobs_prior = {}
+        self.obs_prior_static = {}
+        self.lobs_prior_static = {}
         self.lobs_post = {}
         self.obs_post = {}
         self.data = {}
@@ -473,16 +477,7 @@ class Obs:
                 c.debug_message = f"obs_prior mem{mem_id+1:03} {obs_rec.name:20}"
                 c.current_task = m*nr+r
 
-                seq = {}
-                # need the coordinates for transform later
-                for key in ['x', 'y', 'z', 't', 'err_std']:
-                    seq[key] = self.obs_seq[obs_rec_id][key]
-                # obtain obs_prior values from model state
-                seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
-
-                # misc. transform here
-                for transform_func in c.transform_funcs:
-                    seq = transform_func.forward_obs(c, obs_rec, seq)
+                seq = self.compute_obs_seq(c, tag, obs_rec_id, mem_id)
 
                 c.io.call_method(c, tag, dataset.write_obs, seq, **obs_rec.asdict(), member=mem_id)
 
@@ -496,6 +491,41 @@ class Obs:
                 mem_id, obs_rec_id = key
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
                 c.io.save_debug_data(c, file, {f'obs_{tag}':seq}, path=c.fs.analysis_dir(c.time, c.iter))
+
+    def prepare_obs_from_static(self, c: Context) -> None:
+        """
+        Compute the obs priors of the static members (covariance_def.nens_static) into
+        obs_prior_static, a separate batch from the dynamic members in obs_prior, distributed
+        by c.mem_list_static. Static members only enter the analysis, so their obs priors are
+        not written to the dataset or io storage.
+        """
+        nr = len(self.obs_rec_list[c.pid_rec])
+        nm = len(c.mem_list_static[c.pid_mem])
+        c.total_tasks = nr * nm
+        for m, mem_id in enumerate(c.mem_list_static[c.pid_mem]):
+            for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
+                c.debug_message = f"obs_prior static mem{mem_id+1:03} {self.info.records[obs_rec_id].name:20}"
+                c.current_task = m*nr+r
+                self.obs_prior_static[mem_id, obs_rec_id] = self.compute_obs_seq(c, 'prior', obs_rec_id, mem_id)['obs']
+        c.comm.Barrier()
+
+    def compute_obs_seq(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> dict:
+        """
+        Compute the obs seq for record obs_rec_id from the model state of member mem_id,
+        with the coordinates, and apply the transforms
+        """
+        obs_rec = self.info.records[obs_rec_id]
+        seq = {}
+        # need the coordinates for transform later
+        for key in ['x', 'y', 'z', 't', 'err_std']:
+            seq[key] = self.obs_seq[obs_rec_id][key]
+        # obtain obs_prior values from model state
+        seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
+
+        # misc. transform here
+        for transform_func in c.transform_funcs:
+            seq = transform_func.forward_obs(c, obs_rec, seq)
+        return seq
 
     def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
         # form the global list of obs (in serial mode the main loop is over this list)
@@ -613,7 +643,7 @@ class Obs:
 
         return output_obs
 
-    def transpose_to_ensemble_complete(self, c: Context, input_obs: ObsEns) -> LocalObsEns:
+    def transpose_to_ensemble_complete(self, c: Context, input_obs: ObsEns, mem_list: dict[int, list[int]]) -> LocalObsEns:
         """
         Transpose obs from field-complete to ensemble-complete
 
@@ -627,11 +657,12 @@ class Obs:
         Args:
             c (Context): the runtime context
             input_obs (ObsEns): obs_prior from process_all_obs_priors(), dict[(mem_id, obs_rec_id), np.array];
+            mem_list (dict): the member ids on each pid_mem, c.mem_list for the dynamic members
+                or c.mem_list_static for the static members
 
         Returns,
             LocalObsEns: the lobs_prior dict[(mem_id, obs_rec_id), dict[par_id, np.array]]
         """
-        mem_list = c.mem_list
         nproc_mem = c.config.nproc_mem
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -787,7 +818,7 @@ class Obs:
         c.comm.Barrier()
         return obs_seq
 
-    def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns) -> dict:
+    def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns, lobs_prior_static: LocalObsEns) -> dict:
         """pack lobs and lobs_prior into arrays for the jitted functions"""
         n_obs_rec = len(self.info.records)        # number of obs records
         state_variables = list(c.state.info.variables)
@@ -799,7 +830,9 @@ class Obs:
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
             v_list = [0, 1] if obs_rec.is_vector else [None]
-            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list], axis=0)
+            # the static members' obs priors (covariance_def.nens_static) need to be valid too
+            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list]
+                              + [lobs_prior_static[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens_static) for v in v_list], axis=0)
             no_nan_mask = ~np.isnan(values).any(axis=0)
             self.valid[obs_rec_id] = np.where(no_nan_mask)[0].tolist()
             nlobs += len(self.valid[obs_rec_id]) * len(v_list)
@@ -813,6 +846,7 @@ class Obs:
         data['t'] = np.full(nlobs, np.nan)
         data['err_std'] = np.full(nlobs, np.nan)
         data['obs_prior'] = np.full((c.nens, nlobs), np.nan)
+        data['obs_prior_static'] = np.full((c.nens_static, nlobs), np.nan)
         data['used'] = np.full(nlobs, False)
         data['hroi'] = np.ones(n_obs_rec)
         data['vroi'] = np.ones(n_obs_rec)
@@ -851,6 +885,8 @@ class Obs:
                 data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std'][valid]
                 for m in range(c.nens):
                     data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, valid].copy())
+                for m in range(c.nens_static):
+                    data['obs_prior_static'][m, i:i+d] = np.squeeze(lobs_prior_static[m, obs_rec_id][par_id][v, valid].copy())
                 i += d
 
         return data

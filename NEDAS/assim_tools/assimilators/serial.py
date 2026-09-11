@@ -80,9 +80,9 @@ class SerialAssimilator(Assimilator):
 
         par_id = c.pid_mem
 
-        state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z)
+        state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z, c.state.state_static)
 
-        obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
+        obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior, c.obs.lobs_prior_static)
         obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c)
 
         # ens-complete pre transforms (probit)

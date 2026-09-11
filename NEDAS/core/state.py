@@ -43,6 +43,8 @@ class State:
     fields_z: FieldEns
     state_prior: StateEns   # will be created by self.transpose_to_ensemble_complete()
     state_z: StateEns
+    fields_static: FieldEns # will be created by self.collect_static_fields(), for static members
+    state_static: StateEns  # (covariance_def.nens_static), a separate batch from the dynamic members
     state_post: StateEns    # will be created by assimilator.assimilate()
     fields_post: FieldEns   # will be created by self.transpose_to_field_complete()
     data: dict              # will be created by self.pack_state_data(), for use in assmilator.assimilate()
@@ -56,6 +58,8 @@ class State:
         self.fields_z = {}
         self.state_prior = {}
         self.state_z = {}
+        self.fields_static = {}
+        self.state_static = {}
         self.state_post = {}
         self.fields_post = {}
         self.data = {}
@@ -79,6 +83,8 @@ class State:
         Main method to collect fields from model to form the complete state (field-complete distributed)
         """
         c.logger('Collect prior fields')(self.collect_prior_fields)(c)
+        if c.nens_static > 0:
+            c.logger('Collect static fields')(self.collect_static_fields)(c)
         if self.info.scalars:
             c.logger('Collect prior scalar parameters')(self.collect_scalar_variables)(c)
 
@@ -119,21 +125,9 @@ class State:
                 c.debug_message = f"prepare_state mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
                 c.current_task = m*nr+r
 
-                model_name = rec.model_src
-                model = c.models[model_name]
-                model_fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
-                model.grid.set_destination_grid(c.grid)
-                fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
-                if rec.is_vector:
-                    fld[:, c.grid.mask] = np.nan
-                else:
-                    fld[c.grid.mask] = np.nan
+                self.fields_prior[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id)
 
-                # misc. transform can be added here
-                for transform_func in c.transform_funcs:
-                    fld = transform_func.forward_state(c, rec, fld)
-                # save field to dict
-                self.fields_prior[mem_id, rec_id] = fld
+                model = c.models[rec.model_src]
 
                 # read z_coords for the field
                 # only need to generate the uniq z coords, store in bank
@@ -149,6 +143,44 @@ class State:
         # if c.debug:
         #     c.io.save_debug_data(c, f"fields_prior_{c.pid_mem}_{c.pid_rec}", self.fields_prior, path=c.fs.analysis_dir(c.time, c.iter))
 
+    def collect_static_fields(self, c: Context) -> None:
+        """
+        Collect fields of the static members (covariance_def.nens_static) into fields_static,
+        a separate batch from the dynamic members in fields_prior, distributed by c.mem_list_static.
+        Static members only enter the analysis; their z coords are not needed since the
+        reference z is the dynamic ensemble mean.
+        """
+        nm = len(c.mem_list_static[c.pid_mem])
+        nr = len(self.rec_list[c.pid_rec])
+        c.total_tasks = nm*nr
+        for m, mem_id in enumerate(c.mem_list_static[c.pid_mem]):
+            for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
+                rec = self.info.fields[rec_id]
+                c.debug_message = f"prepare_state static mem{mem_id+1:03} '{rec.name:20}' {rec.time} k={rec.k}"
+                c.current_task = m*nr+r
+                self.fields_static[mem_id, rec_id] = self.read_field_on_grid(c, rec_id, mem_id)
+        c.comm.Barrier()
+
+    def read_field_on_grid(self, c: Context, rec_id: int, mem_id: int) -> np.ndarray:
+        """
+        Read the model field for record rec_id of member mem_id, convert it to the analysis grid
+        and apply the transforms
+        """
+        rec = self.info.fields[rec_id]
+        model = c.models[rec.model_src]
+        model_fld = c.io.call_method(c, 'current', model.read_var, member=mem_id, **rec.asdict())
+        model.grid.set_destination_grid(c.grid)
+        fld = model.grid.convert(model_fld, is_vector=rec.is_vector, method='linear', coarse_grain=True)
+        if rec.is_vector:
+            fld[:, c.grid.mask] = np.nan
+        else:
+            fld[c.grid.mask] = np.nan
+
+        # misc. transform can be added here
+        for transform_func in c.transform_funcs:
+            fld = transform_func.forward_state(c, rec, fld)
+        return fld
+
     def collect_scalar_variables(self, c: Context) -> None:
         """
         Collect scalar parameters from each ensemble member and broadcast to all procs.
@@ -156,6 +188,9 @@ class State:
         Reads per-member parameter values via model.read_param, then allgathers so every
         proc holds the full ensemble of scalar values needed during pack_local_state_data.
         """
+        # the static bank has no per-member parameter files to read the scalars from
+        if c.nens_static > 0:
+            raise NotImplementedError("scalar state variables are not supported with covariance_def.nens_static > 0")
         scalars_local: dict = {}
         for scalar_id, rec in self.info.scalars.items():
             model = c.models[rec.model_src]
@@ -317,7 +352,7 @@ class State:
                 mask_chk = c.grid.mask[inds]
                 fld[..., inds[~mask_chk]] = fld_chk[par_id]
 
-    def transpose_to_ensemble_complete(self, c: Context, fields: FieldEns) -> StateEns:
+    def transpose_to_ensemble_complete(self, c: Context, fields: FieldEns, mem_list: dict[int, list[int]]) -> StateEns:
         """
         Send chunks of field owned by a pid to other pid
         so that the field-complete fields get transposed into ensemble-complete state
@@ -326,6 +361,8 @@ class State:
         Args:
             c (Context): the runtime context
             fields (FieldEns): The locally stored field-complete fields with subset of mem_id,rec_id
+            mem_list (dict): the member ids on each pid_mem, c.mem_list for the dynamic members
+                or c.mem_list_static for the static members
 
         Returns:
             StateEns: The locally stored ensemble-complete field chunks on partitions, dict[(mem_id, rec_id), dict[par_id, fld_chk]]
@@ -333,12 +370,12 @@ class State:
         state = {}
 
         nr = len(self.rec_list[c.pid_rec])
-        nm_max = int(np.max([len(lst) for p,lst in c.mem_list.items()]))
+        nm_max = int(np.max([len(lst) for p,lst in mem_list.items()]))
         c.total_tasks = nr * nm_max
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
 
             # all pid goes through their own mem_list simultaneously
-            mem_list_own = c.mem_list[c.pid_mem]
+            mem_list_own = mem_list[c.pid_mem]
             for m in range(nm_max):
                 status = f"processing mem{mem_list_own[m]+1:03} rec{rec_id}" if m < len(mem_list_own) else "waiting"
                 c.debug_message = f"transposing field: {status}"
@@ -348,8 +385,8 @@ class State:
                 fld = None
                 mem_id = None
                 rec = None
-                if m < len(c.mem_list[c.pid_mem]):
-                    mem_id = c.mem_list[c.pid_mem][m]
+                if m < len(mem_list[c.pid_mem]):
+                    mem_id = mem_list[c.pid_mem][m]
                     rec = self.info.fields[rec_id]
                     fld = fields[mem_id, rec_id].copy()
 
@@ -360,15 +397,15 @@ class State:
 
                 #  1) receive fld_chk from src_pid, for src_pid<pid first
                 for src_pid in range(0, c.pid_mem):
-                    if m < len(c.mem_list[src_pid]):
-                        src_mem_id = c.mem_list[src_pid][m]
+                    if m < len(mem_list[src_pid]):
+                        src_mem_id = mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
 
                 #  2) send my fld chunk to a list of dst_pid, send to dst_pid>=pid first
                 #     because they wait to receive before able to send their own stuff;
                 #     when finished with dst_pid>=pid, cycle back to send to dst_pid<pid,
                 #     i.e., dst_pid list = [pid, pid+1, ..., nproc-1, 0, 1, ..., pid-1]
-                if m < len(c.mem_list[c.pid_mem]):
+                if m < len(mem_list[c.pid_mem]):
                     assert isinstance(rec, FieldRecord), f"{rec} is not a FieldRecord"
                     for dst_pid in np.mod(np.arange(c.config.nproc_mem)+c.pid_mem, c.config.nproc_mem):
                         fld_chk = self.pack_field_chunk(c, fld, rec.is_vector, dst_pid)
@@ -381,8 +418,8 @@ class State:
 
                 #  3) finish receiving fld_chk from src_pid, for src_pid>pid now
                 for src_pid in range(c.pid_mem+1, c.config.nproc_mem):
-                    if m < len(c.mem_list[src_pid]):
-                        src_mem_id = c.mem_list[src_pid][m]
+                    if m < len(mem_list[src_pid]):
+                        src_mem_id = mem_list[src_pid][m]
                         state[src_mem_id, rec_id] = c.comm_mem.recv(source=src_pid, tag=m)
         c.comm.Barrier()
         return state
@@ -462,7 +499,7 @@ class State:
         c.comm.Barrier()
         return fields
 
-    def pack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, state_z: StateEns) -> dict:
+    def pack_local_state_data(self, c: Context, par_id: PartitionID, state_prior: StateEns, state_z: StateEns, state_static: StateEns) -> dict:
         """pack state dict into arrays to be more easily handled by jitted funcs"""
         data = {}
 
@@ -500,6 +537,7 @@ class State:
         data['var_id'] = np.full(nfld, 0)
         data['err_type'] = np.full(nfld, 0)
         data['state_prior'] = np.full((c.nens, nfld, nloc), np.nan)
+        data['state_static'] = np.full((c.nens_static, nfld, nloc), np.nan)
 
         # fill field rows
         t_analysis = t2h(c.time)
@@ -512,6 +550,8 @@ class State:
             for m in range(c.nens):
                 data['z'][n, :] += np.squeeze(state_z[m, rec_id][par_id][v, :]).astype(np.float32) / c.nens  # ens mean z
                 data['state_prior'][m, n, :] = np.squeeze(state_prior[m, rec_id][par_id][v, :].copy())
+            for m in range(c.nens_static):
+                data['state_static'][m, n, :] = np.squeeze(state_static[m, rec_id][par_id][v, :].copy())
 
         # fill scalar rows: replicate scalar value at every spatial location
         for n in range(nfld_only, nfld):

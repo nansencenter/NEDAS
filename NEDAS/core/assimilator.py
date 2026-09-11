@@ -9,8 +9,13 @@ from .types import ObsRecordID, PartitionID, ProcIDMem
 
 class Assimilator(ABC):
     assim_mode: str
+    # whether the algorithm handles the static members of a hybrid covariance (covariance_def);
+    # one that doesn't would silently treat them as extra dynamic members
+    supports_static_members: bool = False
 
     def __init__(self, c: Context):
+        if c.nens_static > 0 and not self.supports_static_members:
+            raise NotImplementedError(f"{self.__class__.__name__} does not support covariance_def.nens_static > 0")
         # get parameters from config file
         code_dir = os.path.dirname(inspect.getfile(self.__class__))
         config_dict = parse_config(code_dir, parse_args=False, **c.config.assimilator_def)
@@ -111,13 +116,18 @@ class Assimilator(ABC):
         """
         Communicate among mpi ranks and transpose the locally-stored state/obs chunks to ensemble-complete
         """
-        c.state.state_prior = c.logger('Transpose prior state')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_prior)
+        c.state.state_prior = c.logger('Transpose prior state')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_prior, c.mem_list)
 
-        c.state.state_z = c.logger('Transpose z coordinates')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_z)
+        c.state.state_z = c.logger('Transpose z coordinates')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_z, c.mem_list)
 
         c.obs.lobs = c.logger('Transpose obs sequences')(c.obs.transpose_obs_seq)(c, c.obs.obs_seq)
 
-        c.obs.lobs_prior = c.logger('Transpose obs prior ensemble')(c.obs.transpose_to_ensemble_complete)(c, c.obs.obs_prior)
+        c.obs.lobs_prior = c.logger('Transpose obs prior ensemble')(c.obs.transpose_to_ensemble_complete)(c, c.obs.obs_prior, c.mem_list)
+
+        # static members (covariance_def.nens_static), a separate batch with its own mem_list
+        if c.nens_static > 0:
+            c.state.state_static = c.logger('Transpose static state')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_static, c.mem_list_static)
+            c.obs.lobs_prior_static = c.logger('Transpose static obs prior ensemble')(c.obs.transpose_to_ensemble_complete)(c, c.obs.obs_prior_static, c.mem_list_static)
 
         # if c.debug:
         #     np.save(os.path.join(self.analysis_dir, f'state_prior.{c.pid_mem}.{c.pid_rec}.npy'), state.state_prior)
