@@ -1,0 +1,28 @@
+# path to libdartkernels.so (build_dart_kernels.sh); empty = alongside the code
+dart_lib:
+
+# which DART obs_increment kernel to use:
+#   EAKF      ensemble adjustment Kalman filter (deterministic; matches NEDAS's native EAKF)
+#   ENKF      stochastic EnKF with perturbed observations
+#   KERNEL    kernel filter (stochastic)
+#   PARTICLE  observation-space particle filter
+#   RHF       rank histogram filter (unbounded)
+#   GAMMA     gamma-distributed prior/likelihood
+#   BNRHF     bounded normal rank histogram filter (uses the bounds below)
+#
+# KDE exists in DART but is refused: it reads its own kde_nml, which needs DART's utilities
+# initialized (initialize_utilities plus an input.nml in the working directory). This
+# interface does not initialize DART, and without that DART stops the run outright.
+filter_kind: EAKF
+
+# seed for DART's random sequence, used by the stochastic kernels (ENKF, KERNEL).
+# 0 derives one from the analysis time, which is the same on every rank -- required, since
+# every rank computes the increment for the same observation -- while changing each cycle,
+# so the perturbations are not replayed. Set a fixed non-zero value to pin a run instead.
+random_seed: 0
+
+# bounds for the bounded kernel (BNRHF); ignored by the others
+bounded_below: False
+bounded_above: False
+lower_bound: 0.0
+upper_bound: 1.0

@@ -12,6 +12,7 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
+   NEDAS.assim_tools.assimilators.DART
    NEDAS.assim_tools.assimilators.EAKF
    NEDAS.assim_tools.assimilators.ETKF
    NEDAS.assim_tools.assimilators.QCEF

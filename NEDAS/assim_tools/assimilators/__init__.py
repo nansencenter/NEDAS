@@ -10,6 +10,7 @@ registry = {
     'EAKF': 'EAKFAssimilator',
     'TopazDEnKF': 'TopazDEnKFAssimilator',
     'QCEF': 'QCEFAssimilator',
+    'DART': 'DARTAssimilator',
     #'PDAF': 'PDAFAssimilator',
     #'RHF'
     'interp': 'InterpolationAssimilator',
