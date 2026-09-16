@@ -54,7 +54,7 @@ work=${work:-$DART/models/lorenz_96/work}
 assim_tools=$DART/assimilation_code/modules/assimilation/assim_tools_mod.f90
 if ! grep -q 'added by NEDAS' "$assim_tools"; then
   echo "patching $assim_tools to expose the obs_increment kernels"
-  sed -i '/^public :: filter_assim/i public :: obs_increment_eakf, obs_increment_enkf, obs_increment_kernel, &\n          obs_increment_particle, obs_increment_rank_histogram, obs_increment_gamma, &\n          obs_increment_bounded_norm_rhf, get_truncated_normal_like, update_from_obs_inc, &\n          inc_ran_seq, first_inc_ran_call  ! added by NEDAS build_dart_kernels.sh' "$assim_tools"
+  sed -i '/^public :: filter_assim/i public :: obs_increment_eakf, obs_increment_enkf, obs_increment_kernel, &\n          obs_increment_particle, obs_increment_rank_histogram, obs_increment_gamma, &\n          obs_increment_bounded_norm_rhf, get_truncated_normal_like, update_from_obs_inc, &\n          inc_ran_seq, first_inc_ran_call, assim_tools_init  ! added by NEDAS build_dart_kernels.sh' "$assim_tools"
 fi
 
 # --- source list, preprocess and version string all come from DART itself

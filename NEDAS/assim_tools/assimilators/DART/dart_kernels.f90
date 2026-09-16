@@ -20,14 +20,18 @@ use           assim_tools_mod,  only : obs_increment_eakf, obs_increment_enkf,  
                                        obs_increment_rank_histogram, obs_increment_gamma, &
                                        obs_increment_bounded_norm_rhf,                  &
                                        get_truncated_normal_like, update_from_obs_inc,  &
-                                       inc_ran_seq, first_inc_ran_call
+                                       inc_ran_seq, first_inc_ran_call, assim_tools_init
 use           random_seq_mod,   only : init_random_seq
+use           mpi_utilities_mod, only : initialize_mpi_utilities
 use           kde_distribution_mod, only : obs_increment_kde
 
 implicit none
 private
 
-public :: dart_obs_increment, dart_update_from_obs_inc, dart_set_random_seed
+public :: dart_obs_increment, dart_update_from_obs_inc, dart_set_random_seed, dart_initialize
+
+! set once dart_initialize() has run; DART warns if its init routines are called twice
+logical :: dart_is_initialized = .false.
 
 ! filter kinds, mirrored in core.py's FILTER_KINDS. These are NEDAS's own codes, not
 ! DART's algorithm_info_mod constants, since the leaf kernels are called directly.
@@ -42,13 +46,38 @@ integer, parameter :: KIND_KDE       = 8
 
 contains
 
+!> Bring up DART's utilities and read its namelists.
+!>
+!> Most kernels never need this: the wrapper otherwise avoids DART's runtime setup, which
+!> is what lets EAKF reproduce NEDAS's native results with no namelist or log files in play.
+!> It is needed only where a kernel's behaviour is namelist-controlled:
+!>   ENKF  sort_obs_inc
+!>   RHF   rectangular_quadrature, gaussian_likelihood_tails
+!>   KDE   quadrature_order (read from kde_nml on first use)
+!>
+!> initialize_mpi_utilities is the null_mpi one (the library is built serial), so this does
+!> not touch MPI; it forwards to initialize_utilities, which reads "input.nml" from the
+!> current working directory. assim_tools_init() then reads &assim_tools_nml from the same
+!> file -- that section is NOT optional, so the file must contain it. The caller is
+!> responsible for putting a suitable input.nml in place; a missing file or section makes
+!> DART stop the process. DART also writes dart_log.out/dart_log.nml there.
+subroutine dart_initialize() bind(c, name='dart_initialize')
+
+if (dart_is_initialized) return
+call initialize_mpi_utilities()
+call assim_tools_init()
+dart_is_initialized = .true.
+
+end subroutine dart_initialize
+
+
 !> Seed the random sequence the stochastic kernels draw from.
 !>
 !> Without this, obs_increment_enkf and _kernel seed themselves on first use with
 !> my_task_id() + 1. That has two consequences, both bad for NEDAS:
 !>
 !>   * my_task_id() initializes DART's (null) mpi utilities, which reads input.nml and
-!>     stops the run when that file is absent -- the reason those kernels were refused.
+!>     stops the run when that file is absent.
 !>   * the seed is a task id, so the stream is identical in every process. NEDAS starts a
 !>     fresh process per cycle, so each cycle would replay the same perturbations.
 !>
@@ -75,19 +104,6 @@ end subroutine dart_set_random_seed
 !>   1 = both obs_var and prior_var are zero (no meaningful analysis)
 !>   2 = unknown filter_kind
 !>   3 = likelihood underflowed (bounded normal RHF); increments left at zero
-!>
-!> Note on randomness: the stochastic kernels (ENKF, KERNEL) are refused by core.py, since
-!> initializing DART's random_seq_mod reads a namelist this interface never provides. The
-!> dispatch below keeps them so that only that guard has to be lifted if DART is ever
-!> initialized here. Should that happen, note how the seeding works out:
-!>
-!> DART seeds its module-level sequence lazily with my_task_id()+1, and both DART's
-!> filter_assim and NEDAS's serial loop broadcast the obs *prior* and then let every task
-!> compute the increment itself. Under real MPI that gives each task a different stream, so
-!> tasks draw different perturbed obs for the same observation (DART's own comment notes
-!> only the related task-count reproducibility caveat). Built null_mpi, my_task_id() is
-!> always 0, so every NEDAS rank walks one identical stream and computes the same increment
-!> -- consistent across ranks, at the cost of being identical between runs.
 integer(c_int) function dart_obs_increment(filter_kind, ens_size, ens, obs, obs_var, &
                                            bounded_below, bounded_above,             &
                                            lower_bound, upper_bound, obs_inc, a)     &

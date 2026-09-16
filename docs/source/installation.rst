@@ -174,24 +174,49 @@ To keep it elsewhere, pass ``-o /path/to/libdartkernels.so`` and point
    status instead, but it cannot intercept every check inside DART. Treat an abrupt stop
    with a DART message in the log as an input the kernel rejected, not as a NEDAS crash.
 
-Select the kernel with ``assimilator_def.filter_kind``: ``EAKF`` (default), ``PARTICLE``,
-``RHF``, ``GAMMA`` or ``BNRHF``. ``BNRHF`` is the bounded kernel and also reads
-``bounded_below``/``bounded_above`` and ``lower_bound``/``upper_bound`` from the same
-section.
+Select the kernel with ``assimilator_def.filter_kind``: ``EAKF`` (default), ``ENKF``,
+``KERNEL``, ``PARTICLE``, ``RHF``, ``GAMMA``, ``BNRHF`` or ``KDE``. The bounded kernels
+(``BNRHF``, ``KDE``) also read ``bounded_below``/``bounded_above`` and
+``lower_bound``/``upper_bound`` from the same section.
 
-``ENKF``, ``KERNEL`` and ``KDE`` exist in DART but are refused for now with a
-``NotImplementedError``. All three need DART's utilities subsystem initialized: the first
-two build their random seed from ``my_task_id()``, which initializes the utilities and reads
-``input.nml`` on the way, while ``KDE`` reads its own ``kde_nml`` and refuses to proceed
-until the utilities are up. This interface does not initialize DART, which is what keeps the
-kernels free of runtime setup and lets ``EAKF`` reproduce NEDAS's native results exactly.
+The stochastic kernels (``ENKF``, ``KERNEL``) draw from a random sequence held inside the
+DART library, which ``numpy``'s generator cannot reach. NEDAS seeds it through
+``assimilator_def.random_seed``: ``0`` derives a seed from the analysis time, which is
+identical on every rank -- necessary, because every rank computes the increment for the same
+observation, so a rank-dependent stream would perturb one observation differently in
+different parts of the domain -- while changing from cycle to cycle, so the same draws are
+not replayed. Set a non-zero value to pin a run instead.
 
-The kernels themselves are fine: all three run once ``initialize_utilities()`` has been
-called and an ``input.nml`` exists in the working directory. Enabling them means adding an
-initialization entry point, putting an ``input.nml`` in every rank's working directory (the
-filename is hardcoded and looked up relative to the current directory), and accepting the
-``dart_log.out``/``dart_log.nml`` that DART writes there. Until then the guard matters,
-because otherwise DART calls its ``error_handler`` and stops the run outright.
+Some kernel options live in DART's namelists rather than in its kernel arguments. These are
+exposed as ``assimilator_def`` entries and written into an ``input.nml`` for DART to read:
+``sort_obs_inc`` (``ENKF``), ``rectangular_quadrature`` and ``gaussian_likelihood_tails``
+(``RHF``), and ``quadrature_order`` (``KDE``).
+
+Only those three kernels trigger this, since only they consult a namelist. The rest never
+initialize DART at all, which keeps them free of runtime setup and lets ``EAKF`` reproduce
+NEDAS's native results exactly. When it is triggered, NEDAS writes an ``input.nml`` into the
+working directory (the filename is hardcoded and looked up relative to the current
+directory) and DART writes ``dart_log.out`` and ``dart_log.nml`` beside it. An ``input.nml``
+that NEDAS did not write is never overwritten -- remove it to let NEDAS manage the namelist,
+or set ``write_input_nml: False`` and supply your own. A supplied file must contain
+``&utilities_nml``, ``&assim_tools_nml`` and ``&obs_kind_nml``; the last is needed because
+initializing the assimilation tools reaches DART's observation-kind module. Empty sections
+are fine -- they simply leave DART's defaults in place.
+
+.. note::
+
+   DART reports a fatal condition by calling its ``error_handler``, which stops the process:
+   there is no exception for Python to catch, and a NEDAS run would end with only DART's
+   message in the log. NEDAS therefore checks what it can in advance (a missing file, a
+   missing section, an unsupported option) and rehearses the initialization itself in a
+   subprocess, so a namelist DART dislikes surfaces as an ordinary Python exception carrying
+   DART's own message. The per-observation kernel calls are too frequent to guard that way
+   and instead return status codes, which NEDAS raises as exceptions.
+
+``sampling_error_correction`` is not supported yet. It applies to every kernel, since it
+changes the regression coefficient in ``update_from_obs_inc``, but beyond the namelist flag
+DART also needs its correction table (``sampling_error_correction_table.nc``) staged at
+runtime. Setting it raises rather than silently regressing with an unpopulated table.
 
 If the libraries DART needs are awkward to provide in your usual NEDAS environment, keep a
 separate environment holding them and point :ref:`python_env <config_file>` at its source

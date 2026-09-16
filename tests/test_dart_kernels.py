@@ -26,6 +26,7 @@ import numpy as np
 
 from NEDAS.assim_tools.assimilators.DART.core import (
     DARTAssimilator, load_dart_kernels, default_lib_path, FILTER_KINDS, seed_from_time,
+    REQUIRED_NML_SECTIONS, dart_error_message,
 )
 from NEDAS.assim_tools.assimilators.EAKF.core import (
     obs_increment_eakf, update_ensemble,
@@ -261,24 +262,132 @@ class TestDARTAssimilatorMethods(unittest.TestCase):
         with self.assertRaises(ValueError):
             _ = self.assim.filter_kind_code
 
-    def test_kde_raises_instead_of_aborting(self):
-        # KDE would terminate the process via DART's error_handler, so it must be refused
-        # in python before reaching the library
+    def test_kde_initializes_dart_and_runs(self):
+        """
+        KDE needs DART's utilities up before it can read kde_nml.
+
+        The assimilator must arrange that itself: write an input.nml if none is there and
+        call dart_initialize. Done in a temporary working directory, since the namelist
+        lookup is cwd-relative and DART drops its log files alongside it.
+        """
+        import tempfile
         self.assim.filter_kind = 'KDE'
-        with self.assertRaises(NotImplementedError):
-            _ = self.assim.filter_kind_code
+        self.assim.bounded_below = True
+        self.assim.lower_bound = 0.0
+        self.assim.write_input_nml = True
+
+        prior = np.abs(np.random.default_rng(4).normal(0.5, 0.3, 60))
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                inc = self.assim.obs_increment(prior, np.zeros(0), 0.05, 0.1)
+                self.assertTrue(os.path.exists('input.nml'), 'a minimal input.nml should be written')
+            finally:
+                os.chdir(cwd)
+
+        post = prior + inc
+        self.assertTrue(np.all(np.isfinite(post)))
+        self.assertGreaterEqual(post.min(), -1e-12, 'KDE: posterior crossed the lower bound')
+
+    def test_kde_refuses_without_input_nml_when_not_allowed_to_write(self):
+        import tempfile
+        self.assim.filter_kind = 'KDE'
+        self.assim.write_input_nml = False
+        prior = np.abs(np.random.default_rng(4).normal(0.5, 0.3, 60))
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                with self.assertRaises(FileNotFoundError):
+                    self.assim.obs_increment(prior, np.zeros(0), 0.05, 0.1)
+            finally:
+                os.chdir(cwd)
 
     def test_stochastic_kind_is_seeded_automatically(self):
         # without _ensure_seeded the kernel would fall back to DART's my_task_id() seeding
-        # and stop the run; this must work straight out of obs_increment
-        if os.path.exists('input.nml'):
-            self.skipTest("an input.nml in the working directory makes this test vacuous")
+        # and stop the run; this must work straight out of obs_increment.
+        # ENKF also reads sort_obs_inc, so the assimilator initializes DART and writes an
+        # input.nml -- run it in a temporary directory rather than the repo.
+        import tempfile
         self.assim.filter_kind = 'ENKF'
         self.assim.random_seed = 777
         prior = np.random.default_rng(2).normal(5.0, 1.0, 50)
-        inc = self.assim.obs_increment(prior, np.zeros(0), 0.0, 1.0)
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                inc = self.assim.obs_increment(prior, np.zeros(0), 0.0, 1.0)
+                self.assertTrue(os.path.exists('input.nml'))
+            finally:
+                os.chdir(cwd)
         self.assertTrue(self.assim._seeded)
         self.assertTrue(np.all(np.isfinite(inc)))
+
+    def test_written_namelist_carries_the_configured_options(self):
+        self.assim.filter_kind = 'RHF'
+        self.assim.sort_obs_inc = False
+        self.assim.gaussian_likelihood_tails = True
+        self.assim.quadrature_order = 5
+        text = self.assim._input_nml_text()
+        self.assertIn('sort_obs_inc = .false.', text)
+        self.assertIn('gaussian_likelihood_tails = .true.', text)
+        self.assertIn('quadrature_order = 5', text)
+        # the gated option is always written off, whatever else is configured
+        self.assertIn('sampling_error_correction = .false.', text)
+        # every section DART demands, plus kde_nml for quadrature_order
+        for section in REQUIRED_NML_SECTIONS + ('kde_nml',):
+            self.assertIn('&' + section, text)
+
+    def test_incomplete_user_namelist_is_refused_in_python(self):
+        """
+        A missing section makes DART stop the process, so it has to be caught beforehand.
+        """
+        import tempfile
+        self.assim.filter_kind = 'RHF'
+        self.assim.write_input_nml = False      # use the file as supplied
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                with open('input.nml', 'w') as f:
+                    f.write('&utilities_nml\n/\n')     # no assim_tools_nml, no obs_kind_nml
+                with self.assertRaises(ValueError) as err:
+                    self.assim._ensure_initialized()
+                self.assertIn('obs_kind_nml', str(err.exception))
+            finally:
+                os.chdir(cwd)
+
+    def test_dart_error_message_is_extracted(self):
+        sample = ("  ERROR FROM:\n  source : utilities_mod.f90\n"
+                  "  routine: find_namelist_in_file\n"
+                  "  message:  Namelist entry &obs_kind_nml must exist in file input.nml\n")
+        self.assertEqual(dart_error_message(sample),
+                         'Namelist entry &obs_kind_nml must exist in file input.nml')
+        # unrecognised output still yields something rather than an empty message
+        self.assertTrue(dart_error_message('segmentation fault'))
+
+    def test_sampling_error_correction_is_refused(self):
+        self.assim.filter_kind = 'RHF'
+        self.assim.sampling_error_correction = True
+        with self.assertRaises(NotImplementedError):
+            self.assim._check_gated_options()
+
+    def test_foreign_input_nml_is_not_overwritten(self):
+        import tempfile
+        self.assim.filter_kind = 'RHF'
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                with open('input.nml', 'w') as f:
+                    f.write('&utilities_nml\n/\n')      # someone else's namelist
+                with self.assertRaises(RuntimeError):
+                    self.assim._ensure_initialized()
+                with open('input.nml') as f:
+                    self.assertNotIn('NEDAS', f.read())
+            finally:
+                os.chdir(cwd)
 
     def test_update_local_state_matches_native(self):
         rng = np.random.default_rng(5)

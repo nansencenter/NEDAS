@@ -9,10 +9,7 @@ dart_lib:
 #   RHF       rank histogram filter (unbounded)
 #   GAMMA     gamma-distributed prior/likelihood
 #   BNRHF     bounded normal rank histogram filter (uses the bounds below)
-#
-# KDE exists in DART but is refused: it reads its own kde_nml, which needs DART's utilities
-# initialized (initialize_utilities plus an input.nml in the working directory). This
-# interface does not initialize DART, and without that DART stops the run outright.
+#   KDE       kernel density estimator filter (uses the bounds below)
 filter_kind: EAKF
 
 # seed for DART's random sequence, used by the stochastic kernels (ENKF, KERNEL).
@@ -21,7 +18,28 @@ filter_kind: EAKF
 # so the perturbations are not replayed. Set a fixed non-zero value to pin a run instead.
 random_seed: 0
 
-# bounds for the bounded kernel (BNRHF); ignored by the others
+# --- DART namelist options -------------------------------------------------------------
+# DART keeps these in its namelists rather than in the kernel arguments, so NEDAS writes
+# them into an input.nml in the working directory for DART to read. Only the kernels that
+# actually consult them (ENKF, RHF, KDE) trigger this; the rest never initialize DART at
+# all, which is what keeps EAKF bit-comparable with the native implementation.
+#
+# True lets NEDAS write that input.nml; an input.nml it did not write is never overwritten.
+# Set False to supply your own, which must then provide &utilities_nml and &assim_tools_nml.
+# DART also writes dart_log.out and dart_log.nml into that directory.
+write_input_nml: True
+
+sort_obs_inc: True               # ENKF: sort increments to minimize the regression error
+rectangular_quadrature: True     # RHF: rectangular vs trapezoidal quadrature
+gaussian_likelihood_tails: False # RHF: gaussian tails for the likelihood
+quadrature_order: 9              # KDE: Gauss-Legendre quadrature order
+
+# Not supported yet: DART also needs its correction table (sampling_error_correction_table.nc)
+# staged at runtime, which NEDAS does not do. Setting this True raises rather than silently
+# regressing with an unpopulated table.
+sampling_error_correction: False
+
+# bounds for the bounded kernels (BNRHF, KDE); ignored by the others
 bounded_below: False
 bounded_above: False
 lower_bound: 0.0
