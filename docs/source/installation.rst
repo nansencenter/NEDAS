@@ -40,6 +40,13 @@ DART is not a Python package and cannot be installed with pip; it is a Fortran c
 which a shared library is built, see `Build the DART kernels`_ below.
 It is only needed if ``assimilator_def.type`` is set to ``DART``.
 
+The ``PDAF`` assimilator likewise runs the analysis kernels of
+`PDAF <https://pdaf.awi.de>`_ (the Parallel Data Assimilation Framework), through its
+`pyPDAF <https://github.com/yumengch/pyPDAF>`_ bindings.
+pyPDAF is not on PyPI or conda-forge and is built from source against a PDAF release,
+see `Install pyPDAF`_ below.
+It is only needed if ``assimilator_def.type`` is set to ``PDAF``.
+
 Some NEDAS submodules may also require additional packages to be installed.
 See the submodule documentation for more details.
 
@@ -226,6 +233,36 @@ script; NEDAS sources that file when launching its job steps.
 implementation, and is skipped unless the library has been built. Only ``EAKF`` has a
 native NEDAS counterpart to compare against -- the other kernels are covered by lighter
 smoke tests, so they would not catch a subtle numerical change upstream.
+
+Install pyPDAF
+--------------
+
+The ``PDAF`` assimilator hands each analysis partition to `PDAF <https://pdaf.awi.de>`_'s
+own domain-localized filters (LESTKF, LETKF, LSEIK, LNETF, LKNETF) instead of NEDAS's
+native ETKF, through the `pyPDAF <https://github.com/yumengch/pyPDAF>`_ bindings.
+It is only needed if you set ``assimilator_def.type`` to ``PDAF``.
+
+pyPDAF has no PyPI or conda-forge package, so it is built from source against a PDAF
+release; the build is meson-python over PDAF's Fortran library and needs a Fortran
+compiler, MPI and BLAS/LAPACK:
+
+.. code-block:: bash
+
+   git clone --recursive https://github.com/yumengch/pyPDAF.git
+   cd pyPDAF
+   # set the compiler and BLAS/LAPACK options in meson.options for your machine
+   pip install .
+
+Build it inside the environment that runs NEDAS, with the same MPI that mpi4py was built
+against -- a mismatch there surfaces as a hang or a crash at the first PDAF call rather
+than as an import error.
+
+PDAF-OMI localizes by horizontal distance alone, so the parts of NEDAS's localization it
+has no equivalent for (``vroi``, ``troi`` and ``impact_on_variable``) are refused at
+startup rather than silently dropped; use ``ETKF`` for those configurations.
+
+``tests/test_pdaf_letkf.py`` checks PDAF's LETKF analysis against NEDAS's native ETKF on
+the same partition, and is skipped unless pyPDAF is installed.
 
 Manual installation
 -------------------

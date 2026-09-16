@@ -11,7 +11,7 @@ registry = {
     'TopazDEnKF': 'TopazDEnKFAssimilator',
     'QCEF': 'QCEFAssimilator',
     'DART': 'DARTAssimilator',
-    #'PDAF': 'PDAFAssimilator',
+    'PDAF': 'PDAFAssimilator',
     #'RHF'
     'interp': 'InterpolationAssimilator',
 }

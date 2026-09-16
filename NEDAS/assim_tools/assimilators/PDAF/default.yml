@@ -1,0 +1,40 @@
+# which PDAF domain-localized filter to use (PDAF_init filtertype):
+#   LSEIK   local SEIK filter
+#   LETKF   local ensemble transform Kalman filter
+#   LESTKF  local error-subspace transform Kalman filter (PDAF's recommended default)
+#   LNETF   local nonlinear ensemble transform filter
+#   LKNETF  local hybrid Kalman-nonlinear ensemble transform filter
+# Only the domain-localized filters are offered: their local-domain loop is what maps onto
+# NEDAS's per-gridpoint batch analysis. PDAF's global filters would ignore localization,
+# and LEnKF localizes the covariance instead (a different interface, not wired up here).
+filter_kind: LESTKF
+
+# PDAF subtype of the chosen filter (see PDAF's AvailableOptionsforInitPDAF wiki page);
+# 0 is the standard variant of each filter above.
+subtype: 0
+
+# PDAF's forgetting factor: the prior ensemble covariance is divided by this before the
+# analysis, i.e. forget < 1 inflates. Leave at 1 and use NEDAS's inflation_def instead
+# unless you specifically want PDAF's.
+forget: 1.0
+
+# PDAFomi localization weight function (locweight in PDAFomi_init_dim_obs_l_iso):
+#   auto               follow localization_def.horizontal.type (recommended: then the PDAF
+#                      analysis sees the same taper the native ETKF/EAKF would apply)
+#   constant           weight 1 inside the radius
+#   exponential        exponential decay, 1/e at the radius
+#   gaspari_cohn       5th-order polynomial (this is what NEDAS calls gaspari_cohn)
+#   regulated_mean     regulated localization of R with mean error variance
+#   regulated_single   regulated localization of R with single-point error variance
+# The radius itself is always NEDAS's obs_def.hroi, not a separate setting.
+loc_weight: auto
+
+# PDAFomi distance metric (disttype): 0 cartesian, 1 cartesian periodic,
+# 2/3 geographic (coordinates in radians). -1 derives it from the grid: 1 when the grid has
+# a cyclic dimension, 0 otherwise. Geographic grids are not derived automatically -- set
+# this explicitly for them.
+disttype: -1
+
+# PDAF screen output verbosity (0 quiet, 1 timings, 2 more); it goes to stdout on every
+# rank and once per partition, so keep it at 0 outside debugging.
+screen: 0
