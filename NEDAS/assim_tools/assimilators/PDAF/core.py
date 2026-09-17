@@ -19,6 +19,13 @@ LOC_WEIGHTS = {'constant': 0, 'exponential': 1, 'gaspari_cohn': 2,
 # weight *inside* cradius, which is the same thing -- so it does map).
 NEDAS_TO_PDAF_WEIGHT = {'gaspari_cohn': 2, 'exponential': 1, 'step': 0}
 
+# PDAF can only be initialized once per process: a second PDAF_init segfaults, with or without
+# a PDAF_deallocate in between (checked against PDAF V3.0 / pyPDAF 1.0.4, 2026-09-17), while
+# assim_offline can be called as often as we like on that one init. So the init is process-wide
+# -- shared by every partition, outer-loop iteration and analysis cycle -- and has to be sized
+# for the largest state vector this rank will ever hand over; see ensure_initialized().
+_pdaf = {'initialized': False, 'dim_p': 0, 'nens': 0, 'filter_kind': ''}
+
 def import_pypdaf():
     """
     Import pyPDAF, turning the ImportError into something actionable.
@@ -52,20 +59,31 @@ class PDAFAssimilator(BatchAssimilator):
        can reach it. Each rank therefore runs its own single-process PDAF, and the obs
        that the halo duplicates across tiles never meet in one PDAF obs vector -- which
        they would, and be assimilated twice, if PDAF's own domain decomposition
-       (PDAFomi_gather_obs across a filter communicator) were used instead.
+       (PDAFomi_gather_obs across a filter communicator) were used instead. PDAF itself is
+       initialized once per process, since it cannot be initialized twice, and every partition
+       reuses that one instance -- see ensure_initialized() and _pdaf above.
 
-    2. **The obs priors ride along in the state vector.** PDAF wants an obs operator
-       mapping state -> obs space; NEDAS has no H, it has H(x) already evaluated by each
-       Dataset's obs_operator. So the PDAF state vector is [state ; obs_prior] and the obs
-       operator is PDAFomi_obs_op_gridpoint picking out the appended entries (id_obs_p).
-       This is PDAF's standard trick for an arbitrary/non-linear H. The appended entries
-       are never part of a local analysis domain (init_dim_l only ever lists state
-       entries), so they are read and discarded, never updated.
+    2. **The obs operator serves NEDAS's obs_prior.** PDAF wants an obs operator mapping
+       state -> obs space; NEDAS has no H, it has H(x) already evaluated per member by each
+       Dataset's obs_operator. So obs_op_pdafomi ignores the state it is handed and returns
+       the stored obs prior, reading which member that is off a tag carried in the last entry
+       of the state vector -- rather than assuming the order PDAF loops over members in. The
+       tag belongs to no local analysis domain, so PDAF reads it and never writes it.
 
     Localization stays NEDAS's radius and taper, handed to PDAFomi as cradius/sradius and
     locweight; the parts of NEDAS's localization PDAFomi has no equivalent for (vertical,
-    temporal, cross-variable impact) are rejected up front in check_capabilities() rather
-    than silently dropped.
+    temporal, cross-variable impact) are rejected up front in check_localization_support()
+    rather than silently dropped.
+
+    One difference from the native ETKF survives and is deliberate: PDAF applies the taper as
+    textbook R-localization (Hunt et al. 2007), scaling the inverse obs error variance by the
+    weight w, whereas NEDAS's ETKF multiplies the whitened obs anomalies and the innovation by
+    w (ensemble_transform_weights), so its taper enters the analysis as w^2 -- a narrower
+    effective localization from the same hroi, and not the convention NEDAS's own EAKF uses
+    either. The two analyses are otherwise identical: with localization off they agree to
+    1e-15, and with the taper reconciled (sqrt(w) handed to NEDAS) to 1e-16; see
+    tests/test_pdaf_letkf.py. Nothing here compensates for it -- the point of this assimilator
+    is to run upstream's numerics as upstream wrote them.
     """
     filter_kind: str = 'LESTKF'
     subtype: int = 0
@@ -150,16 +168,11 @@ class PDAFAssimilator(BatchAssimilator):
         self._disttype = self.disttype_code(c)
         self._domainsize = self.domainsize(c)
 
-        # every rank runs its own single-process PDAF over the partitions it owns, see the
-        # class docstring. COMM_SELF for all four communicators, one model task, filter PE.
-        from mpi4py import MPI
-        comm = MPI.COMM_SELF.py2f()
-        self.pyPDAF.set_parallel(comm, comm, comm, comm, 1, 1, True, 0)
-
         c.message = 'preparing...'
         c.state.state_post = copy.deepcopy(c.state.state_prior)
 
         par_list = c.state.par_list[c.pid_mem]
+        nloc_max = self.max_locations(c)
         c.total_tasks = len(par_list)
         c.current_task = 0
         for par_id in par_list:
@@ -170,6 +183,8 @@ class PDAFAssimilator(BatchAssimilator):
             nloc = state_data['state_prior'].shape[-1]
             nlobs = obs_data['x'].size
             if nloc > 0 and nlobs > 0:
+                nfld = state_data['state_prior'].shape[1]
+                self.ensure_initialized(c, nfld * nloc_max)
                 self.analyze_partition(c, state_data, obs_data)
                 c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
             else:
@@ -185,35 +200,83 @@ class PDAFAssimilator(BatchAssimilator):
         """
         raise NotImplementedError("PDAFAssimilator analyses a whole partition at a time")
 
+    def max_locations(self, c) -> int:
+        """Unmasked grid points in the largest partition this rank owns (see ensure_initialized)."""
+        counts = []
+        for par_id in c.state.par_list[c.pid_mem]:
+            if len(c.grid.x.shape) == 2:
+                ist, ied, di, jst, jed, dj = c.state.partitions[par_id]
+                msk = c.grid.mask[jst:jed:dj, ist:ied:di]
+            else:
+                msk = c.grid.mask[c.state.partitions[par_id]]
+            counts.append(int(np.sum(~msk)))
+        return max(counts, default=0)
+
+    def ensure_initialized(self, c, dim_state_max: int) -> None:
+        """
+        Bring PDAF up, once for the whole process (see the _pdaf comment above).
+
+        The ensemble PDAF allocates here is never the one we analyse: each partition injects
+        its own in the prestep callback. What matters is that dim_p is large enough for every
+        partition this rank will hand over, and that dim_ens and the filter never change.
+        """
+        dim_p = dim_state_max + 1      # + the member tag, see analyze_partition
+        filter_kind = str(self.filter_kind).upper()
+        if _pdaf['initialized']:
+            if dim_p > _pdaf['dim_p'] or c.nens != _pdaf['nens'] or filter_kind != _pdaf['filter_kind']:
+                raise RuntimeError(
+                    f"PDAF is already initialized in this process for filter {_pdaf['filter_kind']}, "
+                    f"dim_p {_pdaf['dim_p']}, {_pdaf['nens']} members, and cannot be initialized "
+                    f"again (a second PDAF_init crashes); this analysis needs filter {filter_kind}, "
+                    f"dim_p {dim_p}, {c.nens} members. Changing the ensemble size, the partitioning "
+                    "or assimilator_def.filter_kind mid-run is therefore not supported.")
+            return
+
+        pyPDAF = self.pyPDAF
+        # PDAF runs entirely inside this rank: NEDAS has already made each partition a
+        # self-contained analysis problem, so all four communicators are MPI_COMM_SELF and
+        # PDAF sees one filter PE with the whole (partition-sized) state.
+        from mpi4py import MPI
+        comm = MPI.COMM_SELF.py2f()
+        pyPDAF.set_parallel(comm, comm, comm, comm, 1, 1, True, 0)
+
+        def init_ens_pdaf(_filtertype, _dim_p, _dim_ens, state_p, uinv, ens_p, status):
+            ens_p[:] = 0.0
+            return state_p, uinv, ens_p, status
+
+        param_int = np.array([dim_p, c.nens], dtype=np.intc)
+        param_real = np.array([float(self.forget)])
+        _, _, status = pyPDAF.init(FILTER_KINDS[filter_kind], int(self.subtype), 0,
+                                   param_int, param_int.size, param_real, param_real.size,
+                                   init_ens_pdaf, int(self.screen))
+        if status != 0:
+            raise RuntimeError(f"PDAF_init failed with status {status}")
+        _pdaf.update(initialized=True, dim_p=dim_p, nens=c.nens, filter_kind=filter_kind)
+
     def analyze_partition(self, c, state_data: dict, obs_data: dict) -> None:
         """
-        Run one PDAF offline analysis over a NEDAS partition, in place in state_data.
+        Run one PDAF analysis over a NEDAS partition, in place in state_data.
 
-        The PDAF state vector is [state ; obs_prior]:
-        entry n*nloc+l is field record n at location l, and the obs priors follow.
-        Each local analysis domain is one location l, holding its nfld field entries.
+        The PDAF state vector is the partition's state, entry n*nloc+l being field record n at
+        location l, padded out to the process-wide dim_p, with the member index in the last
+        entry (the tag, see obs_op_pdafomi). Each local analysis domain is one location l,
+        holding its nfld field entries; the padding and the tag belong to no domain, so PDAF
+        reads them and never writes them.
         """
         pyPDAF = self.pyPDAF
         state_prior = state_data['state_prior']
         nens, nfld, nloc = state_prior.shape
-        nlobs = obs_data['x'].size
         dim_state = nfld * nloc
-        dim_p = dim_state + nlobs
-
-        ens_prior = np.empty((dim_p, nens))
-        ens_prior[:dim_state] = state_prior.reshape(nens, dim_state).T
-        ens_prior[dim_state:] = obs_data['obs_prior'].T
+        dim_p = _pdaf['dim_p']
+        tag = dim_p - 1
 
         # obs are grouped by obs record: each record has its own hroi, and PDAFomi carries
         # cradius per obs type, not per obs
         obs_rec_ids = np.unique(obs_data['obs_rec_id'])
         obs_types = [(int(r), np.where(obs_data['obs_rec_id'] == r)[0]) for r in obs_rec_ids]
+        obs_prior = np.ascontiguousarray(obs_data['obs_prior'], dtype=np.float64)
 
-        analysis = {}   # filled by the prepoststep callback below
-
-        def init_ens_pdaf(_filtertype, _dim_p, _dim_ens, state_p, uinv, ens_p, status):
-            ens_p[:] = ens_prior
-            return state_p, uinv, ens_p, status
+        analysis = {'called': False}   # filled by the prepoststep callback below
 
         def init_n_domains_pdaf(_step, _ndomains):
             return nloc
@@ -231,9 +294,10 @@ class PDAFAssimilator(BatchAssimilator):
                 pyPDAF.PDAFomi.set_doassim(i_obs, 1)
                 pyPDAF.PDAFomi.set_disttype(i_obs, self._disttype)
                 pyPDAF.PDAFomi.set_ncoord(i_obs, 2)
-                # identity obs operator onto the appended obs_prior entries (1-based)
-                id_obs_p = np.zeros((1, ind.size), dtype=np.intc, order='F')
-                id_obs_p[0] = dim_state + ind + 1
+                # id_obs_p is what PDAFomi's own obs operators use to pick observed entries out
+                # of the state vector; ours does not go through them (see obs_op_pdafomi), so
+                # these are dummies -- but OMI wants the array set, so they have to be valid.
+                id_obs_p = np.ones((1, ind.size), dtype=np.intc, order='F')
                 pyPDAF.PDAFomi.set_id_obs_p(i_obs, 1, ind.size, id_obs_p)
                 pyPDAF.PDAFomi.set_use_global_obs(i_obs, 1)
                 if self._disttype == 1:
@@ -250,8 +314,24 @@ class PDAFAssimilator(BatchAssimilator):
             return dim_obs
 
         def obs_op_pdafomi(_step, _dim_p, _dim_obs_p, state_p, ostate):
-            for i_obs in range(1, len(obs_types) + 1):
-                ostate = pyPDAF.PDAFomi.obs_op_gridpoint(i_obs, state_p, ostate)
+            """
+            H(x) for one ensemble member -- read out of NEDAS's obs_prior rather than computed.
+
+            NEDAS has no H to give PDAF: each Dataset evaluates its own obs operator per member,
+            long before the analysis. So this hands PDAF the obs prior NEDAS already has, and
+            the member it belongs to is read off the tag in the state vector rather than assumed
+            from the order PDAF happens to loop in.
+            """
+            member = float(state_p[tag])
+            m = int(round(member))
+            if abs(member - m) > 1e-9 or not 0 <= m < nens:
+                raise RuntimeError(
+                    f"PDAF asked for H(x) of a state vector whose member tag is {member}: it is "
+                    "applying the obs operator to something other than a single ensemble member "
+                    "(the ensemble mean, say), which this interface cannot serve from obs_prior.")
+            for i_obs, (_, ind) in enumerate(obs_types, start=1):
+                ostate = pyPDAF.PDAFomi.gather_obsstate(
+                    i_obs, np.ascontiguousarray(obs_prior[m, ind]), ostate)
             return ostate
 
         def init_dim_obs_l_pdafomi(domain_p, _step, _dim_obs, _dim_obs_l):
@@ -266,36 +346,36 @@ class PDAFAssimilator(BatchAssimilator):
                                                                hroi, hroi, dim_obs_l)
             return dim_obs_l
 
-        def prepoststep_pdaf(step, _dim_p, _dim_ens, _dim_ens_p, _dim_obs_p,
+        def prepoststep_pdaf(_step, _dim_p, _dim_ens, _dim_ens_p, _dim_obs_p,
                              state_p, uinv, ens_p, _flag):
-            # called twice by assim_offline, before (step<0) and after the analysis
-            if step >= 0:
+            # assim_offline calls this exactly twice, once before and once after the analysis.
+            # Which is which is taken from the call order, not from the sign of step: offline,
+            # PDAF passes step 0 to the pre-analysis call, not the negative step the online
+            # interface documents.
+            #
+            # The pre-analysis call is where this partition's ensemble goes in: PDAF holds one
+            # ensemble array for the whole process (it can only be initialized once), so every
+            # partition writes its own state into it here -- ens_p is a view on PDAF's own
+            # array, so the write lands in Fortran -- and reads the analysis back out after.
+            if not analysis['called']:
+                ens_p[:] = 0.0
+                ens_p[:dim_state] = state_prior.reshape(nens, dim_state).T
+                ens_p[tag] = np.arange(nens)
+                analysis['called'] = True
+            else:
                 analysis['ens'] = ens_p.copy()
             return state_p, uinv, ens_p
 
-        param_int = np.array([dim_p, nens], dtype=np.intc)
-        param_real = np.array([float(self.forget)])
-        _, _, status = pyPDAF.init(FILTER_KINDS[str(self.filter_kind).upper()],
-                                   int(self.subtype), 0,
-                                   param_int, param_int.size, param_real, param_real.size,
-                                   init_ens_pdaf, int(self.screen))
+        pyPDAF.PDAFomi.init(len(obs_types))
+        pyPDAF.PDAFomi.init_local()
+        status = pyPDAF.assim_offline(init_dim_obs_pdafomi, obs_op_pdafomi,
+                                      init_n_domains_pdaf, init_dim_l_pdaf,
+                                      init_dim_obs_l_pdafomi, prepoststep_pdaf, 0)
         if status != 0:
-            raise RuntimeError(f"PDAF_init failed with status {status}")
-        try:
-            pyPDAF.PDAFomi.init(len(obs_types))
-            pyPDAF.PDAFomi.init_local()
-            status = pyPDAF.assim_offline(init_dim_obs_pdafomi, obs_op_pdafomi,
-                                          init_n_domains_pdaf, init_dim_l_pdaf,
-                                          init_dim_obs_l_pdafomi, prepoststep_pdaf, 0)
-            if status != 0:
-                raise RuntimeError(f"PDAF analysis failed with status {status}")
-        finally:
-            # PDAF holds the ensemble and obs arrays for this partition's dimensions;
-            # the next partition has different ones, so it starts from a clean PDAF
-            pyPDAF.PDAF.deallocate()
-
+            raise RuntimeError(f"PDAF analysis failed with status {status}")
         if 'ens' not in analysis:
-            raise RuntimeError("PDAF returned no analysis ensemble (prepoststep was not called)")
+            raise RuntimeError("PDAF returned no analysis ensemble: prepoststep ran "
+                               f"{1 if analysis['called'] else 0} time(s), not twice")
         state_prior[:] = analysis['ens'][:dim_state].T.reshape(nens, nfld, nloc)
 
     @staticmethod

@@ -10,6 +10,13 @@ square root they take (and PDAF applies its own type_trans rotation), so the com
 the posterior mean and covariance rather than member by member -- those are what the filter
 is defined by, and a real numerics change upstream moves them.
 
+The comparison also accounts for one genuine difference of convention between the two codes:
+the localization taper enters PDAF's analysis linearly and NEDAS's ETKF squared. See
+native_etkf_analysis() below; it is the reason the reference is handed sqrt(GC).
+
+PDAF can only be initialized once per process (a second PDAF_init crashes), so the filter
+kinds cannot be swept in one test run -- one process per kind, if you want that.
+
 The rest are structural checks that need no pyPDAF: the configuration PDAFomi cannot express
 (vertical/temporal/cross-variable localization) has to be refused rather than silently dropped.
 """
@@ -17,7 +24,7 @@ import unittest
 import numpy as np
 
 from NEDAS.assim_tools.assimilators.PDAF.core import (
-    PDAFAssimilator, FILTER_KINDS, LOC_WEIGHTS, NEDAS_TO_PDAF_WEIGHT,
+    PDAFAssimilator, FILTER_KINDS, LOC_WEIGHTS, NEDAS_TO_PDAF_WEIGHT, import_pypdaf,
 )
 from NEDAS.assim_tools.assimilators.ETKF.core import local_analysis_main
 from NEDAS.assim_tools.localization.distance_based import gaspari_cohn_func
@@ -64,13 +71,25 @@ def make_partition(seed=42):
 
 
 def native_etkf_analysis(state_data, obs_data):
-    """the same partition through NEDAS's own ETKF, as the reference"""
+    """
+    The same partition through NEDAS's own ETKF, as the reference.
+
+    The localization factor is passed as sqrt(GC) here, and that is not a fudge: the two codes
+    taper by different powers of the same function. PDAF does textbook R-localization (Hunt et
+    al. 2007), scaling the inverse observation error variance by the weight w, while NEDAS's
+    ETKF multiplies the whitened obs anomalies AND the innovation by w
+    (ensemble_transform_weights, whitening_factor = local_factor / obs_err_std), which enters
+    the analysis Hessian as w^2. Handing NEDAS sqrt(w) makes its w^2 equal PDAF's w, and the
+    two then agree to roundoff -- as they also do with no localization at all. Without it they
+    differ by ~5e-2 in the posterior mean here, which is the real difference between a GC and a
+    GC^2 taper, not a numerical discrepancy.
+    """
     state_post = state_data['state_prior'].copy()
     no_static_state = np.zeros((0, NFLD, NLOC))
     no_static_obs = np.zeros((0, NLOBS))
     for loc_id in range(NLOC):
         hdist = np.abs(obs_data['x'] - state_data['x'][loc_id])
-        hlfactor = gaspari_cohn_func(hdist, HROI)
+        hlfactor = np.sqrt(gaspari_cohn_func(hdist, HROI))
         local_analysis_main(state_post[..., loc_id], obs_data['obs_prior'],
                             no_static_state[..., loc_id], no_static_obs,
                             obs_data['obs'], obs_data['err_std'], hlfactor,
@@ -83,12 +102,20 @@ def native_etkf_analysis(state_data, obs_data):
     return state_post
 
 
+class FakeContext:
+    """the two things ensure_initialized reads off the Context"""
+    def __init__(self, nens):
+        self.nens = nens
+
+
 def make_assimilator(**kwargs):
     """
     A PDAFAssimilator without a Context: analyze_partition only needs the settings
-    that assimilation_algorithm would have derived from the config and the grid.
+    that assimilation_algorithm would have derived from the config and the grid, plus
+    the process-wide PDAF_init that ensure_initialized() does.
     """
     self = PDAFAssimilator.__new__(PDAFAssimilator)
+    self.pyPDAF = import_pypdaf()
     self.filter_kind = kwargs.get('filter_kind', 'LETKF')
     self.subtype = kwargs.get('subtype', 0)
     self.forget = kwargs.get('forget', 1.0)
@@ -96,6 +123,7 @@ def make_assimilator(**kwargs):
     self._locweight = LOC_WEIGHTS['gaspari_cohn']
     self._disttype = 0
     self._domainsize = np.array([-1.0, -1.0])
+    self.ensure_initialized(FakeContext(NENS), NFLD * NLOC)
     return self
 
 
@@ -131,10 +159,10 @@ class TestPDAFAnalysis(unittest.TestCase):
         reference = native_etkf_analysis(self.state_data, self.obs_data)
         # mean and covariance define the analysis; the ensemble members themselves differ
         # by the square-root convention each filter picks
-        np.testing.assert_allclose(post.mean(axis=0), reference.mean(axis=0), atol=1e-8)
+        np.testing.assert_allclose(post.mean(axis=0), reference.mean(axis=0), atol=1e-12)
         for loc_id in range(NLOC):
             np.testing.assert_allclose(np.cov(post[..., loc_id], rowvar=False),
-                                       np.cov(reference[..., loc_id], rowvar=False), atol=1e-8)
+                                       np.cov(reference[..., loc_id], rowvar=False), atol=1e-12)
 
     def test_analysis_reduces_spread(self):
         post = self.analyze()
@@ -148,10 +176,14 @@ class TestPDAFAnalysis(unittest.TestCase):
         make_assimilator().analyze_partition(None, state_data, obs_data)
         np.testing.assert_allclose(state_data['state_prior'], self.prior, atol=1e-12)
 
-    def test_filter_kinds_run(self):
-        for filter_kind in FILTER_KINDS:
-            post = self.analyze(filter_kind=filter_kind)
-            self.assertTrue(np.isfinite(post).all(), filter_kind)
+    def test_second_filter_kind_is_refused(self):
+        # PDAF cannot be initialized twice in a process, so a run cannot switch filters
+        # halfway (an assimilator_def.type per-iteration dict, say). That has to be an
+        # error rather than the segfault a second PDAF_init would give.
+        self.analyze(filter_kind='LETKF')
+        with self.assertRaises(RuntimeError) as err:
+            make_assimilator(filter_kind='LESTKF')
+        self.assertIn('already initialized', str(err.exception))
 
 
 if __name__ == '__main__':

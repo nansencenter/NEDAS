@@ -248,21 +248,38 @@ compiler, MPI and BLAS/LAPACK:
 
 .. code-block:: bash
 
-   git clone --recursive https://github.com/yumengch/pyPDAF.git
+   git clone --recursive https://github.com/yumengch/pyPDAF.git   # PDAF is a submodule
    cd pyPDAF
-   # set the compiler and BLAS/LAPACK options in meson.options for your machine
-   pip install .
+   FC=<mpi fortran wrapper> CC=<mpi c wrapper> pip install . --no-build-isolation \
+       -Csetup-args="-Dincdirs=<blas include>" \
+       -Csetup-args="-Dlibdirs=<blas lib>" \
+       -Csetup-args="-Dblas_lib=openblas"
 
 Build it inside the environment that runs NEDAS, with the same MPI that mpi4py was built
 against -- a mismatch there surfaces as a hang or a crash at the first PDAF call rather
-than as an import error.
+than as an import error. Note that meson does not search for MPI itself on Linux: MPI
+comes entirely from the wrapper compilers named in ``FC``/``CC``.
+``NEDAS/assim_tools/assimilators/PDAF/install_pypdaf_betzy.sh`` is a worked example of the
+above (and of the module pitfalls behind it) for betzy; see ``install_pypdaf.md`` next to it.
+
+Unlike the DART kernels, which are built serial, pyPDAF requires MPI: it is built against an
+MPI library and initializes MPI on import, so the ``PDAF`` assimilator cannot run in NEDAS's
+no-mpi4py serial fallback. It does not communicate, though -- PDAF is set up on
+``MPI_COMM_SELF`` and every rank analyses the partitions it owns on its own.
 
 PDAF-OMI localizes by horizontal distance alone, so the parts of NEDAS's localization it
 has no equivalent for (``vroi``, ``troi`` and ``impact_on_variable``) are refused at
 startup rather than silently dropped; use ``ETKF`` for those configurations.
 
 ``tests/test_pdaf_letkf.py`` checks PDAF's LETKF analysis against NEDAS's native ETKF on
-the same partition, and is skipped unless pyPDAF is installed.
+the same partition, and is skipped unless pyPDAF is installed. The two agree to roundoff
+once one difference of convention is accounted for: the localization taper enters PDAF's
+analysis linearly (textbook R-localization) and NEDAS's ETKF squared, so the same ``hroi``
+gives PDAF a wider effective localization.
+
+PDAF can only be initialized once per process, so the ensemble size, the partitioning and
+``assimilator_def.filter_kind`` cannot change within a run; NEDAS raises rather than letting
+a second initialization crash the job.
 
 Manual installation
 -------------------
