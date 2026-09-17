@@ -111,9 +111,21 @@ def native_etkf_analysis(state_data, obs_data, taper_power=0.5):
 
 
 class FakeContext:
-    """the two things ensure_initialized reads off the Context"""
+    """the bits of a Context these tests reach for"""
     def __init__(self, nens):
         self.nens = nens
+
+
+class Grid1DStub:
+    """NEDAS's Grid1D spells periodicity as a bool and has no y (lorenz96)"""
+    def __init__(self, cyclic, Lx):
+        self.cyclic, self.Lx, self.Ly = cyclic, Lx, 0
+
+
+class Grid2DStub:
+    """NEDAS's Grid spells it as a string: 'x', 'y', 'xy' or None (vort2d, qg, ...)"""
+    def __init__(self, cyclic_dim, Lx, Ly):
+        self.cyclic_dim, self.Lx, self.Ly = cyclic_dim, Lx, Ly
 
 
 def make_assimilator(**kwargs):
@@ -123,7 +135,6 @@ def make_assimilator(**kwargs):
     the process-wide PDAF_init that ensure_initialized() does.
     """
     self = PDAFAssimilator.__new__(PDAFAssimilator)
-    self.pyPDAF = import_pypdaf()
     self.filter_kind = kwargs.get('filter_kind', 'LETKF')
     self.subtype = kwargs.get('subtype', 0)
     self.forget = kwargs.get('forget', 1.0)
@@ -147,6 +158,23 @@ class TestPDAFMapping(unittest.TestCase):
     def test_localization_taper_maps_to_pdafomi(self):
         for nedas_type, code in NEDAS_TO_PDAF_WEIGHT.items():
             self.assertIn(code, LOC_WEIGHTS.values(), nedas_type)
+
+    def test_cyclic_grids_get_a_periodic_disttype(self):
+        # NEDAS's two grid classes spell periodicity differently, and getting this wrong is
+        # invisible except near the domain edge: Lorenz-96 is a ring, and reading only
+        # cyclic_dim left PDAF localizing it as if it had two open ends.
+        a = PDAFAssimilator.__new__(PDAFAssimilator)
+        a.disttype = -1
+        for grid, expect_disttype, expect_size in [
+                (Grid1DStub(cyclic=True, Lx=40.0), 1, [40.0, -1.0]),     # lorenz96
+                (Grid1DStub(cyclic=False, Lx=40.0), 0, [-1.0, -1.0]),
+                (Grid2DStub(cyclic_dim='x', Lx=10.0, Ly=5.0), 1, [10.0, -1.0]),
+                (Grid2DStub(cyclic_dim='xy', Lx=10.0, Ly=5.0), 1, [10.0, 5.0]),  # vort2d
+                (Grid2DStub(cyclic_dim=None, Lx=10.0, Ly=5.0), 0, [-1.0, -1.0])]:
+            c = FakeContext(NENS)
+            c.grid = grid
+            self.assertEqual(a.disttype_code(c), expect_disttype, grid)
+            np.testing.assert_array_equal(a.domainsize(c), expect_size)
 
 
 @unittest.skipUnless(HAS_PYPDAF, "pyPDAF is not installed (see PDAF/install_pypdaf.md)")

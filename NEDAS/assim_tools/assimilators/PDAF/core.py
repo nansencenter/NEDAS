@@ -30,6 +30,11 @@ def import_pypdaf():
     """
     Import pyPDAF, turning the ImportError into something actionable.
 
+    Called where it is needed rather than cached on the assimilator: in offline io_mode the
+    scheduler pickles the assimilator out to worker processes, and a module attribute makes
+    that fail with "cannot pickle 'module' object" (found in the first offline L96 run,
+    2026-09-17). Python's own module cache makes the repeated import free.
+
     pyPDAF is not on PyPI or conda-forge (checked 2026-09-16); it is built from source
     against a PDAF release, see install_pypdaf.md next to this file.
     """
@@ -154,16 +159,33 @@ class PDAFAssimilator(BatchAssimilator):
                 f"grid.distance_type '{c.grid.distance_type}' does not map onto a PDAFomi "
                 "disttype automatically; set assimilator_def.disttype (2 or 3 for geographic, "
                 "with coordinates in radians).")
-        return 1 if getattr(c.grid, 'cyclic_dim', None) else 0
+        return 1 if any(self.cyclic_axes(c)) else 0
+
+    @staticmethod
+    def cyclic_axes(c) -> tuple:
+        """
+        Which of x, y wrap around, for both of NEDAS's grid classes.
+
+        Grid (2D) carries cyclic_dim, a string ('x', 'y', 'xy' or None); Grid1D carries a plain
+        cyclic flag and has no y. Reading only cyclic_dim silently localized Lorenz-96 -- a ring
+        -- as if it had two open ends, which is how this was found (2026-09-17, first end-to-end
+        L96 run): NEDAS's own distance wrapped, PDAF's did not, so the two disagreed only near
+        x=0 and x=Lx.
+        """
+        grid = c.grid
+        if hasattr(grid, 'cyclic_dim'):
+            cyclic = str(grid.cyclic_dim or '')
+            return 'x' in cyclic, 'y' in cyclic
+        return bool(getattr(grid, 'cyclic', False)), False
 
     def domainsize(self, c) -> np.ndarray:
         """Periodicity lengths for disttype 1; a negative entry means not periodic."""
-        cyclic = str(getattr(c.grid, 'cyclic_dim', None) or '')
-        return np.array([c.grid.Lx if 'x' in cyclic else -1.0,
-                         c.grid.Ly if 'y' in cyclic else -1.0])
+        cyclic_x, cyclic_y = self.cyclic_axes(c)
+        return np.array([c.grid.Lx if cyclic_x else -1.0,
+                         c.grid.Ly if cyclic_y else -1.0])
 
     def assimilation_algorithm(self, c) -> None:
-        self.pyPDAF = import_pypdaf()
+        import_pypdaf()      # fail early, and with a useful message, if it is not installed
         self.check_localization_support(c)
         self._locweight = self.locweight_code(c)
         self._disttype = self.disttype_code(c)
@@ -233,7 +255,7 @@ class PDAFAssimilator(BatchAssimilator):
                     "or assimilator_def.filter_kind mid-run is therefore not supported.")
             return
 
-        pyPDAF = self.pyPDAF
+        pyPDAF = import_pypdaf()
         # PDAF runs entirely inside this rank: NEDAS has already made each partition a
         # self-contained analysis problem, so all four communicators are MPI_COMM_SELF and
         # PDAF sees one filter PE with the whole (partition-sized) state.
@@ -264,7 +286,7 @@ class PDAFAssimilator(BatchAssimilator):
         holding its nfld field entries; the padding and the tag belong to no domain, so PDAF
         reads them and never writes them.
         """
-        pyPDAF = self.pyPDAF
+        pyPDAF = import_pypdaf()
         state_prior = state_data['state_prior']
         nens, nfld, nloc = state_prior.shape
         dim_state = nfld * nloc
