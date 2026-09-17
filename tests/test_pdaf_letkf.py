@@ -10,9 +10,12 @@ square root they take (and PDAF applies its own type_trans rotation), so the com
 the posterior mean and covariance rather than member by member -- those are what the filter
 is defined by, and a real numerics change upstream moves them.
 
-The comparison also accounts for one genuine difference of convention between the two codes:
-the localization taper enters PDAF's analysis linearly and NEDAS's ETKF squared. See
-native_etkf_analysis() below; it is the reason the reference is handed sqrt(GC).
+Each assimilator reproduces the formulation of the code it comes from, differences included --
+that is the point of having several: comparing them measures what an implementation's own
+choices do to a method the literature calls the same. One such difference shows up here, in
+how the localization taper enters the analysis (linearly for PDAF, squared for NEDAS's ETKF),
+and the tests below both measure it and hold everything else to roundoff, so that a real
+numerics change upstream cannot hide behind it. Neither side is adjusted to match the other.
 
 PDAF can only be initialized once per process (a second PDAF_init crashes), so the filter
 kinds cannot be swept in one test run -- one process per kind, if you want that.
@@ -70,26 +73,31 @@ def make_partition(seed=42):
     return state_data, obs_data
 
 
-def native_etkf_analysis(state_data, obs_data):
+def native_etkf_analysis(state_data, obs_data, taper_power=0.5):
     """
     The same partition through NEDAS's own ETKF, as the reference.
 
-    The localization factor is passed as sqrt(GC) here, and that is not a fudge: the two codes
-    taper by different powers of the same function. PDAF does textbook R-localization (Hunt et
-    al. 2007), scaling the inverse observation error variance by the weight w, while NEDAS's
-    ETKF multiplies the whitened obs anomalies AND the innovation by w
-    (ensemble_transform_weights, whitening_factor = local_factor / obs_err_std), which enters
-    the analysis Hessian as w^2. Handing NEDAS sqrt(w) makes its w^2 equal PDAF's w, and the
-    two then agree to roundoff -- as they also do with no localization at all. Without it they
-    differ by ~5e-2 in the posterior mean here, which is the real difference between a GC and a
-    GC^2 taper, not a numerical discrepancy.
+    ``taper_power`` selects which taper the reference runs with, and exists to separate the two
+    things that could make the codes disagree:
+
+    * ``1.0`` -- each code as its own source formulates it. PDAF does textbook R-localization
+      (Hunt et al. 2007), scaling the inverse observation error variance by the weight w, while
+      NEDAS's ETKF multiplies the whitened obs anomalies AND the innovation by w
+      (ensemble_transform_weights, whitening_factor = local_factor / obs_err_std), so its taper
+      enters the analysis Hessian as w^2. The same hroi therefore localizes more tightly in
+      NEDAS's ETKF than in PDAF's LETKF. That gap is a property of the two implementations, and
+      test_taper_convention_differs measures it rather than removing it.
+    * ``0.5`` -- the reference is handed sqrt(w), so its w^2 equals PDAF's w and the taper drops
+      out of the comparison. Everything else in the two analyses then has to agree to roundoff,
+      which is what makes test_letkf_matches_native_etkf a usable regression test on upstream's
+      numerics: with the known difference held fixed, anything that moves is a new one.
     """
     state_post = state_data['state_prior'].copy()
     no_static_state = np.zeros((0, NFLD, NLOC))
     no_static_obs = np.zeros((0, NLOBS))
     for loc_id in range(NLOC):
         hdist = np.abs(obs_data['x'] - state_data['x'][loc_id])
-        hlfactor = np.sqrt(gaspari_cohn_func(hdist, HROI))
+        hlfactor = gaspari_cohn_func(hdist, HROI) ** taper_power
         local_analysis_main(state_post[..., loc_id], obs_data['obs_prior'],
                             no_static_state[..., loc_id], no_static_obs,
                             obs_data['obs'], obs_data['err_std'], hlfactor,
@@ -155,14 +163,29 @@ class TestPDAFAnalysis(unittest.TestCase):
         return state_data['state_prior']
 
     def test_letkf_matches_native_etkf(self):
+        # with the taper difference held fixed (taper_power 0.5, see native_etkf_analysis),
+        # nothing else may differ: this is the check that catches upstream numerics moving.
         post = self.analyze(filter_kind='LETKF')
-        reference = native_etkf_analysis(self.state_data, self.obs_data)
+        reference = native_etkf_analysis(self.state_data, self.obs_data, taper_power=0.5)
         # mean and covariance define the analysis; the ensemble members themselves differ
         # by the square-root convention each filter picks
         np.testing.assert_allclose(post.mean(axis=0), reference.mean(axis=0), atol=1e-12)
         for loc_id in range(NLOC):
             np.testing.assert_allclose(np.cov(post[..., loc_id], rowvar=False),
                                        np.cov(reference[..., loc_id], rowvar=False), atol=1e-12)
+
+    def test_taper_convention_differs(self):
+        # run as each code formulates it: same method, same hroi, same observations, and a
+        # posterior that differs by ~5e-2 here purely because the taper enters linearly in one
+        # and squared in the other. Pinned so that a change of formulation on either side is
+        # visible as a test failure rather than as a quiet shift in everyone's tuned hroi.
+        post = self.analyze(filter_kind='LETKF')
+        as_formulated = native_etkf_analysis(self.state_data, self.obs_data, taper_power=1.0)
+        difference = np.abs(post.mean(axis=0) - as_formulated.mean(axis=0)).max()
+        self.assertGreater(difference, 1e-3)
+        # ... and PDAF's wider taper keeps more of the observations, so it moves the mean further
+        self.assertGreater(np.abs(post.mean(axis=0) - self.prior.mean(axis=0)).max(),
+                           np.abs(as_formulated.mean(axis=0) - self.prior.mean(axis=0)).max())
 
     def test_analysis_reduces_spread(self):
         post = self.analyze()

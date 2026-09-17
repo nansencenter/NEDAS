@@ -272,10 +272,12 @@ has no equivalent for (``vroi``, ``troi`` and ``impact_on_variable``) are refuse
 startup rather than silently dropped; use ``ETKF`` for those configurations.
 
 ``tests/test_pdaf_letkf.py`` checks PDAF's LETKF analysis against NEDAS's native ETKF on
-the same partition, and is skipped unless pyPDAF is installed. The two agree to roundoff
-once one difference of convention is accounted for: the localization taper enters PDAF's
-analysis linearly (textbook R-localization) and NEDAS's ETKF squared, so the same ``hroi``
-gives PDAF a wider effective localization.
+the same partition, and is skipped unless pyPDAF is installed. Each assimilator runs the
+formulation of the code it comes from, so the comparison measures the difference rather than
+removing it: the localization taper enters PDAF's analysis linearly (textbook
+R-localization) and NEDAS's ETKF squared, so the same ``hroi`` localizes more tightly in the
+native ETKF. With that difference held fixed the two agree to roundoff, which is what turns
+the test into a regression check on upstream's numerics.
 
 PDAF can only be initialized once per process, so the ensemble size, the partitioning and
 ``assimilator_def.filter_kind`` cannot change within a run; NEDAS raises rather than letting

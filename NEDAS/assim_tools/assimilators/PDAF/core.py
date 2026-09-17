@@ -75,15 +75,16 @@ class PDAFAssimilator(BatchAssimilator):
     temporal, cross-variable impact) are rejected up front in check_localization_support()
     rather than silently dropped.
 
-    One difference from the native ETKF survives and is deliberate: PDAF applies the taper as
-    textbook R-localization (Hunt et al. 2007), scaling the inverse obs error variance by the
-    weight w, whereas NEDAS's ETKF multiplies the whitened obs anomalies and the innovation by
-    w (ensemble_transform_weights), so its taper enters the analysis as w^2 -- a narrower
+    This runs PDAF's formulation, not a version of it adjusted to agree with NEDAS's own ETKF.
+    One difference is known and left standing: PDAF applies the taper as textbook
+    R-localization (Hunt et al. 2007), scaling the inverse obs error variance by the weight w,
+    whereas NEDAS's ETKF multiplies the whitened obs anomalies and the innovation by w
+    (ensemble_transform_weights), so its taper enters the analysis as w^2 -- a tighter
     effective localization from the same hroi, and not the convention NEDAS's own EAKF uses
-    either. The two analyses are otherwise identical: with localization off they agree to
-    1e-15, and with the taper reconciled (sqrt(w) handed to NEDAS) to 1e-16; see
-    tests/test_pdaf_letkf.py. Nothing here compensates for it -- the point of this assimilator
-    is to run upstream's numerics as upstream wrote them.
+    either. That is a result this interface exists to produce: what a given code's own choices
+    do to a method the literature calls the same. Everything else is identical -- with
+    localization off the two agree to 1e-15, and with the taper held fixed to 1e-16, which is
+    what makes tests/test_pdaf_letkf.py a regression test on upstream's numerics.
     """
     filter_kind: str = 'LESTKF'
     subtype: int = 0
