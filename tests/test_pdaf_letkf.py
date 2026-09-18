@@ -215,6 +215,22 @@ class TestPDAFAnalysis(unittest.TestCase):
         self.assertGreater(np.abs(post.mean(axis=0) - self.prior.mean(axis=0)).max(),
                            np.abs(as_formulated.mean(axis=0) - self.prior.mean(axis=0)).max())
 
+    def test_integer_grid_coordinates(self):
+        # a grid built from integer spacing (vort3d: np.arange(nx)*dx) hands the assimilator
+        # integer coordinates; pyPDAF's typed memoryviews only take float64, and this went
+        # undetected until the first 3-D run because lorenz96's coordinates are floats.
+        state_data = dict(self.state_data)
+        state_data['state_prior'] = self.prior.copy()
+        state_data['x'] = (self.state_data['x'] * 1000).astype(np.int64)
+        state_data['y'] = np.zeros(NLOC, dtype=np.int64)
+        obs_data = dict(self.obs_data)
+        obs_data['x'] = (self.obs_data['x'] * 1000).astype(np.int64)
+        obs_data['y'] = np.zeros(NLOBS, dtype=np.int64)
+        obs_data['hroi'] = np.array([HROI * 1000])
+        make_assimilator().analyze_partition(None, state_data, obs_data)
+        self.assertTrue(np.isfinite(state_data['state_prior']).all())
+        self.assertFalse(np.allclose(state_data['state_prior'], self.prior))
+
     def test_analysis_reduces_spread(self):
         post = self.analyze()
         self.assertLessEqual(np.std(post, axis=0).mean(), np.std(self.prior, axis=0).mean())

@@ -182,7 +182,7 @@ class PDAFAssimilator(BatchAssimilator):
         """Periodicity lengths for disttype 1; a negative entry means not periodic."""
         cyclic_x, cyclic_y = self.cyclic_axes(c)
         return np.array([c.grid.Lx if cyclic_x else -1.0,
-                         c.grid.Ly if cyclic_y else -1.0])
+                         c.grid.Ly if cyclic_y else -1.0], dtype=np.float64)
 
     def assimilation_algorithm(self, c) -> None:
         import_pypdaf()      # fail early, and with a useful message, if it is not installed
@@ -326,7 +326,7 @@ class PDAFAssimilator(BatchAssimilator):
                 if self._disttype == 1:
                     pyPDAF.PDAFomi.set_domainsize(i_obs, 2, self._domainsize)
 
-                ocoord_p = np.zeros((2, ind.size), order='F')
+                ocoord_p = np.zeros((2, ind.size), dtype=np.float64, order='F')
                 ocoord_p[0] = obs_data['x'][ind]
                 ocoord_p[1] = obs_data['y'][ind]
                 # PDAF works with the inverse obs error variance (diagonal R)
@@ -359,7 +359,11 @@ class PDAFAssimilator(BatchAssimilator):
 
         def init_dim_obs_l_pdafomi(domain_p, _step, _dim_obs, _dim_obs_l):
             loc_id = domain_p - 1
-            coords_l = np.array([state_data['x'][loc_id], state_data['y'][loc_id]])
+            # float64 explicitly: a grid built from integer spacing (vort3d's
+            # np.arange(nx)*dx, say) hands us integer coordinates, and pyPDAF's typed
+            # memoryview rejects them with "Buffer dtype mismatch, expected 'double'"
+            coords_l = np.array([state_data['x'][loc_id], state_data['y'][loc_id]],
+                                dtype=np.float64)
             dim_obs_l = 0
             for i_obs, (obs_rec_id, _) in enumerate(obs_types, start=1):
                 hroi = self.hroi(obs_data, obs_rec_id)
