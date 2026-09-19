@@ -5,8 +5,9 @@
 #   LNETF   local nonlinear ensemble transform filter
 #   LKNETF  local hybrid Kalman-nonlinear ensemble transform filter
 # Only the domain-localized filters are offered: their local-domain loop is what maps onto
-# NEDAS's per-gridpoint batch analysis. PDAF's global filters would ignore localization,
-# and LEnKF localizes the covariance instead (a different interface, not wired up here).
+# NEDAS's per-partition batch analysis. PDAF's global filters would see only the obs NEDAS
+# has already cut down to the partition -- a hard edge, not a taper -- so they're left for
+# later; same for LEnKF (covariance localization, a different interface) and 3DVAR.
 filter_kind: LESTKF
 
 # PDAF subtype of the chosen filter (see PDAF's AvailableOptionsforInitPDAF wiki page);

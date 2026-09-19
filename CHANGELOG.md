@@ -12,6 +12,8 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Added
+- `PDAF` assimilator: local ensemble filters (LSEIK/LETKF/LESTKF/LNETF/LKNETF)
+  via pyPDAF
 - `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error
   options ported from `enkf-topaz`, default off
 - `InterpolationAssimilator`: Cressman/OI local obs-only analysis

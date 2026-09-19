@@ -2,10 +2,13 @@ import copy
 import numpy as np
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
-# PDAF filtertype codes (PDAF_init), restricted to the domain-localized filters:
-# those are the ones whose analysis loop matches NEDAS's per-gridpoint batch loop.
-# The global filters (ETKF=4, ESTKF=6, ...) and LEnKF=8 (covariance localization
-# through PDAFomi_set_localize_covar, not a domain loop) are deliberately absent.
+# PDAF filtertype codes (PDAF_init), restricted to the domain-localized filters: those are
+# the ones whose analysis loop matches NEDAS's per-gridpoint batch loop. PDAF3's generic
+# assim_offline can also drive global filters (ETKF, ESTKF, ...), but "global" there means
+# the whole partition, not the whole domain -- NEDAS has already cut obs down to what's
+# within hroi of the partition (BatchAssimilator.assign_obs), so a global PDAF analysis
+# would see a hard partition-edge cutoff instead of a taper. Left for later, along with
+# 3DVAR, which needs a linear+adjoint obs operator NEDAS doesn't always have.
 FILTER_KINDS = {'LSEIK': 3, 'LETKF': 5, 'LESTKF': 7, 'LNETF': 10, 'LKNETF': 11}
 
 # PDAFomi weight functions (PDAFomi_init_dim_obs_l_iso locweight):
@@ -70,10 +73,9 @@ class PDAFAssimilator(BatchAssimilator):
 
     2. **The obs operator serves NEDAS's obs_prior.** PDAF wants an obs operator mapping
        state -> obs space; NEDAS has no H, it has H(x) already evaluated per member by each
-       Dataset's obs_operator. So obs_op_pdafomi ignores the state it is handed and returns
-       the stored obs prior, reading which member that is off a tag carried in the last entry
-       of the state vector -- rather than assuming the order PDAF loops over members in. The
-       tag belongs to no local analysis domain, so PDAF reads it and never writes it.
+       Dataset's obs_operator. So obs_op_pdafomi ignores the state it is handed and returns the
+       stored obs prior, taking *which member* is wanted from PDAF's own
+       PDAF_get_obsmemberid (0 = the central state, served as the obs-prior mean).
 
     Localization stays NEDAS's radius and taper, handed to PDAFomi as cradius/sradius and
     locweight; the parts of NEDAS's localization PDAFomi has no equivalent for (vertical,
@@ -243,7 +245,7 @@ class PDAFAssimilator(BatchAssimilator):
         its own in the prestep callback. What matters is that dim_p is large enough for every
         partition this rank will hand over, and that dim_ens and the filter never change.
         """
-        dim_p = dim_state_max + 1      # + the member tag, see analyze_partition
+        dim_p = dim_state_max       # the partition state and nothing else, see analyze_partition
         filter_kind = str(self.filter_kind).upper()
         if _pdaf['initialized']:
             if dim_p > _pdaf['dim_p'] or c.nens != _pdaf['nens'] or filter_kind != _pdaf['filter_kind']:
@@ -281,17 +283,15 @@ class PDAFAssimilator(BatchAssimilator):
         Run one PDAF analysis over a NEDAS partition, in place in state_data.
 
         The PDAF state vector is the partition's state, entry n*nloc+l being field record n at
-        location l, padded out to the process-wide dim_p, with the member index in the last
-        entry (the tag, see obs_op_pdafomi). Each local analysis domain is one location l,
-        holding its nfld field entries; the padding and the tag belong to no domain, so PDAF
-        reads them and never writes them.
+        location l, padded out to the process-wide dim_p. Each local analysis domain is one
+        location l, holding its nfld field entries; the padding belongs to no domain and
+        stays zero, so it contributes no covariance.
         """
         pyPDAF = import_pypdaf()
         state_prior = state_data['state_prior']
         nens, nfld, nloc = state_prior.shape
         dim_state = nfld * nloc
         dim_p = _pdaf['dim_p']
-        tag = dim_p - 1
 
         # obs are grouped by obs record: each record has its own hroi, and PDAFomi carries
         # cradius per obs type, not per obs
@@ -338,23 +338,36 @@ class PDAFAssimilator(BatchAssimilator):
 
         def obs_op_pdafomi(_step, _dim_p, _dim_obs_p, state_p, ostate):
             """
-            H(x) for one ensemble member -- read out of NEDAS's obs_prior rather than computed.
+            H(x) -- served from NEDAS's obs_prior rather than computed.
 
             NEDAS has no H to give PDAF: each Dataset evaluates its own obs operator per member,
-            long before the analysis. So this hands PDAF the obs prior NEDAS already has, and
-            the member it belongs to is read off the tag in the state vector rather than assumed
-            from the order PDAF happens to loop in.
+            long before the analysis. So this hands PDAF the obs prior NEDAS already has.
+
+            Which member is being asked for comes from PDAF itself. PDAFobs_init sets its
+            obs_member module variable before each call to the obs operator (`obs_member =
+            member` inside its ENS1 loop, and 0 for the central state), and
+            PDAF_get_obsmemberid reads it back. That is 1-based for a member, 0 for the
+            ensemble mean -- which PDAF also applies the operator to when it wants H of the
+            mean, so both cases are served. The mean is taken as the mean of obs_prior, which
+            is the same thing when H is linear and the only option available here when it is
+            not (we have no H to evaluate at the mean state).
+
+            This replaced carrying the member index in a trailing entry of the state vector.
+            PDAF's own member id is exact, needs no padding, and -- unlike that tag -- cannot
+            leak into a filter that forms covariances in state space.
             """
-            member = float(state_p[tag])
-            m = int(round(member))
-            if abs(member - m) > 1e-9 or not 0 <= m < nens:
+            member = int(pyPDAF.PDAF.get_obsmemberid(0))
+            if member == 0:
+                x = obs_prior.mean(axis=0)              # central state / ensemble mean
+            elif 1 <= member <= nens:
+                x = obs_prior[member - 1]
+            else:
                 raise RuntimeError(
-                    f"PDAF asked for H(x) of a state vector whose member tag is {member}: it is "
-                    "applying the obs operator to something other than a single ensemble member "
-                    "(the ensemble mean, say), which this interface cannot serve from obs_prior.")
+                    f"PDAF asked for H(x) of ensemble member {member}, outside 1..{nens}: this "
+                    "interface serves obs_prior, which holds exactly one row per member.")
             for i_obs, (_, ind) in enumerate(obs_types, start=1):
                 ostate = pyPDAF.PDAFomi.gather_obsstate(
-                    i_obs, np.ascontiguousarray(obs_prior[m, ind]), ostate)
+                    i_obs, np.ascontiguousarray(x[ind], dtype=np.float64), ostate)
             return ostate
 
         def init_dim_obs_l_pdafomi(domain_p, _step, _dim_obs, _dim_obs_l):
@@ -385,9 +398,8 @@ class PDAFAssimilator(BatchAssimilator):
             # partition writes its own state into it here -- ens_p is a view on PDAF's own
             # array, so the write lands in Fortran -- and reads the analysis back out after.
             if not analysis['called']:
-                ens_p[:] = 0.0
+                ens_p[:] = 0.0     # dim_p may exceed this partition's state; pad (inert) with zeros
                 ens_p[:dim_state] = state_prior.reshape(nens, dim_state).T
-                ens_p[tag] = np.arange(nens)
                 analysis['called'] = True
             else:
                 analysis['ens'] = ens_p.copy()

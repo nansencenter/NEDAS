@@ -17,12 +17,17 @@ how the localization taper enters the analysis (linearly for PDAF, squared for N
 and the tests below both measure it and hold everything else to roundoff, so that a real
 numerics change upstream cannot hide behind it. Neither side is adjusted to match the other.
 
-PDAF can only be initialized once per process (a second PDAF_init crashes), so the filter
-kinds cannot be swept in one test run -- one process per kind, if you want that.
+PDAF can only be initialized once per process (a second PDAF_init crashes) and the filter kind
+is fixed at init, so no single process can run two filters. Everything that sweeps filter kinds
+here therefore runs one subprocess per kind (see _run_kind); the in-process tests never switch.
 
 The rest are structural checks that need no pyPDAF: the configuration PDAFomi cannot express
 (vertical/temporal/cross-variable localization) has to be refused rather than silently dropped.
 """
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
 import numpy as np
 
@@ -150,8 +155,13 @@ class TestPDAFMapping(unittest.TestCase):
     """the parts that do not need pyPDAF installed"""
 
     def test_only_domain_localized_filters_offered(self):
-        # PDAF's global filters would silently ignore NEDAS's localization, so they
-        # must not be reachable through filter_kind
+        # The codes have to be PDAF's own (PDAF_da.F90), because they are handed straight to
+        # PDAF_init; a version bump that renumbers them would otherwise be silent. PDAF's
+        # global filters would silently ignore NEDAS's localization (they'd see only the
+        # obs already cut down to the partition, a hard edge rather than a taper), so they
+        # must not be reachable through filter_kind.
+        self.assertEqual(FILTER_KINDS,
+                         {'LSEIK': 3, 'LETKF': 5, 'LESTKF': 7, 'LNETF': 10, 'LKNETF': 11})
         for name in FILTER_KINDS:
             self.assertTrue(name.startswith('L'), name)
 
@@ -251,6 +261,58 @@ class TestPDAFAnalysis(unittest.TestCase):
         with self.assertRaises(RuntimeError) as err:
             make_assimilator(filter_kind='LESTKF')
         self.assertIn('already initialized', str(err.exception))
+
+
+# Runs one filter kind over the test partition, in its own interpreter, and saves the
+# posterior. Inherits this module so the partition/assimilator helpers are the same ones.
+_KIND_DRIVER = '''
+import os, sys, warnings
+warnings.filterwarnings("ignore")
+import numpy as np
+sys.path.insert(0, os.environ["NEDAS_TEST_DIR"])
+import test_pdaf_letkf as T
+kind, hroi, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+state_data, obs_data = T.make_partition(seed=42)
+obs_data = dict(obs_data)
+obs_data["hroi"] = np.array([hroi])
+assim = T.make_assimilator(filter_kind=kind)
+sd = dict(state_data)
+sd["state_prior"] = state_data["state_prior"].copy()
+assim.analyze_partition(None, sd, obs_data)
+np.save(out, sd["state_prior"])
+'''
+
+
+def _run_kind(kind, hroi=HROI):
+    """Analyse the test partition with one PDAF filter kind, in a fresh process."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, 'post.npy')
+        env = dict(os.environ,
+                   NEDAS_TEST_DIR=os.path.dirname(os.path.abspath(__file__)))
+        run = subprocess.run([sys.executable, '-c', _KIND_DRIVER, kind, repr(hroi), out],
+                             capture_output=True, text=True, env=env, timeout=600)
+        if not os.path.exists(out):
+            raise AssertionError(f"{kind} produced no analysis (exit {run.returncode}):\n"
+                                 f"{run.stdout[-1500:]}\n{run.stderr[-1500:]}")
+        return np.load(out)
+
+
+@unittest.skipUnless(HAS_PYPDAF, 'pyPDAF is not importable')
+class TestPDAFFilterKinds(unittest.TestCase):
+    """Every offered filter kind, through this interface.
+
+    Each of these runs in its own process, so this class costs one interpreter per kind.
+    """
+
+    def test_every_offered_kind_analyses_a_partition(self):
+        prior = make_partition(seed=42)[0]['state_prior']
+        for kind in sorted(FILTER_KINDS):
+            with self.subTest(filter_kind=kind):
+                post = _run_kind(kind)
+                self.assertTrue(np.isfinite(post).all(), f'{kind} produced non-finite values')
+                self.assertEqual(post.shape, prior.shape)
+                # it has to have done something to every field
+                self.assertGreater(np.abs(post - prior).max(), 1e-8, kind)
 
 
 if __name__ == '__main__':
