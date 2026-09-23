@@ -10,7 +10,7 @@ Moreover, NEDAS offers a collection of state-of-the-art DA algorithms for benchm
 including the serial assimilation approaches (similar to [DART](https://github.com/NCAR/DART)) and
 batch assimilation approaches (similar to the LETKF in [PDAF](https://pdaf.awi.de/trac/wiki)).
 
-[NEDAS documentaion is available online](https://nedas.readthedocs.io/en/latest/)
+[NEDAS documentation is available online](https://nedas.readthedocs.io/en/latest/)
 
 [A series of tutorial notebooks are also available](https://github.com/myying/NEDAS_tutorials)
 

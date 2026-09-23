@@ -131,7 +131,7 @@ class SerialAssimilator(Assimilator):
                                     state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                     c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
-                                    impact_per_field)
+                                    c.localization_funcs['correlation'], impact_per_field)
 
             # 3. all pid update their own locally stored obs:
             obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
@@ -143,7 +143,7 @@ class SerialAssimilator(Assimilator):
                                   obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
-                                  obs_impact)
+                                  c.localization_funcs['correlation'], obs_impact)
 
         # ens-complete inverse transforms (probit)
         self.transform_ens_state_backward(state_data)

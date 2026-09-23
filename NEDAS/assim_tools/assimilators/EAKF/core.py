@@ -22,24 +22,24 @@ class EAKFAssimilator(SerialAssimilator):
     def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
-                           h_local_func, v_local_func, t_local_func,
+                           h_local_func, v_local_func, t_local_func, correlation_local_func,
                            impact_on_variable) -> None:
         return update_local_state_linear(state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
                                          state_h_dist, state_v_dist, state_t_dist,
                                          hroi, vroi, troi,
-                                         h_local_func, v_local_func, t_local_func,
+                                         h_local_func, v_local_func, t_local_func, correlation_local_func,
                                          impact_on_variable,
                                          self.weight_dynamic, self.weight_static, self.hybrid_perturbation)
 
     def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func,
+                         h_local_func, v_local_func, t_local_func, correlation_local_func,
                          impact_on_variable) -> None:
         return update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                                        h_dist, v_dist, t_dist,
                                        hroi, vroi, troi,
-                                       h_local_func, v_local_func, t_local_func,
+                                       h_local_func, v_local_func, t_local_func, correlation_local_func,
                                        impact_on_variable,
                                        self.weight_dynamic, self.weight_static, self.hybrid_perturbation)
 
@@ -92,7 +92,7 @@ def obs_increment_eakf(obs_prior, obs_prior_static, obs, obs_err,
 def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_static, obs_incr,
                               h_dist, v_dist, t_dist,
                               hroi, vroi, troi,
-                              h_local_func, v_local_func, t_local_func,
+                              h_local_func, v_local_func, t_local_func, correlation_local_func,
                               impact_on_variable,
                               weight_dynamic, weight_static, hybrid_perturbation) -> None:
 
@@ -111,13 +111,14 @@ def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_sta
 
     state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], state_static[:, :, nloc_sub],
                                                  obs_prior, obs_prior_static, obs_incr, lfactor[:, nloc_sub],
-                                                 weight_dynamic, weight_static, hybrid_perturbation)
+                                                 correlation_local_func, weight_dynamic, weight_static,
+                                                 hybrid_perturbation)
 
 @njit
 def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                             h_dist, v_dist, t_dist,
                             hroi, vroi, troi,
-                            h_local_func, v_local_func, t_local_func,
+                            h_local_func, v_local_func, t_local_func, correlation_local_func,
                             impact_on_variable,
                             weight_dynamic, weight_static, hybrid_perturbation):
 
@@ -133,11 +134,12 @@ def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prio
 
     obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_data_static[:, ind],
                                        obs_prior, obs_prior_static, obs_incr, lfactor[ind],
-                                       weight_dynamic, weight_static, hybrid_perturbation)
+                                       correlation_local_func, weight_dynamic, weight_static,
+                                       hybrid_perturbation)
 
 @njit
 def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr, local_factor,
-                    weight_dynamic, weight_static, hybrid_perturbation) -> np.ndarray:
+                    correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> np.ndarray:
     """
     Regress the obs-space increments onto the dynamic members (ens_prior).
 
@@ -145,22 +147,53 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
     with the static ones (ens_static, obs_prior_static), which are held fixed and never updated. With
     hybrid_perturbation=False the perturbation increments are regressed with the dynamic ensemble's own
     coefficient instead (Wang et al. 2007), so mean and perturbation increments are regressed separately.
-    Plain EAKF = no static members and weight_dynamic = 1.
+    Plain EAKF = no static members and weight_dynamic = 1. Correlation-based localization, if enabled, is
+    defined using the correlation coefficient computed from the dynamic members only.
     """
     nens = ens_prior.shape[0]
     nens_static = ens_static.shape[0]
     ens_post = ens_prior.copy()
 
-    # obs-space statistics of the dynamic members
+    # obs-space statistics of the dynamic members. ss = 'sum of squares'
     obs_prior_mean = np.mean(obs_prior)
-    obs_prior_var = np.sum((obs_prior - obs_prior_mean)**2) / max(nens - 1, 1)
-    cov = np.zeros(ens_prior.shape[1:])
-    for m in range(nens):
-        cov += ens_prior[m, ...] * (obs_prior[m] - obs_prior_mean) / max(nens - 1, 1)
+    obs_prior_ss = np.sum((obs_prior - obs_prior_mean)**2)
 
-    # variance and covariance of the hybrid covariance
-    obs_prior_var_hybrid = weight_dynamic * obs_prior_var
-    cov_hybrid = weight_dynamic * cov
+    # state/obs cross-covariance and correlation (if needed)
+    ens_prior_mean = np.mean(ens_prior)
+
+    cov = np.zeros(ens_prior.shape[1:])  # cov is sample covariance * (nens - 1)
+
+    if correlation_local_func is not None:
+        ens_prior_ss = np.zeros(ens_prior.shape[1:])
+
+    for m in range(nens):
+        xpert = ens_prior[m, ...] - ens_prior_mean
+        ypert = obs_prior[m] - obs_prior_mean
+        cov += xpert * ypert
+        if correlation_local_func is not None:
+            ens_prior_ss += xpert**2
+
+    if correlation_local_func is not None:
+        r = np.zeros(cov.shape)
+
+        if obs_prior_ss > 0.0:
+            cov_flat = cov.ravel()
+            ens_prior_ss_flat = ens_prior_ss.ravel()
+            r_flat = r.ravel()
+
+            for i in range(cov_flat.size):
+                if ens_prior_ss_flat[i] > 0.0:
+                    r_flat[i] = (
+                        cov_flat[i]
+                        / np.sqrt(ens_prior_ss_flat[i] * obs_prior_ss)
+                    )
+
+        # Combine distance- and correlation-based localization into a single factor
+        local_factor *= correlation_local_func(r, nens)
+
+    # sum of squares and covariance of the hybrid covariance
+    obs_prior_var_hybrid = weight_dynamic * obs_prior_ss / (nens - 1)
+    cov_hybrid = weight_dynamic * cov / (nens - 1)
     if nens_static > 1:
         obs_prior_mean_static = np.mean(obs_prior_static)
         obs_prior_var_hybrid += weight_static * np.sum((obs_prior_static - obs_prior_mean_static)**2) / (nens_static - 1)
@@ -175,13 +208,14 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
 
     # the mean and perturbation increments are regressed with the same coefficient, unless the
     # perturbations are updated with the dynamic ensemble covariance alone
-    split_increment = (not hybrid_perturbation) and nens_static > 1 and obs_prior_var > 0
+    split_increment = (not hybrid_perturbation) and nens_static > 1 and obs_prior_ss > 0
     if not split_increment:
         for m in range(nens):
             ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
         return ens_post
 
-    reg_factor_pert = cov / obs_prior_var
+    # Lack of normalization by (nens - 1) in cov and obs_prior_ss is obviated by the division on the next line
+    reg_factor_pert = cov / obs_prior_ss
     obs_incr_mean = np.mean(obs_incr)
     for m in range(nens):
         ens_post[m, ...] = ens_prior[m, ...] + local_factor * (reg_factor * obs_incr_mean

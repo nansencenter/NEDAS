@@ -14,7 +14,7 @@ def _plain_obs_increment(obs_prior, obs, obs_err):
 def _plain_update_ensemble(ens_prior, obs_prior, obs_incr, local_factor):
     """plain EAKF regression: no static members"""
     return update_ensemble(ens_prior, np.zeros((0,) + ens_prior.shape[1:]), obs_prior, np.zeros(0),
-                           obs_incr, local_factor, 1.0, 0.0, False)
+                           obs_incr, local_factor, None, 1.0, 0.0, False)
 
 
 class TestObsIncrementEAKF(unittest.TestCase):
@@ -109,7 +109,7 @@ class TestEAKFHybrid(unittest.TestCase):
                                                  hybrid_perturbation)
             np.testing.assert_allclose(obs_incr, obs_incr_ref, atol=1e-14)
             ens_post = update_ensemble(self.ens_dynamic.copy(), np.zeros((0, self.nstate)), obs_prior,
-                                              np.zeros(0), obs_incr_ref, np.ones(self.nstate), 1.0, 0.0,
+                                              np.zeros(0), obs_incr_ref, np.ones(self.nstate), None, 1.0, 0.0,
                                               hybrid_perturbation)
             np.testing.assert_allclose(ens_post, ens_post_ref, atol=1e-13)
 
@@ -124,7 +124,7 @@ class TestEAKFHybrid(unittest.TestCase):
             obs_incr = obs_increment_eakf(obs_prior, obs_prior_static, self.obs, self.obs_err,
                                                  weight_dynamic, weight_static, hybrid_perturbation)
             post_eakf = update_ensemble(self.ens_dynamic.copy(), ens_static, obs_prior, obs_prior_static,
-                                               obs_incr, np.ones(self.nstate), weight_dynamic, weight_static,
+                                               obs_incr, np.ones(self.nstate), None, weight_dynamic, weight_static,
                                                hybrid_perturbation)
             weights, weights_static = etkf_transform_weights(np.array([self.obs]), np.array([self.obs_err]),
                                                              obs_prior[:, None].copy(), obs_prior_static[:, None].copy(),
