@@ -192,20 +192,19 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
         local_factor *= correlation_local_func(r, nens)
 
     # sum of squares and covariance of the hybrid covariance
-    obs_prior_ss_hybrid = weight_dynamic * obs_prior_ss
-    cov_hybrid = weight_dynamic * cov
+    obs_prior_var_hybrid = weight_dynamic * obs_prior_ss / (nens - 1)
+    cov_hybrid = weight_dynamic * cov / (nens - 1)
     if nens_static > 1:
         obs_prior_mean_static = np.mean(obs_prior_static)
-        obs_prior_ss_hybrid += weight_static * np.sum((obs_prior_static - obs_prior_mean_static)**2) / (nens_static - 1)
+        obs_prior_var_hybrid += weight_static * np.sum((obs_prior_static - obs_prior_mean_static)**2) / (nens_static - 1)
         for m in range(nens_static):
             cov_hybrid += weight_static * ens_static[m, ...] * (obs_prior_static[m] - obs_prior_mean_static) / (nens_static - 1)
 
     # if there is no prior spread, don't update at all
-    if obs_prior_ss_hybrid == 0:
+    if obs_prior_var_hybrid == 0:
         return ens_post
 
-    # Lack of normalization by (nens - 1) in cov and obs_prior_ss is obviated by the division on the next line
-    reg_factor = cov_hybrid / obs_prior_ss_hybrid
+    reg_factor = cov_hybrid / obs_prior_var_hybrid
 
     # the mean and perturbation increments are regressed with the same coefficient, unless the
     # perturbations are updated with the dynamic ensemble covariance alone
