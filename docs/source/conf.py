@@ -15,13 +15,13 @@ author = 'Yue Ying'
 
 import subprocess
 try:
-    # last published tag, not setuptools_scm's guessed-next-dev version
-    _tag = subprocess.check_output(
-        ['git', 'describe', '--tags', '--abbrev=0'],
-        cwd=os.path.dirname(__file__), text=True,
-    ).strip()
-    release = _tag.lstrip('v')
-except (subprocess.CalledProcessError, FileNotFoundError):
+    # highest published release tag, not setuptools_scm's guessed-next dev version
+    _tags = subprocess.check_output(
+        ['git', 'tag', '--list', 'v[0-9]*', '--sort=-v:refname'],
+        cwd=os.path.dirname(os.path.abspath(__file__)), text=True,
+    ).split()
+    release = _tags[0].lstrip('v')
+except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
     from NEDAS import __version__ as release
 version = '.'.join(release.split('.')[:2])
 

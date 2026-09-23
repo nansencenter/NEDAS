@@ -10,6 +10,10 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.13"
+  jobs:
+    post_checkout:
+      # RTD clones shallow without tags; conf.py needs them for the version number
+      - git fetch --tags --depth 1
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
