@@ -435,14 +435,21 @@ class Obs:
 
     def prepare_obs(self, c: Context) -> None:
         self.obs_seq = bcast_by_root(c.comm_mem)(self.collect_obs_seq)(c)
-        # collect_obs_seq runs only on root and sets rec.nobs there; sync to all procs
-        # using the already-broadcast obs_seq so no extra communication is needed
-        for obs_rec_id, seq in self.obs_seq.items():
+        # collect_obs_seq returns only this pid_rec group's records and the bcast above
+        # only spans comm_mem, so gather over comm_rec too: every rank must know every
+        # record's nobs before finalize_pos(), since info.size/rec.pos set the obs_*.bin
+        # write offsets (io_backends/offline.py::write_obs) and the .dat header pid 0
+        # writes. Without this, ranks in different rec groups compute different layouts
+        # and pid 0 records nobs=0 for records its own group does not own.
+        all_seq = {}
+        for part in c.comm_rec.allgather(self.obs_seq):
+            all_seq.update(part)
+        for obs_rec_id, seq in all_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
         self.info.finalize_pos()
         if c.pid == 0 and c.config.io_mode != 'online':
             analysis_dir = c.fs.analysis_dir(c.time, c.iter)
-            np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(self.obs_seq, dtype=object))
+            np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(all_seq, dtype=object))
 
     def output_obs(self, c: 'Context', tag: str) -> None:
         """Persist obs_post already in memory (from serial assimilator lobs_post
