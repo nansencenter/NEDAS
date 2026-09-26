@@ -1,5 +1,7 @@
+import os
 import numpy as np
 from NEDAS.utils.njit import njit
+from NEDAS.utils.netcdf_lib import nc_write_var
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 
 
@@ -14,7 +16,65 @@ class TopazDEnKFAssimilator(BatchAssimilator):
     def assimilation_algorithm(self, c):
         # scaling of the dynamic/static anomalies that gives the hybrid covariance
         self.anomaly_factors = c.covariance.anomaly_factors()
+        # accumulators for the observation-impact diagnostics, summed over the field
+        # records updated at each analysis grid point: [DFS, SRF, nlobs, count]
+        self.diag = np.zeros((4, c.grid.x.size))
         super().assimilation_algorithm(c)
+        self.output_local_diagnostics(c)
+
+    def output_local_diagnostics(self, c):
+        """Write the observation-impact diagnostics of the local analyses to
+        ``enkf_diag.nc`` in the analysis directory (as the Fortran EnKF-TOPAZ does in
+        m_local_analysis.F90::diag2nc).
+
+        With S the localized, R-normalized ensemble observation anomalies and
+        G = (I + S^T S)^-1 S^T the gain in ensemble space (so that K = A G), the two
+        metrics of Sakov et al. (2012, Ocean Sci. 8, 633-656, TOPAZ4) and Sakov (2014,
+        EnKF-C user guide, Sect. 2.7.6) are
+
+            DFS = tr(KH) = tr(G S)
+            SRF = sqrt( tr(H P^f H^T R^-1) / tr(H P^a H^T R^-1) ) - 1
+                = sqrt( tr(S^T S) / tr(G S) ) - 1
+
+        DFS, the degrees of freedom for signal (Rodgers 2000; Cardinali et al. 2004),
+        counts the independent pieces of information the local analysis extracts from its
+        observations; it is bounded by min(nlobs, nens-1) and is a rank-problem indicator:
+        keeping it below ~nens/4 is the usual advice, larger values point at too large an
+        hroi (or too small an ensemble) for the ensemble to represent.
+
+        SRF, the spread reduction factor, is the relative reduction of the observed
+        ensemble spread by the analysis: 0 means no impact, 1 means the spread is halved.
+        It measures the "strength" of the assimilation and should ideally stay below ~1;
+        larger values require a nearly optimal system or they produce imbalances.
+
+        Following the Fortran, DFS uses the gain that updates the mean (obs errors without
+        ``rfactor``) and SRF the gain that updates the anomalies (obs errors inflated by
+        ``rfactor``), so SRF reflects the spread reduction actually applied. Both are the
+        theoretical KF values (exact for the ETKF); the DEnKF approximates the KF, so its
+        realized values differ slightly.
+
+        Unlike the Fortran, which localizes horizontally only and so has one value per
+        model column, NEDAS also applies vertical, temporal and cross-variable
+        localization, giving a separate local analysis per field record. The values written
+        here are averaged over the field records updated at each grid point (identical to
+        the Fortran's single value when only horizontal localization is active), together
+        with ``nlobs``, the average number of observations used.
+        """
+        diag = c.comm.allreduce(self.diag)
+        if c.pid != 0:
+            return
+        count = diag[3]
+        fname = os.path.join(c.fs.analysis_dir(c.time, c.iter), 'enkf_diag.nc')
+        if len(c.grid.x.shape) == 2:
+            dims = {'y': c.grid.x.shape[0], 'x': c.grid.x.shape[1]}
+        else:
+            dims = {'loc': c.grid.x.size}
+        # grid points that were never analysed (masked, or no local obs) are left as nan
+        avg = np.where(count > 0, diag[:3] / np.where(count > 0, count, 1), np.nan)
+        for name, value in zip(['dfs', 'srf', 'nlobs'], avg):
+            nc_write_var(fname, dims, name, value.reshape(c.grid.x.shape), dtype='float32')
+        nc_write_var(fname, dims, 'x', c.grid.x, dtype='float32')
+        nc_write_var(fname, dims, 'y', c.grid.y, dtype='float32')
 
     def local_analysis(self, c, loc_id, ind, hlfactor, state_data, obs_data):
         state_var_id = state_data['var_id']  # variable id for each field (nfld)
@@ -65,13 +125,15 @@ class TopazDEnKFAssimilator(BatchAssimilator):
                           + obs_prior_var * (innov / self.kfactor)**2) - obs_prior_var
         obs_err = np.sqrt(obs_var)
 
+        diag_out = np.zeros(4)
         local_analysis_main(state_data['state_prior'][..., loc_id], obs_prior,
                             state_data['state_static'][..., loc_id], obs_prior_static,
                             obs_value, obs_err, hlfactor,
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_variable, self.rfactor, self.nlobs_max,
-                            *self.anomaly_factors, c.covariance.hybrid_perturbation)
+                            *self.anomaly_factors, c.covariance.hybrid_perturbation, diag_out)
+        self.diag[:, state_data['loc_inds'][loc_id]] += diag_out
 
 
 @njit
@@ -80,7 +142,7 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
                         impact_on_variable, rfactor, nlobs_max,
-                        fac_dynamic, fac_static, hybrid_perturbation) -> None:
+                        fac_dynamic, fac_static, hybrid_perturbation, diag_out) -> None:
     """perform local analysis for one location in the analysis grid partition, updating the
     dynamic members in state_prior; the static members (state_static, obs_prior_static) enter
     through the hybrid covariance, see ensemble_transform_weights
@@ -88,6 +150,10 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     obs_err: already adjusted by rfactor1 and kfactor (applied once per
              location in the parent method) — matches Fortran's convention
              of a single modified obs variance used throughout.
+
+    diag_out: (4,) accumulator [DFS, SRF, nlobs, count] summed over the field records
+              actually updated at this location; the parent method turns it into the
+              per-location averages written to the diagnostics file (see output_local_diagnostics).
     """
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -100,6 +166,7 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     lfactor_old = np.zeros(nlobs)
     weights_old = np.eye(nens)
     weights_static_old = np.zeros((nens_static, nens))
+    diag_old = np.zeros(2)
 
     # loop through the field records
     for n in range(nfld):
@@ -144,8 +211,9 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
         if n > 0 and len(ind) == len(lfactor_old) and (lfactor[ind] == lfactor_old).all():
             weights = weights_old
             weights_static = weights_static_old
+            diag = diag_old
         else:
-            weights, weights_static = ensemble_transform_weights(obs[ind], obs_err[ind],
+            weights, weights_static, diag = ensemble_transform_weights(obs[ind], obs_err[ind],
                                                                  obs_prior[:, ind], obs_prior_static[:, ind],
                                                                  lfactor[ind], rfactor,
                                                                  fac_dynamic, fac_static, hybrid_perturbation)
@@ -156,9 +224,16 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
         for m in range(nens_static):
             state_prior[:, n] += state_static[m, n] * weights_static[m, :]
 
+        # accumulate the diagnostics over the field records updated at this location
+        diag_out[0] += diag[0]
+        diag_out[1] += diag[1]
+        diag_out[2] += len(ind)
+        diag_out[3] += 1
+
         lfactor_old = lfactor[ind]
         weights_old = weights
         weights_static_old = weights_static
+        diag_old = diag
 
 
 @njit
@@ -183,8 +258,9 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
     (hybrid_perturbation=True, Counillon et al. 2009) or of the dynamic ensemble alone (False, as in
     Wang et al. 2007). The plain DEnKF is no static members with fac_dynamic = 1/sqrt(nens-1).
 
-    Returns  weights (nens x nens) and weights_static (nens_static x nens), such that
-             E_post = E_prior @ weights + E_static @ weights_static  (columns for the dynamic members).
+    Returns  weights (nens x nens), weights_static (nens_static x nens), such that
+             E_post = E_prior @ weights + E_static @ weights_static  (columns for the dynamic members),
+             and diag = [DFS, SRF], the two observation-impact diagnostics (see output_local_diagnostics).
     """
     nens, nlobs = obs_prior.shape
     nens_static = obs_prior_static.shape[0]
@@ -216,10 +292,14 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
     S[:, :nens] = obs_anomaly * fac_dynamic
     S[:, nens:] = obs_anomaly_static * fac_static
 
+    diag = np.zeros(2)
+
     # ----first part of weights: update of mean, gain = (I + S^T S)^-1 S^T
     success, gain = kalman_gain_weights(S)
     if not success:
-        return np.eye(nens), np.zeros((nens_static, nens))  # no update
+        return np.eye(nens), np.zeros((nens_static, nens)), diag  # no update
+    # DFS, from the gain that updates the mean (no rfactor), see output_local_diagnostics
+    diag[0] = traceprod(gain, S)
     mean_gain_weights = gain @ dy
     w = fac_dynamic * mean_gain_weights[:nens]
     w_static = fac_static * mean_gain_weights[nens:]
@@ -232,7 +312,8 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
         S_pert = S / np.sqrt(rfactor)
         success, gain = kalman_gain_weights(S_pert)
         if not success:
-            return np.eye(nens), np.zeros((nens_static, nens))
+            return np.eye(nens), np.zeros((nens_static, nens)), diag
+        diag[1] = spread_reduction_factor(gain, S_pert)
         gain_obs_anomaly = gain @ (obs_anomaly / np.sqrt(rfactor))
         pert_weights = np.eye(nens) - 0.5 * fac_dynamic * gain_obs_anomaly[:nens, :]
         pert_weights_static = -0.5 * fac_static * gain_obs_anomaly[nens:, :]
@@ -241,7 +322,8 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
         S_dynamic = obs_anomaly / np.sqrt(max(nens - 1, 1)) / np.sqrt(rfactor)
         success, gain = kalman_gain_weights(S_dynamic)
         if not success:
-            return np.eye(nens), np.zeros((nens_static, nens))
+            return np.eye(nens), np.zeros((nens_static, nens)), diag
+        diag[1] = spread_reduction_factor(gain, S_dynamic)
         pert_weights = np.eye(nens) - 0.5 * gain @ S_dynamic
 
     # ensemble weight matrix, weights[:, m] is for the m-th member
@@ -252,7 +334,22 @@ def ensemble_transform_weights(obs, obs_err, obs_prior, obs_prior_static, local_
         weights[:, m] = w + pert_weights[:, m]
         weights_static[:, m] = w_static + pert_weights_static[:, m]
 
-    return weights, weights_static
+    return weights, weights_static, diag
+
+
+@njit
+def traceprod(A, B):
+    """trace(A @ B) without forming the product"""
+    return np.sum(A * B.T)
+
+
+@njit
+def spread_reduction_factor(gain, S):
+    """SRF = sqrt(tr(S^T S) / tr(G S)) - 1, see output_local_diagnostics"""
+    tr_gs = traceprod(gain, S)
+    if tr_gs <= 0:
+        return 0.
+    return np.sqrt(np.sum(S * S) / tr_gs) - 1
 
 
 @njit

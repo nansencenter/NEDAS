@@ -509,12 +509,16 @@ class State:
             msk = c.grid.mask[jst:jed:dj, ist:ied:di]
             data['x'] = c.grid.x[jst:jed:dj, ist:ied:di][~msk]
             data['y'] = c.grid.y[jst:jed:dj, ist:ied:di][~msk]
+            # index of each local point in the flattened analysis grid, so that per-location
+            # diagnostics computed in the local analysis can be mapped back onto the grid
+            data['loc_inds'] = np.arange(c.grid.x.size).reshape(c.grid.x.shape)[jst:jed:dj, ist:ied:di][~msk]
 
         else:
             inds = self.partitions[par_id]
             msk = c.grid.mask[inds]
             data['x'] = c.grid.x[inds][~msk]
             data['y'] = c.grid.y[inds][~msk]
+            data['loc_inds'] = np.asarray(inds)[~msk]
 
         # field entries: (rec_id, component)
         data['field_ids'] = []

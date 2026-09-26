@@ -20,7 +20,7 @@ def _make_data(nens=12, nlobs=5, seed=7):
 def _plain_denkf_weights(obs, obs_err, obs_prior, lfactor, rfactor):
     """plain DEnKF: no static members, the dynamic ensemble covariance alone"""
     nens, nlobs = obs_prior.shape
-    weights, _ = ensemble_transform_weights(obs, obs_err, obs_prior, np.zeros((0, nlobs)), lfactor, rfactor,
+    weights, _, _ = ensemble_transform_weights(obs, obs_err, obs_prior, np.zeros((0, nlobs)), lfactor, rfactor,
                                             1.0 / np.sqrt(nens - 1), 0.0, False)
     return weights
 
@@ -29,7 +29,7 @@ def _plain_local_analysis_main(state_prior, obs_prior, *args):
     """local_analysis_main without static members"""
     nens, nfld = state_prior.shape
     local_analysis_main(state_prior, obs_prior, np.zeros((0, nfld)), np.zeros((0, obs_prior.shape[1])),
-                        *args, 1.0 / np.sqrt(nens - 1), 0.0, False)
+                        *args, 1.0 / np.sqrt(nens - 1), 0.0, False, np.zeros(4))
 
 
 class TestTopazEnsembleTransformWeights(unittest.TestCase):
@@ -224,7 +224,7 @@ class TestTopazHybridCovariance(unittest.TestCase):
         fac_static = np.sqrt(beta * self.static_var_scaling) / np.sqrt(self.nens_static - 1)
         return ensemble_transform_weights(self.obs, self.obs_err, self.ens_dynamic[:, :self.nobs].copy(),
                                           self.ens_static[:, :self.nobs].copy(), np.ones(self.nobs), rfactor,
-                                          fac_dynamic, fac_static, hybrid_perturbation)
+                                          fac_dynamic, fac_static, hybrid_perturbation)[:2]
 
     def _post_dynamic(self, weights, weights_static):
         return (self.ens_dynamic.T @ weights + self.ens_static.T @ weights_static).T
@@ -279,6 +279,75 @@ class TestTopazHybridCovariance(unittest.TestCase):
             post_ref = (self.ens_dynamic.T @ weights_ref).T
             post = self._post_dynamic(*self._weights(False, 2.0))
             np.testing.assert_allclose(post - post.mean(0), post_ref - post_ref.mean(0), atol=1e-10)
+
+
+class TestDiagnostics(unittest.TestCase):
+    """DFS = tr(GS) and SRF = sqrt(tr(S^T S)/tr(GS)) - 1, as in the Fortran EnKF-TOPAZ
+    (m_local_analysis.F90) and Sakov et al. 2012 / EnKF-C guide Sect. 2.7.6"""
+
+    def _diag(self, obs, obs_err, obs_prior, lfactor, rfactor=1.0):
+        nens, nlobs = obs_prior.shape
+        return ensemble_transform_weights(obs, obs_err, obs_prior, np.zeros((0, nlobs)), lfactor, rfactor,
+                                          1.0 / np.sqrt(nens - 1), 0.0, False)[2]
+
+    def test_single_obs_analytic(self):
+        # one obs: the eigenvalue of S S^T is lam = prior_var/obs_var, so
+        # DFS = lam/(1+lam) and SRF = sqrt(1+lam/rfactor) - 1
+        rng = np.random.default_rng(17)
+        nens = 15
+        obs_prior = rng.normal(0, 2, (nens, 1))
+        obs_err = np.array([0.7])
+        for rfactor in (1.0, 3.0):
+            lam = np.var(obs_prior[:, 0], ddof=1) / obs_err[0]**2
+            dfs, srf = self._diag(rng.normal(0, 1, 1), obs_err, obs_prior, np.ones(1), rfactor)
+            self.assertAlmostEqual(dfs, lam / (1 + lam), places=10)
+            self.assertAlmostEqual(srf, np.sqrt(1 + lam / rfactor) - 1, places=10)
+
+    def test_dfs_matches_trace_of_influence_matrix(self):
+        # DFS = tr(HK) computed with the explicit Kalman gain
+        rng = np.random.default_rng(23)
+        nens, nlobs = 10, 6
+        obs_prior = rng.normal(0, 1.5, (nens, nlobs))
+        obs_err = rng.uniform(0.4, 1.2, nlobs)
+        dfs, _ = self._diag(rng.normal(0, 1, nlobs), obs_err, obs_prior, np.ones(nlobs))
+        HPHt = np.cov(obs_prior.T)
+        R = np.diag(obs_err**2)
+        np.testing.assert_allclose(dfs, np.trace(HPHt @ np.linalg.inv(HPHt + R)), atol=1e-10)
+
+    def test_localization_reduces_dfs(self):
+        rng = np.random.default_rng(29)
+        obs_prior = rng.normal(0, 1, (12, 4))
+        obs, obs_err = rng.normal(0, 1, 4), np.ones(4) * 0.5
+        dfs_full, srf_full = self._diag(obs, obs_err, obs_prior, np.ones(4))
+        dfs_tapered, srf_tapered = self._diag(obs, obs_err, obs_prior, np.full(4, 0.3))
+        self.assertLess(dfs_tapered, dfs_full)
+        self.assertLess(srf_tapered, srf_full)
+
+    def test_no_impact_gives_zero(self):
+        # obs error so large the analysis is a no-op: no signal, no spread reduction
+        obs_prior = np.random.default_rng(31).normal(0, 1, (8, 3))
+        dfs, srf = self._diag(np.zeros(3), np.full(3, 1e8), obs_prior, np.ones(3))
+        self.assertAlmostEqual(dfs, 0.0, places=8)
+        self.assertAlmostEqual(srf, 0.0, places=8)
+
+    def test_accumulated_over_field_records(self):
+        # local_analysis_main sums [DFS, SRF, nlobs, count] over the records it updates
+        rng = np.random.default_rng(37)
+        nens, nfld, nlobs = 10, 3, 4
+        state_prior = rng.normal(0, 1, (nens, nfld))
+        obs_prior = rng.normal(0, 1, (nens, nlobs))
+        obs, obs_err = rng.normal(0, 1, nlobs), np.ones(nlobs) * 0.6
+        hlfactor = np.ones(nlobs)
+        diag_out = np.zeros(4)
+        local_analysis_main(state_prior, obs_prior, np.zeros((0, nfld)), np.zeros((0, nlobs)),
+                            obs, obs_err, hlfactor,
+                            np.zeros(nfld), np.zeros(nlobs), 0.0, step_func,
+                            np.zeros(nfld), np.zeros(nlobs), 0.0, step_func,
+                            np.ones((nlobs, nfld)), 1.0, 0,
+                            1.0 / np.sqrt(nens - 1), 0.0, False, diag_out)
+        dfs, srf = self._diag(obs, obs_err, obs_prior, hlfactor)
+        # no vertical/temporal localization: every record gets the same local analysis
+        np.testing.assert_allclose(diag_out, [nfld * dfs, nfld * srf, nfld * nlobs, nfld], atol=1e-10)
 
 
 if __name__ == '__main__':
