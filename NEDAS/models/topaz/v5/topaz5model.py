@@ -70,6 +70,7 @@ class Topaz5Model(Model[RegularGrid]):
     preproc_copy_forcing: bool = True
     preproc_link_runtime_files: bool = True
     preproc_copy_restart: bool = True
+    postprocess_method: str = 'fixhycom'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -259,6 +260,13 @@ class Topaz5Model(Model[RegularGrid]):
     def read_mask(self, **kwargs):
         pass
 
+    @staticmethod
+    def _save_npy_atomic(fname, var):
+        """Atomic .npy write, so a concurrent reader never loads a partial file."""
+        tmp = f"{fname}.{os.getpid()}.tmp.npy"
+        np.save(tmp, var)
+        os.replace(tmp, fname)
+
     def read_var(self, **kwargs):
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
@@ -330,7 +338,7 @@ class Topaz5Model(Model[RegularGrid]):
                     var = self.operator[name](**kwargs)
                     # save the variable to npy file
                     self.c.fs.make_dir(os.path.dirname(fname))
-                    np.save(fname, var)
+                    self._save_npy_atomic(fname, var)
             # otherwise, fall back to read the variable from daily output files
             else:
                 var = self.read_var(**{**kwargs, 'name': name+'_daily'})
@@ -366,13 +374,20 @@ class Topaz5Model(Model[RegularGrid]):
         if name in self.restart_variables:
             # open the restart file for over-writing
             # the 'r+' mode and a new overwrite_field method were added in the ABFileRestart in .abfile
-            f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
-            if rec['is_vector']:
-                for i in range(2):
-                    f.overwrite_field(var[i,...], self.grid.mask, rec['name'][i], level=kwargs['k'], tlevel=1)
-            else:
-                f.overwrite_field(var, self.grid.mask, rec['name'], level=kwargs['k'], tlevel=1)
-            f.close()
+            # overwrite_field rewrites the whole .b, so concurrent writers to the
+            # same file lose each other's min/max updates and fixhycom then fails
+            # its .a/.b consistency check. Serialize on the per-file lock.
+            self.c.comm.acquire_file_lock(fname)
+            try:
+                f = ABFileRestart(fname, 'r+', idm=self.grid.nx, jdm=self.grid.ny, mask=True)
+                if rec['is_vector']:
+                    for i in range(2):
+                        f.overwrite_field(var[i,...], self.grid.mask, rec['name'][i], level=kwargs['k'], tlevel=1)
+                else:
+                    f.overwrite_field(var, self.grid.mask, rec['name'], level=kwargs['k'], tlevel=1)
+                f.close()
+            finally:
+                self.c.comm.release_file_lock(fname)
 
         elif name in self.iced_variables:
             if rec['is_vector']:
@@ -420,7 +435,7 @@ class Topaz5Model(Model[RegularGrid]):
             # if restart file exists, the diag variable should be save to a npy cache file
             if self._restart_file_exists(kwargs):
                 self.c.fs.make_dir(os.path.dirname(fname))
-                np.save(fname, var)
+                self._save_npy_atomic(fname, var)
             # otherwise, save the variable to daily output files
             else:
                 self.write_var(var, **{**kwargs, 'name': name+'_daily'})
@@ -719,6 +734,13 @@ class Topaz5Model(Model[RegularGrid]):
             self._copy_restart_files(time, mstr, run_dir, kwargs['restart_dir'], kwargs['path'])
 
     def postprocess(self, *args, **kwargs):
+        if self.postprocess_method == 'fixhycom':
+            return self._postprocess_fixhycom(*args, **kwargs)
+        if self.postprocess_method == 'native':
+            return self.postprocess_native(*args, **kwargs)
+        raise ValueError(f"topaz5model: unknown postprocess_method '{self.postprocess_method}', expected 'fixhycom' or 'native'")
+
+    def _postprocess_fixhycom(self, *args, **kwargs):
         kwargs = super().parse_kwargs(kwargs)
         if self.grid is None:
             raise AttributeError("topaz5model: grid not yet defined")
@@ -784,15 +806,17 @@ class Topaz5Model(Model[RegularGrid]):
         # obs_post.bin/diag_obs_validate.py) but never reached the model state used
         # to seed the next forecast. Now config-controlled via seaice_thick_obs_impact
         # (same knob postprocess_native's adjust_ice_variables call uses).
-        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'fixhycom')} analysis{member+1:03}.a {member+1} forecast{member+1:03}.nc ice_forecast{member+1:03}.nc {time:%j} {self.seaice_thick_obs_impact} > fixhycom{member+1:03}.log 2>&1; "
-        commands += f"cat fixanalysis{member+1:03}.b >> tmp{member+1:03}.b; mv tmp{member+1:03}.b fixanalysis{member+1:03}.b; "
+        commands += f"{os.path.join(self.reanalysis_code, 'ASSIM', 'BIN', 'fixhycom')} analysis{member+1:03}.a {member+1} forecast{member+1:03}.nc ice_forecast{member+1:03}.nc {time:%j} {self.seaice_thick_obs_impact} > fixhycom{member+1:03}.log 2>&1 && "
+        # chained with && : these mv's overwrite the posterior in place, so a
+        # fixhycom failure must not reach them.
+        commands += f"cat fixanalysis{member+1:03}.b >> tmp{member+1:03}.b && mv tmp{member+1:03}.b fixanalysis{member+1:03}.b"
         for ext in ['.a', '.b']:
             file1 = os.path.join(run_dir, f'fixanalysis{member+1:03}{ext}')
             file2 = os.path.join(kwargs['path'], f'restart.{time:%Y_%j_%H_%M%S}{mstr}{ext}')
-            commands += f"mv {file1} {file2}; "
+            commands += f" && mv {file1} {file2}"
         file1 = os.path.join(run_dir, f'fix_ice_forecast{member+1:03}.nc')
         file2 = os.path.join(kwargs['path'], f'iced.{time:%Y-%m-%d}-{time.hour*3600:05}{mstr}.nc')
-        commands += f"mv {file1} {file2}; "
+        commands += f" && mv {file1} {file2}"
         self.c.run_job(commands, nproc=1)
 
     def postprocess_native(self, *args, **kwargs):

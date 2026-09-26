@@ -23,6 +23,7 @@ walltime: 3600
 preproc_copy_forcing: True
 preproc_link_runtime_files: True
 preproc_copy_restart: True
+postprocess_method: fixhycom  # 'fixhycom' (external Fortran binary) or 'native' (python/numba port)
 max_num_attempts: 3
 ens_run_strategy: scheduler
 
