@@ -447,6 +447,12 @@ class Obs:
         for obs_rec_id, seq in all_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
         self.info.finalize_pos()
+        # every rank must agree on the layout, or write_obs scatters obs_*.bin at
+        # mismatched offsets and pid 0's .dat describes none of it
+        sizes = c.comm.allgather(self.info.size)
+        if min(sizes) != max(sizes):
+            raise RuntimeError(f"obs layout differs across ranks (info.size {min(sizes)}..{max(sizes)}); "
+                               "obs records not synced")
         if c.pid == 0 and c.config.io_mode != 'online':
             analysis_dir = c.fs.analysis_dir(c.time, c.iter)
             np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(all_seq, dtype=object))
