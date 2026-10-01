@@ -53,3 +53,76 @@ class TestAnalysisScheme(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestSerialBatchEquivalence(unittest.TestCase):
+    """
+    The serial and the batch analysis agree exactly when nothing is localized, and differ
+    once something is.
+
+    The first half is a correctness statement worth pinning: with a linear observation
+    operator and no localization, assimilating observations one at a time and assimilating
+    them simultaneously are the same deterministic square-root analysis, so the two
+    strategies must land on the same posterior mean. If that ever breaks, one of the two
+    implementations has drifted.
+
+    The second half pins the gap as expected rather than as a defect. It has two causes, and
+    neither is a choice of localization weight: the EAKF tapers the regression of the
+    observation increment onto the state (the Kalman gain) while the ETKF tapers R, which is
+    a different operation at any power; and a sequence of tapered single-observation updates
+    is not one tapered simultaneous update (Nerger, 2015). Both ETKF settings of
+    loc_weight_squared are checked, so neither can be mistaken for closing the gap.
+    """
+    NENS, NOBS = 60, 4
+
+    def analyses(self, weights):
+        import numpy as np
+        from NEDAS.assim_tools.assimilators.EAKF.core import obs_increment_eakf, update_ensemble
+        from NEDAS.assim_tools.assimilators.ETKF.core import (
+            ensemble_transform_weights, apply_ensemble_transform)
+
+        nens, nobs = self.NENS, self.NOBS
+        rng = np.random.default_rng(11)
+        prior = rng.normal(0, 1, (nens, 1))
+        obs_prior = rng.normal(0, 1, (nens, nobs))
+        obs = rng.normal(0, 1, nobs)
+        err = np.full(nobs, 0.7)
+        no_static_state, no_static_obs = np.zeros((0, 1)), np.zeros((0, nobs))
+        fac = 1.0 / np.sqrt(nens - 1)
+
+        # serial: one observation at a time, with the obs priors kept consistent as the
+        # serial loop does, so the comparison is against the real algorithm
+        X, Y = prior.copy(), obs_prior.copy()
+        for j in range(nobs):
+            incr = obs_increment_eakf(Y[:, j], np.zeros(0), obs[j], err[j], 1.0, 0.0, False)
+            X = update_ensemble(X, no_static_state, Y[:, j], np.zeros(0), incr,
+                                np.full((1,), weights[j]), None, 1.0, 0.0, False)
+            for k in range(nobs):
+                if k != j:
+                    Y[:, k] = update_ensemble(Y[:, k][:, None], np.zeros((0, 1)), Y[:, j],
+                                              np.zeros(0), incr, np.array([weights[j]]),
+                                              None, 1.0, 0.0, False)[:, 0]
+        serial = X.mean()
+
+        batch = {}
+        for squared in (True, False):
+            lfactor = weights if squared else np.sqrt(weights)
+            wt, _ = ensemble_transform_weights(obs, err, obs_prior.copy(), no_static_obs,
+                                               lfactor, np.eye(nens), False, fac, 0.0, False)
+            batch[squared] = apply_ensemble_transform(prior.copy()[:, 0], wt).mean()
+        return serial, batch
+
+    def test_agree_without_localization(self):
+        import numpy as np
+        serial, batch = self.analyses(np.ones(self.NOBS))
+        for squared, value in batch.items():
+            self.assertAlmostEqual(serial, value, places=10,
+                                   msg=f'serial vs batch (squared={squared}) at w=1')
+
+    def test_differ_with_localization(self):
+        import numpy as np
+        serial, batch = self.analyses(np.array([1.0, 0.6, 0.3, 0.1]))
+        for squared, value in batch.items():
+            self.assertGreater(abs(serial - value), 1e-4,
+                               msg=f'squared={squared} unexpectedly reproduces the serial '
+                                   'analysis under localization')

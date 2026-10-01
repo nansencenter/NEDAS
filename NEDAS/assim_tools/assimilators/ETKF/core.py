@@ -91,9 +91,13 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     support and changes its shape, while rescaling the radius moves the support (for an
     exponential taper the two happen to coincide, since squaring it halves the radius).
 
-    Note this convention is the batch family's. The serial EAKF tapers the regression of the
-    observation increment onto the state and leaves the denominator alone, so its weight
-    enters once; at one hroi the two families localize differently unless this is False.
+    Note this convention is the batch family's, and neither setting reconciles it with the
+    serial EAKF. The EAKF tapers the regression of the observation increment onto the state
+    -- the Kalman gain -- whereas this tapers R, and scaling a gain by w is not scaling R^-1
+    by any power of w. Unlocalized, the two strategies agree exactly (tests/test_assimilator
+    .py::TestSerialBatchEquivalence); localized, they differ for that reason and because a
+    sequence of tapered single-observation updates is not one tapered simultaneous update
+    (Nerger, 2015).
 
     sqrt preserves which weights are zero and their ordering, so the zero-weight skip and
     the high-to-low sort below are unaffected.
