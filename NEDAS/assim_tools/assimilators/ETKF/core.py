@@ -6,6 +6,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
     transform_solver: str  # 'svd', 'eigen', or 'auto'
+    taper_power: float     # exponent on the localization weight, see local_analysis_main
     supports_static_members = True
     supports_hybrid_perturbation = True
 
@@ -61,7 +62,8 @@ class ETKFAssimilator(BatchAssimilator):
                             state_z, obs_z, vroi, c.localization_funcs['vertical'],
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_variable, self.rotation_matrix, use_eigen,
-                            *self.anomaly_factors, c.covariance.hybrid_perturbation)
+                            *self.anomaly_factors, c.covariance.hybrid_perturbation,
+                            self.taper_power)
 
 @njit
 def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
@@ -69,11 +71,25 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
                         state_z, obs_z, vroi, vlocal_func,
                         state_t, obs_t, troi, tlocal_func,
                         impact_on_variable, rotation, use_eigen,
-                        fac_dynamic, fac_static, hybrid_perturbation) -> None:
+                        fac_dynamic, fac_static, hybrid_perturbation,
+                        taper_power=1.0) -> None:
     """
     perform local analysis for one location in the analysis grid partition, updating the
     dynamic members in state_prior; the static members (state_static, obs_prior_static)
     enter through the hybrid covariance, see ensemble_transform_weights
+
+    ``taper_power`` is an exponent applied to the combined localization weight w before it
+    enters the analysis. It exists because the same localization radius does not mean the
+    same thing in every code. ``ensemble_transform_weights`` whitens both the observation
+    anomalies and the innovation by w/sigma_o, so w enters the analysis Hessian
+    (I + S S^T) squared; PDAF's LETKF instead does textbook R-localization (Hunt et al.
+    2007), scaling the inverse observation error variance by w, so there w enters linearly.
+    The default 1.0 is NEDAS's own convention. ``taper_power = 0.5`` feeds w^(1/2) in, so
+    that the squaring reproduces PDAF's linear weight and the two codes localize
+    identically -- which is what makes an exact comparison against PDAF possible.
+
+    A positive exponent preserves which weights are zero and their ordering, so the
+    zero-weight skip and the high-to-low sort below are unaffected.
     """
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -104,6 +120,8 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
 
         # total lfactor
         lfactor =  hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
+        if taper_power != 1.0:
+            lfactor = lfactor ** taper_power
         if (lfactor==0).all():
             continue
 

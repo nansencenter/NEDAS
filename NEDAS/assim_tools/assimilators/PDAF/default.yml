@@ -27,6 +27,12 @@ forget: 1.0
 #   gaspari_cohn       5th-order polynomial (this is what NEDAS calls gaspari_cohn)
 #   regulated_mean     regulated localization of R with mean error variance
 #   regulated_single   regulated localization of R with single-point error variance
+#   exponential_ens    as exponential, but weighting the observed ensemble as well as R
+#   gaspari_cohn_ens   as gaspari_cohn, but weighting the observed ensemble as well as R
+# The '_ens' variants (PDAF locweight >= 11) make the taper enter the analysis squared, which
+# is what NEDAS's batch ETKF does at its default taper_power=1.0; the plain variants weight R
+# only, matching taper_power=0.5. 'auto' follows the taper *function* and the serial EAKF's
+# linear convention -- set gaspari_cohn_ens explicitly to match the ETKF default exactly.
 # The radius itself is always NEDAS's obs_def.hroi, not a separate setting.
 loc_weight: auto
 

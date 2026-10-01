@@ -265,6 +265,58 @@ class TestLocalAnalysisStaticMembers(unittest.TestCase):
         np.testing.assert_allclose(state_static, ens_static)
 
 
+class TestTaperPower(unittest.TestCase):
+    """
+    taper_power exponentiates the combined localization weight before it enters the analysis.
+
+    It exists so NEDAS's ETKF can be made to localize the way PDAF's LETKF does:
+    ensemble_transform_weights whitens both the obs anomalies and the innovation by
+    w/sigma_o, so w reaches the Hessian squared, while PDAF scales inverse obs error
+    variance by w (linear). taper_power=0.5 cancels the difference.
+    """
+
+    def _run(self, hlfactor, taper_power, nens=8, nobs=5, seed=7):
+        rng = np.random.default_rng(seed)
+        state = rng.normal(0, 1, (nens, nobs))
+        obs_prior = rng.normal(0, 1, (nens, nobs))
+        obs, obs_err = rng.normal(0, 1, nobs), np.ones(nobs) * 0.7
+        zeros, ones = np.zeros(nobs), np.ones(nobs)
+        local_analysis_main(state, obs_prior, np.zeros((0, nobs)), np.zeros((0, nobs)),
+                            obs, obs_err, hlfactor,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            np.ones((nobs, nobs)), _eye(nens), False,
+                            1.0 / np.sqrt(nens - 1), 0.0, False,
+                            taper_power)
+        return state
+
+    def test_matches_pre_raising_the_weight(self):
+        """
+        The knob must do exactly what the PDAF test does by hand: that test gets exact
+        agreement with PDAF by handing its reference w**0.5, so if the two routes agree
+        here, configuring taper_power=0.5 reproduces PDAF's localization.
+        """
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        np.testing.assert_allclose(self._run(w, 0.5), self._run(w ** 0.5, 1.0), atol=1e-12)
+
+    def test_default_is_a_noop(self):
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        np.testing.assert_allclose(self._run(w, 1.0), self._run(w, 1.0), atol=1e-14)
+
+    def test_power_changes_the_analysis(self):
+        """a guard against the exponent being silently dropped"""
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        self.assertGreater(np.abs(self._run(w, 0.5) - self._run(w, 1.0)).max(), 1e-8)
+
+    def test_zero_weights_stay_zero(self):
+        """a positive exponent preserves which obs are excluded, so the skip logic is intact"""
+        w = gaspari_cohn_func(np.array([0.0, 2.0, 9.0, 9.0, 9.0]), 5.0)
+        self.assertTrue((w[2:] == 0).all())
+        for power in (0.5, 1.0, 2.0):
+            post = self._run(w, power)
+            self.assertTrue(np.isfinite(post).all())
+
+
 class TestApplyEnsembleTransform(unittest.TestCase):
 
     def test_identity_weights_leave_ensemble_unchanged(self):

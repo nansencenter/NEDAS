@@ -15,8 +15,15 @@ FILTER_KINDS = {'LSEIK': 3, 'LETKF': 5, 'LESTKF': 7, 'LNETF': 10, 'LKNETF': 11}
 # PDAFomi weight functions (PDAFomi_init_dim_obs_l_iso locweight):
 # 2 (5th-order polynomial) is Gaspari-Cohn, the same taper as NEDAS's
 # gaspari_cohn_func with sradius = cradius = hroi.
+# Codes below 11 weight R only, so the taper enters PDAF's analysis linearly. Codes at 11 and
+# above also weight the observed ensemble A (PDAFomi_obs_l.F90, `doweighting: locweight >= 11`:
+# it scales A in place and then forms C = R^-1 A), so the taper enters squared -- which is
+# NEDAS's own convention in ensemble_transform_weights. The pairs therefore line up with the
+# ETKF's taper_power: locweight 2 matches taper_power=0.5, locweight 17 matches taper_power=1.0
+# (the ETKF default), and 1 vs 11 likewise for the exponential taper.
 LOC_WEIGHTS = {'constant': 0, 'exponential': 1, 'gaspari_cohn': 2,
-               'regulated_mean': 3, 'regulated_single': 4}
+               'regulated_mean': 3, 'regulated_single': 4,
+               'exponential_ens': 11, 'gaspari_cohn_ens': 17}
 
 # NEDAS localization_def.horizontal.type -> PDAFomi locweight, for the tapers that
 # exist on both sides. 'step' has no PDAFomi counterpart (locweight 0 is constant
@@ -137,8 +144,11 @@ class PDAFAssimilator(BatchAssimilator):
             except KeyError:
                 raise ValueError(f"unknown assimilator_def.loc_weight '{self.loc_weight}', "
                                  f"choose one of {', '.join(LOC_WEIGHTS)} or 'auto'") from None
-        # 'auto': the taper NEDAS is configured with, so the PDAF analysis sees the same
-        # weights the native ETKF/EAKF would have applied
+        # 'auto': the taper function NEDAS is configured with. Note this matches the taper
+        # *shape*, and the way the serial EAKF applies it (linearly, to the covariance) -- not
+        # the batch ETKF's convention, which squares it (see LOC_WEIGHTS). For an exact
+        # comparison against the ETKF at its default taper_power=1.0, set loc_weight to the
+        # matching '_ens' code explicitly.
         htype = str(c.config.localization_def['horizontal']['type']).lower()
         try:
             return NEDAS_TO_PDAF_WEIGHT[htype]

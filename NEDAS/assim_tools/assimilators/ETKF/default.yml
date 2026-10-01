@@ -1,2 +1,3 @@
 random_rotation: True
 transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)
+taper_power: 1.0  # exponent on the localization weight; 1.0 is NEDAS's convention (w enters the Hessian squared), 0.5 matches PDAF's linear R-localization
