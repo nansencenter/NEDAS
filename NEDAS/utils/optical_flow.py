@@ -44,6 +44,9 @@ class OpticalFlow:
           normalize: 'minmax' (float, default) or 'uint8' (quantized like DIS/Farneback)
           num_flow_updates: refinement iterations (default 12)
           num_threads: torch CPU threads per process (default 1, one per MPI rank)
+          upscale: resize images by this factor before RAFT (default 4). RAFT estimates flow on a
+                   1/8-resolution grid, which shows up as 8-pixel blocks; upscaling shrinks them
+                   (~16x the cost of upscale=1)
         """
         import torch
         import torch.nn.functional as F
@@ -73,7 +76,8 @@ class OpticalFlow:
         # RAFT expects (N,3,H,W) in [-1,1], H,W divisible by 8 and at least 128:
         # upsample low-res images, then map the flow back to the original grid and pixel units
         ny, nx = fld1.shape
-        size = lambda n: max(128, n + -n % 8)
+        up = self.kwargs.get('upscale', 4)
+        size = lambda n: max(128, round(n * up) + -round(n * up) % 8)
         H, W = size(ny), size(nx)
         imgs = torch.from_numpy(frames).float().mul(2).sub(1)[:, None].expand(2, 3, ny, nx)
         if (H, W) != (ny, nx):
@@ -82,7 +86,9 @@ class OpticalFlow:
             flow = self._raft_model(imgs[0:1], imgs[1:2],
                                     num_flow_updates=self.kwargs.get('num_flow_updates', 12))[-1]
         if (H, W) != (ny, nx):
-            flow = F.interpolate(flow, size=(ny, nx), mode='bilinear', align_corners=False)
+            # antialias averages the upscaled flow when shrinking it back, removing block edges
+            flow = F.interpolate(flow, size=(ny, nx), mode='bilinear', align_corners=False,
+                                 antialias=(H > ny or W > nx))
         flow = flow[0].numpy()
         return np.array([flow[0] * nx / W * grid.dx, flow[1] * ny / H * grid.dy])
 
