@@ -15,15 +15,13 @@ FILTER_KINDS = {'LSEIK': 3, 'LETKF': 5, 'LESTKF': 7, 'LNETF': 10, 'LKNETF': 11}
 # PDAFomi weight functions (PDAFomi_init_dim_obs_l_iso locweight):
 # 2 (5th-order polynomial) is Gaspari-Cohn, the same taper as NEDAS's
 # gaspari_cohn_func with sradius = cradius = hroi.
-# Codes below 11 weight R only, so the taper enters PDAF's analysis linearly. Codes at 11 and
-# above also weight the observed ensemble A (PDAFomi_obs_l.F90, `doweighting: locweight >= 11`:
-# it scales A in place and then forms C = R^-1 A), so the taper enters squared -- which is
-# NEDAS's own convention in ensemble_transform_weights. The pairs therefore line up with the
-# ETKF's taper_power: locweight 2 matches taper_power=0.5, locweight 17 matches taper_power=1.0
-# (the ETKF default), and 1 vs 11 likewise for the exponential taper.
+# Only the codes below 11 are offered. Those apply the weight once, to R, which is what NEDAS
+# applies too, so the same hroi means the same localization in both. PDAF also has codes at 11
+# and above, which additionally scale the observed ensemble A in place (PDAFomi_obs_l.F90,
+# `doweighting: locweight >= 11`, then C = R^-1 A) so that the weight reaches the analysis
+# Hessian squared; there is no counterpart for that here and nothing needs one.
 LOC_WEIGHTS = {'constant': 0, 'exponential': 1, 'gaspari_cohn': 2,
-               'regulated_mean': 3, 'regulated_single': 4,
-               'exponential_ens': 11, 'gaspari_cohn_ens': 17}
+               'regulated_mean': 3, 'regulated_single': 4}
 
 # NEDAS localization_def.horizontal.type -> PDAFomi locweight, for the tapers that
 # exist on both sides. 'step' has no PDAFomi counterpart (locweight 0 is constant

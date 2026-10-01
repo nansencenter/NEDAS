@@ -189,7 +189,8 @@ inflation_def:
 # covariance localization technique in assimilation
 localization_def:       # localization is configured separately for horizontal, vertical and temporal relations
   horizontal:
-    type: gaspari_cohn  # type of localization kernel (gaspari_cohn, step, exp, nice...)
+    type: gaspari_cohn  # localization kernel: gaspari_cohn, step, exponential, or the
+                        # correlation-based gcv / polo (see assim_tools/localization/registry)
   vertical:
     type: gaspari_cohn
   temporal:

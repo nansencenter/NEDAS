@@ -6,7 +6,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
     transform_solver: str  # 'svd', 'eigen', or 'auto'
-    taper_power: float     # exponent on the localization weight, see local_analysis_main
+    loc_weight_squared: bool   # whether the localization weight enters the analysis squared
     supports_static_members = True
     supports_hybrid_perturbation = True
 
@@ -63,7 +63,7 @@ class ETKFAssimilator(BatchAssimilator):
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_variable, self.rotation_matrix, use_eigen,
                             *self.anomaly_factors, c.covariance.hybrid_perturbation,
-                            self.taper_power)
+                            self.loc_weight_squared)
 
 @njit
 def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
@@ -72,24 +72,31 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
                         state_t, obs_t, troi, tlocal_func,
                         impact_on_variable, rotation, use_eigen,
                         fac_dynamic, fac_static, hybrid_perturbation,
-                        taper_power=1.0) -> None:
+                        loc_weight_squared=True) -> None:
     """
     perform local analysis for one location in the analysis grid partition, updating the
     dynamic members in state_prior; the static members (state_static, obs_prior_static)
     enter through the hybrid covariance, see ensemble_transform_weights
 
-    ``taper_power`` is an exponent applied to the combined localization weight w before it
-    enters the analysis. It exists because the same localization radius does not mean the
-    same thing in every code. ``ensemble_transform_weights`` whitens both the observation
-    anomalies and the innovation by w/sigma_o, so w enters the analysis Hessian
-    (I + S S^T) squared; PDAF's LETKF instead does textbook R-localization (Hunt et al.
-    2007), scaling the inverse observation error variance by w, so there w enters linearly.
-    The default 1.0 is NEDAS's own convention. ``taper_power = 0.5`` feeds w^(1/2) in, so
-    that the squaring reproduces PDAF's linear weight and the two codes localize
-    identically -- which is what makes an exact comparison against PDAF possible.
+    ``loc_weight_squared`` selects how far the localization weight w gets into the analysis.
+    ``ensemble_transform_weights`` whitens the observation anomalies AND the innovation by
+    w/sigma_o, so w reaches both the Hessian (I + S S^T) and the mean-update numerator
+    squared -- which is self-consistent R-localization with w^2, and NEDAS's own convention
+    (the default, True).
 
-    A positive exponent preserves which weights are zero and their ordering, so the
-    zero-weight skip and the high-to-low sort below are unaffected.
+    ``loc_weight_squared=False`` feeds in sqrt(w) instead, so the same double application lands on w:
+    textbook R-localization (Hunt et al. 2007), which is what PDAF's LETKF does at its
+    locweight 2. That is the setting to use when comparing the two codes at one convention,
+    and it cannot be had by rescaling hroi instead: squaring Gaspari-Cohn preserves its
+    support and changes its shape, while rescaling the radius moves the support (for an
+    exponential taper the two happen to coincide, since squaring it halves the radius).
+
+    Note this convention is the batch family's. The serial EAKF tapers the regression of the
+    observation increment onto the state and leaves the denominator alone, so its weight
+    enters once; at one hroi the two families localize differently unless this is False.
+
+    sqrt preserves which weights are zero and their ordering, so the zero-weight skip and
+    the high-to-low sort below are unaffected.
     """
     nens, nfld = state_prior.shape
     nens_obs, nlobs = obs_prior.shape
@@ -120,8 +127,8 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
 
         # total lfactor
         lfactor =  hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
-        if taper_power != 1.0:
-            lfactor = lfactor ** taper_power
+        if not loc_weight_squared:
+            lfactor = np.sqrt(lfactor)
         if (lfactor==0).all():
             continue
 

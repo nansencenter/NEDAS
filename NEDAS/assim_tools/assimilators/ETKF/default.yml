@@ -1,3 +1,16 @@
 random_rotation: True
 transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)
-taper_power: 1.0  # exponent on the localization weight; 1.0 is NEDAS's convention (w enters the Hessian squared), 0.5 matches PDAF's linear R-localization
+
+# Whether the localization weight reaches the analysis squared. The whitening in
+# ensemble_transform_weights applies the weight to both the observation anomalies and the
+# innovation, so by default it lands on w^2 -- self-consistent R-localization with w^2, and
+# NEDAS's own convention.
+#   True   NEDAS's convention (default)
+#   False  sqrt(w) is fed in instead, so the weight lands on w: textbook R-localization
+#          (Hunt et al. 2007). Set this to be compatible with PDAF's convention, whose
+#          LETKF applies the weight once (PDAFomi locweight 2) -- needed to compare the two
+#          codes at one convention. It also matches how the serial EAKF applies its weight.
+# Note a given hroi localizes more tightly under True than under False, and that squaring
+# cannot be reproduced by rescaling hroi: it preserves the taper's support and changes its
+# shape, whereas rescaling the radius moves the support.
+loc_weight_squared: True
