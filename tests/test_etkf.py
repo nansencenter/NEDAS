@@ -265,16 +265,16 @@ class TestLocalAnalysisStaticMembers(unittest.TestCase):
         np.testing.assert_allclose(state_static, ens_static)
 
 
-class TestLocWeightSquared(unittest.TestCase):
+class TestLocWeightSqrt(unittest.TestCase):
     """
-    loc_weight_squared decides how far the localization weight reaches into the analysis.
+    loc_weight_sqrt decides how far the localization weight reaches into the analysis.
 
     The whitening applies it to both the observation anomalies and the innovation, so by
     default it lands on w^2 in the Hessian and in the mean-update numerator alike -- which is
     R-localization with w^2. False feeds sqrt(w) in so it lands on w, PDAF's convention.
     """
 
-    def _run(self, hlfactor, loc_weight_squared, nens=8, nobs=5, seed=7):
+    def _run(self, hlfactor, loc_weight_sqrt, nens=8, nobs=5, seed=7):
         rng = np.random.default_rng(seed)
         state = rng.normal(0, 1, (nens, nobs))
         obs_prior = rng.normal(0, 1, (nens, nobs))
@@ -286,7 +286,7 @@ class TestLocWeightSquared(unittest.TestCase):
                             zeros, zeros, ones, gaspari_cohn_func,
                             np.ones((nobs, nobs)), _eye(nens), False,
                             1.0 / np.sqrt(nens - 1), 0.0, False,
-                            loc_weight_squared)
+                            loc_weight_sqrt)
         return state
 
     @staticmethod
@@ -312,14 +312,16 @@ class TestLocWeightSquared(unittest.TestCase):
         return prior.mean(0) + K @ (obs - obs_prior.mean(0))
 
     def test_default_is_r_localization_with_w_squared(self):
+        """loc_weight_sqrt=False, the default: w goes in and arrives as w^2."""
         w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
-        np.testing.assert_allclose(self._run(w, True).mean(axis=0),
+        np.testing.assert_allclose(self._run(w, False).mean(axis=0),
                                    self._kalman_R_localized(2.0), atol=1e-10)
 
     def test_unsquared_is_r_localization_with_w(self):
-        """PDAF's convention: this is the setting that puts the two codes on one footing."""
+        """loc_weight_sqrt=True: sqrt(w) goes in and arrives as w -- PDAF's convention,
+        the setting that puts the two codes on one footing."""
         w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
-        np.testing.assert_allclose(self._run(w, False).mean(axis=0),
+        np.testing.assert_allclose(self._run(w, True).mean(axis=0),
                                    self._kalman_R_localized(1.0), atol=1e-10)
 
     def test_the_two_settings_differ(self):
@@ -347,8 +349,8 @@ class TestLocWeightSquared(unittest.TestCase):
         """sqrt preserves which obs are excluded, so the skip logic is intact"""
         w = gaspari_cohn_func(np.array([0.0, 2.0, 9.0, 9.0, 9.0]), 5.0)
         self.assertTrue((w[2:] == 0).all())
-        for squared in (True, False):
-            self.assertTrue(np.isfinite(self._run(w, squared)).all())
+        for use_sqrt in (True, False):
+            self.assertTrue(np.isfinite(self._run(w, use_sqrt)).all())
 
 
 class TestApplyEnsembleTransform(unittest.TestCase):

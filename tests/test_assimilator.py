@@ -71,7 +71,7 @@ class TestSerialBatchEquivalence(unittest.TestCase):
     observation increment onto the state (the Kalman gain) while the ETKF tapers R, which is
     a different operation at any power; and a sequence of tapered single-observation updates
     is not one tapered simultaneous update (Nerger, 2015). Both ETKF settings of
-    loc_weight_squared are checked, so neither can be mistaken for closing the gap.
+    loc_weight_sqrt are checked, so neither can be mistaken for closing the gap.
     """
     NENS, NOBS = 60, 4
 
@@ -105,24 +105,24 @@ class TestSerialBatchEquivalence(unittest.TestCase):
         serial = X.mean()
 
         batch = {}
-        for squared in (True, False):
-            lfactor = weights if squared else np.sqrt(weights)
+        for use_sqrt in (False, True):
+            lfactor = np.sqrt(weights) if use_sqrt else weights
             wt, _ = ensemble_transform_weights(obs, err, obs_prior.copy(), no_static_obs,
                                                lfactor, np.eye(nens), False, fac, 0.0, False)
-            batch[squared] = apply_ensemble_transform(prior.copy()[:, 0], wt).mean()
+            batch[use_sqrt] = apply_ensemble_transform(prior.copy()[:, 0], wt).mean()
         return serial, batch
 
     def test_agree_without_localization(self):
         import numpy as np
         serial, batch = self.analyses(np.ones(self.NOBS))
-        for squared, value in batch.items():
+        for use_sqrt, value in batch.items():
             self.assertAlmostEqual(serial, value, places=10,
-                                   msg=f'serial vs batch (squared={squared}) at w=1')
+                                   msg=f'serial vs batch (loc_weight_sqrt={use_sqrt}) at w=1')
 
     def test_differ_with_localization(self):
         import numpy as np
         serial, batch = self.analyses(np.array([1.0, 0.6, 0.3, 0.1]))
-        for squared, value in batch.items():
+        for use_sqrt, value in batch.items():
             self.assertGreater(abs(serial - value), 1e-4,
-                               msg=f'squared={squared} unexpectedly reproduces the serial '
-                                   'analysis under localization')
+                               msg=f'loc_weight_sqrt={use_sqrt} unexpectedly reproduces the '
+                                   'serial analysis under localization')

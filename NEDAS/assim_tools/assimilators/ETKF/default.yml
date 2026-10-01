@@ -1,23 +1,18 @@
 random_rotation: True
 transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)
 
-# Whether the localization weight reaches the analysis squared. The whitening in
+# Take the square root of the localization weight before using it. The whitening in
 # ensemble_transform_weights applies the weight to both the observation anomalies and the
-# innovation, so by default it lands on w^2 -- self-consistent R-localization with w^2, and
-# NEDAS's own convention.
-#   True   NEDAS's convention (default)
-#   False  sqrt(w) is fed in instead, so the weight lands on w: textbook R-localization
-#          (Hunt et al. 2007). Set this to be compatible with PDAF's convention, whose
-#          LETKF applies the weight once (PDAFomi locweight 2) -- needed to compare the two
-#          codes at one convention.
-# Note a given hroi localizes more tightly under True than under False, and that squaring
-# cannot be reproduced by rescaling hroi: it preserves the taper's support and changes its
+# innovation, so whatever goes in arrives squared:
+#   False  w goes in, so it arrives as w^2 -- self-consistent R-localization with w^2,
+#          NEDAS's own convention (the default).
+#   True   sqrt(w) goes in, so it arrives as w: textbook R-localization (Hunt et al. 2007).
+#          Set this to be compatible with PDAF's convention, whose LETKF applies the weight
+#          once (PDAFomi locweight 2) -- needed to compare the two codes at one convention.
+# A given hroi localizes more tightly under False than under True, and squaring cannot be
+# reproduced by rescaling hroi instead: it preserves the taper's support and changes its
 # shape, whereas rescaling the radius moves the support.
 #
-# This setting does NOT bring the batch analysis into agreement with the serial EAKF. The
-# EAKF tapers the regression of the observation increment onto the state -- the Kalman gain --
-# while this tapers R, and scaling a gain by w is not scaling R^-1 by any power of w. The two
-# strategies agree exactly when nothing is localized, and differ once something is, both for
-# that reason and because a sequence of tapered single-observation updates is not a single
-# tapered simultaneous update (Nerger, 2015). Neither setting here closes that gap.
-loc_weight_squared: True
+# This does NOT bring the batch analysis into agreement with the serial EAKF, which tapers
+# the Kalman gain rather than R (see tests/test_assimilator.py for the measurement).
+loc_weight_sqrt: False

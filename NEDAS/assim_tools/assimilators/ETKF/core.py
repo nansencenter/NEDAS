@@ -6,7 +6,7 @@ from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 class ETKFAssimilator(BatchAssimilator):
     random_rotation: bool
     transform_solver: str  # 'svd', 'eigen', or 'auto'
-    loc_weight_squared: bool   # whether the localization weight enters the analysis squared
+    loc_weight_sqrt: bool      # take the square root of the localization weight first
     supports_static_members = True
     supports_hybrid_perturbation = True
 
@@ -63,7 +63,7 @@ class ETKFAssimilator(BatchAssimilator):
                             state_t, obs_t, troi, c.localization_funcs['temporal'],
                             impact_on_variable, self.rotation_matrix, use_eigen,
                             *self.anomaly_factors, c.covariance.hybrid_perturbation,
-                            self.loc_weight_squared)
+                            self.loc_weight_sqrt)
 
 @njit
 def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
@@ -72,19 +72,19 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
                         state_t, obs_t, troi, tlocal_func,
                         impact_on_variable, rotation, use_eigen,
                         fac_dynamic, fac_static, hybrid_perturbation,
-                        loc_weight_squared=True) -> None:
+                        loc_weight_sqrt=False) -> None:
     """
     perform local analysis for one location in the analysis grid partition, updating the
     dynamic members in state_prior; the static members (state_static, obs_prior_static)
     enter through the hybrid covariance, see ensemble_transform_weights
 
-    ``loc_weight_squared`` selects how far the localization weight w gets into the analysis.
+    ``loc_weight_sqrt`` takes the square root of the localization weight before it is used.
     ``ensemble_transform_weights`` whitens the observation anomalies AND the innovation by
-    w/sigma_o, so w reaches both the Hessian (I + S S^T) and the mean-update numerator
-    squared -- which is self-consistent R-localization with w^2, and NEDAS's own convention
-    (the default, True).
+    w/sigma_o, so whatever goes in reaches both the Hessian (I + S S^T) and the mean-update
+    numerator squared. Left at the default False, w therefore arrives as w^2: self-consistent
+    R-localization with w^2, which is NEDAS's own convention.
 
-    ``loc_weight_squared=False`` feeds in sqrt(w) instead, so the same double application lands on w:
+    Set True, sqrt(w) goes in and the double application lands on w instead:
     textbook R-localization (Hunt et al. 2007), which is what PDAF's LETKF does at its
     locweight 2. That is the setting to use when comparing the two codes at one convention,
     and it cannot be had by rescaling hroi instead: squaring Gaspari-Cohn preserves its
@@ -92,7 +92,7 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     exponential taper the two happen to coincide, since squaring it halves the radius).
 
     Note this convention is the batch family's, and neither setting reconciles it with the
-    serial EAKF. The EAKF tapers the regression of the observation increment onto the state
+    serial EAKF -- measured, not assumed. The EAKF tapers the regression of the increment
     -- the Kalman gain -- whereas this tapers R, and scaling a gain by w is not scaling R^-1
     by any power of w. Unlocalized, the two strategies agree exactly (tests/test_assimilator
     .py::TestSerialBatchEquivalence); localized, they differ for that reason and because a
@@ -131,7 +131,7 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
 
         # total lfactor
         lfactor =  hlfactor * vlfactor * tlfactor * impact_on_variable[:, n]
-        if not loc_weight_squared:
+        if loc_weight_sqrt:
             lfactor = np.sqrt(lfactor)
         if (lfactor==0).all():
             continue
