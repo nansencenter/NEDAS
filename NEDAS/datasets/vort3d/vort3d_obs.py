@@ -107,8 +107,17 @@ class Vort3DObs(SyntheticObs):
         # registered Dataset class against a bare Context() with no models registered at
         # all, so 'vort3d' is not guaranteed to be in self.c.models here -- only wire up
         # 'wind' when the model is actually present (true for any real vort3d config).
+        # 'wind', 'theta' and 'q' are all real model.variables entries defined on every level,
+        # so NEDAS's generic state_to_obs option-1 pathway interpolates each to an obs's own z
+        # with no obs_operator needed (see the zmin/zmax note below). Which of them a given
+        # observation record observes is obs_def[].name, as for any dataset -- there is no
+        # switch here. theta and q are registered because the vortex is moist: q is bounded
+        # below at zero and strongly skewed in this model, which is the regime where a
+        # rank-histogram or nonlinear ensemble transform filter differs from an EnKF at all,
+        # and wind alone never samples it.
         if 'vort3d' in self.c.models:
-            self.variables['wind'] = self.c.models['vort3d'].variables['wind']
+            for name in ('wind', 'theta', 'q'):
+                self.variables[name] = self.c.models['vort3d'].variables[name]
 
         restart_dt = 6
         # NOTE: update(), not a wholesale `self.variables = {...}` reassignment -- would wipe out
@@ -141,7 +150,7 @@ class Vort3DObs(SyntheticObs):
         i, j = self.vortex_position(wind_b[0,...], wind_b[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
-        if name in ('wind_b', 'wind'):
+        if name in ('wind_b', 'wind', 'theta', 'q'):
             # seed by cycle time so obs network is reproducible across cases, still random over time
             np.random.seed(int(kwargs['time'].timestamp()) % (2**32 - 1))
             nobs = self._draw_count(kwargs['nobs'])
@@ -196,7 +205,7 @@ class Vort3DObs(SyntheticObs):
             else:
                 raise ValueError('unknown network type: '+self.network_type)
 
-            if name == 'wind':
+            if name in ('wind', 'theta', 'q'):
                 # z is physical pressure (Pa) -- same convention z_coords() itself uses, so it
                 # lines up with the levels state_to_obs's vertical_interp brackets against.
                 # zmin/zmax are given in z_units (default hPa); each obs draws its own z
