@@ -75,6 +75,17 @@ class Vort3DObs(SyntheticObs):
     # on [0,1], z = zmax - t*(zmax-zmin) (peaks at zmax, decays toward zmin; λ=3 mirrors the
     # truth/obs figure's 950->300 hPa draw).
     z_lambda: float = 3.0
+    global_nobs: int | list | None = None  # extra uniform obs over the whole domain, added to a
+    # 'targeted' network so the outer vortex and environment are also observed; [min, max] draws
+    # a new count each cycle (see _draw_count)
+
+    @staticmethod
+    def _draw_count(n):
+        """Obs count for this cycle: an int is fixed; [min, max] draws uniformly (inclusive) from
+        the cycle-time-seeded RNG, so the count varies in time but is identical across schemes."""
+        if isinstance(n, (list, tuple)):
+            return int(np.random.randint(n[0], n[1] + 1))
+        return n
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -131,9 +142,9 @@ class Vort3DObs(SyntheticObs):
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
         if name in ('wind_b', 'wind'):
-            nobs = kwargs['nobs']
             # seed by cycle time so obs network is reproducible across cases, still random over time
             np.random.seed(int(kwargs['time'].timestamp()) % (2**32 - 1))
+            nobs = self._draw_count(kwargs['nobs'])
             if self.network_type == 'global':
                 if nobs is None:
                     nobs = 1000
@@ -197,17 +208,27 @@ class Vort3DObs(SyntheticObs):
                 else:
                     unit_scale = 100.0 if self.z_units == 'hPa' else 1.0  # hPa -> Pa
                     zmin_pa, zmax_pa = self.zmin * unit_scale, self.zmax * unit_scale
-                if self.z_dist == 'exp':
-                    u = np.random.random(nobs)
-                    if self.z_lambda == 0:
-                        t = u  # uniform limit as z_lambda->0, avoids 0/0 below
-                    else:
-                        t = -np.log(1 - u * (1 - np.exp(-self.z_lambda))) / self.z_lambda
-                    z = zmax_pa - t * (zmax_pa - zmin_pa)
-                else:
-                    z = np.random.uniform(zmin_pa, zmax_pa, nobs)
+                def draw_z(n):
+                    if self.z_dist == 'exp':
+                        u = np.random.random(n)
+                        if self.z_lambda == 0:
+                            t = u  # uniform limit as z_lambda->0, avoids 0/0 below
+                        else:
+                            t = -np.log(1 - u * (1 - np.exp(-self.z_lambda))) / self.z_lambda
+                        return zmax_pa - t * (zmax_pa - zmin_pa)
+                    return np.random.uniform(zmin_pa, zmax_pa, n)
             else:
-                z = np.zeros(nobs)  # 'wind_b': unused by its own custom obs_operator, kept as before
+                draw_z = np.zeros  # 'wind_b': unused by its own custom obs_operator, kept as before
+            z = draw_z(nobs)
+
+            # sparse uniform layer over the whole domain, drawn after the main network so the
+            # main network's obs are unchanged by adding it
+            if self.global_nobs is not None and self.network_type != 'global':
+                ng = self._draw_count(self.global_nobs)
+                yg = np.random.uniform(grid.ymin, grid.ymax, ng)
+                xg = np.random.uniform(grid.xmin, grid.xmax, ng)
+                x, y, z = np.concatenate([x, xg]), np.concatenate([y, yg]), np.concatenate([z, draw_z(ng)])
+                nobs += ng
 
             obs_seq = {'obs': np.full(nobs, np.nan),
                     't': np.full(nobs, kwargs['time']),
