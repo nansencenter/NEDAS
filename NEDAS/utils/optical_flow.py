@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 
 class OpticalFlow:
     def __init__(self, method='DIS', **kwargs):
@@ -101,6 +100,7 @@ class OpticalFlow:
             # PRESET_FAST's default (large) patch size produces a blocky, over-smoothed
             # displacement field relative to Horn-Schunck -- smaller patch_size or
             # PRESET_MEDIUM should recover finer spatial detail, at the cost of more noise/compute.
+            import cv2   # optional: pip install nedas[alignment]
             preset_name = self.kwargs.get('preset', 'DISOPTICAL_FLOW_PRESET_FAST')
             DISOpticalFlow_create = getattr(cv2, 'DISOpticalFlow_create')
             dis = DISOpticalFlow_create(getattr(cv2, preset_name))
@@ -134,6 +134,7 @@ class OpticalFlow:
             # window) is the main smoothing control -- OpenCV's own docs note larger winsize
             # "yields more blurred motion field"; the default 15 is larger than even the S-scale's
             # character_length (6.4), which likely over-smooths fine-scale displacement structure.
+            import cv2   # optional: pip install nedas[alignment]
             calcOpticalFlowFarneback = getattr(cv2, 'calcOpticalFlowFarneback')
             frame1, frame2 = self._to_uint8_pair(fld1, fld2)
             pyr_scale = self.kwargs.get('pyr_scale', 0.5)

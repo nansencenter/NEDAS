@@ -24,6 +24,10 @@ class TestOpticalFlowConstantShift(unittest.TestCase):
         self.assertAlmostEqual(flow[1][inner].mean(), -2.0, delta=0.3)
 
     def test_dis(self):
+        try:
+            import cv2  # noqa: F401
+        except ImportError:
+            self.skipTest('opencv not installed')
         self.check('DIS')
 
     def test_raft(self):

@@ -27,13 +27,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv", "torch", "torchvision"]
+all = ["mpi4py", "numba", "pyFFTW", "pygrib", "opencv-python", "torch", "torchvision"]
 mpi = ["mpi4py"]
 jit = ["numba"]
 fftw = ["pyFFTW"]
 grib = ["pygrib"]
-alignment = ["opencv"]
-alignment-raft = ["opencv", "torch", "torchvision"]
+alignment = ["opencv-python"]
+alignment-raft = ["opencv-python", "torch", "torchvision"]
 emulator = ["torch"]
 
 [project.scripts]
