@@ -1,6 +1,7 @@
 import copy
 import numpy as np
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
+from NEDAS.utils.call_cost import CallCost
 
 # PDAF filtertype codes (PDAF_init), restricted to the domain-localized filters: those are
 # the ones whose analysis loop matches NEDAS's per-gridpoint batch loop. PDAF3's generic
@@ -405,11 +406,20 @@ class PDAFAssimilator(BatchAssimilator):
                 analysis['ens'] = ens_p.copy()
             return state_p, uinv, ens_p
 
+        # PDAF calls these back per local analysis domain and per member, so the boundary is
+        # crossed a number of times that grows with the problem; cost carries what that
+        # amounts to (NEDAS/utils/call_cost.py), measured inside the 'assim_offline' region
+        # so each callback reads as a share of the analysis.
+        cost = self.call_cost = CallCost()
         pyPDAF.PDAFomi.init(len(obs_types))
         pyPDAF.PDAFomi.init_local()
-        status = pyPDAF.assim_offline(init_dim_obs_pdafomi, obs_op_pdafomi,
-                                      init_n_domains_pdaf, init_dim_l_pdaf,
-                                      init_dim_obs_l_pdafomi, prepoststep_pdaf, 0)
+        with cost.measure('assim_offline'):
+            status = pyPDAF.assim_offline(cost.wrap(init_dim_obs_pdafomi),
+                                          cost.wrap(obs_op_pdafomi),
+                                          cost.wrap(init_n_domains_pdaf),
+                                          cost.wrap(init_dim_l_pdaf),
+                                          cost.wrap(init_dim_obs_l_pdafomi),
+                                          cost.wrap(prepoststep_pdaf), 0)
         if status != 0:
             raise RuntimeError(f"PDAF analysis failed with status {status}")
         if 'ens' not in analysis:

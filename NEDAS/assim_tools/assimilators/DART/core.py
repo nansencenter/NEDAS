@@ -6,6 +6,7 @@ import sys
 import numpy as np
 from numpy.ctypeslib import ndpointer
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
+from NEDAS.utils.call_cost import CallCost
 from NEDAS.utils.conversion import t2h
 
 _f64 = ndpointer(dtype=np.float64, flags='C_CONTIGUOUS')
@@ -168,6 +169,19 @@ class DARTAssimilator(SerialAssimilator):
                     f"{err}\n\nThe DART kernel library at {lib_path} is missing an entry point "
                     "this version of NEDAS expects; rebuild it with build_dart_kernels.sh.") from err
         return self._lib
+
+    @property
+    def call_cost(self) -> CallCost:
+        """
+        What the ctypes boundary costs (NEDAS/utils/call_cost.py). The kernels are called
+        three times per observation, so this accumulates over the serial loop: each kernel
+        region sits inside the method that prepares its arrays, and the difference between
+        the two is what Python adds to the call.
+        """
+        cost = getattr(self, '_call_cost', None)
+        if cost is None:
+            cost = self._call_cost = CallCost()
+        return cost
 
     @property
     def lib_path(self) -> str:
@@ -345,15 +359,18 @@ class DARTAssimilator(SerialAssimilator):
     def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err):
         self._ensure_initialized()
         self._ensure_seeded()
-        obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
-        obs_incr = np.empty_like(obs_prior)
-        net_a = np.zeros(1)
+        cost = self.call_cost
+        with cost.measure('obs_increment'):
+            obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
+            obs_incr = np.empty_like(obs_prior)
+            net_a = np.zeros(1)
 
-        status = self.lib.dart_obs_increment(self.filter_kind_code, obs_prior.size, obs_prior,
-                                             float(obs), float(obs_err)**2,
-                                             int(bool(self.bounded_below)), int(bool(self.bounded_above)),
-                                             float(self.lower_bound), float(self.upper_bound),
-                                             obs_incr, net_a)
+            with cost.measure('dart_obs_increment'):
+                status = self.lib.dart_obs_increment(self.filter_kind_code, obs_prior.size, obs_prior,
+                                                     float(obs), float(obs_err)**2,
+                                                     int(bool(self.bounded_below)), int(bool(self.bounded_above)),
+                                                     float(self.lower_bound), float(self.upper_bound),
+                                                     obs_incr, net_a)
         if status:
             raise ValueError(f"DART {self.filter_kind}: {_STATUS.get(status, f'status {status}')}")
 
@@ -396,14 +413,17 @@ class DARTAssimilator(SerialAssimilator):
         """
         if not ens.flags['C_CONTIGUOUS'] or ens.dtype != np.float64:
             raise ValueError("DART kernels need a C-contiguous float64 ensemble to update in place")
-        nens = ens.shape[0]
-        flat = ens.reshape(nens, -1)          # a view, since ens is contiguous
-        lfactor = np.ascontiguousarray(lfactor, dtype=np.float64).reshape(-1)
+        cost = self.call_cost
+        with cost.measure('_regress'):
+            nens = ens.shape[0]
+            flat = ens.reshape(nens, -1)          # a view, since ens is contiguous
+            lfactor = np.ascontiguousarray(lfactor, dtype=np.float64).reshape(-1)
+            obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
+            obs_incr = np.ascontiguousarray(obs_incr, dtype=np.float64)
 
-        self.lib.dart_update_from_obs_inc(nens, flat.shape[1],
-                                          np.ascontiguousarray(obs_prior, dtype=np.float64),
-                                          np.ascontiguousarray(obs_incr, dtype=np.float64),
-                                          self._net_a, flat, lfactor)
+            with cost.measure('dart_update_from_obs_inc'):
+                self.lib.dart_update_from_obs_inc(nens, flat.shape[1], obs_prior, obs_incr,
+                                                  self._net_a, flat, lfactor)
 
 
 def seed_from_time(time) -> int:
