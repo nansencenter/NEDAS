@@ -494,3 +494,24 @@ class TestInputNamelistWrite(unittest.TestCase):
             finally:
                 os.chdir(cwd)
         self.assertEqual(bad, [], 'a reader saw input.nml empty or partly written')
+
+
+class TestGammaDomainGuard(unittest.TestCase):
+    """GAMMA stops the DART process on a signed quantity; the wrapper must refuse it first.
+
+    The check precedes any kernel call, so no DART library is needed here.
+    """
+
+    def _assim(self):
+        from NEDAS.assim_tools.assimilators.DART.core import DARTAssimilator
+        a = DARTAssimilator.__new__(DARTAssimilator)
+        a.filter_kind = 'GAMMA'
+        return a
+
+    def test_signed_prior_is_refused_with_the_reason(self):
+        with self.assertRaisesRegex(ValueError, 'strictly positive'):
+            self._assim().obs_increment(np.array([-1.0, 2.0, 3.0]), np.zeros(0), 1.5, 1.0)
+
+    def test_non_positive_observation_is_refused(self):
+        with self.assertRaisesRegex(ValueError, 'strictly positive'):
+            self._assim().obs_increment(np.array([1.0, 2.0, 3.0]), np.zeros(0), -0.5, 1.0)

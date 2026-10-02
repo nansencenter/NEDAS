@@ -374,6 +374,16 @@ class DARTAssimilator(SerialAssimilator):
         self._initialized = True
 
     def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err):
+        # GAMMA models a positive quantity. Handed a signed one (a wind component) the kernel
+        # evaluates an inverse CDF at an illegal quantile and DART stops the whole process,
+        # with a message about an uninitialized error handler that hides the cause. Refuse
+        # here with the real reason instead; whether exactly zero is accepted was not tested.
+        if str(self.filter_kind).upper() == 'GAMMA' and (np.min(obs_prior) <= 0 or obs <= 0):
+            raise ValueError(
+                "DART GAMMA needs strictly positive prior members and observation, got "
+                f"min(prior)={np.min(obs_prior):.4g}, obs={float(obs):.4g}. It models a positive "
+                "quantity (humidity, a concentration), not a signed one such as a wind component; "
+                "observe only positive variables with it, or use another filter_kind.")
         self._ensure_initialized()
         self._ensure_seeded()
         lib = self.lib      # resolved before the timed region: `lib` is a lazy property that
