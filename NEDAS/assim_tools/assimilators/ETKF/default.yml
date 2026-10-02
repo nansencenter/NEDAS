@@ -1,5 +1,5 @@
 random_rotation: True
-transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)
+transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs > nens, svd otherwise)
 
 # Take the square root of the localization weight before using it. The whitening in
 # ensemble_transform_weights applies the weight to both the observation anomalies and the

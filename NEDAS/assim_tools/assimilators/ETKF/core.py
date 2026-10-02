@@ -45,13 +45,17 @@ class ETKFAssimilator(BatchAssimilator):
 
         # the string solver option is mapped to a boolean here so that the njit
         # kernels do not need to perform string comparisons. 'auto' (default,
-        # unset by the user) picks eigen when nlobs >> nens, since svd's
-        # full_matrices=True is O(nlobs^3) there vs eigen's O(nens^3) -- an
-        # explicit 'svd' or 'eigen' choice is always respected as-is.
+        # unset by the user) picks eigen once nlobs exceeds nens: svd with
+        # full_matrices=True forms an nlobs x nlobs factor, so it grows much faster in
+        # nlobs than eigen's nens^2*nlobs + nens^3. Timed on one core
+        # (nens = 64, 128, 256), eigen is already ~1.4-1.8x faster at nlobs = nens and
+        # the crossover is near nlobs = nens/2; svd is ~5-9x slower at nlobs = 4*nens,
+        # which is where this switch used to sit. An explicit 'svd' or 'eigen' choice
+        # is always respected as-is.
         if self.transform_solver == 'auto':
-            use_eigen = len(ind) > 4 * (c.nens + c.nens_static)
+            use_eigen = len(ind) > (c.nens + c.nens_static)
             if use_eigen and not self._warned_eigen_fallback:
-                c.debug_message = 'ETKF: nlobs >> nens, auto-selected eigen transform_solver'
+                c.debug_message = 'ETKF: nlobs > nens, auto-selected eigen transform_solver'
                 self._warned_eigen_fallback = True
         else:
             use_eigen = (self.transform_solver == 'eigen')

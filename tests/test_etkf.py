@@ -377,3 +377,24 @@ class TestApplyEnsembleTransform(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestHessianSolvers(unittest.TestCase):
+    """'auto' switches between the two decompositions as nlobs crosses nens, so they must agree
+    on both sides of it: same eigenvalues, same eigenvectors up to sign."""
+
+    def test_svd_and_eigen_agree_either_side_of_the_switch(self):
+        from NEDAS.assim_tools.assimilators.ETKF.core import hessian_decomposition
+        rng = np.random.default_rng(1)
+        nens = 20
+        for nlobs in (5, nens, 3 * nens):
+            S = rng.standard_normal((nens, nlobs))
+            ok_s, d_s, U_s = hessian_decomposition(S, False)
+            ok_e, d_e, U_e = hessian_decomposition(S, True)
+            self.assertTrue(ok_s and ok_e)
+            order_s, order_e = np.argsort(d_s), np.argsort(d_e)
+            np.testing.assert_allclose(d_s[order_s], d_e[order_e], rtol=1e-10, atol=1e-10)
+            # the Hessian itself is the sign-free check on the vectors
+            H = np.eye(nens) + S @ S.T
+            for d, U in ((d_s, U_s), (d_e, U_e)):
+                np.testing.assert_allclose((U * d) @ U.T, H, rtol=1e-9, atol=1e-9)
