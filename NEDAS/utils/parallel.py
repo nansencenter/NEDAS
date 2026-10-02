@@ -8,6 +8,49 @@ import threading
 import traceback
 import numpy as np
 
+# Environment variables that mean "this process is one rank of an MPI job". One per launcher
+# family, because they do not agree on names:
+#   PMI_SIZE / PMI_RANK          Intel MPI, MPICH, and srun's pmi2 plugin
+#   OMPI_COMM_WORLD_SIZE / ...   OpenMPI's own mpirun
+#   PMIX_RANK / PMIX_NAMESPACE   PMIx, which is how srun --mpi=pmix wires up OpenMPI 5
+# The PMIx entries matter: srun --mpi=pmix sets neither of the others, so without them a
+# pmix-launched rank looks serial, Scheme.run_step re-elevates into a nested launch, and that
+# fails (Olivia, 2026-10-02; betzy never showed it because Intel MPI sets PMI_SIZE).
+#
+# This is only a gate on whether to bring MPI up at all, never the answer to how many ranks
+# there are -- MPI itself is asked for that below. The gate exists because importing mpi4py
+# calls MPI_Init, and on a machine with no fabric (an Olivia login node) that aborts the
+# process rather than raising, so it must not be attempted when nothing launched us.
+MPI_LAUNCH_ENV_VARS = ('PMI_SIZE', 'PMI_RANK',
+                       'OMPI_COMM_WORLD_SIZE', 'OMPI_UNIVERSE_SIZE',
+                       'PMIX_RANK', 'PMIX_NAMESPACE')
+
+
+def mpi_launched(environ: dict|None = None) -> bool:
+    """
+    Whether a launcher started this process as one rank of an MPI job.
+
+    Takes the environment as an argument so it is testable without a launcher.
+    """
+    environ = os.environ if environ is None else environ
+    return any(var in environ for var in MPI_LAUNCH_ENV_VARS)
+
+
+def launcher_task_count(environ: dict|None = None) -> int:
+    """
+    How many tasks the launcher believes it started, or 0 if it does not say.
+
+    Used only to catch the case where the launcher and MPI disagree; see Comm.__init__.
+    """
+    environ = os.environ if environ is None else environ
+    for var in ('SLURM_STEP_NUM_TASKS', 'SLURM_NTASKS', 'PMI_SIZE', 'OMPI_COMM_WORLD_SIZE'):
+        try:
+            return int(environ[var])
+        except (KeyError, ValueError):
+            continue
+    return 0
+
+
 class Comm:
     """
     Communicator class supporting both serial and MPI programs.
@@ -31,24 +74,46 @@ class Comm:
     mpi_ready: bool = False
 
     def __init__(self):
-        # detect if mpi environment exists
-        # possible environ variable names from mpi calls
-        mpi_env_var = ('PMI_SIZE', 'OMPI_UNIVERSE_SIZE')
-        if any([ev in os.environ for ev in mpi_env_var]):
-            # program is called from mpi, initialize comm
+        if mpi_launched():
+            # A launcher started us; ask MPI itself how many ranks there actually are.
+            # Importing mpi4py fails in more than one way, and not all are ImportError: with
+            # no MPI module loaded it raises RuntimeError('cannot load MPI library') from its
+            # own dlopen of libmpi (Olivia login node, 2026-10-02). Catch the lot and fall
+            # back, rather than letting a runtime-library problem end the program.
             try:
                 from mpi4py import MPI   #type: ignore
+            except Exception as exc:
+                print(f"Warning: MPI environment found but mpi4py is unusable ({exc!r}). "
+                      "Falling back to serial program for now.", flush=True)
+                self._MPI = None
+                self._comm = DummyComm()
+            else:
                 self._MPI = MPI
                 self._comm = MPI.COMM_WORLD
                 self.mpi_ready = True
 
-            except ImportError:
-                print("Warning: MPI environment found but 'mpi4py' module is not installed. Falling back to serial program for now.", flush=True)
-                self._MPI = None
-                self._comm = DummyComm()
+                # The launcher's task count and MPI's own view must agree. They do not when
+                # the wiring is wrong -- srun --mpi=pmi2 against OpenMPI, for instance, starts
+                # N processes that each see COMM_WORLD size 1. Nothing then errors: every rank
+                # believes it is alone and runs the whole analysis, writing the same files
+                # (observed on Olivia as one log reporting 'Output posterior ensemble mean'
+                # three times). That is worse than a crash, so refuse it here and name the fix.
+                # Deliberately outside the try above: this must propagate, not fall back.
+                expected = launcher_task_count()
+                if expected > 1 and self._comm.Get_size() == 1:
+                    raise RuntimeError(
+                        f"the launcher started {expected} tasks but MPI_COMM_WORLD has size 1: "
+                        "the ranks are running as independent singletons, and each would "
+                        "repeat the whole computation. The launcher is not wiring MPI up -- "
+                        "with OpenMPI under Slurm use 'srun --mpi=pmix' (check 'srun --mpi=list'), "
+                        "or use the MPI's own launcher (mpirun).")
 
         else:
-            # serial program, use a dummy communicator
+            # Serial program: use a dummy communicator, and do NOT import mpi4py to check.
+            # The import is not a safe probe -- on a node with an MPI module loaded but no
+            # fabric (an Olivia login node), MPI_Init fails inside the pml/OFI framework and
+            # kills the process with no Python exception to catch, so attempting it here would
+            # break exactly the serial case this branch exists to support.
             self._MPI = None
             self._comm = DummyComm()
 

@@ -1,4 +1,5 @@
 # check if your mpi environment is correctly setup
+import os
 import numpy as np
 import unittest
 from NEDAS.utils.parallel import Comm, distribute_tasks
@@ -96,3 +97,60 @@ class TestParallel(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+
+
+class TestMPILauncherDetection(unittest.TestCase):
+    """
+    Which environment means "one rank of an MPI job", and how a broken launcher is caught.
+
+    The env check is only a gate on whether to bring MPI up: importing mpi4py calls MPI_Init,
+    and on a node with no fabric that aborts the process instead of raising, so it must not be
+    attempted when nothing launched us. How many ranks there are is asked of MPI, never
+    guessed from these variables.
+    """
+
+    def test_each_launcher_family_is_recognized(self):
+        from NEDAS.utils.parallel import mpi_launched
+        for var in ('PMI_SIZE', 'PMI_RANK', 'OMPI_COMM_WORLD_SIZE',
+                    'OMPI_UNIVERSE_SIZE', 'PMIX_RANK', 'PMIX_NAMESPACE'):
+            with self.subTest(launcher_var=var):
+                self.assertTrue(mpi_launched({var: '4'}))
+
+    def test_pmix_is_recognized(self):
+        """srun --mpi=pmix sets only PMIX_*, which is how OpenMPI 5 is wired under Slurm"""
+        from NEDAS.utils.parallel import mpi_launched
+        pmix_env = {'PMIX_RANK': '0', 'PMIX_NAMESPACE': 'slurm.pmix.2414269.0',
+                    'SLURM_NTASKS': '4'}
+        self.assertTrue(mpi_launched(pmix_env))
+        self.assertNotIn('PMI_SIZE', pmix_env)
+        self.assertNotIn('OMPI_UNIVERSE_SIZE', pmix_env)
+
+    def test_a_bare_shell_is_not_an_mpi_job(self):
+        from NEDAS.utils.parallel import mpi_launched
+        self.assertFalse(mpi_launched({}))
+        # a batch script body is inside a Slurm allocation but is not itself an MPI rank
+        self.assertFalse(mpi_launched({'SLURM_JOB_ID': '1', 'SLURM_NTASKS': '8'}))
+
+    def test_launcher_task_count(self):
+        from NEDAS.utils.parallel import launcher_task_count
+        self.assertEqual(launcher_task_count({'SLURM_STEP_NUM_TASKS': '8'}), 8)
+        self.assertEqual(launcher_task_count({'SLURM_NTASKS': '4'}), 4)
+        self.assertEqual(launcher_task_count({'PMI_SIZE': '2'}), 2)
+        self.assertEqual(launcher_task_count({}), 0)
+        self.assertEqual(launcher_task_count({'SLURM_NTASKS': 'not-a-number'}), 0)
+
+    def test_unusable_mpi4py_falls_back_to_serial(self):
+        """A launcher env without a loadable MPI runtime must degrade, not crash.
+
+        mpi4py raises RuntimeError (not ImportError) when libmpi cannot be dlopen'd.
+        """
+        import sys
+        from unittest import mock
+        from NEDAS.utils.parallel import DummyComm
+        broken = mock.MagicMock()
+        type(broken).MPI = mock.PropertyMock(side_effect=RuntimeError('cannot load MPI library'))
+        with mock.patch.dict(os.environ, {'PMIX_RANK': '0'}), \
+             mock.patch.dict(sys.modules, {'mpi4py': broken, 'mpi4py.MPI': None}):
+            comm = Comm()
+        self.assertFalse(comm.mpi_ready)
+        self.assertIsInstance(comm._comm, DummyComm)
