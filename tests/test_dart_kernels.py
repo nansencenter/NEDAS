@@ -552,3 +552,16 @@ class TestClampObsPrior(unittest.TestCase):
         ens = np.array([[-1.0, 2.0], [0.5, -3.0]])
         self._update(self._assim('GAMMA', clamp_obs_prior=True), ens)
         self.assertGreater(ens.min(), 0.0)
+
+
+class TestKindsThatSpeakThroughTheErrorHandler(unittest.TestCase):
+    def test_gamma_and_bnrhf_initialize_dart(self):
+        """Uninitialized, DART's error_handler stops the process even on a plain message, and
+        GAMMA's inv_cdf and the bounded BNRHF both report through it."""
+        from NEDAS.assim_tools.assimilators.DART.core import KINDS_NEEDING_INIT
+        self.assertLessEqual({'GAMMA', 'BNRHF'}, KINDS_NEEDING_INIT)
+
+    def test_eakf_stays_free_of_dart_setup(self):
+        """EAKF reproduces the native filter exactly because nothing of DART's runs around it."""
+        from NEDAS.assim_tools.assimilators.DART.core import KINDS_NEEDING_INIT
+        self.assertNotIn('EAKF', KINDS_NEEDING_INIT)

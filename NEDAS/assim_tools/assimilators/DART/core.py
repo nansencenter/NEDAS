@@ -25,11 +25,21 @@ STOCHASTIC_KINDS = {'ENKF', 'KERNEL'}
 #   RHF   rectangular_quadrature, gaussian_likelihood_tails
 #   KDE   quadrature_order (kde_nml, read on first use)
 #
-# The others read no namelist variable that reaches them, so they stay free of DART's
-# runtime setup -- which is what lets EAKF reproduce NEDAS's native results exactly.
-# KERNEL is deliberately absent: it looked like it belonged here because its seeding block
-# calls my_task_id(), but seeding explicitly through dart_set_random_seed() skips that.
-KINDS_NEEDING_INIT = {'ENKF', 'RHF', 'KDE'}
+# Two more need it for a different reason, not a namelist but DART's error handler:
+#   GAMMA   inv_cdf reports "Failed to converge for quantile 1e-23" through error_handler as
+#           a plain message (thousands of times per analysis on near-zero humidity)
+#   BNRHF   reports a member outside the bounds the same way
+# With the utilities uninitialized the handler treats even a message as fatal -- "must call
+# initialize_utilities before error_handler" -- and stops the whole process, so these kinds
+# died on the first message, with a text that hid what had been said (2026-10-02).
+#
+# The rest read no namelist variable that reaches them and are not known to report through
+# the handler, so they stay free of DART's runtime setup -- which is what lets EAKF reproduce
+# NEDAS's native results exactly. KERNEL is deliberately absent: it looked like it belonged
+# here because its seeding block calls my_task_id(), but seeding explicitly through
+# dart_set_random_seed() skips that. NEDAS_DART_INIT_ALL=1 initializes every kind, to find
+# out whether another one speaks through the handler.
+KINDS_NEEDING_INIT = {'ENKF', 'RHF', 'KDE', 'GAMMA', 'BNRHF'}
 
 # Sections DART insists on when we initialize. utilities_nml is read by
 # initialize_utilities, assim_tools_nml by assim_tools_init, and obs_kind_nml by the
