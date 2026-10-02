@@ -121,7 +121,8 @@ obs_def:
   # the following is specific to the observation 'streamfunc' in the dataset
   nobs: 3000              # number of observations (if generating synthetic obs)
   err:
-    type: normal          # observation error model (normal, ...)
+    type: normal          # observation error model: normal, or lognormal (multiplicative: std is the
+                          # log-space std, dimensionless, and 'floor' below is the smallest truth value)
     std: 0.2              # error standard deviation (in observation physical units); can also be
                           # given as a per-iteration dict, e.g. {iter0: 0.5, iter1: 0.2}, see hroi below
   hroi: 100               # horizontal localization radius (in grid coordinate units); can also be

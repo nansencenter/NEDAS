@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import t2h, ensure_list
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
+from NEDAS.utils.obs_error import perturb_obs, assimilation_std
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
 from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
@@ -393,11 +394,10 @@ class Obs:
                     # compute obs values
                     seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
 
-                    # perturb with obs err
-                    # TODO: only support normal err_type here
+                    # perturb with obs err (normal or lognormal, see utils/obs_error.py)
                     # seed by (time, obs_rec_id) so noise is reproducible across cases/cycles
                     np.random.seed((int(obs_rec.time.timestamp()) + obs_rec_id) % (2**32 - 1))
-                    seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
+                    seq['obs'] = perturb_obs(seq['obs'], obs_rec.err)
 
                     c._synthetic_obs_cache[obs_rec_id] = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in seq.items()}
                 else:
@@ -406,7 +406,7 @@ class Obs:
                 # err_std for the assimilator's R, re-applied fresh every iteration (not cached
                 # with the rest of seq) so obs values/generation noise stay fixed per cycle while
                 # R can still be inflated per iteration (e.g. tempering) independent of them
-                seq['err_std'] = np.full_like(seq['err_std'], obs_rec.err.std * obs_rec.err.infl)
+                seq['err_std'] = assimilation_std(seq['obs'], obs_rec.err).astype(seq['err_std'].dtype)
 
             else:
                 # read dataset files and obtain obs sequence

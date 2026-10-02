@@ -113,6 +113,7 @@ class ObsInfo:
                 tcorr=err_opts.get('tcorr',0.),
                 cross_corr=cross_corr,
                 infl=resolve_iter_dict(err_opts.get('infl', 1.0), c.iter, c.config.niter),
+                floor=err_opts.get('floor', 0.0),
             )
             rec = ObsRecord(
                 name=vname,
