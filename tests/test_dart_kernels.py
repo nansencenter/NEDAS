@@ -451,3 +451,46 @@ class TestDARTAssimilatorMethods(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestInputNamelistWrite(unittest.TestCase):
+    """Every rank writes input.nml at once; no reader may ever see it partly written.
+
+    An exclusive create followed by a write left a window in which the file existed but was
+    empty. A rank arriving then read no NEDAS marker, took the file for a foreign namelist,
+    and raised -- and the hang that followed (that rank waits in a Barrier, the rest wait for
+    it) had no message at all. Needs no DART library: only the file is exercised.
+    """
+
+    def test_a_reader_never_sees_a_partial_namelist(self):
+        import tempfile
+        import threading
+        from NEDAS.assim_tools.assimilators.DART.core import DARTAssimilator, NEDAS_NML_MARKER
+        assim = DARTAssimilator.__new__(DARTAssimilator)
+        cwd = os.getcwd()
+        bad, done = [], threading.Event()
+
+        def reader():
+            while not done.is_set():
+                try:
+                    with open('input.nml') as f:
+                        text = f.read()
+                except FileNotFoundError:
+                    continue
+                if not text.startswith(NEDAS_NML_MARKER) or '&assim_tools_nml' not in text:
+                    bad.append(text[:60])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                watcher = threading.Thread(target=reader)
+                watcher.start()
+                writers = [threading.Thread(target=lambda: [assim._write_input_nml() for _ in range(40)])
+                           for _ in range(16)]
+                for w in writers: w.start()
+                for w in writers: w.join()
+                done.set(); watcher.join()
+                self.assertEqual(os.listdir('.'), ['input.nml'], 'temporary files left behind')
+            finally:
+                os.chdir(cwd)
+        self.assertEqual(bad, [], 'a reader saw input.nml empty or partly written')

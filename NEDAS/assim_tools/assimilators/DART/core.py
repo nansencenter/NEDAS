@@ -1,5 +1,6 @@
 import ctypes
 import os
+import threading
 import re
 import subprocess
 import sys
@@ -261,6 +262,28 @@ class DARTAssimilator(SerialAssimilator):
             '',
         ])
 
+    def _write_input_nml(self) -> None:
+        """
+        Write input.nml so that no reader ever sees it partly written.
+
+        Every rank gets here at the same moment, in one directory. An exclusive create
+        followed by a write is not atomic: a rank arriving between the two finds an empty file,
+        reads no NEDAS marker on its first line, takes it for someone else's namelist and
+        raises -- and that rank then sits in the Barrier of Context's timing wrapper while the
+        rest wait for it, which is a hang with no message (DART RHF, 2026-10-02). The content is
+        the same from every rank, so the last replace winning is harmless; os.replace is atomic
+        within a directory, so the file is either absent or complete.
+
+        A foreign input.nml created in the instant between the caller's check and this replace
+        would be overwritten; the old exclusive create did not allow that, but the window is
+        negligible next to a namelist someone left there on purpose, which the check refuses.
+        """
+        # unique per process and thread, or two writers would truncate each other's temp file
+        tmp = f'input.nml.{os.getpid()}.{threading.get_ident()}.tmp'
+        with open(tmp, 'w') as f:
+            f.write(self._input_nml_text())
+        os.replace(tmp, 'input.nml')
+
     def _check_namelist_sections(self, path: str = 'input.nml') -> None:
         """
         Fail in python if a supplied namelist is missing a section DART requires.
@@ -329,8 +352,7 @@ class DARTAssimilator(SerialAssimilator):
             with open('input.nml') as f:
                 ours = NEDAS_NML_MARKER in f.readline()
             if ours and self.write_input_nml:
-                with open('input.nml', 'w') as f:      # refresh, config may have changed
-                    f.write(self._input_nml_text())
+                self._write_input_nml()                # refresh, config may have changed
             elif not ours and self.write_input_nml:
                 raise RuntimeError(
                     f"an input.nml not written by NEDAS is already in {os.getcwd()}; refusing "
@@ -339,12 +361,7 @@ class DARTAssimilator(SerialAssimilator):
             else:
                 self._check_namelist_sections()
         elif self.write_input_nml:
-            try:
-                # exclusive create: several ranks may reach this at once
-                with open('input.nml', 'x') as f:
-                    f.write(self._input_nml_text())
-            except FileExistsError:
-                pass
+            self._write_input_nml()
         else:
             raise FileNotFoundError(
                 f"filter_kind '{self.filter_kind}' needs DART's namelists, read from an "
