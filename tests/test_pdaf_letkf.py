@@ -33,6 +33,7 @@ import numpy as np
 
 from NEDAS.assim_tools.assimilators.PDAF.core import (
     PDAFAssimilator, FILTER_KINDS, LOC_WEIGHTS, NEDAS_TO_PDAF_WEIGHT, import_pypdaf,
+    mpi_sonames, check_mpi_environment,
 )
 from NEDAS.assim_tools.assimilators.ETKF.core import local_analysis_main
 from NEDAS.assim_tools.localization.distance_based import gaspari_cohn_func
@@ -153,6 +154,49 @@ def make_assimilator(**kwargs):
     self._domainsize = np.array([-1.0, -1.0])
     self.ensure_initialized(FakeContext(NENS), NFLD * NLOC)
     return self
+
+
+class TestMPIEnvironmentGuard(unittest.TestCase):
+    """
+    The environment is checked before PDAF is handed anything, because afterwards there is no
+    checking it: PDAF calls MPI_Init from fortran, a failure aborts the process, and the
+    interpreter wedges rather than raising. These are the two configurations that do it.
+    """
+
+    ONE = "7f00-7f01 r-xp /usr/lib/libmpi.so.12\n7f02-7f03 r-xp /usr/lib/libmpifort.so.12\n"
+    TWO = ONE + "7f04-7f05 r-xp /opt/openmpi/lib/libmpi.so.40\n"
+
+    def test_sonames_found(self):
+        self.assertEqual(mpi_sonames(self.ONE), {'libmpi.so.12'})
+        self.assertEqual(mpi_sonames(self.TWO), {'libmpi.so.12', 'libmpi.so.40'})
+        self.assertEqual(mpi_sonames(''), set())
+
+    def test_one_implementation_passes(self):
+        check_mpi_environment(maps_text=self.ONE, environ={})
+
+    def test_two_implementations_refused(self):
+        with self.assertRaises(RuntimeError) as caught:
+            check_mpi_environment(maps_text=self.TWO, environ={})
+        message = str(caught.exception)
+        self.assertIn('libmpi.so.12', message)
+        self.assertIn('libmpi.so.40', message)
+        self.assertIn('install_pypdaf.md', message)
+
+    def test_pmi_outside_a_job_step_refused(self):
+        with self.assertRaises(RuntimeError) as caught:
+            check_mpi_environment(maps_text=self.ONE,
+                                  environ={'I_MPI_PMI_LIBRARY': '/usr/lib/libpmi2.so'})
+        self.assertIn('unset I_MPI_PMI_LIBRARY', str(caught.exception))
+
+    def test_pmi_inside_a_job_step_is_fine(self):
+        """inside a job step the PMI library is what makes MPI work, so it must not be refused"""
+        check_mpi_environment(maps_text=self.ONE,
+                              environ={'I_MPI_PMI_LIBRARY': '/usr/lib/libpmi2.so',
+                                       'SLURM_JOB_ID': '1754314'})
+
+    def test_unreadable_maps_does_not_block(self):
+        """no /proc is not evidence of a problem; the check simply does not apply"""
+        check_mpi_environment(maps_text='', environ={})
 
 
 class TestPDAFMapping(unittest.TestCase):

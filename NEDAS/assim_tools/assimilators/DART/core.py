@@ -359,6 +359,10 @@ class DARTAssimilator(SerialAssimilator):
     def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err):
         self._ensure_initialized()
         self._ensure_seeded()
+        lib = self.lib      # resolved before the timed region: `lib` is a lazy property that
+        # dlopens the kernel library and installs its argtypes on first access, and timing that
+        # inside the region attributed a one-off ~0.5 s to the first kernel call (measured on
+        # betzy, 2026-10-02 -- it read as 123 ms per observation).
         cost = self.call_cost
         with cost.measure('obs_increment'):
             obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
@@ -366,7 +370,7 @@ class DARTAssimilator(SerialAssimilator):
             net_a = np.zeros(1)
 
             with cost.measure('dart_obs_increment'):
-                status = self.lib.dart_obs_increment(self.filter_kind_code, obs_prior.size, obs_prior,
+                status = lib.dart_obs_increment(self.filter_kind_code, obs_prior.size, obs_prior,
                                                      float(obs), float(obs_err)**2,
                                                      int(bool(self.bounded_below)), int(bool(self.bounded_above)),
                                                      float(self.lower_bound), float(self.upper_bound),
@@ -413,6 +417,7 @@ class DARTAssimilator(SerialAssimilator):
         """
         if not ens.flags['C_CONTIGUOUS'] or ens.dtype != np.float64:
             raise ValueError("DART kernels need a C-contiguous float64 ensemble to update in place")
+        lib = self.lib      # outside the timed region, as in obs_increment above
         cost = self.call_cost
         with cost.measure('_regress'):
             nens = ens.shape[0]
@@ -422,7 +427,7 @@ class DARTAssimilator(SerialAssimilator):
             obs_incr = np.ascontiguousarray(obs_incr, dtype=np.float64)
 
             with cost.measure('dart_update_from_obs_inc'):
-                self.lib.dart_update_from_obs_inc(nens, flat.shape[1], obs_prior, obs_incr,
+                lib.dart_update_from_obs_inc(nens, flat.shape[1], obs_prior, obs_incr,
                                                   self._net_a, flat, lfactor)
 
 

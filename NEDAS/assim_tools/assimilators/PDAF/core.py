@@ -1,4 +1,6 @@
 import copy
+import os
+import re
 import numpy as np
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 from NEDAS.utils.call_cost import CallCost
@@ -55,6 +57,64 @@ def import_pypdaf():
             "It has no PyPI/conda package -- build it from source (meson + a PDAF release), "
             "see NEDAS/assim_tools/assimilators/PDAF/install_pypdaf.md.") from err
     return pyPDAF
+
+# A failed MPI_Init inside pyPDAF cannot be caught: PDAF calls it from fortran, Intel MPI
+# aborts the process, and what Python sees is a segfault followed by a wedged interpreter --
+# the status check after pyPDAF.init never runs. Observed 2026-10-02 as a pytest run that hung
+# until its timeout killed it, and a SLURM job killed the same way, for an environment problem
+# whose fix is one line. So the environment is checked BEFORE calling in, where a clear
+# exception is still possible.
+
+_LIBMPI_SONAME = re.compile(r'/(libmpi\.so\.\d+)')
+
+
+def mpi_sonames(maps_text: str) -> set:
+    """
+    The distinct libmpi sonames mapped into a process, from /proc/self/maps.
+
+    One is normal. Two means two MPI implementations are loaded at once -- libmpi.so.12 is
+    the MPICH ABI (MPICH, Intel MPI), libmpi.so.40 is OpenMPI -- and then a communicator
+    made by one is meaningless to the other, which is what PDAF receives through py2f().
+    """
+    return set(_LIBMPI_SONAME.findall(maps_text))
+
+
+def check_mpi_environment(maps_text: str = None, environ: dict = None) -> None:
+    """
+    Refuse the two misconfigurations that make PDAF's own MPI_Init abort, with the remedy.
+
+    Checked, in order: more than one MPI implementation loaded, and Intel MPI's PMI library
+    pointing at a resource manager that is not there (a login node), which aborts with
+    PMI2_Job_GetId returned 14. Both are described in install_pypdaf.md.
+
+    Takes its inputs as arguments so it is testable without a particular machine; defaults
+    read the live process.
+    """
+    environ = os.environ if environ is None else environ
+    if maps_text is None:
+        try:
+            with open('/proc/self/maps') as handle:
+                maps_text = handle.read()
+        except OSError:
+            maps_text = ''          # not Linux, or /proc unavailable: skip this check
+
+    sonames = mpi_sonames(maps_text)
+    if len(sonames) > 1:
+        raise RuntimeError(
+            f"two MPI implementations are loaded in this process ({', '.join(sorted(sonames))}), "
+            "so the communicator NEDAS passes to PDAF would be meaningless to it and PDAF's "
+            "MPI_Init would abort. pyPDAF and mpi4py must use the same MPI. On betzy this means "
+            "sourcing the environment that loads the Intel MPI module (nedas.src) rather than "
+            "calling the conda interpreter directly -- without it, conda-forge mpi4py falls back "
+            "to its OpenMPI build. See NEDAS/assim_tools/assimilators/PDAF/install_pypdaf.md.")
+
+    if environ.get('I_MPI_PMI_LIBRARY') and not environ.get('SLURM_JOB_ID'):
+        raise RuntimeError(
+            "I_MPI_PMI_LIBRARY is set but this is not a Slurm job step, so PDAF's own MPI_Init "
+            "will try the resource manager's PMI and abort with 'PMI2_Job_GetId returned 14'. "
+            "Run `unset I_MPI_PMI_LIBRARY` first, or run inside a job step, where it is "
+            "harmless. See NEDAS/assim_tools/assimilators/PDAF/install_pypdaf.md.")
+
 
 class PDAFAssimilator(BatchAssimilator):
     """
@@ -267,6 +327,8 @@ class PDAFAssimilator(BatchAssimilator):
             return
 
         pyPDAF = import_pypdaf()
+        # before set_parallel/init, while a clear exception is still possible (see above)
+        check_mpi_environment()
         # PDAF runs entirely inside this rank: NEDAS has already made each partition a
         # self-contained analysis problem, so all four communicators are MPI_COMM_SELF and
         # PDAF sees one filter PE with the whole (partition-sized) state.
