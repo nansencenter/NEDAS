@@ -1,4 +1,5 @@
 import copy
+from NEDAS.utils.call_cost import CallCost
 from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
@@ -60,6 +61,20 @@ class SerialAssimilator(Assimilator):
 
         return obs_inds
 
+    @property
+    def loop_cost(self) -> CallCost:
+        """
+        The three per-observation calls of the serial loop, timed (NEDAS/utils/call_cost.py;
+        opt-in with NEDAS_CALL_COST, otherwise the functions are called untouched). Shared by
+        every serial assimilator, so the native EAKF and a compiled one are timed at the same
+        boundaries; what the loop spends outside them is the broadcast, the distance
+        computations and bookkeeping, which are the same Python for every backend.
+        """
+        cost = getattr(self, '_loop_cost', None)
+        if cost is None:
+            cost = self._loop_cost = CallCost()
+        return cost
+
     def distribute_partitions(self, c: Context):
         # just assign each partition to each pid, pid==par_id
         par_list = {p:[p] for p in range(c.config.nproc_mem)}
@@ -91,6 +106,10 @@ class SerialAssimilator(Assimilator):
 
         # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
+        cost = self.loop_cost
+        obs_increment = cost.wrap(self.obs_increment, 'obs_increment')
+        update_local_state = cost.wrap(self.update_local_state, 'update_local_state')
+        update_local_obs = cost.wrap(self.update_local_obs, 'update_local_obs')
         for p in range(len(obs_list)):
             obs_rec_id, v, owner_pid, i = obs_list[p]
 
@@ -113,20 +132,21 @@ class SerialAssimilator(Assimilator):
 
             else:
                 obs_p = None
-            obs_p = c.comm_mem.bcast(obs_p, root=owner_pid)
+            with cost.measure('bcast_obs'):     # where a rank waits for the slowest one
+                obs_p = c.comm_mem.bcast(obs_p, root=owner_pid)
 
             if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['prior_static']).any() or np.isnan(obs_p['obs']):
                 continue
 
             # compute obs-space increment
-            obs_incr = self.obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
+            obs_incr = obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
 
             # 2. all pid update their own locally stored state:
             state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
             state_v_dist = np.abs(obs_p['z'] - state_data['z'])
             state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
-            self.update_local_state(state_data['state_prior'], state_data['state_static'],
+            update_local_state(state_data['state_prior'], state_data['state_static'],
                                     obs_p['prior'], obs_p['prior_static'], obs_incr,
                                     state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
@@ -138,7 +158,7 @@ class SerialAssimilator(Assimilator):
             obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
             obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])
             obs_impact = obs_data['obs_impact']
-            self.update_local_obs(obs_data['obs_prior'], obs_data['obs_prior_static'], obs_data['used'],
+            update_local_obs(obs_data['obs_prior'], obs_data['obs_prior_static'], obs_data['used'],
                                   obs_p['prior'], obs_p['prior_static'], obs_incr,
                                   obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
