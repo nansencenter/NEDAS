@@ -515,3 +515,40 @@ class TestGammaDomainGuard(unittest.TestCase):
     def test_non_positive_observation_is_refused(self):
         with self.assertRaisesRegex(ValueError, 'strictly positive'):
             self._assim().obs_increment(np.array([1.0, 2.0, 3.0]), np.zeros(0), -0.5, 1.0)
+
+
+class TestClampObsPrior(unittest.TestCase):
+    """The linear update of later observations' priors can break a bound; clamping restores it.
+
+    The regression is stubbed out so no DART library is needed; only the clamp is exercised.
+    """
+
+    def _assim(self, kind, **kw):
+        from NEDAS.assim_tools.assimilators.DART.core import DARTAssimilator
+        a = DARTAssimilator.__new__(DARTAssimilator)
+        a.filter_kind = kind
+        a._regress = lambda *args: None
+        for k, v in kw.items(): setattr(a, k, v)
+        return a
+
+    def _update(self, a, ens):
+        ones = lambda d, r: np.ones_like(d, dtype=float)
+        n = ens.shape[1]
+        a.update_local_obs(ens, None, np.zeros(n, bool), np.zeros(4), None, np.zeros(4),
+                           np.zeros(n), np.zeros(n), np.zeros(n), 1.0, 1.0, 1.0,
+                           ones, ones, ones, None, np.ones(n))
+
+    def test_off_by_default_leaves_the_ensemble_alone(self):
+        ens = np.array([[-1.0, 2.0], [0.5, -3.0]])
+        self._update(self._assim('BNRHF', bounded_below=True, lower_bound=0.0, clamp_obs_prior=False), ens)
+        self.assertEqual(ens.min(), -3.0)
+
+    def test_clamps_into_the_lower_bound(self):
+        ens = np.array([[-1.0, 2.0], [0.5, -3.0]])
+        self._update(self._assim('BNRHF', bounded_below=True, lower_bound=0.0, clamp_obs_prior=True), ens)
+        self.assertEqual(ens.min(), 0.0)
+
+    def test_gamma_is_clamped_to_strictly_positive(self):
+        ens = np.array([[-1.0, 2.0], [0.5, -3.0]])
+        self._update(self._assim('GAMMA', clamp_obs_prior=True), ens)
+        self.assertGreater(ens.min(), 0.0)

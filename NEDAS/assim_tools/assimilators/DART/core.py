@@ -132,6 +132,7 @@ class DARTAssimilator(SerialAssimilator):
     bounded_below: bool = False
     bounded_above: bool = False
     lower_bound: float = 0.0
+    clamp_obs_prior: bool = False
     upper_bound: float = 1.0
     _lib = None
     _net_a: float = 0.0
@@ -344,7 +345,13 @@ class DARTAssimilator(SerialAssimilator):
         whose settings matter. In that case either let NEDAS manage the file (remove it) or
         set write_input_nml to False to use yours as-is.
         """
-        if self._initialized or str(self.filter_kind).upper() not in KINDS_NEEDING_INIT:
+        # NEDAS_DART_INIT_ALL=1 brings DART's utilities up for every kind, which is how a kernel
+        # that dies in DART's error_handler gets to print its real message: without the
+        # utilities initialized the handler only complains that they are not (DART GAMMA and
+        # BNRHF, 2026-10-02). Off by default, since initializing is what writes dart_log files.
+        needs_init = (str(self.filter_kind).upper() in KINDS_NEEDING_INIT
+                      or os.environ.get('NEDAS_DART_INIT_ALL') == '1')
+        if self._initialized or not needs_init:
             return
         self._check_gated_options()
 
@@ -432,6 +439,29 @@ class DARTAssimilator(SerialAssimilator):
         # which is the same test the fortran loop already applies
         lfactor = np.where(used, 0.0, lfactor)
         self._regress(obs_data, obs_prior, obs_incr, lfactor)
+        if self.clamp_obs_prior:
+            self._clamp_to_bounds(obs_data)
+
+    # DART GAMMA wants strictly positive members; this stands in for zero when clamping
+    GAMMA_FLOOR = 1e-12
+
+    def _clamp_to_bounds(self, ens) -> None:
+        """
+        Clip observation priors back into the filter's bounds, in place.
+
+        Observation priors of not-yet-assimilated observations are updated by linear
+        regression onto each earlier increment, which knows nothing about bounds: a member
+        of a positive quantity can come out negative, and then the bounded kernels refuse it
+        (BNRHF: 'Smallest ensemble member less than lower bound'; GAMMA needs positive
+        members). Clipping is a modelling choice the unbounded filters do not make, so it is
+        opt-in and a result obtained with it should say so.
+        """
+        lower = float(self.lower_bound) if self.bounded_below else None
+        if str(self.filter_kind).upper() == 'GAMMA':
+            lower = max(lower if lower is not None else 0.0, self.GAMMA_FLOOR)
+        upper = float(self.upper_bound) if self.bounded_above else None
+        if lower is not None or upper is not None:
+            np.clip(ens, lower, upper, out=ens)
 
     def _regress(self, ens, obs_prior, obs_incr, lfactor) -> None:
         """

@@ -40,6 +40,13 @@ quadrature_order: 9              # KDE: Gauss-Legendre quadrature order
 sampling_error_correction: False
 
 # bounds for the bounded kernels (BNRHF, KDE); ignored by the others
+# Clip the observation priors of not-yet-assimilated observations into the bounds after each
+# update (GAMMA: to a tiny positive floor). Those priors are updated by linear regression,
+# which can push a member of a positive quantity negative, and then BNRHF (bounded) and GAMMA
+# refuse it. Off by default because the unbounded filters do not clip and it is a modelling
+# choice; set it when observing a bounded quantity with a bounded or positive-only kernel.
+clamp_obs_prior: False
+
 bounded_below: False
 bounded_above: False
 lower_bound: 0.0
