@@ -126,3 +126,22 @@ class TestSerialBatchEquivalence(unittest.TestCase):
             self.assertGreater(abs(serial - value), 1e-4,
                                msg=f'loc_weight_sqrt={use_sqrt} unexpectedly reproduces the '
                                    'serial analysis under localization')
+
+
+class TestSerialOverrideSignatures(unittest.TestCase):
+    """serial.py calls update_local_state/obs with a fixed argument list; every override must
+    accept it. DART missed `correlation_local_func` when the base grew it, and nothing failed
+    until a DART run reached the update step."""
+
+    def test_overrides_match_base(self):
+        import inspect
+        from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
+        from NEDAS.assim_tools.assimilators.EAKF.core import EAKFAssimilator
+        from NEDAS.assim_tools.assimilators.DART.core import DARTAssimilator
+        for name in ('update_local_state', 'update_local_obs'):
+            want = list(inspect.signature(getattr(SerialAssimilator, name)).parameters)
+            # QCEF is left out: it is an unfinished stub whose overrides and kernel calls predate
+            # this interface, and is not a working assimilator to hold to it yet
+            for cls in (EAKFAssimilator, DARTAssimilator):
+                got = list(inspect.signature(getattr(cls, name)).parameters)
+                self.assertEqual(got, want, f"{cls.__name__}.{name}")

@@ -386,7 +386,7 @@ class DARTAssimilator(SerialAssimilator):
     def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
                            state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
-                           h_local_func, v_local_func, t_local_func,
+                           h_local_func, v_local_func, t_local_func, correlation_local_func,
                            impact_on_variable) -> None:
         # localization stays NEDAS's; lfactor[n, l] = h[l] * v[n, l] * t[n] * impact[n]
         lfactor = (h_local_func(state_h_dist, hroi)[None, :]
@@ -397,7 +397,7 @@ class DARTAssimilator(SerialAssimilator):
     def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
                          h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func,
+                         h_local_func, v_local_func, t_local_func, correlation_local_func,
                          impact_on_variable) -> None:
         lfactor = (h_local_func(h_dist, hroi) * v_local_func(v_dist, vroi)
                    * t_local_func(t_dist, troi) * impact_on_variable)
