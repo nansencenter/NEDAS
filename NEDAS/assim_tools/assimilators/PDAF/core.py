@@ -195,6 +195,18 @@ class PDAFAssimilator(BatchAssimilator):
                 f"{self.__class__.__name__} does not support: {', '.join(sorted(set(unsupported)))}. "
                 "PDAFomi localizes by horizontal distance only; use ETKF for these.")
 
+    @property
+    def call_cost(self) -> CallCost:
+        """
+        What the callback boundary costs (NEDAS/utils/call_cost.py), accumulated across every
+        partition this rank analyses -- created once, not per partition, so a whole analysis
+        can be reported rather than whichever partition happened to run last.
+        """
+        cost = getattr(self, '_call_cost', None)
+        if cost is None:
+            cost = self._call_cost = CallCost()
+        return cost
+
     def locweight_code(self, c) -> int:
         if self.loc_weight != 'auto':
             try:
@@ -333,6 +345,15 @@ class PDAFAssimilator(BatchAssimilator):
         # self-contained analysis problem, so all four communicators are MPI_COMM_SELF and
         # PDAF sees one filter PE with the whole (partition-sized) state.
         from mpi4py import MPI
+        # MPI must be up before a communicator handle is handed to fortran: py2f() is
+        # MPI_Comm_c2f, which the standard forbids before MPI_Init. Whether it is up depends
+        # on import order here -- import_pypdaf() above loads pyPDAF first, and pyPDAF does
+        # not initialize MPI -- and the two MPIs disagree about what that costs: Intel MPI
+        # returns a handle regardless, while OpenMPI aborts the process with "The
+        # MPI_Comm_c2f() function was called before MPI_INIT was invoked" (seen on Olivia,
+        # 2026-10-02). Initializing here makes the backend independent of the order.
+        if not MPI.Is_initialized():
+            MPI.Init()
         comm = MPI.COMM_SELF.py2f()
         pyPDAF.set_parallel(comm, comm, comm, comm, 1, 1, True, 0)
 
@@ -480,7 +501,7 @@ class PDAFAssimilator(BatchAssimilator):
         # crossed a number of times that grows with the problem; cost carries what that
         # amounts to (NEDAS/utils/call_cost.py), measured inside the 'assim_offline' region
         # so each callback reads as a share of the analysis.
-        cost = self.call_cost = CallCost()
+        cost = self.call_cost
         pyPDAF.PDAFomi.init(len(obs_types))
         pyPDAF.PDAFomi.init_local()
         with cost.measure('assim_offline'):
