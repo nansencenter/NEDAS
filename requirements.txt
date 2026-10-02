@@ -7,7 +7,11 @@ netCDF4>=1.6.4
 PyYAML>=6.0.1
 pandas
 xarray
+# numba is optional for correctness -- utils/njit.py falls back to a no-op decorator when it
+# is missing -- but it is required here so CI exercises the compiled kernels. Without it the
+# whole assimilation path runs as pure Python, and a numba-specific regression (a lost type
+# specialization, say) would pass the test suite and only appear on a cluster.
+numba>=0.57.0
 # pyFFTW>=0.13.1 # if not available, will use numpy.fft instead
-# numba>=0.57.0  # optional, recommended for better performance
 # mpi4py>3.1.4   # optional, but needed if running parallel computation
 # jupyter>1.0.0  # optional, for notebook users
