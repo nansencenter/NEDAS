@@ -1,0 +1,53 @@
+nproc_per_run: 1
+nproc_per_util: 1
+ens_init_dir: ''
+ens_run_strategy: scheduler
+walltime: 100
+
+restart_dt: 24  # model restart output interval in hours
+
+# paths to the nedas_bgrid_advance executable (offline io mode) and libnedas_bgrid.so
+# (online io mode), both built by build_bgrid_solo.sh; empty = alongside the code
+model_exe: ''
+model_lib: ''
+
+# horizontal and vertical resolution; the default 60x30 grid with 5 levels is close to the
+# smallest one with somewhat realistic baroclinic instability (DART bgrid_solo readme)
+nlon: 60
+nlat: 30
+nlev: 5
+
+dt_atmos: 3600  # model time step in seconds; forecast periods must be multiples of it
+
+# Model time is counted in days since this date. The Held-Suarez forcing has no calendar
+# (no seasonal or diurnal cycle), so it only fixes how NEDAS dates map to DART times.
+time_ref: '1900-01-01'
+
+# --- initial conditions -------------------------------------------------------------------
+# The model starts from rest with a uniform temperature (its own cold start), which needs a
+# random temperature perturbation to develop baroclinic waves, and about 100 days to reach
+# a statistically steady state.
+spinup_hours: 2400
+init_perturb_sd: 1.0  # K, standard deviation of the random temperature perturbation
+seed: 0  # base random seed; member m (and the truth) use seed + m
+
+# how to initialize ensemble members:
+#   spinup  independent cold starts, each spun up for spinup_hours: a climatological ensemble
+#   truth   the truth state (truth_dir) plus a temperature perturbation of init_perturb_sd
+init_ens_mode: spinup
+
+# --- Held-Suarez forcing (Held and Suarez 1994) --------------------------------------------
+delh: 60.  # equator-pole temperature difference (K)
+t_zero: 315.  # equatorial surface temperature (K)
+t_strat: 200.  # stratospheric temperature (K)
+delv: 10.  # vertical potential temperature gradient (K)
+ka: -40.  # Newtonian cooling time scale (days; negative = days, as in DART)
+ks: -4.  # surface Newtonian cooling time scale (days)
+kf: -1.  # Rayleigh friction time scale (days)
+sigma_b: 0.7  # boundary layer top (sigma)
+
+# --- dynamical core ------------------------------------------------------------------------
+damp_coeff_wind: 0.10
+damp_coeff_temp: 0.10
+advec_order_wind: 4
+advec_order_temp: 2

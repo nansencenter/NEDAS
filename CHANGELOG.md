@@ -12,6 +12,17 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Added
+- `bgrid_solo` model: DART's dry dynamical core with Held-Suarez forcing (global
+  atmosphere, 60x30x5), run through a driver built against the DART source
+  (`build_bgrid_solo.sh`); example in `examples/bgrid_solo`
+- `bgrid_solo`: online io mode, the model advanced in memory through
+  `libnedas_bgrid.so` (a C interface to the same DART code, built by
+  `build_bgrid_solo.sh`), giving the same states as the offline executable
+- Small test models from DART and DAPPER on a common base (`models/ode_model.py`):
+  `lorenz63`, `lorenz84`, `lorenz05` (Lorenz 2005 Models II/III, DART lorenz_04),
+  `lorenz96_2scale`, `nine_var` (Lorenz 1980), `ikeda`, `lotka_volterra`, `ks`
+  (Kuramoto-Sivashinsky); example in `examples/small_models`
+- `synthetic` obs: random positions take their levels from `obs_z` if given
 - `PDAF` assimilator: local ensemble filters (LSEIK/LETKF/LESTKF/LNETF/LKNETF)
   via pyPDAF
 - `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error
@@ -33,6 +44,18 @@ DA schemes, or other backward-compatible features land in the next minor release
   of this interface yet, minor change)
 
 ### Fixed
+- Horizontal localization on grids with `distance_type: spherical` (lon-lat grids,
+  e.g. `bgrid_solo`): `Grid.distance` ignored the grid's distance type, so the
+  assimilators compared cartesian degrees with `hroi` in meters and localized
+  nothing; it now follows the grid, and the batch assimilators' partition screen
+  handles great-circle distances. The `topaz` grid (a conformal mapping) is
+  declared spherical too and now gets the great-circle distances it was meant to
+  have: before, its distances were cartesian in the model plane, which do not
+  account for the varying map factor (up to ~5% shorter within 1000 km)
+- `Grid1D`: the last point of a non-cyclic grid was outside the grid, so an
+  observation there had no prior and the serial assimilators failed
+- `build_bgrid_solo.sh` works with a fresh DART checkout (no site `mkmf.template`
+  needed) and no longer builds into it
 - `test_file_system.py` no longer creates a stray `test/` dir at repo root
   (used `work_dir='test'` instead of the `work_dir` default); `work/` is now
   gitignored

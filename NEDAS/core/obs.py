@@ -541,21 +541,35 @@ class Obs:
             seq = transform_func.forward_obs(c, obs_rec, seq)
         return seq
 
-    def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
-        # form the global list of obs (in serial mode the main loop is over this list)
+    def global_obs_list(self, c: Context, valid: list[dict]|None=None) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
+        """
+        Form the global list of obs (in serial mode the main loop is over this list): entries
+        (obs_rec_id, v, owner_pid, i), i the position of the obs in the owner's packed obs data.
+
+        Args:
+            c (Context): the runtime context
+            valid (list[dict], optional): for each owner pid, its pack_local_obs_data's self.valid
+                (obs_rec_id -> indices of the obs with valid priors, the ones that are packed).
+                Without it all obs are assumed valid.
+        """
         n_obs_rec = len(self.info.records)
 
         i = {}  # location in full obs vector on owner pid
         for owner_pid in range(c.config.nproc_mem):
             i[owner_pid] = 0
 
+        # the order of pack_local_obs_data: by obs record, then vector component, then obs
         obs_list = []
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
             v_list = [0, 1] if obs_rec.is_vector else [None]
             for owner_pid in self.obs_inds[obs_rec_id].keys():
-                for _ in self.obs_inds[obs_rec_id][owner_pid]:
-                    for v in v_list:
+                if valid is None:
+                    nvalid = len(self.obs_inds[obs_rec_id][owner_pid])
+                else:
+                    nvalid = len(valid[owner_pid][obs_rec_id])
+                for v in v_list:
+                    for _ in range(nvalid):
                         obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
                         i[owner_pid] += 1
 

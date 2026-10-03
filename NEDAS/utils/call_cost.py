@@ -1,12 +1,11 @@
 """
 Cost of crossing the Python/compiled boundary, for the assimilators that call compiled
-kernels: DART through ctypes, PDAF through pyPDAF.
+kernels: PDAF through pyPDAF.
 
 NEDAS's native assimilators and the compiled ones are run against each other to see what an
 implementation's own choices cost. That comparison is only readable if the price of the
-binding is known rather than guessed, and it is not a thin wrapper in either case: DART
-crosses the boundary three times per observation, and PDAF calls *back* into Python once per
-local analysis domain, so the crossing count grows with the problem.
+binding is known rather than guessed, and it is not a thin wrapper: PDAF calls *back* into
+Python once per local analysis domain, so the crossing count grows with the problem.
 
 **Off unless asked for.** The regions measured here wrap a few hundred nanoseconds of work,
 so an instrument costing the same would both slow the analysis and inflate the number it

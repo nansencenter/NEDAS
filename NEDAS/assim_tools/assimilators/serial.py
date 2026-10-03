@@ -98,7 +98,10 @@ class SerialAssimilator(Assimilator):
         state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z, c.state.state_static)
 
         obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior, c.obs.lobs_prior_static)
-        obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c)
+        # obs without a valid prior (e.g. outside the model domain) are left out of obs_data,
+        # so the list is formed from what each owner pid has packed
+        valid = c.comm_mem.allgather(c.obs.valid)
+        obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c, valid)
 
         # ens-complete pre transforms (probit)
         self.transform_ens_state_forward(state_data)

@@ -103,8 +103,15 @@ class BatchAssimilator(Assimilator):
             # observations within the bounding box + halo region of width hroi will be assigned to
             # this partition. Although this will include some observations near the corner that are
             # not within hroi of any grid points, this is favorable for the efficiency in finding subset
-            obs_inds[par_id] = np.where(np.logical_and(c.grid.distance(xc, xo, yc, yc, p=1) <= Dx+hroi,
-                                                       c.grid.distance(xc, xc, yc, yo, p=1) <= Dy+hroi))[0]
+            if getattr(c.grid, 'distance_type', 'cartesian') == 'spherical':
+                # distances are great circles in meters, the box is in grid coordinates: take the
+                # disk around the center that holds the box corners (the farthest points of a
+                # lon-lat box from its center), plus the halo
+                rmax = np.max(c.grid.distance(xc, np.array([xmin, xmax, xmin, xmax]), yc, np.array([ymin, ymin, ymax, ymax])))
+                obs_inds[par_id] = np.where(c.grid.distance(xc, xo, yc, yo) <= rmax+hroi)[0]
+            else:
+                obs_inds[par_id] = np.where(np.logical_and(c.grid.distance(xc, xo, yc, yc, p=1) <= Dx+hroi,
+                                                           c.grid.distance(xc, xc, yc, yo, p=1) <= Dy+hroi))[0]
 
         return obs_inds
 

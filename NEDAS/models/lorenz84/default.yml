@@ -1,0 +1,23 @@
+# Lorenz (1984)
+a: 0.25
+b: 4.
+F: 8.
+G: 1.23
+dt: 0.05  # time step (model time units)
+hours_per_unit_time: 120.  # 0.05 time units = 6 h, as in Lorenz (1996)
+
+# --- common to the small models (see NEDAS/models/ode_model.py) ---
+restart_dt: 6  # restart interval (hours)
+spinup_time: 20.0  # model time from the perturbed x0 to a state on the attractor
+init_sd: 0.1  # standard deviation of the perturbation added to x0 before the spinup
+# initial ensemble: 'climatology' = independently spun up states (seed + 1 + member),
+#                   'truth' = the truth at time_start plus noise of init_ens_sd
+init_ens_mode: climatology
+init_ens_sd: 0.1
+seed: 0  # random seed of the truth
+
+nproc_per_run: 1
+nproc_per_util: 1
+walltime: 10
+ens_init_dir:
+truth_dir:

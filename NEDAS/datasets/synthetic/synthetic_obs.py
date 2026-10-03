@@ -42,7 +42,8 @@ class SyntheticObs(Dataset):
 
             obs_x = np.array(obs_x)
             obs_y = np.array(obs_y)
-            obs_z = np.zeros(nobs)
+            # vertical positions drawn from the obs_z list if given (e.g. the model levels)
+            obs_z = np.random.choice(np.asarray(self.obs_z, dtype=float), nobs) if self.obs_z else np.zeros(nobs)
 
         elif self.obs_position == 'prescribed':
             obs_x = np.array(self.obs_x)

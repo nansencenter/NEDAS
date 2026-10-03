@@ -451,7 +451,7 @@ class Grid2DBase(ABC):
             fld_out = fld
         return fld_out
 
-    def distance(self, ref_x, x, ref_y, y, p=2, type='cartesian'):
+    def distance(self, ref_x, x, ref_y, y, p=2, type=None):
         """
         Compute distance for points (x,y) to the reference point
 
@@ -463,11 +463,14 @@ class Grid2DBase(ABC):
             p (int, optional):
                 Minkowski p-norm order, default is 2
             type (str, optional):
-                distance type, 'cartesian' (default) or 'spherical'
+                distance type, 'cartesian' or 'spherical' (great circle distance in meters, for which
+                p is not used); the grid's distance_type by default
 
         Returns:
             Distances between x,y and the reference point ref_x, ref_y.
         """
+        if type is None:
+            type = self.distance_type
         if type == 'cartesian':
             # normal cartesian distances in x and y
             dist_x = np.abs(x - ref_x)

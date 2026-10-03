@@ -1,507 +1,418 @@
-import ctypes
 import os
-import threading
-import re
-import subprocess
-import sys
+import copy
+import ctypes
+from datetime import datetime
 import numpy as np
-from numpy.ctypeslib import ndpointer
+from NEDAS.core import Context, Assimilator
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
-from NEDAS.utils.call_cost import CallCost
-from NEDAS.utils.conversion import t2h
 
-_f64 = ndpointer(dtype=np.float64, flags='C_CONTIGUOUS')
-
-# must match the KIND_* parameters in dart_kernels.f90
-FILTER_KINDS = {'EAKF': 1, 'ENKF': 2, 'KERNEL': 3, 'PARTICLE': 4,
-                'RHF': 5, 'GAMMA': 6, 'BNRHF': 7, 'KDE': 8}
-
-# kernels that draw from DART's random sequence, and so must be seeded before use
-STOCHASTIC_KINDS = {'ENKF', 'KERNEL'}
-
-# Kernels whose behaviour DART takes from a namelist, so they need DART's utilities up and
-# its namelists read before they run:
-#   ENKF  sort_obs_inc
-#   RHF   rectangular_quadrature, gaussian_likelihood_tails
-#   KDE   quadrature_order (kde_nml, read on first use)
-#
-# Two more need it for a different reason, not a namelist but DART's error handler:
-#   GAMMA   inv_cdf reports "Failed to converge for quantile 1e-23" through error_handler as
-#           a plain message (thousands of times per analysis on near-zero humidity)
-#   BNRHF   reports a member outside the bounds the same way
-# With the utilities uninitialized the handler treats even a message as fatal -- "must call
-# initialize_utilities before error_handler" -- and stops the whole process, so these kinds
-# died on the first message, with a text that hid what had been said (2026-10-02).
-#
-# The rest read no namelist variable that reaches them and are not known to report through
-# the handler, so they stay free of DART's runtime setup -- which is what lets EAKF reproduce
-# NEDAS's native results exactly. KERNEL is deliberately absent: it looked like it belonged
-# here because its seeding block calls my_task_id(), but seeding explicitly through
-# dart_set_random_seed() skips that. NEDAS_DART_INIT_ALL=1 initializes every kind, to find
-# out whether another one speaks through the handler.
-KINDS_NEEDING_INIT = {'ENKF', 'RHF', 'KDE', 'GAMMA', 'BNRHF'}
-
-# Sections DART insists on when we initialize. utilities_nml is read by
-# initialize_utilities, assim_tools_nml by assim_tools_init, and obs_kind_nml by the
-# obs_kind module that assim_tools_init pulls in through get_num_types_of_obs(). None of
-# them are optional: a missing section makes DART stop the process. kde_nml is read with
-# optional_nml so it may be absent, but we write it to carry quadrature_order.
-REQUIRED_NML_SECTIONS = ('utilities_nml', 'assim_tools_nml', 'obs_kind_nml')
-
-# first line of an input.nml we wrote, so we never overwrite a real DART namelist
-NEDAS_NML_MARKER = '! written by NEDAS (assim_tools/assimilators/DART) -- safe to delete'
-
-# status codes returned by dart_obs_increment
-_STATUS = {1: "obs error variance and prior spread are both zero",
-           2: "unknown filter_kind",
-           3: "likelihood underflowed (BNRHF); check the bounds"}
-
-def load_dart_kernels(lib_path: str) -> ctypes.CDLL:
-    """
-    Load libdartkernels.so and declare the signatures of the wrappers in dart_kernels.f90
-    """
-    lib = ctypes.CDLL(lib_path)
-
-    lib.dart_obs_increment.restype = ctypes.c_int
-    lib.dart_obs_increment.argtypes = [ctypes.c_int, ctypes.c_int, _f64,
-                                       ctypes.c_double, ctypes.c_double,
-                                       ctypes.c_int, ctypes.c_int,
-                                       ctypes.c_double, ctypes.c_double, _f64, _f64]
-
-    lib.dart_update_from_obs_inc.restype = None
-    lib.dart_update_from_obs_inc.argtypes = [ctypes.c_int, ctypes.c_int, _f64, _f64,
-                                             ctypes.c_double, _f64, _f64]
-
-    lib.dart_set_random_seed.restype = None
-    lib.dart_set_random_seed.argtypes = [ctypes.c_int]
-
-    lib.dart_initialize.restype = None
-    lib.dart_initialize.argtypes = []
-    return lib
+# generic DART quantities/obs types compiled into the library (obs_def_nedas_mod.f90)
+NUM_SLOTS = 40
+DART_EPOCH = datetime(1601, 1, 1)
+_f64 = np.ctypeslib.ndpointer(dtype=np.float64, flags='C_CONTIGUOUS')
+_i32 = np.ctypeslib.ndpointer(dtype=np.int32, flags='C_CONTIGUOUS')
+_CALLBACK = ctypes.CFUNCTYPE(None)
+_LIB = None  # module level: a CDLL does not pickle
+DEFAULT_INFLATION = {
+    'prior': {'flavor': 0, 'initial': 1.0, 'sd_initial': 0.6, 'damping': 0.9, 'lower_bound': 1.0,
+              'upper_bound': 1e6, 'sd_lower_bound': 0.6, 'sd_max_change': 1.05, 'deterministic': True},
+    'posterior': {'flavor': 0, 'initial': 1.0, 'sd_initial': 0.0, 'damping': 1.0, 'lower_bound': 1.0,
+                  'upper_bound': 1e6, 'sd_lower_bound': 0.0, 'sd_max_change': 1.05, 'deterministic': True},
+}
 
 def default_lib_path() -> str:
-    return os.path.join(os.path.dirname(__file__), 'libdartkernels.so')
+    return os.path.join(os.path.dirname(__file__), 'libdartfilter.so')
 
-def _fortran_bool(value) -> str:
-    return '.true.' if value else '.false.'
+def load_dart_filter(lib_path: str) -> ctypes.CDLL:
+    global _LIB
+    if _LIB is None:
+        if not os.path.exists(lib_path):
+            raise FileNotFoundError(f"{lib_path} not found; build it with build_dart_filter.sh")
+        lib = ctypes.CDLL(lib_path)
+        p = ctypes.c_void_p
+        lib.dart_filter_set_state.argtypes = [ctypes.c_int]*3 + [p, _f64, _f64, _f64, _i32, p] + [ctypes.c_int]*2
+        lib.dart_filter_set_obs.argtypes = [ctypes.c_int]*2 + [p]*9
+        lib.dart_filter_set_periodic.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_double]*2
+        lib.dart_filter_set_posterior.argtypes = [p, _CALLBACK]
+        lib.dart_filter_set_write_obs_seq.argtypes = [ctypes.c_int]
+        lib.dart_filter_run.argtypes = [ctypes.c_int]
+        for f in ('dart_filter_set_state', 'dart_filter_set_obs', 'dart_filter_set_posterior', 'dart_filter_set_periodic',
+                  'dart_filter_set_write_obs_seq', 'dart_filter_run'):
+            getattr(lib, f).restype = None
+        _LIB = lib
+    return _LIB
 
-def dart_error_message(output: str) -> str:
+def nml_value(v) -> str:
+    if isinstance(v, bool):
+        return '.true.' if v else '.false.'
+    if isinstance(v, str):
+        return f"'{v}'"
+    if isinstance(v, (list, tuple)):
+        return ', '.join(nml_value(x) for x in v)
+    return repr(float(v)) if isinstance(v, float) else str(v)
+
+def dart_time(t: datetime) -> tuple[int, int]:
+    dt = t.replace(tzinfo=None) - DART_EPOCH   # NEDAS times are UTC
+    return dt.days, dt.seconds
+
+
+class DARTAssimilator(Assimilator):
     """
-    Pull DART's complaint out of a captured run.
+    DART's own filter_main (libdartfilter.so), with its file I/O replaced by NEDAS memory.
 
-    DART reports fatal conditions as a block ending in 'message: ...' before stopping, so
-    that line is the useful part; fall back to the tail of the output if the format changes.
+    NEDAS does the state/obs preparation, the transpose to ensemble-complete blocks and H(x);
+    DART runs inflation, QC, QCEFF and the serial filter_assim on NEDAS's communicator.
+    See build_dart_filter.sh and nedas_hooks_mod.f90.
     """
-    match = re.search(r'message:\s*(.+)', output)
-    if match:
-        return match.group(1).strip()
-    return output.strip()[-400:] or '(no output captured)'
+    assim_mode = 'batch'   # obs_post is recomputed from the posterior by the scheme
 
-class DARTAssimilator(SerialAssimilator):
-    """
-    Serial filters using DART's own compiled kernels rather than NEDAS's native ports.
+    # NEDAS's serial partitioning: one strided block per rank
+    init_partitions = SerialAssimilator.init_partitions
+    assign_obs = SerialAssimilator.assign_obs
+    distribute_partitions = SerialAssimilator.distribute_partitions
 
-    NEDAS keeps the grid, partitioning, localization, obs matching and I/O; only
-    obs_increment and the regression onto the state come from DART (via ctypes into
-    libdartkernels.so, see dart_kernels.f90 and build_dart_kernels.sh).
+    def __init__(self, c: Context):
+        defaults = copy.deepcopy(DEFAULT_INFLATION)
+        super().__init__(c)
+        for f in defaults:   # a partial inflation entry in the config keeps the other defaults
+            defaults[f].update((self.inflation or {}).get(f) or {})
+        self.inflation = defaults
+        self.lib_path = self.dart_lib or default_lib_path()
 
-    assimilator_def.filter_kind selects the kernel (see default.yml). With filter_kind
-    EAKF the results should match NEDAS's native EAKF assimilator to roundoff --
-    tests/test_dart_kernels.py checks exactly that, so upstream numerics changes show up
-    as a test failure rather than as silent drift. The other kernels have no native NEDAS
-    counterpart to compare against.
+    # ---------------------------------------------------------------- checks
 
-    DART keeps several kernel options in its namelists rather than in arguments. Those are
-    exposed here as assimilator_def entries (sort_obs_inc, rectangular_quadrature,
-    gaussian_likelihood_tails, quadrature_order) and written into an input.nml for DART to
-    read; see _ensure_initialized(). Only the kernels in KINDS_NEEDING_INIT pay that cost.
+    def check(self, c: Context) -> None:
+        if c.state.info.scalars:
+            raise NotImplementedError("DART: scalar state variables are not supported")
+        inf = c.inflation_func
+        if (inf.prior or inf.post) and (getattr(inf, 'adaptive', False) or getattr(inf, 'coef', 1.0) != 1.0):
+            raise NotImplementedError("DART: use assimilator_def.inflation, not inflation_def "
+                                      "(DART inflates inside filter)")
+        if getattr(c.grid, 'distance_type', 'cartesian') != 'cartesian':
+            raise NotImplementedError("DART: only cartesian grids (threed_cartesian location)")
+        for rec in c.obs.info.records.values():
+            if np.isfinite(rec.troi):
+                raise NotImplementedError("DART: DART has no temporal localization, set troi: inf")
+            if any(f != 1 for f in rec.impact_on_variable):
+                raise NotImplementedError("DART: impact_on_variable is not supported")
+        if self.inflation['posterior']['flavor'] not in (0, 4) and not self.compute_posterior(c):
+            raise RuntimeError("posterior adaptive inflation needs compute_posterior")
 
-    On error handling: DART reports fatal conditions by calling error_handler, which ends
-    the process -- there is no exception for python to catch. Everything that can be checked
-    beforehand therefore is (see _check_gated_options and _ensure_initialized), and the one
-    remaining abort-prone call, initialization, is rehearsed in a subprocess first so its
-    failure arrives as a python exception. The per-observation kernel calls are too hot to
-    wrap that way and rely on the status codes returned by dart_obs_increment instead.
+    def compute_posterior(self, c: Context) -> bool:
+        return self.inflation['posterior']['flavor'] in (2, 3, 5)
 
-    Static members (covariance_def.nens_static) are not supported: DART's kernels take the
-    dynamic ensemble alone. check_capabilities() rejects that configuration up front, so the
-    static arguments below are accepted to satisfy the SerialAssimilator interface and ignored.
-    """
-    dart_lib: str = ''
-    filter_kind: str = 'EAKF'
-    random_seed: int = 0          # 0: derive a seed from the analysis time
-    write_input_nml: bool = True  # may write an input.nml for the kernels that need one
+    # ---------------------------------------------------------------- slots
 
-    # DART namelist options that reach the kernels we call (assim_tools_nml / kde_nml)
-    sort_obs_inc: bool = True
-    rectangular_quadrature: bool = True
-    gaussian_likelihood_tails: bool = False
-    quadrature_order: int = 9
-    sampling_error_correction: bool = False   # gated, see _check_gated_options
+    def slots(self, c: Context) -> dict:
+        """DART quantity/type slot (1-based) for each (variable name, component)"""
+        keys = set()
+        for rec in c.state.info.fields.values():
+            keys.update([(rec.name, v) for v in ((0, 1) if rec.is_vector else (-1,))])
+        for rec in c.obs.info.records.values():
+            keys.update([(rec.name, v) for v in ((0, 1) if rec.is_vector else (-1,))])
+        keys = sorted(keys)
+        if len(keys) > NUM_SLOTS:
+            raise NotImplementedError(f"DART: more than {NUM_SLOTS} variables")
+        return {k: i+1 for i, k in enumerate(keys)}
 
-    bounded_below: bool = False
-    bounded_above: bool = False
-    lower_bound: float = 0.0
-    clamp_obs_prior: bool = False
-    upper_bound: float = 1.0
-    _lib = None
-    _net_a: float = 0.0
-    _seeded: bool = False
-    _initialized: bool = False
+    def slot_name(self, key) -> str:
+        name, v = key
+        return name if v < 0 else f"{name}_{'xy'[v]}"
 
-    @property
-    def lib(self) -> ctypes.CDLL:
-        """The loaded kernel library; loaded on first use so that merely constructing
-        this assimilator (e.g. in the registry tests) does not require a built DART."""
-        if self._lib is None:
-            lib_path = self.lib_path
-            if not os.path.exists(lib_path):
-                raise FileNotFoundError(
-                    f"DART kernel library not found: {lib_path}. Build it with "
-                    "NEDAS/assim_tools/assimilators/DART/build_dart_kernels.sh, or set "
-                    "assimilator_def.dart_lib to its location.")
-            try:
-                self._lib = load_dart_kernels(lib_path)
-            except OSError as err:
-                # the library built fine but something it links against is not visible here.
-                # DART pulls in netCDF, and on a module-based HPC stack HDF5/MPI/CUDA underneath
-                # it; those paths are usually absent once a conda environment is activated.
-                # rpath in the build cannot always fix this: when an intermediate library carries
-                # RUNPATH (as module-built MPI does), the loader ignores our rpath for *its*
-                # dependencies, so they have to come from LD_LIBRARY_PATH at runtime.
-                raise OSError(
-                    f"{err}\n\nThe DART kernel library at {lib_path} could not be loaded. "
-                    f"Run 'ldd {lib_path}' in this same environment to see which libraries are "
-                    "missing, then add their directories to LD_LIBRARY_PATH (or load the modules "
-                    "that were used to build DART).") from err
-            except AttributeError as err:
-                # a symbol the wrapper declares is absent: almost always a stale library left
-                # from an older dart_kernels.f90
-                raise AttributeError(
-                    f"{err}\n\nThe DART kernel library at {lib_path} is missing an entry point "
-                    "this version of NEDAS expects; rebuild it with build_dart_kernels.sh.") from err
-        return self._lib
+    # ---------------------------------------------------------------- transposes
 
-    @property
-    def call_cost(self) -> CallCost:
-        """
-        What the ctypes boundary costs (NEDAS/utils/call_cost.py). The kernels are called
-        three times per observation, so this accumulates over the serial loop: each kernel
-        region sits inside the method that prepares its arrays, and the difference between
-        the two is what Python adds to the call.
-        """
-        cost = getattr(self, '_call_cost', None)
-        if cost is None:
-            cost = self._call_cost = CallCost()
-        return cost
+    def transpose_to_ensemble_complete(self, c: Context) -> None:
+        # only the state: DART distributes the obs itself
+        c.state.state_prior = c.logger('Transpose prior state')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_prior, c.mem_list)
+        c.state.state_z = c.logger('Transpose z coordinates')(c.state.transpose_to_ensemble_complete)(c, c.state.fields_z, c.mem_list)
 
-    @property
-    def lib_path(self) -> str:
-        return self.dart_lib or default_lib_path()
+    # ---------------------------------------------------------------- main
 
-    @property
-    def filter_kind_code(self) -> int:
-        name = str(self.filter_kind).upper()
+    def assimilation_algorithm(self, c: Context) -> None:
+        self.check(c)
+        lib = load_dart_filter(self.lib_path)
+        slots = self.slots(c)
+
+        c.state.state_post = copy.deepcopy(c.state.state_prior)
+        par_id = c.pid_mem
+        data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z, c.state.state_static)
+        nfld, nloc = data['state_prior'].shape[1:]
+        nk = nfld * nloc
+        state = np.ascontiguousarray(data['state_prior'].reshape(c.nens, nk))
+        if np.isnan(state).any():
+            raise ValueError("DART: NaN in the state")
+        comp = [v if v is not None else -1 for _, v in data['field_ids']]
+        names = [c.state.info.fields[r].name for r, _ in data['field_ids']]
+        qty = np.repeat([slots[(n, v)] for n, v in zip(names, comp)], nloc).astype(np.int32)
+        x = np.ascontiguousarray(np.tile(data['x'], nfld), dtype=np.float64)
+        y = np.ascontiguousarray(np.tile(data['y'], nfld), dtype=np.float64)
+        z = np.ascontiguousarray(data['z'].ravel(), dtype=np.float64)
+        nmax = c.comm.allreduce(nk, op=c.comm._MPI.MAX) if c.comm.mpi_ready else nk
+
+        workdir = os.path.join(c.fs.analysis_dir(c.time, c.iter), 'dart')
+        inf, from_restart = self.load_inflation(c, nk)
+        obs = self.collect_obs(c, slots)
+
+        if c.pid == 0:
+            os.makedirs(workdir, exist_ok=True)
+            self.write_input_nml(c, workdir, slots, obs, from_restart)
+        c.comm.Barrier()
+
+        lib.dart_filter_set_periodic(*self.periodic(c))
+        days, secs = dart_time(c.time)
+        lib.dart_filter_set_state(c.nens, nk, nmax, state.ctypes.data, x, y, z, qty,
+                                  inf.ctypes.data, days, secs)
+        ptr = lambda a: a.ctypes.data
+        lib.dart_filter_set_obs(len(obs['val']), obs['prior'].shape[1], *(ptr(obs[k]) for k in
+                                ('type', 'x', 'y', 'z', 'days', 'secs', 'val', 'errvar', 'prior')))
+        post = np.full_like(obs['prior'], np.nan)
+        callback = _CALLBACK(lambda: self.posterior_obs(c, par_id, data, state, obs, post))
+        lib.dart_filter_set_posterior(post.ctypes.data, callback)
+        lib.dart_filter_set_write_obs_seq(int(self.write_obs_seq_final))
+
+        cwd = os.getcwd()
         try:
-            return FILTER_KINDS[name]
-        except KeyError:
-            raise ValueError(f"unknown assimilator_def.filter_kind '{self.filter_kind}', "
-                             f"choose one of {', '.join(FILTER_KINDS)}") from None
+            os.chdir(workdir)
+            lib.dart_filter_run(self.fortran_comm(c))
+        finally:
+            os.chdir(cwd)
 
-    def assimilation_algorithm(self, c):
-        # Seed before any kernel runs. The seed must be the same on every rank -- the serial
-        # loop has all ranks compute the increment for one global state, so a rank-dependent
-        # stream would give the same observation different perturbations in different parts of
-        # the domain -- and must change each cycle, or every cycle replays the same draws.
-        # t2h(c.time) satisfies both: identical across ranks, advancing with the analysis time.
-        if str(self.filter_kind).upper() in STOCHASTIC_KINDS:
-            self.set_random_seed(self.random_seed or seed_from_time(c.time))
-        super().assimilation_algorithm(c)
+        data['state_prior'][:] = state.reshape(c.nens, nfld, nloc)
+        c.state.unpack_local_state_data(c, par_id, c.state.state_post, data)
+        np.save(os.path.join(workdir, f'inflation.{c.pid}.npy'), inf)
 
-    def set_random_seed(self, seed: int) -> None:
-        """Seed DART's random sequence (the one the stochastic kernels draw from)."""
-        self.lib.dart_set_random_seed(int(seed))
-        self._seeded = True
+    @staticmethod
+    def fortran_comm(c: Context) -> int:
+        if c.comm.mpi_ready:
+            return c.comm._comm.py2f()
+        from mpi4py import MPI
+        return MPI.COMM_WORLD.py2f()
 
-    def _ensure_seeded(self) -> None:
+    # ---------------------------------------------------------------- obs
+
+    def collect_obs(self, c: Context, slots: dict) -> dict:
         """
-        Never let a stochastic kernel fall back to DART's own seeding.
+        Obs metadata on every rank (DART's serial loop needs it), sorted by time; the H(x)
+        ensemble only for the obs this rank owns in DART (sorted position j, owner j % nproc)
+        """
+        seqs = {}
+        for part in c.comm_rec.allgather(c.obs.obs_seq):
+            seqs.update(part)
 
-        That fallback builds the seed from my_task_id(), which initializes DART's utilities
-        and reads input.nml -- stopping the run when the file is absent. Seeding here keeps
-        the kernel usable without any DART runtime setup.
-        """
-        if not self._seeded and str(self.filter_kind).upper() in STOCHASTIC_KINDS:
-            self.set_random_seed(self.random_seed or 1)
+        cols = {k: [] for k in ('type', 'x', 'y', 'z', 't', 'val', 'errvar')}
+        index, slices, start = [], {}, 0
+        for rec_id in sorted(seqs):
+            rec = c.obs.info.records[rec_id]
+            seq = seqs[rec_id]
+            n = seq['obs'].shape[-1]
+            ncomp = 2 if rec.is_vector else 1
+            comps = (0, 1) if rec.is_vector else (-1,)
+            slices[rec_id] = (start, n, ncomp)
+            start += n * ncomp
+            cols['val'].append(np.reshape(seq['obs'], (ncomp, n)).T.ravel())
+            cols['type'].append(np.tile([slots[(rec.name, v)] for v in comps], n))
+            for k in ('x', 'y', 'z'):
+                cols[k].append(np.repeat(np.asarray(seq[k], dtype=np.float64), ncomp))
+            cols['errvar'].append(np.repeat(np.asarray(seq['err_std'], dtype=np.float64)**2, ncomp))
+            cols['t'].append(np.repeat(np.asarray(seq['t']), ncomp))
+            index += [(rec_id, i, v) for i in range(n) for v in comps]
+        obs = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in cols.items()}
 
-    def _check_gated_options(self) -> None:
-        """
-        sampling_error_correction changes the regression coefficient in update_from_obs_inc,
-        so it would affect every filter_kind. It is refused rather than quietly ignored:
-        besides the namelist flag it needs DART's correction table (a netCDF file read by
-        read_sampling_error_correction) staged in the working directory, and the module
-        arrays that hold it are only allocated on that path. Enabling it without that in
-        place would regress with an unpopulated table.
-        """
+        # drop obs whose H(x) is NaN in any member, wherever that member is held
+        bad = np.zeros(start, dtype=np.int64)
+        for (m, rec_id), seq in c.obs.obs_prior.items():
+            st, n, ncomp = slices[rec_id]
+            bad[st:st+n*ncomp] += ~np.isfinite(np.reshape(seq, (ncomp, n)).T.ravel())
+        if c.comm.mpi_ready:
+            bad = c.comm.allreduce(bad)
+        valid = np.isfinite(obs['val']) & (bad == 0)
+        times = [dart_time(t) for t in obs['t']]
+        order = sorted(np.flatnonzero(valid), key=lambda i: times[i])
+
+        out = {k: np.ascontiguousarray(obs[k][order], dtype=np.float64) for k in ('x', 'y', 'z', 'val', 'errvar')}
+        out['type'] = np.ascontiguousarray(obs['type'][order], dtype=np.int32)
+        out['days'] = np.array([times[i][0] for i in order], dtype=np.int32)
+        out['secs'] = np.array([times[i][1] for i in order], dtype=np.int32)
+        out['pos'] = np.full(start, -1)
+        out['pos'][order] = np.arange(len(order))
+        out['slices'] = slices
+        out['prior'] = self.to_owners(c, c.obs.obs_prior, out, np.full((c.nens, self.num_owned(c, len(order))), np.nan))
+        if np.isnan(out['prior']).any():
+            raise RuntimeError("DART: missing H(x) for owned obs")
+        return out
+
+    @staticmethod
+    def num_owned(c: Context, nobs: int) -> int:
+        return len(range(c.pid, nobs, c.comm.Get_size()))
+
+    @staticmethod
+    def to_owners(c: Context, ens: dict, obs: dict, buf: np.ndarray) -> np.ndarray:
+        """Send NEDAS's (member, record) obs ensembles to their DART owners, into buf (nens, nowned)"""
+        nproc = c.comm.Get_size()
+        sends = [[] for _ in range(nproc)]
+        for (m, rec_id), seq in ens.items():
+            st, n, ncomp = obs['slices'][rec_id]
+            pos = obs['pos'][st:st+n*ncomp]
+            keep = pos >= 0
+            vals, pos = np.reshape(seq, (ncomp, n)).T.ravel()[keep], pos[keep]
+            for d in np.unique(pos % nproc):
+                sel = pos % nproc == d
+                sends[d].append((m, pos[sel] // nproc, vals[sel]))
+        recv = c.comm.alltoall(sends) if nproc > 1 else sends
+        for part in recv:
+            for m, loc, vals in part:
+                buf[m, loc] = vals
+        return buf
+
+    def posterior_obs(self, c: Context, par_id, data, state, obs, post) -> None:
+        """Called from inside filter_main: H(x_post) with NEDAS's own obs operators"""
+        data['state_prior'][:] = state.reshape(data['state_prior'].shape)
+        c.state.unpack_local_state_data(c, par_id, c.state.state_post, data)
+        # the transpose deletes what it sends, and state_post is needed again after filter_main
+        c.state.fields_post = c.state.transpose_to_field_complete(c, copy.deepcopy(c.state.state_post))
+        c.state.output_state(c, 'post')
+        c.obs.prepare_obs_from_state(c, 'post')
+        post[:] = np.nan
+        self.to_owners(c, c.obs.obs_post, obs, post)
+
+    # ---------------------------------------------------------------- inflation
+
+    def load_inflation(self, c: Context, nk: int):
+        """Inflation fields from the previous cycle (this rank's block), else namelist values"""
+        inf = np.ones((4, nk))
+        inf[1::2] = 0.0
+        adaptive = {f: self.inflation[f]['flavor'] in (2, 3, 5) for f in ('prior', 'posterior')}
+        found = False
+        if any(adaptive.values()):
+            prev = os.path.join(c.fs.analysis_dir(c.prev_time, c.iter), 'dart', f'inflation.{c.pid}.npy')
+            if os.path.exists(prev):
+                saved = np.load(prev)
+                if saved.shape == inf.shape:
+                    inf[:] = saved
+                    found = True
+        found = c.comm.allreduce(int(found), op=c.comm._MPI.MIN) if c.comm.mpi_ready else int(found)
+        return np.ascontiguousarray(inf), {f: bool(found) and a for f, a in adaptive.items()}
+
+    # ---------------------------------------------------------------- namelists
+
+    def cyclic(self, c: Context):
+        grid = c.grid
+        if hasattr(grid, 'cyclic_dim'):
+            cyc = str(grid.cyclic_dim or '')
+            return 'x' in cyc, 'y' in cyc
+        return bool(getattr(grid, 'cyclic', False)), False
+
+    def periodic(self, c: Context) -> tuple:
+        """(x_on, xmin, xmax, y_on, ymin, ymax) for DART's set_periodic"""
+        cx, cy = self.cyclic(c)
+        g = c.grid
+        xr = (float(g.xmin), float(g.xmin + g.Lx)) if cx else (0.0, 0.0)
+        yr = (float(g.ymin), float(g.ymin + g.Ly)) if cy else (0.0, 0.0)
+        if cy and (not cx or yr != xr):
+            # threed_cartesian sizes periodic y boxes with the x limits
+            raise NotImplementedError("DART: periodic y needs a periodic x with the same extent")
+        return (int(cx), *xr, int(cy), *yr)
+
+    def write_input_nml(self, c: Context, workdir: str, slots: dict, obs: dict, from_restart: dict) -> None:
+        used = sorted(slots.values())
+        types = [f'NEDAS_{s:02d}' for s in used]
+        hroi = {}
+        vroi = {}
+        for rec in c.obs.info.records.values():
+            for v in ((0, 1) if rec.is_vector else (-1,)):
+                s = slots[(rec.name, v)]
+                if hroi.setdefault(s, rec.hroi) != rec.hroi or vroi.setdefault(s, rec.vroi) != rec.vroi:
+                    raise NotImplementedError(f"DART: '{rec.name}' has records with different hroi/vroi")
+        big = 1e30
+        half = {s: (h/2 if np.isfinite(h) else big) for s, h in hroi.items()}
+        vnorm = {s: (vroi[s]/hroi[s] if np.isfinite(vroi[s]) and np.isfinite(hroi[s]) else big) for s in hroi}
+        cutoff = max(half.values()) if half else big
+        vn = max(vnorm.values()) if vnorm else big
+        special = [s for s in half if half[s] != cutoff]
+        special_vn = [s for s in vnorm if vnorm[s] != vn]
+
+        inf_keys = ('flavor', 'initial_from_restart', 'sd_initial_from_restart', 'deterministic', 'initial',
+                    'sd_initial', 'damping', 'lower_bound', 'upper_bound', 'sd_lower_bound', 'sd_max_change')
+        infl = {f: dict(self.inflation[f]) for f in ('prior', 'posterior')}
+        for f in infl:
+            infl[f]['initial_from_restart'] = infl[f]['sd_initial_from_restart'] = from_restart[f]
+
+        cx, cy = self.cyclic(c)
+        nml = {
+            'utilities_nml': {'termlevel': 1, 'logfilename': 'dart_log.out', 'nmlfilename': 'dart_log.nml',
+                              'write_nml': 'file', 'module_details': False},
+            'mpi_utilities_nml': {},
+            'ensemble_manager_nml': {'layout': 1},
+            'filter_nml': {
+                'ens_size': c.nens, 'num_groups': self.num_groups, 'distributed_state': True,
+                'init_time_days': -1, 'init_time_seconds': -1,
+                'single_file_in': False, 'single_file_out': False, 'perturb_from_single_instance': False,
+                'stages_to_write': 'output', 'output_members': True, 'output_mean': False, 'output_sd': False,
+                'num_output_state_members': 0, 'num_output_obs_members': 0,
+                'compute_posterior': self.compute_posterior(c),
+                **{f'inf_{k}': [infl['prior'][k], infl['posterior'][k]] for k in inf_keys},
+            },
+            'assim_tools_nml': {
+                'cutoff': cutoff, 'sort_obs_inc': self.sort_obs_inc, 'spread_restoration': False,
+                'sampling_error_correction': self.sampling_error_correction,
+                'adaptive_localization_threshold': self.adaptive_localization_threshold,
+                'print_every_nth_obs': 0, 'close_obs_caching': True,
+                'rectangular_quadrature': self.rectangular_quadrature,
+                'gaussian_likelihood_tails': self.gaussian_likelihood_tails,
+                **({'special_localization_obs_types': [f'NEDAS_{s:02d}' for s in special],
+                    'special_localization_cutoffs': [half[s] for s in special]} if special else {}),
+            },
+            'cov_cutoff_nml': {'select_localization': 1},
+            'reg_factor_nml': {'select_regression': 1},
+            'obs_sequence_nml': {'write_binary_obs_sequence': False},
+            'obs_kind_nml': {'assimilate_these_obs_types': types, 'use_precomputed_FOs_these_obs_types': types},
+            'location_nml': {
+                # get_close's box search does not wrap (only get_dist does): one box per periodic axis
+                **({'nx': 1} if cx else {}), **({'ny': 1} if cy else {}),
+                'vert_normalization_height': vn,
+                **({'special_vert_normalization_obs_types': [f'NEDAS_{s:02d}' for s in special_vn],
+                    'special_vert_normalization_heights': [vnorm[s] for s in special_vn]} if special_vn else {}),
+            },
+            'quality_control_nml': {'input_qc_threshold': 3.0, 'outlier_threshold': self.outlier_threshold},
+            'state_vector_io_nml': {},
+            'algorithm_info_nml': {'qceff_table_filename': self.write_qceff_table(c, workdir, slots)},
+            'probit_transform_nml': {},
+            'kde_nml': {'quadrature_order': self.quadrature_order},
+        }
+        for section, entries in (self.namelist or {}).items():
+            nml.setdefault(section, {}).update(entries)
         if self.sampling_error_correction:
-            raise NotImplementedError(
-                "assimilator_def.sampling_error_correction is not supported yet: DART also "
-                "needs its sampling error correction table (sampling_error_correction_table.nc) "
-                "available at runtime, which NEDAS does not stage.")
+            dst = os.path.join(workdir, 'sampling_error_correction_table.nc')
+            if not os.path.exists(dst):
+                os.symlink(self.sec_table, dst)
 
-    def _input_nml_text(self) -> str:
-        """The namelist DART reads: utilities and obs_kind for init, then our kernel options."""
-        return '\n'.join([
-            NEDAS_NML_MARKER,
-            '&utilities_nml',
-            '/',
-            '',
-            '&assim_tools_nml',
-            f'   sort_obs_inc = {_fortran_bool(self.sort_obs_inc)}',
-            f'   rectangular_quadrature = {_fortran_bool(self.rectangular_quadrature)}',
-            f'   gaussian_likelihood_tails = {_fortran_bool(self.gaussian_likelihood_tails)}',
-            '   sampling_error_correction = .false.',
-            '/',
-            '',
-            # required: assim_tools_init reaches obs_kind_mod via get_num_types_of_obs()
-            '&obs_kind_nml',
-            '/',
-            '',
-            '&kde_nml',
-            f'   quadrature_order = {int(self.quadrature_order)}',
-            '/',
-            '',
-        ])
+        lines = ['! written by NEDAS (assim_tools/assimilators/DART)']
+        for section, entries in nml.items():
+            lines.append(f'&{section}')
+            lines += [f'   {k} = {nml_value(v)}' for k, v in entries.items()]
+            lines.append('   /\n')
+        with open(os.path.join(workdir, 'input.nml'), 'w') as f:
+            f.write('\n'.join(lines))
 
-    def _write_input_nml(self) -> None:
-        """
-        Write input.nml so that no reader ever sees it partly written.
-
-        Every rank gets here at the same moment, in one directory. An exclusive create
-        followed by a write is not atomic: a rank arriving between the two finds an empty file,
-        reads no NEDAS marker on its first line, takes it for someone else's namelist and
-        raises -- and that rank then sits in the Barrier of Context's timing wrapper while the
-        rest wait for it, which is a hang with no message (DART RHF, 2026-10-02). The content is
-        the same from every rank, so the last replace winning is harmless; os.replace is atomic
-        within a directory, so the file is either absent or complete.
-
-        A foreign input.nml created in the instant between the caller's check and this replace
-        would be overwritten; the old exclusive create did not allow that, but the window is
-        negligible next to a namelist someone left there on purpose, which the check refuses.
-        """
-        # unique per process and thread, or two writers would truncate each other's temp file
-        tmp = f'input.nml.{os.getpid()}.{threading.get_ident()}.tmp'
-        with open(tmp, 'w') as f:
-            f.write(self._input_nml_text())
-        os.replace(tmp, 'input.nml')
-
-    def _check_namelist_sections(self, path: str = 'input.nml') -> None:
-        """
-        Fail in python if a supplied namelist is missing a section DART requires.
-
-        Without this the omission surfaces as DART calling error_handler and stopping the
-        run, which leaves no exception and no traceback behind.
-        """
-        with open(path) as f:
-            text = f.read()
-        missing = [s for s in REQUIRED_NML_SECTIONS
-                   if not re.search(r'&\s*' + s + r'\b', text)]
-        if missing:
-            raise ValueError(
-                f"{os.path.abspath(path)} is missing the namelist section(s) "
-                f"{', '.join('&' + s for s in missing)}, which DART requires when "
-                f"filter_kind '{self.filter_kind}' initializes it. Add them (an empty "
-                "section is enough), or set assimilator_def.write_input_nml to let NEDAS "
-                "write the file.")
-
-    def _probe_initialize(self) -> None:
-        """
-        Rehearse dart_initialize() in a throwaway interpreter.
-
-        DART answers a bad namelist by stopping the process, which would take the whole
-        NEDAS run with it. Running it in a subprocess first turns that into an ordinary
-        python exception carrying DART's own message. A subprocess rather than fork(),
-        because NEDAS runs under MPI and forking a rank is not safe.
-        """
-        code = ("import ctypes, sys\n"
-                "lib = ctypes.CDLL(sys.argv[1])\n"
-                "lib.dart_initialize.restype = None\n"
-                "lib.dart_initialize.argtypes = []\n"
-                "lib.dart_initialize()\n"
-                "print('INIT-OK')\n")
-        try:
-            run = subprocess.run([sys.executable, '-c', code, self.lib_path],
-                                 capture_output=True, text=True, cwd=os.getcwd(), timeout=120)
-        except (OSError, subprocess.SubprocessError):
-            return      # cannot rehearse here; fall through and try for real
-        if 'INIT-OK' in run.stdout:
-            return
-        raise RuntimeError(
-            f"DART refused to initialize in {os.getcwd()}: "
-            f"{dart_error_message(run.stdout + run.stderr)}\n"
-            "DART stops the process on a fatal condition, so this was checked in a "
-            "subprocess; fix the namelist (or the working directory) and rerun.")
-
-    def _ensure_initialized(self) -> None:
-        """
-        Put an input.nml in place and bring DART up, for the kernels that need it.
-
-        DART reads "input.nml" from the current working directory (the name is hardcoded),
-        and the sections in REQUIRED_NML_SECTIONS are not optional there. A missing file or
-        section makes DART stop the process rather than return an error, which is why all of
-        this happens before the kernel is called.
-
-        An input.nml we did not write is never overwritten: it may be a real DART namelist
-        whose settings matter. In that case either let NEDAS manage the file (remove it) or
-        set write_input_nml to False to use yours as-is.
-        """
-        # NEDAS_DART_INIT_ALL=1 brings DART's utilities up for every kind, which is how a kernel
-        # that dies in DART's error_handler gets to print its real message: without the
-        # utilities initialized the handler only complains that they are not (DART GAMMA and
-        # BNRHF, 2026-10-02). Off by default, since initializing is what writes dart_log files.
-        needs_init = (str(self.filter_kind).upper() in KINDS_NEEDING_INIT
-                      or os.environ.get('NEDAS_DART_INIT_ALL') == '1')
-        if self._initialized or not needs_init:
-            return
-        self._check_gated_options()
-
-        if os.path.exists('input.nml'):
-            with open('input.nml') as f:
-                ours = NEDAS_NML_MARKER in f.readline()
-            if ours and self.write_input_nml:
-                self._write_input_nml()                # refresh, config may have changed
-            elif not ours and self.write_input_nml:
-                raise RuntimeError(
-                    f"an input.nml not written by NEDAS is already in {os.getcwd()}; refusing "
-                    "to overwrite it. Remove it to let NEDAS manage the DART namelist, or set "
-                    "assimilator_def.write_input_nml to False to use it as-is.")
-            else:
-                self._check_namelist_sections()
-        elif self.write_input_nml:
-            self._write_input_nml()
-        else:
-            raise FileNotFoundError(
-                f"filter_kind '{self.filter_kind}' needs DART's namelists, read from an "
-                f"input.nml in the working directory ({os.getcwd()}). Put one there providing "
-                f"{', '.join('&' + s for s in REQUIRED_NML_SECTIONS)}, or set "
-                "assimilator_def.write_input_nml to let NEDAS write it.")
-
-        self._probe_initialize()
-        self.lib.dart_initialize()
-        self._initialized = True
-
-    def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err):
-        # GAMMA models a positive quantity. Handed a signed one (a wind component) the kernel
-        # evaluates an inverse CDF at an illegal quantile and DART stops the whole process,
-        # with a message about an uninitialized error handler that hides the cause. Refuse
-        # here with the real reason instead; whether exactly zero is accepted was not tested.
-        if str(self.filter_kind).upper() == 'GAMMA' and (np.min(obs_prior) <= 0 or obs <= 0):
-            raise ValueError(
-                "DART GAMMA needs strictly positive prior members and observation, got "
-                f"min(prior)={np.min(obs_prior):.4g}, obs={float(obs):.4g}. It models a positive "
-                "quantity (humidity, a concentration), not a signed one such as a wind component; "
-                "observe only positive variables with it, or use another filter_kind.")
-        self._ensure_initialized()
-        self._ensure_seeded()
-        lib = self.lib      # resolved before the timed region: `lib` is a lazy property that
-        # dlopens the kernel library and installs its argtypes on first access, and timing that
-        # inside the region attributed a one-off ~0.5 s to the first kernel call (measured on
-        # betzy, 2026-10-02 -- it read as 123 ms per observation).
-        cost = self.call_cost
-        with cost.measure('obs_increment'):
-            obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
-            obs_incr = np.empty_like(obs_prior)
-            net_a = np.zeros(1)
-
-            with cost.measure('dart_obs_increment'):
-                status = lib.dart_obs_increment(self.filter_kind_code, obs_prior.size, obs_prior,
-                                                     float(obs), float(obs_err)**2,
-                                                     int(bool(self.bounded_below)), int(bool(self.bounded_above)),
-                                                     float(self.lower_bound), float(self.upper_bound),
-                                                     obs_incr, net_a)
-        if status:
-            raise ValueError(f"DART {self.filter_kind}: {_STATUS.get(status, f'status {status}')}")
-
-        # net_a carries over to the regression below, as it does inside DART's own
-        # filter_assim; the serial loop always pairs one obs_increment with the updates
-        self._net_a = float(net_a[0])
-        return obs_incr
-
-    def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
-                           state_h_dist, state_v_dist, state_t_dist,
-                           hroi, vroi, troi,
-                           h_local_func, v_local_func, t_local_func, correlation_local_func,
-                           impact_on_variable) -> None:
-        # localization stays NEDAS's; lfactor[n, l] = h[l] * v[n, l] * t[n] * impact[n]
-        lfactor = (h_local_func(state_h_dist, hroi)[None, :]
-                   * v_local_func(state_v_dist, vroi)
-                   * (t_local_func(state_t_dist, troi) * impact_on_variable)[:, None])
-        self._regress(state_prior, obs_prior, obs_incr, lfactor)
-
-    def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
-                         h_dist, v_dist, t_dist,
-                         hroi, vroi, troi,
-                         h_local_func, v_local_func, t_local_func, correlation_local_func,
-                         impact_on_variable) -> None:
-        lfactor = (h_local_func(h_dist, hroi) * v_local_func(v_dist, vroi)
-                   * t_local_func(t_dist, troi) * impact_on_variable)
-        # already-assimilated obs are excluded by zeroing their localization factor,
-        # which is the same test the fortran loop already applies
-        lfactor = np.where(used, 0.0, lfactor)
-        self._regress(obs_data, obs_prior, obs_incr, lfactor)
-        if self.clamp_obs_prior:
-            self._clamp_to_bounds(obs_data)
-
-    # DART GAMMA wants strictly positive members; this stands in for zero when clamping
-    GAMMA_FLOOR = 1e-12
-
-    def _clamp_to_bounds(self, ens) -> None:
-        """
-        Clip observation priors back into the filter's bounds, in place.
-
-        Observation priors of not-yet-assimilated observations are updated by linear
-        regression onto each earlier increment, which knows nothing about bounds: a member
-        of a positive quantity can come out negative, and then the bounded kernels refuse it
-        (BNRHF: 'Smallest ensemble member less than lower bound'; GAMMA needs positive
-        members). Clipping is a modelling choice the unbounded filters do not make, so it is
-        opt-in and a result obtained with it should say so.
-        """
-        lower = float(self.lower_bound) if self.bounded_below else None
-        if str(self.filter_kind).upper() == 'GAMMA':
-            lower = max(lower if lower is not None else 0.0, self.GAMMA_FLOOR)
-        upper = float(self.upper_bound) if self.bounded_above else None
-        if lower is not None or upper is not None:
-            np.clip(ens, lower, upper, out=ens)
-
-    def _regress(self, ens, obs_prior, obs_incr, lfactor) -> None:
-        """
-        Regress one obs increment onto ens (nens, ...), updating it in place.
-
-        ponytail: passes every element and lets fortran skip the ones with
-        lfactor<=0, instead of subsetting to the roi first as the native EAKF does.
-        The scan is cheap next to the regression itself; subset here if profiling
-        ever says otherwise.
-        """
-        if not ens.flags['C_CONTIGUOUS'] or ens.dtype != np.float64:
-            raise ValueError("DART kernels need a C-contiguous float64 ensemble to update in place")
-        lib = self.lib      # outside the timed region, as in obs_increment above
-        cost = self.call_cost
-        with cost.measure('_regress'):
-            nens = ens.shape[0]
-            flat = ens.reshape(nens, -1)          # a view, since ens is contiguous
-            lfactor = np.ascontiguousarray(lfactor, dtype=np.float64).reshape(-1)
-            obs_prior = np.ascontiguousarray(obs_prior, dtype=np.float64)
-            obs_incr = np.ascontiguousarray(obs_incr, dtype=np.float64)
-
-            with cost.measure('dart_update_from_obs_inc'):
-                lib.dart_update_from_obs_inc(nens, flat.shape[1], obs_prior, obs_incr,
-                                                  self._net_a, flat, lfactor)
-
-
-def seed_from_time(time) -> int:
-    """
-    A seed derived from the analysis time: identical on every rank, different each cycle.
-
-    Kept a positive 32-bit integer, since it is passed to fortran as a default integer.
-    """
-    return int(abs(int(t2h(time))) % (2**31 - 2)) + 1
+    def write_qceff_table(self, c: Context, workdir: str, slots: dict) -> str:
+        """QCEFF table from filter_kind/probit_dist and per-variable qceff entries; '' = all defaults"""
+        if self.filter_kind == 'EAKF' and self.probit_dist == 'NORMAL_DISTRIBUTION' and not self.qceff:
+            return ''
+        b = lambda x: '.true.' if x else '.false.'
+        rows = []
+        for key, s in sorted(slots.items(), key=lambda kv: kv[1]):
+            opt = {'filter_kind': self.filter_kind, 'dist': self.probit_dist, 'bounded_below': False,
+                   'bounded_above': False, 'lower_bound': -888888, 'upper_bound': -888888}
+            opt.update((self.qceff or {}).get(key[0], {}))
+            opt.update((self.qceff or {}).get(self.slot_name(key), {}))
+            bounds = f"{b(opt['bounded_below'])},{b(opt['bounded_above'])},{opt['lower_bound']},{opt['upper_bound']}"
+            dist = f"{opt['dist']},{bounds}"
+            rows.append(f"QTY_NEDAS_{s:02d},{bounds},{dist},{dist},{dist},{opt['filter_kind']},{bounds}")
+        head = ('QCEFF table version: 1,obs_error_info,,,,probit_inflation,,,,,probit_state,,,,,'
+                'probit_extended_state,,,,,obs_inc_info,,,,\n'
+                'QTY_NAME:' + ',bounded_below,bounded_above,lower_bound,upper_bound' +
+                (',dist_type,bounded_below,bounded_above,lower_bound,upper_bound' * 3) +
+                ',filter_kind,bounded_below,bounded_above,lower_bound,upper_bound\n')
+        with open(os.path.join(workdir, 'qceff_table.csv'), 'w') as f:
+            f.write(head + '\n'.join(rows) + '\n')
+        return 'qceff_table.csv'

@@ -15,6 +15,16 @@ registry = {
     'nextsim.v3': 'NextsimDGModel',
     'wrf': 'WRFModel',
     'vort3d': 'Vort3DModel',
+    'bgrid_solo': 'BgridSoloModel',
+    # small test models from DART and DAPPER (NEDAS/models/ode_model.py)
+    'lorenz63': 'Lorenz63Model',
+    'lorenz84': 'Lorenz84Model',
+    'lorenz05': 'Lorenz05Model',
+    'lorenz96_2scale': 'Lorenz96TwoScaleModel',
+    'nine_var': 'NineVarModel',
+    'ikeda': 'IkedaModel',
+    'lotka_volterra': 'LotkaVolterraModel',
+    'ks': 'KSModel',
 }
 
 def get_model_class(model_name: str) -> Type["Model"]:
