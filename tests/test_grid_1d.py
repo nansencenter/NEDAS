@@ -38,6 +38,15 @@ class TestGrid1DFindIndex(unittest.TestCase):
         inside, vertices, in_coords, nearest = self.g.find_index(np.array([2.5]))
         self.assertTrue(inside[0])
 
+    def test_end_points_are_inside(self):
+        # both ends of a non-cyclic grid are grid points, and interpolate to their values
+        inside, _, _, nearest = self.g.find_index(np.array([0.0, 4.0]))
+        self.assertTrue(all(inside))
+        self.assertEqual(list(nearest), [0, 4])
+        fld = np.arange(5.0) * 10.
+        np.testing.assert_allclose(self.g.interp(fld, x=np.array([0.0, 4.0, 3.5])), [0., 40., 35.])
+        self.assertTrue(np.isnan(self.g.interp(fld, x=np.array([4.0001]))[0]))
+
     def test_outside_range_not_inside(self):
         inside, _, _, _ = self.g.find_index(np.array([-1.0, 10.0]))
         self.assertFalse(any(inside))

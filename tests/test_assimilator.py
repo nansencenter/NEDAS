@@ -143,3 +143,32 @@ class TestSerialOverrideSignatures(unittest.TestCase):
             for cls in (EAKFAssimilator,):
                 got = list(inspect.signature(getattr(cls, name)).parameters)
                 self.assertEqual(got, want, f"{cls.__name__}.{name}")
+
+
+class TestBatchObsAssignmentSpherical(unittest.TestCase):
+    def test_every_obs_within_hroi_of_a_partition_is_assigned_to_it(self):
+        # on a lon-lat grid the distances are great circles in meters, while the partition
+        # boxes are in degrees: the screen must not mix the two
+        from types import SimpleNamespace
+        import numpy as np
+        from pyproj import Proj
+        from NEDAS.grid import Grid
+        from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
+        lon, lat = np.meshgrid(np.arange(-177., 180., 6.), np.arange(-87., 90., 6.))
+        grid = Grid(Proj('+proj=longlat'), lon, lat, cyclic_dim='x', distance_type='spherical')
+        partitions = [(i, i + 10, 1, j, j + 10, 1) for j in range(0, 30, 10) for i in range(0, 60, 10)]
+        rng = np.random.default_rng(0)
+        xo, yo = rng.uniform(-180, 180, 2000), np.rad2deg(np.arcsin(rng.uniform(-1, 1, 2000)))
+        hroi = 1.5e6
+        c = SimpleNamespace(grid=grid)
+        state = SimpleNamespace(partitions=partitions)
+        obs = SimpleNamespace(info=SimpleNamespace(records={0: SimpleNamespace(hroi=hroi)}),
+                              obs_seq={0: {'x': xo, 'y': yo}})
+        obs_inds = BatchAssimilator.assign_obs_to_tiles(None, c, state, obs, 0)
+        for par_id, (ist, ied, di, jst, jed, dj) in enumerate(partitions):
+            px, py = lon[jst:jed, ist:ied].ravel(), lat[jst:jed, ist:ied].ravel()
+            near = [k for k in range(len(xo)) if grid.distance(xo[k], px, yo[k], py).min() <= hroi]
+            self.assertTrue(set(near) <= set(obs_inds[par_id]), f"partition {par_id} misses obs")
+            self.assertGreater(len(near), 0)
+            # and the screen still screens
+            self.assertLess(len(obs_inds[par_id]), len(xo))
