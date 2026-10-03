@@ -12,6 +12,9 @@ DA schemes, or other backward-compatible features land in the next minor release
 ## [Unreleased]
 
 ### Added
+- `bgrid_solo` model: DART's dry dynamical core with Held-Suarez forcing (global
+  atmosphere, 60x30x5), run through a driver built against the DART source
+  (`build_bgrid_solo.sh`); example in `examples/bgrid_solo`
 - `PDAF` assimilator: local ensemble filters (LSEIK/LETKF/LESTKF/LNETF/LKNETF)
   via pyPDAF
 - `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error

@@ -12,6 +12,7 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
+   NEDAS.models.bgrid_solo
    NEDAS.models.lorenz96
    NEDAS.models.nextsim
    NEDAS.models.noresm

@@ -1,0 +1,129 @@
+# Cycled DA experiment with the DART bgrid_solo dry dynamical core (Held-Suarez forcing):
+# synthetic temperature observations from a truth run assimilated by the EAKF.
+# This shows the setup working end to end; the localization, inflation and observation
+# network are not tuned, and do not yet bring the analysis closer to the truth.
+#
+# Build the model first (needs a DART checkout, gfortran and netCDF-Fortran):
+#   NEDAS/models/bgrid_solo/build_bgrid_solo.sh --dart /path/to/DART
+# then run from this directory (about 9 minutes serial, most of it spinning up the ensemble):
+#   nedas-run -c config.yml
+work_dir: bgrid_solo
+
+python_env:
+
+io_mode: offline
+
+job_submit:
+  host: local
+  parallel_mode: serial
+
+nproc: 1
+
+nens: 10
+run_preproc: True
+run_forecast: True
+run_analysis: True
+run_postproc: True
+run_diagnose: False
+debug: False
+
+# the ensemble members are spun up for model_def.bgrid_solo.spinup_hours before time_start
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-01-12T00:00:00Z
+time_analysis_start: 2001-01-02T00:00:00Z
+time_analysis_end: 2001-01-11T00:00:00Z
+cycle_period: 24
+time:
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: bgrid_solo
+
+state_def:
+- name: temperature
+  model_src: bgrid_solo
+  var_type: field
+  err_type: normal
+- name: wind
+  model_src: bgrid_solo
+  var_type: field
+  err_type: normal
+- name: ps
+  model_src: bgrid_solo
+  var_type: field
+  err_type: normal
+
+model_def:
+  bgrid_solo:
+    config_file:
+    nproc_per_run: 1
+    ens_run_strategy: scheduler
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+    spinup_hours: 2400
+    init_ens_mode: spinup
+
+obs_def:
+- name: temperature
+  dataset_src: synthetic
+  model_src: bgrid_solo
+  nobs: 500
+  err:
+    type: normal
+    std: 0.3
+  hroi: 3.0e6  # meters, the grid has spherical distances
+  vroi: 1000  # hPa; the synthetic network is all at z=0, the top level, so this spreads it down
+  troi: inf
+  impact_on_variable:
+
+dataset_def:
+  synthetic:
+    model_src: bgrid_solo
+    config_file:
+    obs_position: random
+    obs_window_min: -24
+    obs_window_max: 0
+
+shuffle_obs: False
+
+use_synthetic_obs: True
+
+perturb:
+
+scheme: filter
+
+niter: 1
+iter: 0
+
+assimilator_def:
+  type: EAKF
+
+updator_def:
+  type: additive
+
+covariance_def:
+  type: ensemble
+
+inflation_def:
+  type: post,multiplicative
+  adaptive: False
+  coef: 1.05
+
+localization:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exp
+
+transform_def:
+  type: identity
+
+resolution_level: [0]
+character_length: [10]
+
+diag:
