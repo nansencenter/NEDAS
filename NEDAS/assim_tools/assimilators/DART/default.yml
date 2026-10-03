@@ -7,7 +7,13 @@ dart_lib:
 #   KERNEL    kernel filter (stochastic)
 #   PARTICLE  observation-space particle filter
 #   RHF       rank histogram filter (unbounded)
-#   GAMMA     gamma-distributed prior/likelihood
+#   GAMMA     gamma-distributed prior/likelihood. Assumes a gamma observation likelihood, and is
+#             numerically unreliable when the prior is narrow relative to its mean: with ideal
+#             gamma priors and observations its increments match EAKF's at a coefficient of
+#             variation of 0.2 or more, but are 30-1500x too large at 0.05 (DART's inverse gamma
+#             CDF fails to converge in the tails, and it reports status 0). On real humidity
+#             ensembles about 29% of locations blow up. Where the threshold lies between 0.05
+#             and 0.2 was not determined. Not recommended.
 #   BNRHF     bounded normal rank histogram filter (uses the bounds below)
 #   KDE       kernel density estimator filter (uses the bounds below)
 filter_kind: EAKF
