@@ -159,7 +159,10 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
     obs_prior_ss = np.sum((obs_prior - obs_prior_mean)**2)
 
     # state/obs cross-covariance and correlation (if needed)
-    ens_prior_mean = np.mean(ens_prior)
+    # per-location member mean (a global np.mean mixes locations and fails on empty input)
+    ens_prior_mean = np.zeros(ens_prior.shape[1:])
+    for m in range(nens):
+        ens_prior_mean += ens_prior[m, ...] / nens
 
     cov = np.zeros(ens_prior.shape[1:])  # cov is sample covariance * (nens - 1)
 

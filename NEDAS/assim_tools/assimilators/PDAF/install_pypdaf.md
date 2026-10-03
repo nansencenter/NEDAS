@@ -42,7 +42,7 @@ The assimilator imports pyPDAF lazily, so NEDAS runs fine without it as long as
 ## MPI is not optional
 
 pyPDAF requires MPI at build time (`dependency('mpi', ..., required: true)` on Windows, an MPI
-wrapper compiler elsewhere) and initializes it on import, so unlike the DART backend (built
-`nompi`) the PDAF assimilator cannot run in NEDAS's no-mpi4py serial fallback. It does not
+wrapper compiler elsewhere) and initializes it on import, so the PDAF assimilator cannot run
+in NEDAS's no-mpi4py serial fallback. It does not
 *communicate*, though: PDAF is set up on MPI_COMM_SELF and every rank analyses its own
 partitions alone.

@@ -137,6 +137,8 @@ class Grid1D:
                 i_ = np.hstack((i_, i_[0]))
 
         pi = np.array(np.searchsorted(xi_, x_, side='right'))
+        # the last grid point itself is inside, in the last interval (side='right' puts it past the end)
+        pi[(pi == len(xi_)) & (x_ == xi_[-1])] = len(xi_) - 1
         inside = ~np.logical_or(pi==len(xi_), pi==0)
         pi = pi[inside]
 

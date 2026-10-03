@@ -87,6 +87,32 @@ class TestUpdateEnsembleEAKF(unittest.TestCase):
         self.assertFalse(np.allclose(ens_post, ens_prior))
 
 
+    def test_empty_update_does_not_raise(self):
+        # nothing within the radius to update (numba raised ZeroDivisionError)
+        rng = np.random.default_rng(3)
+        obs_prior = rng.normal(0, 1, 10)
+        out = _plain_update_ensemble(np.zeros((10, 0)), obs_prior, rng.normal(0, 1, 10), np.zeros(0))
+        self.assertEqual(out.shape, (10, 0))
+
+    def test_correlation_is_per_location(self):
+        # correlation localization must see each location's own correlation, whatever its mean
+        from NEDAS.utils.njit import njit
+
+        @njit
+        def corr_as_factor(r, nens):
+            return r
+
+        rng = np.random.default_rng(4)
+        nens = 30
+        obs_prior = rng.normal(0, 1, nens)
+        obs_incr = rng.normal(0, 0.3, nens)
+        ens_prior = rng.normal(0, 1, (nens, 4)) + np.array([0.0, 10.0, -50.0, 1e3])
+        post = update_ensemble(ens_prior.copy(), np.zeros((0, 4)), obs_prior, np.zeros(0), obs_incr,
+                               np.ones(4), corr_as_factor, 1.0, 0.0, False)
+        r = np.array([np.corrcoef(ens_prior[:, i], obs_prior)[0, 1] for i in range(4)])
+        reg = np.array([np.cov(ens_prior[:, i], obs_prior)[0, 1] for i in range(4)]) / np.var(obs_prior, ddof=1)
+        np.testing.assert_allclose(post, ens_prior + (r * reg)[None, :] * obs_incr[:, None], rtol=1e-10)
+
 class TestEAKFHybrid(unittest.TestCase):
     """Serial EAKF with the hybrid covariance P = (1-beta)*P_d + beta*static_var_scaling*P_s, a separate
     batch of static members: without static members it is the plain EAKF, and for a single observation

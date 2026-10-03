@@ -1,3 +1,3 @@
 from .core import DARTAssimilator
 
-__all__ = ['DARTAssimilator']
+__all__ = ["DARTAssimilator"]

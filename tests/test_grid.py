@@ -113,6 +113,22 @@ class TestGrid(unittest.TestCase):
         self.assertAlmostEqual(vfld2[0, 100, 100], 0.0)
         self.assertAlmostEqual(vfld2[1, 100, 100], -1.0)
 
+    def test_distance_follows_the_grid_distance_type(self):
+        # on a lon-lat grid declared spherical, distances are great circles in meters by default
+        # (the assimilators call distance() without a type); they used to be cartesian degrees
+        lon, lat = np.meshgrid(np.arange(-177., 180., 6.), np.arange(-87., 90., 6.))
+        grid = Grid(Proj('+proj=longlat'), lon, lat, cyclic_dim='x', distance_type='spherical')
+        quarter = 0.5 * np.pi * 6371000.
+        self.assertAlmostEqual(float(grid.distance(0., np.array([90.]), 0., np.array([0.]))[0]), quarter, delta=1.)
+        self.assertAlmostEqual(float(grid.distance(0., np.array([0.]), 0., np.array([90.]))[0]), quarter, delta=1.)
+        # across the dateline
+        self.assertAlmostEqual(float(grid.distance(179., np.array([-179.]), 0., np.array([0.]))[0]),
+                               2. / 360. * 2 * np.pi * 6371000., delta=1.)
+        self.assertEqual(float(grid.distance(0., np.array([90.]), 0., np.array([0.]), type='cartesian')[0]), 90.)
+        # a cartesian grid is unchanged
+        flat = Grid(Proj('+proj=stere'), lon, lat)
+        self.assertEqual(float(flat.distance(0., np.array([3.]), 0., np.array([4.]))[0]), 5.)
+
 if __name__ == '__main__':
     unittest.main()
 
