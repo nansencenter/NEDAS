@@ -1,0 +1,115 @@
+# Cycled EAKF experiment with the Lorenz (1963) model, one of the small test models from DART and
+# DAPPER (NEDAS/models/ode_model.py): all 3 variables observed every 0.25 time units (6 h) with
+# error variance 2, the setting of Sakov et al. (2012) as in DAPPER mods/Lorenz63/sakov2012.py,
+# where a 10-member EnKF reaches an analysis RMSE of about 0.6-0.8.
+#
+# The other small models run the same way: change model_src, grid_def, the variable names
+# and the observed positions (obs_x is the index in the state vector, or the fast grid of
+# lorenz96_2scale), see the default.yml of each model. Run from this directory:
+#   nedas-run -c lorenz63.yml
+work_dir: lorenz63
+
+python_env:
+
+io_mode: online
+
+nproc: 1
+
+nens: 10
+run_preproc: True
+run_forecast: True
+run_analysis: True
+run_postproc: True
+run_diagnose: False
+debug: False
+
+time_start: 2001-01-01T00:00:00Z
+time_end: 2001-02-01T00:00:00Z
+time_analysis_start: 2001-01-01T00:00:00Z
+time_analysis_end: 2001-01-31T18:00:00Z
+cycle_period: 6
+time:
+obs_time_steps: [0]
+obs_time_scale: 0
+state_time_steps: [0]
+state_time_scale: 0
+
+grid_def:
+  type: lorenz63
+
+state_def:
+- name: state
+  model_src: lorenz63
+  var_type: field
+  err_type: normal
+
+model_def:
+  lorenz63:
+    config_file:
+    nproc_per_run: 1
+    ens_run_strategy: scheduler
+    ens_init_dir: '{work_dir}/init_ens'
+    truth_dir: '{work_dir}/truth'
+
+obs_def:
+- name: state
+  dataset_src: synthetic
+  model_src: lorenz63
+  nobs: 3
+  err:
+    type: normal
+    std: 1.4142135623730951
+  hroi: inf  # no localization: 3 variables
+  vroi: inf
+  troi: inf
+  impact_on_variable:
+
+dataset_def:
+  synthetic:
+    model_src: lorenz63
+    config_file:
+    obs_position: prescribed
+    obs_x: [0, 1, 2]
+    obs_window_min: -6
+    obs_window_max: 0
+
+shuffle_obs: False
+interp_method: linear
+
+perturb:
+
+scheme: filter
+
+niter: 1
+iter:
+resolution_level: [0]
+character_length: [1]
+
+assimilator_def:
+  type: EAKF
+  config_file:
+
+updator_def:
+  type: additive
+  config_file:
+
+covariance_def:
+  type: ensemble
+  config_file:
+
+inflation_def:
+  type: prior,multiplicative
+  adaptive: False
+  coef: 1.02
+
+localization_def:
+  horizontal:
+    type: gaspari_cohn
+  vertical:
+    type: gaspari_cohn
+  temporal:
+    type: exponential
+
+transform_def:
+
+diag:
