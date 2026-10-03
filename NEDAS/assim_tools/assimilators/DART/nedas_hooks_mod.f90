@@ -42,8 +42,9 @@ end interface
 integer     :: nens = 0, nloc = 0, nmax = 0, t_days = 0, t_secs = 0
 type(c_ptr) :: state_p = c_null_ptr, inf_p = c_null_ptr
 
-! obs, replicated on all tasks; prior/post (nobs, nens) are numpy (nens, nobs)
-integer     :: nobs = 0
+! obs metadata on all tasks; H(x) prior/post only for the obs this task owns in DART
+! (position i owned by task mod(i-1, ntasks)): (nown, nens), numpy (nens, nown)
+integer     :: nobs = 0, nown = 0
 type(c_ptr) :: otype_p, ox_p, oy_p, oz_p, oday_p, osec_p, oval_p, oerr_p, prior_p
 type(c_ptr) :: post_p = c_null_ptr
 procedure(callback), pointer :: post_callback => null()
@@ -76,12 +77,13 @@ call nedas_set_periodic(x_on /= 0, xmin, xmax, y_on /= 0, ymin, ymax)
 end subroutine dart_filter_set_periodic
 
 
-subroutine dart_filter_set_obs(nobs_in, otype, x, y, z, days, secs, val, errvar, prior) &
+subroutine dart_filter_set_obs(nobs_in, nown_in, otype, x, y, z, days, secs, val, errvar, prior) &
                                bind(c, name='dart_filter_set_obs')
-integer(c_int), value :: nobs_in
+integer(c_int), value :: nobs_in, nown_in
 type(c_ptr),    value :: otype, x, y, z, days, secs, val, errvar, prior
 
 nobs = nobs_in
+nown = nown_in
 otype_p = otype; ox_p = x; oy_p = y; oz_p = z
 oday_p = days; osec_p = secs; oval_p = val; oerr_p = errvar; prior_p = prior
 end subroutine dart_filter_set_obs
@@ -219,7 +221,7 @@ call c_f_pointer(oy_p, oy, [nobs])
 call c_f_pointer(oz_p, oz, [nobs])
 call c_f_pointer(oval_p, oval, [nobs])
 call c_f_pointer(oerr_p, oerr, [nobs])
-call c_f_pointer(prior_p, prior, [nobs, nens])
+call c_f_pointer(prior_p, prior, [nown, nens])
 
 ncopy = 1 + copies_inc
 nqc   = 1 + qc_inc
@@ -241,7 +243,11 @@ do i = 1, nobs
    call set_obs_def_time(def, set_time(osec(i), oday(i)))
    call set_obs_def_error_variance(def, oerr(i))
    call set_obs_def_key(def, i)
-   call set_obs_def_external_FO(def, .true., .false., i, nens, prior(i, :))
+   if (mod(i-1, task_count()) == my_task_id()) then
+      call set_obs_def_external_FO(def, .true., .false., i, nens, prior((i-1)/task_count()+1, :))
+   else   ! another task's: an attempt to use it here stops DART
+      call set_obs_def_external_FO(def, .false., .false., i, 1, [MISSING_R8])
+   endif
    call set_obs_def(obs, def)
    vals(1) = oval(i)
    call set_obs_values(obs, vals)
@@ -273,7 +279,7 @@ real(r8),                intent(inout) :: prior_qc_copy(:)
 real(r8), pointer :: post(:,:)
 type(obs_type) :: obs
 real(r8) :: input_qc(1)
-integer  :: j, key, qc, istatus(nens), global_qc
+integer  :: j, k, key, qc, istatus(nens), global_qc
 
 if (isprior) call error_handler(E_ERR, 'nedas_obs_ens_distrib_state', 'posterior only', source)
 if (.not. associated(post_callback)) call error_handler(E_ERR, &
@@ -282,19 +288,22 @@ if (.not. associated(post_callback)) call error_handler(E_ERR, &
 ! NEDAS evaluates H on the current posterior (all tasks take part)
 call copy_state_out(ens_handle)
 call post_callback()
-call c_f_pointer(post_p, post, [nobs, nens])
+call c_f_pointer(post_p, post, [nown, nens])
 
 call init_obs(obs, 0, 0)
 do j = 1, obs_fwd_op_ens_handle%my_num_vars
    key = keys(obs_fwd_op_ens_handle%my_vars(j))
+   if (mod(key-1, task_count()) /= my_task_id()) call error_handler(E_ERR, &
+      'nedas_obs_ens_distrib_state', 'obs ownership differs from NEDAS', source)
+   k = (key-1)/task_count() + 1
    call get_obs_from_key(seq, key, obs)
    call get_qc(obs, input_qc, input_qc_index)
    if (.not. input_qc_ok(input_qc(1), global_qc)) cycle
 
    istatus = 0
-   where (post(key, :) /= post(key, :)) istatus = 1   ! NaN: failed forward operator
+   where (post(k, :) /= post(k, :)) istatus = 1   ! NaN: failed forward operator
    where (istatus == 0)
-      obs_fwd_op_ens_handle%copies(1:nens, j) = post(key, :)
+      obs_fwd_op_ens_handle%copies(1:nens, j) = post(k, :)
    elsewhere
       obs_fwd_op_ens_handle%copies(1:nens, j) = MISSING_R8
    end where

@@ -31,7 +31,7 @@ def load_dart_filter(lib_path: str) -> ctypes.CDLL:
         lib = ctypes.CDLL(lib_path)
         p = ctypes.c_void_p
         lib.dart_filter_set_state.argtypes = [ctypes.c_int]*3 + [p, _f64, _f64, _f64, _i32, p] + [ctypes.c_int]*2
-        lib.dart_filter_set_obs.argtypes = [ctypes.c_int] + [p]*9
+        lib.dart_filter_set_obs.argtypes = [ctypes.c_int]*2 + [p]*9
         lib.dart_filter_set_periodic.argtypes = [ctypes.c_int, ctypes.c_double, ctypes.c_double]*2
         lib.dart_filter_set_posterior.argtypes = [p, _CALLBACK]
         lib.dart_filter_set_write_obs_seq.argtypes = [ctypes.c_int]
@@ -163,7 +163,7 @@ class DARTAssimilator(Assimilator):
         lib.dart_filter_set_state(c.nens, nk, nmax, state.ctypes.data, x, y, z, qty,
                                   inf.ctypes.data, days, secs)
         ptr = lambda a: a.ctypes.data
-        lib.dart_filter_set_obs(len(obs['val']), *(ptr(obs[k]) for k in
+        lib.dart_filter_set_obs(len(obs['val']), obs['prior'].shape[1], *(ptr(obs[k]) for k in
                                 ('type', 'x', 'y', 'z', 'days', 'secs', 'val', 'errvar', 'prior')))
         post = np.full_like(obs['prior'], np.nan)
         callback = _CALLBACK(lambda: self.posterior_obs(c, par_id, data, state, obs, post))
@@ -191,48 +191,78 @@ class DARTAssimilator(Assimilator):
     # ---------------------------------------------------------------- obs
 
     def collect_obs(self, c: Context, slots: dict) -> dict:
-        """Every obs with its H(x) ensemble, on all ranks, sorted by time (DART needs that)"""
-        seqs, priors = {}, {}
+        """
+        Obs metadata on every rank (DART's serial loop needs it), sorted by time; the H(x)
+        ensemble only for the obs this rank owns in DART (sorted position j, owner j % nproc)
+        """
+        seqs = {}
         for part in c.comm_rec.allgather(c.obs.obs_seq):
             seqs.update(part)
-        for part in c.comm.allgather(c.obs.obs_prior):
-            priors.update(part)
 
-        cols = {k: [] for k in ('type', 'x', 'y', 'z', 't', 'val', 'errvar', 'prior', 'index')}
+        cols = {k: [] for k in ('type', 'x', 'y', 'z', 't', 'val', 'errvar')}
+        index, slices, start = [], {}, 0
         for rec_id in sorted(seqs):
             rec = c.obs.info.records[rec_id]
             seq = seqs[rec_id]
             n = seq['obs'].shape[-1]
             ncomp = 2 if rec.is_vector else 1
             comps = (0, 1) if rec.is_vector else (-1,)
-            prior = np.stack([np.reshape(priors[m, rec_id], (ncomp, n)) for m in range(c.nens)])
+            slices[rec_id] = (start, n, ncomp)
+            start += n * ncomp
             cols['val'].append(np.reshape(seq['obs'], (ncomp, n)).T.ravel())
-            cols['prior'].append(prior.transpose(0, 2, 1).reshape(c.nens, n*ncomp))
             cols['type'].append(np.tile([slots[(rec.name, v)] for v in comps], n))
             for k in ('x', 'y', 'z'):
                 cols[k].append(np.repeat(np.asarray(seq[k], dtype=np.float64), ncomp))
             cols['errvar'].append(np.repeat(np.asarray(seq['err_std'], dtype=np.float64)**2, ncomp))
             cols['t'].append(np.repeat(np.asarray(seq['t']), ncomp))
-            cols['index'] += [(rec_id, i, v) for i in range(n) for v in comps]
+            index += [(rec_id, i, v) for i in range(n) for v in comps]
+        obs = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in cols.items()}
 
-        if not cols['val']:
-            empty = np.zeros(0)
-            return {'type': empty.astype(np.int32), 'x': empty, 'y': empty, 'z': empty,
-                    'days': empty.astype(np.int32), 'secs': empty.astype(np.int32), 'val': empty,
-                    'errvar': empty, 'prior': np.zeros((c.nens, 0)), 'index': [], 'hroi': {}, 'vroi': {}}
-
-        obs = {k: np.concatenate(v) for k, v in cols.items() if k not in ('prior', 'index')}
-        obs['prior'] = np.concatenate(cols['prior'], axis=1)
-        valid = np.isfinite(obs['val']) & np.isfinite(obs['prior']).all(axis=0)
+        # drop obs whose H(x) is NaN in any member, wherever that member is held
+        bad = np.zeros(start, dtype=np.int64)
+        for (m, rec_id), seq in c.obs.obs_prior.items():
+            st, n, ncomp = slices[rec_id]
+            bad[st:st+n*ncomp] += ~np.isfinite(np.reshape(seq, (ncomp, n)).T.ravel())
+        if c.comm.mpi_ready:
+            bad = c.comm.allreduce(bad)
+        valid = np.isfinite(obs['val']) & (bad == 0)
         times = [dart_time(t) for t in obs['t']]
         order = sorted(np.flatnonzero(valid), key=lambda i: times[i])
+
         out = {k: np.ascontiguousarray(obs[k][order], dtype=np.float64) for k in ('x', 'y', 'z', 'val', 'errvar')}
         out['type'] = np.ascontiguousarray(obs['type'][order], dtype=np.int32)
         out['days'] = np.array([times[i][0] for i in order], dtype=np.int32)
         out['secs'] = np.array([times[i][1] for i in order], dtype=np.int32)
-        out['prior'] = np.ascontiguousarray(obs['prior'][:, order])
-        out['index'] = [cols['index'][i] for i in order]
+        out['pos'] = np.full(start, -1)
+        out['pos'][order] = np.arange(len(order))
+        out['slices'] = slices
+        out['prior'] = self.to_owners(c, c.obs.obs_prior, out, np.full((c.nens, self.num_owned(c, len(order))), np.nan))
+        if np.isnan(out['prior']).any():
+            raise RuntimeError("DART: missing H(x) for owned obs")
         return out
+
+    @staticmethod
+    def num_owned(c: Context, nobs: int) -> int:
+        return len(range(c.pid, nobs, c.comm.Get_size()))
+
+    @staticmethod
+    def to_owners(c: Context, ens: dict, obs: dict, buf: np.ndarray) -> np.ndarray:
+        """Send NEDAS's (member, record) obs ensembles to their DART owners, into buf (nens, nowned)"""
+        nproc = c.comm.Get_size()
+        sends = [[] for _ in range(nproc)]
+        for (m, rec_id), seq in ens.items():
+            st, n, ncomp = obs['slices'][rec_id]
+            pos = obs['pos'][st:st+n*ncomp]
+            keep = pos >= 0
+            vals, pos = np.reshape(seq, (ncomp, n)).T.ravel()[keep], pos[keep]
+            for d in np.unique(pos % nproc):
+                sel = pos % nproc == d
+                sends[d].append((m, pos[sel] // nproc, vals[sel]))
+        recv = c.comm.alltoall(sends) if nproc > 1 else sends
+        for part in recv:
+            for m, loc, vals in part:
+                buf[m, loc] = vals
+        return buf
 
     def posterior_obs(self, c: Context, par_id, data, state, obs, post) -> None:
         """Called from inside filter_main: H(x_post) with NEDAS's own obs operators"""
@@ -242,13 +272,8 @@ class DARTAssimilator(Assimilator):
         c.state.fields_post = c.state.transpose_to_field_complete(c, copy.deepcopy(c.state.state_post))
         c.state.output_state(c, 'post')
         c.obs.prepare_obs_from_state(c, 'post')
-        obs_post = {}
-        for part in c.comm.allgather(c.obs.obs_post):
-            obs_post.update(part)
-        for key, (rec_id, i, v) in enumerate(obs['index']):
-            for m in range(c.nens):
-                seq = obs_post[m, rec_id]
-                post[m, key] = seq[v, i] if v >= 0 else seq[i]
+        post[:] = np.nan
+        self.to_owners(c, c.obs.obs_post, obs, post)
 
     # ---------------------------------------------------------------- inflation
 
