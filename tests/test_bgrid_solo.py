@@ -1,9 +1,10 @@
 """
 Tests for the DART bgrid_solo (Held-Suarez dry dynamical core) model.
 
-The grid, the wind interpolation and the file layout are checked as they are. The model run
-itself needs the nedas_bgrid_advance executable (NEDAS/models/bgrid_solo/build_bgrid_solo.sh,
-which needs a DART checkout), without which those tests are skipped.
+The grid, the wind interpolation, the file layout and the state vector in memory are checked as
+they are. The model run itself needs the nedas_bgrid_advance executable (offline io mode) or
+libnedas_bgrid.so (online io mode), both built by NEDAS/models/bgrid_solo/build_bgrid_solo.sh,
+which needs a DART checkout; without them those tests are skipped.
 """
 import os
 import shutil
@@ -16,7 +17,9 @@ from NEDAS.core import Context
 from NEDAS.models import get_model_class
 from NEDAS.models.bgrid_solo.util import vel_to_temp, temp_to_vel, grid_coords, write_restart_file
 
-EXE = os.path.join(os.path.dirname(__import__('NEDAS.models.bgrid_solo', fromlist=['x']).__file__), 'nedas_bgrid_advance')
+_MODEL_DIR = os.path.dirname(__import__('NEDAS.models.bgrid_solo', fromlist=['x']).__file__)
+EXE = os.path.join(_MODEL_DIR, 'nedas_bgrid_advance')
+LIB = os.path.join(_MODEL_DIR, 'libnedas_bgrid.so')
 
 
 class TestStaggering(unittest.TestCase):
@@ -81,6 +84,10 @@ class TestModel(unittest.TestCase):
         z = m.z_coords(name='temperature', k=0)
         self.assertEqual(z.shape, m.grid.x.shape)
         self.assertLess(z[0, 0], m.z_coords(name='temperature', k=4)[0, 0])  # level 0 is the top
+        # z is the bottom of the layer of each level (NEDAS's convention), down to the surface
+        self.assertEqual(z[0, 0], 200.)
+        self.assertEqual(m.z_coords(name='temperature', k=4)[0, 0], 1000.)
+        self.assertEqual(m.z_coords(name='ps')[0, 0], 1000.)
 
     def test_model_day(self):
         self.assertEqual(self.model.model_day(self.model._time_ref + timedelta(hours=36)), 1.5)
@@ -211,6 +218,106 @@ class TestRun(unittest.TestCase):
         m.cold_start(m.filename(path=self.dir, time=self.time), self.time, seed=3)
         with self.assertRaises(AssertionError):
             m.run(path=self.dir, time=self.time, forecast_period=1.5)
+
+
+class TestMemory(unittest.TestCase):
+    """online io mode: the state vector in memory reads and writes like the restart file"""
+    def setUp(self):
+        self.c = Context()
+        self.off = get_model_class('bgrid_solo')(context=self.c, io_mode='offline')
+        self.on = get_model_class('bgrid_solo')(context=self.c, io_mode='online')
+        self.dir = tempfile.mkdtemp()
+        self.time = datetime(2000, 1, 1)
+        m = self.off
+        rng = np.random.default_rng(1)
+        self.fields = {'ps': rng.normal(1e5, 1e3, (m.nlat, m.nlon)), 't': rng.normal(250, 10, (m.nlev, m.nlat, m.nlon)),
+                       'u': rng.normal(0, 10, (m.nlev, m.nlat-1, m.nlon)), 'v': rng.normal(0, 10, (m.nlev, m.nlat-1, m.nlon))}
+        write_restart_file(m.filename(path=self.dir, time=self.time), m.nlon, m.nlat, m.nlev, m.model_day(self.time),
+                           *self.fields.values())
+        x = np.concatenate([f.ravel() for f in self.fields.values()])
+        self.on.set_state(x, time=self.time, tag='current', member=0)
+        self.off_kw = dict(path=self.dir, time=self.time, member=None)
+        self.on_kw = dict(time=self.time, tag='current', member=0)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def test_state_vector_layout(self):
+        x = self.on.get_state(**self.on_kw)
+        self.assertEqual(x.size, self.on.state_size)
+        for v, f in self.on._split(x).items():
+            np.testing.assert_array_equal(f, self.fields[v])
+
+    def test_read_and_write_match_the_file(self):
+        rng = np.random.default_rng(2)
+        for name, k in (('ps', 0), ('temperature', 3), ('wind', 2)):
+            a = self.off.read_var(**self.off_kw, name=name, k=k)
+            np.testing.assert_array_equal(self.on.read_var(**self.on_kw, name=name, k=k), a)
+            new = a + rng.normal(0, 1, a.shape)
+            self.off.write_var(new, **self.off_kw, name=name, k=k)
+            self.on.write_var(new, **self.on_kw, name=name, k=k)
+        with Dataset(self.off.filename(**self.off_kw)) as f:
+            on = self.on._split(self.on.get_state(**self.on_kw))
+            for v in ('ps', 't', 'u', 'v'):
+                np.testing.assert_allclose(on[v], f[v][0, 0], rtol=0, atol=1e-9)
+
+    def test_memory_is_per_tag_member_and_time(self):
+        with self.assertRaises(KeyError):
+            self.on.read_var(**{**self.on_kw, 'member': 1})
+        with self.assertRaises(KeyError):
+            self.on.read_var(**{**self.on_kw, 'tag': 'truth'})
+        with self.assertRaises(KeyError):
+            self.on.read_var(**{**self.on_kw, 'time': self.time + timedelta(hours=24)})
+
+    def test_preprocess_keeps_a_copy_of_the_prior(self):
+        on = self.on
+        on.preprocess(**self.on_kw)
+        prior = on.read_var(**{**self.on_kw, 'tag': 'prior'}, name='temperature', k=1).copy()
+        on.write_var(prior + 1., **self.on_kw, name='temperature', k=1)
+        np.testing.assert_array_equal(on.read_var(**{**self.on_kw, 'tag': 'prior'}, name='temperature', k=1), prior)
+        on.postprocess(**self.on_kw)
+        np.testing.assert_array_equal(on.read_var(**{**self.on_kw, 'tag': 'post'}, name='temperature', k=1), prior + 1.)
+
+
+@unittest.skipUnless(os.path.exists(LIB) and os.path.exists(EXE), "libnedas_bgrid.so or nedas_bgrid_advance not built")
+class TestOnlineRun(unittest.TestCase):
+    """online io mode runs the same model code in memory, and gives the same states as offline"""
+    def setUp(self):
+        self.c = Context()
+        self.off = get_model_class('bgrid_solo')(context=self.c, io_mode='offline', spinup_hours=0)
+        self.on = get_model_class('bgrid_solo')(context=self.c, io_mode='online', spinup_hours=0)
+        self.dir = tempfile.mkdtemp()
+        self.time = datetime(2000, 1, 10)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def full_state(self, fname):
+        with Dataset(fname) as f:
+            return np.concatenate([f[v][0, 0].ravel() for v in ('ps', 't', 'u', 'v')])
+
+    def test_cold_start_and_run_equal_offline(self):
+        off, on = self.off, self.on
+        off.cold_start(off.filename(path=self.dir, time=self.time), self.time, seed=3)
+        x0 = on.cold_start_state(seed=3)
+        np.testing.assert_array_equal(x0, self.full_state(off.filename(path=self.dir, time=self.time)))
+
+        kw = dict(time=self.time, tag='current', member=2, forecast_period=48)
+        on.set_state(x0, **kw)
+        on.run(**kw)
+        off.run(path=self.dir, time=self.time, forecast_period=48)
+        later = self.time + timedelta(hours=48)
+        x = on.get_state(**{**kw, 'time': later})
+        np.testing.assert_array_equal(x, self.full_state(off.filename(path=self.dir, time=later)))
+        self.assertGreater(np.abs(on.read_var(**{**kw, 'time': later}, name='wind', k=2)).max(), 0.1)
+        # the state it started from is left alone
+        np.testing.assert_array_equal(on.get_state(**kw), x0)
+
+    def test_other_settings_in_the_same_process_are_refused(self):
+        self.on.lib()
+        other = get_model_class('bgrid_solo')(context=self.c, io_mode='online', dt_atmos=1800)
+        with self.assertRaises(AssertionError):
+            other.lib()
 
 
 if __name__ == '__main__':

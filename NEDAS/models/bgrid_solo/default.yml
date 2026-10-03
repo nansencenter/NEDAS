@@ -6,8 +6,10 @@ walltime: 100
 
 restart_dt: 24  # model restart output interval in hours
 
-# path to the nedas_bgrid_advance executable (build_bgrid_solo.sh); empty = alongside the code
+# paths to the nedas_bgrid_advance executable (offline io mode) and libnedas_bgrid.so
+# (online io mode), both built by build_bgrid_solo.sh; empty = alongside the code
 model_exe: ''
+model_lib: ''
 
 # horizontal and vertical resolution; the default 60x30 grid with 5 levels is close to the
 # smallest one with somewhat realistic baroclinic instability (DART bgrid_solo readme)

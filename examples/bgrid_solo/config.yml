@@ -1,12 +1,13 @@
 # Cycled DA experiment with the DART bgrid_solo dry dynamical core (Held-Suarez forcing):
-# synthetic temperature observations from a truth run assimilated by the EAKF.
-# This shows the setup working end to end; the localization, inflation and observation
-# network are not tuned, and do not yet bring the analysis closer to the truth.
+# synthetic temperature observations from a truth run, at random positions and model levels,
+# assimilated by the EAKF. The localization, inflation and observation network are not tuned.
 #
 # Build the model first (needs a DART checkout, gfortran and netCDF-Fortran):
 #   NEDAS/models/bgrid_solo/build_bgrid_solo.sh --dart /path/to/DART
-# then run from this directory (about 9 minutes serial, most of it spinning up the ensemble):
+# then run from this directory (about 6-8 minutes serial, most of it spinning up the ensemble):
 #   nedas-run -c config.yml
+# The model runs from DART netCDF restart files with io_mode offline, or in memory through
+# libnedas_bgrid.so with io_mode online (the same model states, without the file io).
 work_dir: bgrid_solo
 
 python_env:
@@ -75,7 +76,7 @@ obs_def:
     type: normal
     std: 0.3
   hroi: 3.0e6  # meters, the grid has spherical distances
-  vroi: 1000  # hPa; the synthetic network is all at z=0, the top level, so this spreads it down
+  vroi: 400  # hPa
   troi: inf
   impact_on_variable:
 
@@ -84,6 +85,7 @@ dataset_def:
     model_src: bgrid_solo
     config_file:
     obs_position: random
+    obs_z: [100., 300., 500., 700., 900.]  # hPa, at the model levels (the layer centers, see BgridSoloModel.z_coords)
     obs_window_min: -24
     obs_window_max: 0
 
@@ -112,13 +114,13 @@ inflation_def:
   adaptive: False
   coef: 1.05
 
-localization:
+localization_def:
   horizontal:
     type: gaspari_cohn
   vertical:
     type: gaspari_cohn
   temporal:
-    type: exp
+    type: exponential
 
 transform_def:
   type: identity

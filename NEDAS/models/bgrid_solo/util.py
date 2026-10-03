@@ -87,8 +87,12 @@ def write_restart_file(filename: str, nlon: int, nlat: int, nlev: int, day: floa
 
 
 def input_nml(model, template: str, ic_file: str, ud_file: str, advance_seconds: int=0,
-              cold_start: bool=False, init_days: int=0) -> str:
-    """The input.nml text for nedas_bgrid_advance, with the settings of a BgridSoloModel"""
+              cold_start: bool=False, init_days: int=0, integrals: bool=True) -> str:
+    """
+    The input.nml text for nedas_bgrid_advance (or libnedas_bgrid, which only reads the model
+    settings, and takes template 'null'), with the settings of a BgridSoloModel.
+    With integrals=False the model does not print its daily global integrals.
+    """
     b = lambda x: '.true.' if x else '.false.'
     return f"""&utilities_nml
    TERMLEVEL = 2,
@@ -153,7 +157,7 @@ def input_nml(model, template: str, ic_file: str, ud_file: str, advance_seconds:
 &bgrid_integrals_nml
    file_name  = 'dynam_integral.out',
    time_units = 'days',
-   output_interval = 1.00
+   output_interval = {1.0 if integrals else -1.0}
    /
 &obs_kind_nml
    /
