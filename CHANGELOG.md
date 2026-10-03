@@ -48,9 +48,9 @@ DA schemes, or other backward-compatible features land in the next minor release
   e.g. `bgrid_solo`): `Grid.distance` ignored the grid's distance type, so the
   assimilators compared cartesian degrees with `hroi` in meters and localized
   nothing; it now follows the grid, and the batch assimilators' partition screen
-  handles great-circle distances. The `topaz` grids are also declared spherical:
-  their distances change from stereographic plane to great-circle meters, which
-  differ by the map scale factor (a few percent)
+  handles great-circle distances. The `topaz` grid, a conformal mapping that was
+  declared spherical but always got cartesian distances in the model plane, is now
+  declared cartesian, so its distances are unchanged
 - `Grid1D`: the last point of a non-cyclic grid was outside the grid, so an
   observation there had no prior and the serial assimilators failed
 - `build_bgrid_solo.sh` works with a fresh DART checkout (no site `mkmf.template`
