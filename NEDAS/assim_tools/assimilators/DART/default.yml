@@ -1,59 +1,60 @@
-# path to libdartkernels.so (build_dart_kernels.sh); empty = alongside the code
+# path to libdartfilter.so (build_dart_filter.sh); empty = alongside the code
 dart_lib:
 
-# which DART obs_increment kernel to use:
-#   EAKF      ensemble adjustment Kalman filter (deterministic; matches NEDAS's native EAKF)
-#   ENKF      stochastic EnKF with perturbed observations
-#   KERNEL    kernel filter (stochastic)
-#   PARTICLE  observation-space particle filter
-#   RHF       rank histogram filter (unbounded)
-#   GAMMA     gamma-distributed prior/likelihood. Assumes a gamma observation likelihood, and is
-#             numerically unreliable when the prior is narrow relative to its mean: with ideal
-#             gamma priors and observations its increments match EAKF's at a coefficient of
-#             variation of 0.2 or more, but are 30-1500x too large at 0.05 (DART's inverse gamma
-#             CDF fails to converge in the tails, and it reports status 0). On real humidity
-#             ensembles about 29% of locations blow up. Where the threshold lies between 0.05
-#             and 0.2 was not determined. Not recommended.
-#   BNRHF     bounded normal rank histogram filter (uses the bounds below)
-#   KDE       kernel density estimator filter (uses the bounds below)
+# obs-space filter and probit distribution for every variable (DART QCEFF table names):
+#   filter_kind: EAKF, ENKF, KERNEL, OBS_PARTICLE, UNBOUNDED_RHF, GAMMA_FILTER,
+#                BOUNDED_NORMAL_RHF, KDE_FILTER
+#   probit_dist: NORMAL_DISTRIBUTION, BOUNDED_NORMAL_RH_DISTRIBUTION, GAMMA_DISTRIBUTION,
+#                BETA_DISTRIBUTION, LOG_NORMAL_DISTRIBUTION, UNIFORM_DISTRIBUTION,
+#                PARTICLE_FILTER_DISTRIBUTION, KDE_DISTRIBUTION
 filter_kind: EAKF
+probit_dist: NORMAL_DISTRIBUTION
 
-# seed for DART's random sequence, used by the stochastic kernels (ENKF, KERNEL).
-# 0 derives one from the analysis time, which is the same on every rank -- required, since
-# every rank computes the increment for the same observation -- while changing each cycle,
-# so the perturbations are not replayed. Set a fixed non-zero value to pin a run instead.
-random_seed: 0
+# per-variable overrides, keyed by variable name (or name_x/name_y for a vector component):
+#   qceff:
+#     tracer: {filter_kind: BOUNDED_NORMAL_RHF, dist: BOUNDED_NORMAL_RH_DISTRIBUTION,
+#              bounded_below: True, lower_bound: 0.0}
+qceff: {}
 
-# --- DART namelist options -------------------------------------------------------------
-# DART keeps these in its namelists rather than in the kernel arguments, so NEDAS writes
-# them into an input.nml in the working directory for DART to read. Only the kernels that
-# actually consult them (ENKF, RHF, KDE) trigger this; the rest never initialize DART at
-# all, which is what keeps EAKF bit-comparable with the native implementation.
-#
-# True lets NEDAS write that input.nml; an input.nml it did not write is never overwritten.
-# Set False to supply your own, which must then provide &utilities_nml and &assim_tools_nml.
-# DART also writes dart_log.out and dart_log.nml into that directory.
-write_input_nml: True
+# DART inflation (filter_nml inf_*). flavor: 0 none, 2 spatially varying adaptive,
+# 3 spatially fixed adaptive, 4 RTPS (posterior only), 5 enhanced varying adaptive.
+# Adaptive inflation fields are carried to the next cycle by NEDAS.
+inflation:
+  prior:
+    flavor: 0
+    initial: 1.0
+    sd_initial: 0.6
+    damping: 0.9
+    lower_bound: 1.0
+    upper_bound: 1000000.0
+    sd_lower_bound: 0.6
+    sd_max_change: 1.05
+    deterministic: True
+  posterior:
+    flavor: 0
+    initial: 1.0
+    sd_initial: 0.0
+    damping: 1.0
+    lower_bound: 1.0
+    upper_bound: 1000000.0
+    sd_lower_bound: 0.0
+    sd_max_change: 1.05
+    deterministic: True
 
-sort_obs_inc: True               # ENKF: sort increments to minimize the regression error
-rectangular_quadrature: True     # RHF: rectangular vs trapezoidal quadrature
-gaussian_likelihood_tails: False # RHF: gaussian tails for the likelihood
-quadrature_order: 9              # KDE: Gauss-Legendre quadrature order
+num_groups: 1
+outlier_threshold: -1.0
+adaptive_localization_threshold: -1
+sort_obs_inc: False
+rectangular_quadrature: True
+gaussian_likelihood_tails: False
+quadrature_order: 9
 
-# Not supported yet: DART also needs its correction table (sampling_error_correction_table.nc)
-# staged at runtime, which NEDAS does not do. Setting this True raises rather than silently
-# regressing with an unpopulated table.
+# needs DART's table, e.g. DART/assimilation_code/programs/gen_sampling_err_table/work/sampling_error_correction_table.nc
 sampling_error_correction: False
+sec_table:
 
-# bounds for the bounded kernels (BNRHF, KDE); ignored by the others
-# Clip the observation priors of not-yet-assimilated observations into the bounds after each
-# update (GAMMA: to a tiny positive floor). Those priors are updated by linear regression,
-# which can push a member of a positive quantity negative, and then BNRHF (bounded) and GAMMA
-# refuse it. Off by default because the unbounded filters do not clip and it is a modelling
-# choice; set it when observing a bounded quantity with a bounded or positive-only kernel.
-clamp_obs_prior: False
+# write obs_seq.final (DART diagnostics) into the dart work directory
+write_obs_seq_final: False
 
-bounded_below: False
-bounded_above: False
-lower_bound: 0.0
-upper_bound: 1.0
+# any other namelist entries, {section: {key: value}}, applied last
+namelist: {}

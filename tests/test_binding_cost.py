@@ -1,9 +1,8 @@
 """
-What the Python/compiled boundary costs in the DART and PDAF assimilators.
+What the Python/compiled boundary costs in the PDAF assimilator.
 
 NEDAS runs its own Python assimilators against compiled ones, and the comparison only reads
-if the price of the binding is known. Neither binding is a thin wrapper: DART crosses the
-boundary three times per observation, and PDAF calls back into Python once per local analysis
+if the price of the binding is known. PDAF calls back into Python once per local analysis
 domain, so the crossing count is a function of the problem size, not a constant.
 
 The instrument is off unless NEDAS_CALL_COST is set, since it wraps regions only a few
@@ -26,8 +25,6 @@ from NEDAS.utils.call_cost import CallCost
 from test_pdaf_letkf import (
     HAS_PYPDAF, NENS, NFLD, NLOC, make_partition, make_assimilator,
 )
-from test_dart_kernels import LIB_PATH
-from NEDAS.assim_tools.assimilators.DART.core import DARTAssimilator
 
 
 class TestCallCost(unittest.TestCase):
@@ -96,45 +93,6 @@ class TestCallCost(unittest.TestCase):
         with cost.measure('solo'):
             pass
         self.assertIn('solo', cost.report())
-
-
-@unittest.skipUnless(os.path.exists(LIB_PATH), f"DART kernel library not built: {LIB_PATH}")
-class TestDARTBindingCost(unittest.TestCase):
-    """
-    Three crossings per observation: one obs_increment, then one regression onto the state
-    and one onto the remaining obs priors. That is the arity the serial loop pays per
-    observation, so it is what the cost scales with.
-    """
-
-    def setUp(self):
-        patcher = mock.patch.dict(os.environ, {'NEDAS_CALL_COST': '1'})
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.assim = DARTAssimilator.__new__(DARTAssimilator)
-        self.assim.dart_lib = LIB_PATH
-        self.assim.filter_kind = 'EAKF'
-        self.assim.bounded_below = self.assim.bounded_above = False
-        self.assim.lower_bound = self.assim.upper_bound = 0.0
-
-    def test_crossings_scale_with_observation_count(self):
-        rng = np.random.default_rng(0)
-        nens, nobs, nloc = 20, 4, 8
-        state = np.ascontiguousarray(rng.normal(0, 1, (nens, 1, nloc)))
-        obs_prior = np.ascontiguousarray(rng.normal(0, 1, (nens, nobs)))
-
-        for j in range(nobs):
-            incr = self.assim.obs_increment(obs_prior[:, j], None, float(rng.normal()), 1.0)
-            self.assim._regress(state, obs_prior[:, j], incr, np.ones(nloc))
-
-        cost = self.assim.call_cost
-        self.assertEqual(cost.count('obs_increment'), nobs)
-        self.assertEqual(cost.count('dart_obs_increment'), nobs)
-        self.assertEqual(cost.count('_regress'), nobs)
-        self.assertEqual(cost.count('dart_update_from_obs_inc'), nobs)
-        # the kernel is inside the method that prepares its arrays, so it cannot cost more
-        self.assertLessEqual(cost.seconds('dart_obs_increment'), cost.seconds('obs_increment'))
-        self.assertLessEqual(cost.seconds('dart_update_from_obs_inc'), cost.seconds('_regress'))
-        print('\nDART binding cost\n' + cost.report())
 
 
 @unittest.skipUnless(HAS_PYPDAF, 'pyPDAF not installed')
