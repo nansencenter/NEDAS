@@ -246,7 +246,8 @@ do i = 1, nobs
    if (mod(i-1, task_count()) == my_task_id()) then
       call set_obs_def_external_FO(def, .true., .false., i, nens, prior((i-1)/task_count()+1, :))
    else   ! another task's: an attempt to use it here stops DART
-      call set_obs_def_external_FO(def, .false., .false., i, 1, [MISSING_R8])
+      ! nens long: DART allocates external_FO once, on the first call for this def
+      call set_obs_def_external_FO(def, .false., .false., i, nens, spread(MISSING_R8, 1, nens))
    endif
    call set_obs_def(obs, def)
    vals(1) = oval(i)
