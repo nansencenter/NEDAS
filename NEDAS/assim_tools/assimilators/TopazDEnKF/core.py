@@ -163,10 +163,17 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     if obs_prior_static.shape[0] != nens_static:
         raise ValueError('Error: number of static members in state and obs do not match!')
 
-    lfactor_old = np.zeros(nlobs)
-    weights_old = np.eye(nens)
-    weights_static_old = np.zeros((nens_static, nens))
-    diag_old = np.zeros(2)
+    have_weights = False
+    lfactor_raw_old = np.zeros(0)       # the previous processed field's lfactor, as computed
+    lfactor_old = np.zeros(0)           # and over the obs it uses
+    nind_old = 0
+    weights = np.eye(nens)
+    weights_static = np.zeros((nens_static, nens))
+    diag = np.zeros(2)
+
+    # fields that share the current weights, transformed together once the weights change
+    group = np.empty(nfld, dtype=np.int64)
+    ngroup = 0
 
     # loop through the field records
     for n in range(nfld):
@@ -192,48 +199,71 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
         if np.std(state_prior[:, n]) == 0 and (nens_static == 0 or np.std(state_static[:, n]) == 0):
             continue
 
-        # only need to assimilate obs with lfactor>0
-        ind = np.where(lfactor > 0)[0]
+        # the same lfactor as the previous field (the usual case, e.g. vroi and troi infinite):
+        # same local obs, so the same weights, without selecting them again
+        if not (have_weights and lfactor.size == lfactor_raw_old.size and (lfactor == lfactor_raw_old).all()):
 
-        # TODO:get rid of obs if obs_prior is nan
-        # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
-        # ind = ind[valid]
+            # only need to assimilate obs with lfactor>0
+            ind = np.where(lfactor > 0)[0]
 
-        # limit number of local obs if needed
-        # Fortran (get_local_obs): sorts by distance, keeps nlobs closest
-        # Python: sorts by lfactor (descending), keeps nlobs_max highest-impact
-        if nlobs_max > 0 and len(ind) > nlobs_max:
-            sort_ind = np.argsort(lfactor[ind])[::-1]
-            ind = ind[sort_ind]
-            ind = ind[:nlobs_max]
+            # TODO:get rid of obs if obs_prior is nan
+            # valid = np.array([np.isnan(obs_prior[:,i]).any() for i in ind])
+            # ind = ind[valid]
 
-        # use cached weight if no localization is applied, to avoid repeated computation
-        if n > 0 and len(ind) == len(lfactor_old) and (lfactor[ind] == lfactor_old).all():
-            weights = weights_old
-            weights_static = weights_static_old
-            diag = diag_old
-        else:
-            weights, weights_static, diag = ensemble_transform_weights(obs[ind], obs_err[ind],
-                                                                 obs_prior[:, ind], obs_prior_static[:, ind],
-                                                                 lfactor[ind], rfactor,
-                                                                 fac_dynamic, fac_static, hybrid_perturbation)
+            # limit number of local obs if needed
+            # Fortran (get_local_obs): sorts by distance, keeps nlobs closest
+            # Python: sorts by lfactor (descending), keeps nlobs_max highest-impact
+            if nlobs_max > 0 and len(ind) > nlobs_max:
+                sort_ind = np.argsort(lfactor[ind])[::-1]
+                ind = ind[sort_ind]
+                ind = ind[:nlobs_max]
 
-        # perform local analysis and update the ensemble state,
-        # the static members contribute to the dynamic members' update through weights_static
-        state_prior[:, n] = apply_ensemble_transform(state_prior[:, n], weights)
-        for m in range(nens_static):
-            state_prior[:, n] += state_static[m, n] * weights_static[m, :]
+            # use cached weight if no localization is applied, to avoid repeated computation
+            if not (have_weights and len(ind) == len(lfactor_old) and (lfactor[ind] == lfactor_old).all()):
+                # new weights: first transform the fields that share the old ones
+                apply_ensemble_transform_fields(state_prior, state_static, group[:ngroup], weights, weights_static)
+                ngroup = 0
+                weights, weights_static, diag = ensemble_transform_weights(obs[ind], obs_err[ind],
+                                                                     obs_prior[:, ind], obs_prior_static[:, ind],
+                                                                     lfactor[ind], rfactor,
+                                                                     fac_dynamic, fac_static, hybrid_perturbation)
+                have_weights = True
+
+            lfactor_raw_old = lfactor
+            lfactor_old = lfactor[ind]
+            nind_old = len(ind)
+
+        group[ngroup] = n
+        ngroup += 1
 
         # accumulate the diagnostics over the field records updated at this location
         diag_out[0] += diag[0]
         diag_out[1] += diag[1]
-        diag_out[2] += len(ind)
+        diag_out[2] += nind_old
         diag_out[3] += 1
 
-        lfactor_old = lfactor[ind]
-        weights_old = weights
-        weights_static_old = weights_static
-        diag_old = diag
+    apply_ensemble_transform_fields(state_prior, state_static, group[:ngroup], weights, weights_static)
+
+
+@njit
+def apply_ensemble_transform_fields(state_prior, state_static, fields, weights, weights_static):
+    """
+    Perform the local analysis for the fields that share one set of weights, all at once:
+    x_post[k] = sum_m x_prior[m] weights[m, k] + sum_j x_static[j] weights_static[j, k], for each field,
+    as matrix products; the static members contribute to the dynamic members' update through
+    weights_static. As apply_ensemble_transform, the weights are used as they are, with a warning if
+    a column does not sum to one.
+    """
+    if fields.size == 0:
+        return
+    for m in range(weights.shape[1]):
+        if np.abs(np.sum(weights[:, m]) - 1) > 1e-5:
+            print('Warning: sum of weights != 1 detected!')
+            break
+    post = np.ascontiguousarray(weights).T @ np.ascontiguousarray(state_prior[:, fields])
+    if state_static.shape[0] > 0:
+        post += np.ascontiguousarray(weights_static).T @ np.ascontiguousarray(state_static[:, fields])
+    state_prior[:, fields] = post
 
 
 @njit
