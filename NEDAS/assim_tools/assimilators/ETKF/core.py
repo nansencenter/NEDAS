@@ -114,17 +114,14 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
     if obs_prior_static.shape[0] != nens_static:
         raise ValueError('Error: number of static members in state and obs do not match!')
 
-    have_weights = False
-    lfactor_raw_old = np.zeros(0)       # the previous processed field's lfactor, as computed
-    lfactor_old = np.zeros(0)           # and sorted, over the obs it uses
-    weights = np.eye(nens)
-    weights_static = np.zeros((nens_static, nens))
-
-    # fields that share the current weights, transformed together once the weights change
-    group = np.empty(nfld, dtype=np.int64)
-    ngroup = 0
-
-    # loop through the field records
+    # Group the fields by their lfactor, as PDAF's local domains group state entries: fields
+    # with identical lfactor (same obs, same weights) share one set of transform weights and are
+    # transformed together. Which of vroi, troi or impact_on_variable sets fields apart only
+    # changes how they split into groups (one group per column when all are infinite/uniform).
+    lfactors = np.zeros((nfld, nlobs))
+    group_id = np.full(nfld, -1, dtype=np.int64)   # -1: field not updated
+    group_first = np.empty(nfld, dtype=np.int64)   # first field of each group
+    ngroups = 0
     for n in range(nfld):
 
         # vertical localization
@@ -150,12 +147,19 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
         if np.std(state_prior[:, n]) == 0 and (nens_static == 0 or np.std(state_static[:, n]) == 0):
             continue
 
-        # the same lfactor as the previous field (the usual case, e.g. vroi and troi infinite):
-        # same obs in the same order, so the same weights, without selecting and sorting again
-        if have_weights and lfactor.size == lfactor_raw_old.size and (lfactor == lfactor_raw_old).all():
-            group[ngroup] = n
-            ngroup += 1
-            continue
+        lfactors[n] = lfactor
+        for g in range(ngroups):
+            if (lfactor == lfactors[group_first[g]]).all():
+                group_id[n] = g
+                break
+        if group_id[n] < 0:
+            group_first[ngroups] = n
+            group_id[n] = ngroups
+            ngroups += 1
+
+    # one set of weights per group, shared (with its random rotation) by all the group's fields
+    for g in range(ngroups):
+        lfactor = lfactors[group_first[g]]
 
         # only need to assimilate obs with lfactor>0
         ind = np.where(lfactor>0)[0]
@@ -168,26 +172,12 @@ def local_analysis_main(state_prior, obs_prior, state_static, obs_prior_static,
         sort_ind = np.argsort(lfactor[ind])[::-1]
         ind = ind[sort_ind]
 
-        # use cached weight if the localization factors are unchanged from the
-        # previous field record, to avoid repeated computation. Note: when a
-        # random rotation is applied, the cached weights (including their
-        # rotation) are reused, keeping neighboring field records consistent.
-        if not (have_weights and len(ind)==len(lfactor_old) and (lfactor[ind]==lfactor_old).all()):
-            # new weights: first transform the fields that share the old ones
-            apply_ensemble_transform_fields(state_prior, state_static, group[:ngroup], weights, weights_static)
-            ngroup = 0
-            weights, weights_static = ensemble_transform_weights(obs[ind], obs_err[ind],
-                                                                 obs_prior[:, ind], obs_prior_static[:, ind],
-                                                                 lfactor[ind], rotation, use_eigen,
-                                                                 fac_dynamic, fac_static, hybrid_perturbation)
-            have_weights = True
-        group[ngroup] = n
-        ngroup += 1
-
-        lfactor_raw_old = lfactor
-        lfactor_old = lfactor[ind]
-
-    apply_ensemble_transform_fields(state_prior, state_static, group[:ngroup], weights, weights_static)
+        weights, weights_static = ensemble_transform_weights(obs[ind], obs_err[ind],
+                                                             obs_prior[:, ind], obs_prior_static[:, ind],
+                                                             lfactor[ind], rotation, use_eigen,
+                                                             fac_dynamic, fac_static, hybrid_perturbation)
+        apply_ensemble_transform_fields(state_prior, state_static, np.where(group_id == g)[0],
+                                        weights, weights_static)
 
 @njit
 def apply_ensemble_transform_fields(state_prior, state_static, fields, weights, weights_static):
