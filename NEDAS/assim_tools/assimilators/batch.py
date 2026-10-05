@@ -1,7 +1,6 @@
 import copy
 from abc import abstractmethod
 import numpy as np
-from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
@@ -134,7 +133,17 @@ class BatchAssimilator(Assimilator):
                               for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        par_list = distribute_tasks(c.comm_mem, par_list_full, workload)
+
+        # largest tile first, each to the pid with the least work so far (greedy LPT): with only a
+        # few tiles per pid, contiguous runs of equal cumulative workload (distribute_tasks) cannot
+        # come out even, and the analysis waits for the most loaded pid
+        load = np.zeros(c.config.nproc_mem)
+        assigned = {pid: [] for pid in range(c.config.nproc_mem)}
+        for par_id in par_list_full[np.argsort(-workload, kind='stable')]:
+            pid = int(np.argmin(load))
+            assigned[pid].append(par_id)
+            load[pid] += workload[par_id]
+        par_list = {pid: np.sort(np.array(lst, dtype=int)) for pid, lst in assigned.items()}
 
         return par_list
 
