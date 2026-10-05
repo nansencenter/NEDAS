@@ -46,5 +46,8 @@ def assimilation_std(obs: np.ndarray, err) -> np.ndarray:
     """The error standard deviation per observation that the assimilator's R is built from."""
     _check(err)
     if err.type == 'normal':
-        return np.full(obs.shape, err.std * err.infl)
+        # one per location: a vector obs is (2, nobs), its err_std (nobs,)
+        return np.full(obs.shape[-1:], err.std * err.infl)
+    if obs.ndim > 1:
+        raise ValueError(f"{err.type} error on a vector obs: no single std per location")
     return err.std * np.abs(obs) * err.infl

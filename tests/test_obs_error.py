@@ -20,6 +20,10 @@ class TestNormal(unittest.TestCase):
         s = assimilation_std(np.arange(5.0), model('normal', 0.4, infl=2.0))
         np.testing.assert_allclose(s, 0.8)
 
+    def test_assimilation_std_is_per_location_for_vector_obs(self):
+        s = assimilation_std(np.ones((2, 5)), model('normal', 0.4))
+        self.assertEqual(s.shape, (5,))
+
 
 class TestLognormal(unittest.TestCase):
     def test_always_positive_even_where_the_truth_is_zero(self):
