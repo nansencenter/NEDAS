@@ -103,10 +103,6 @@ class SerialAssimilator(Assimilator):
         valid = c.comm_mem.allgather(c.obs.valid)
         obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c, valid)
 
-        # ens-complete pre transforms (probit)
-        self.transform_ens_state_forward(state_data)
-        self.transform_ens_obs_forward(obs_data)
-
         # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
         cost = self.loop_cost
@@ -168,10 +164,6 @@ class SerialAssimilator(Assimilator):
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
                                   c.localization_funcs['correlation'], obs_impact)
 
-        # ens-complete inverse transforms (probit)
-        self.transform_ens_state_backward(state_data)
-        self.transform_ens_obs_backward(obs_data)
-
         c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
         c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
 
@@ -225,16 +217,3 @@ class SerialAssimilator(Assimilator):
             used (np.ndarray): boolean mask of already-assimilated obs
         """
         pass
-
-    def transform_ens_state_forward(self, state_data):
-        pass
-
-    def transform_ens_state_backward(self, state_data):
-        pass
-
-    def transform_ens_obs_forward(self, obs_data):
-        pass
-
-    def transform_ens_obs_backward(self, obs_data):
-        pass
-
