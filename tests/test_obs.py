@@ -173,10 +173,11 @@ class TestGlobalObsList(unittest.TestCase):
         obs_list = Obs.global_obs_list(self.obs, self.c, valid)
         for pid, n in ((0, 3 + 2*2), (1, 3 + 2*3)):
             self.assertEqual(sorted(i for _, _, p, i in obs_list if p == pid), list(range(n)))
-        # in the packing order: per record, the vector components in blocks
+        # a vector obs's components are visited together (DART's order), while i still points
+        # into the packing order, where they are stored in blocks
         pid1 = [(rec, v, i) for rec, v, p, i in obs_list if p == 1]
         self.assertEqual(pid1, [(0, None, 0), (0, None, 1), (0, None, 2),
-                                (1, 0, 3), (1, 0, 4), (1, 0, 5), (1, 1, 6), (1, 1, 7), (1, 1, 8)])
+                                (1, 0, 3), (1, 1, 6), (1, 0, 4), (1, 1, 7), (1, 0, 5), (1, 1, 8)])
 
 if __name__ == '__main__':
     unittest.main()

@@ -558,7 +558,8 @@ class Obs:
         for owner_pid in range(c.config.nproc_mem):
             i[owner_pid] = 0
 
-        # the order of pack_local_obs_data: by obs record, then vector component, then obs
+        # pack_local_obs_data stores each record by vector component, then obs; the list visits
+        # the components of a vector obs together (u1, v1, u2, v2, ...), the order of DART's obs_seq
         obs_list = []
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
@@ -568,10 +569,10 @@ class Obs:
                     nvalid = len(self.obs_inds[obs_rec_id][owner_pid])
                 else:
                     nvalid = len(valid[owner_pid][obs_rec_id])
-                for v in v_list:
-                    for _ in range(nvalid):
-                        obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
-                        i[owner_pid] += 1
+                for k in range(nvalid):
+                    for iv, v in enumerate(v_list):
+                        obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid] + iv*nvalid + k))
+                i[owner_pid] += len(v_list) * nvalid
 
         if getattr(c, 'shuffle_obs', False):
             np.random.shuffle(obs_list)  # randomize the order of obs (this is optional)
