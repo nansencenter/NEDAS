@@ -56,6 +56,24 @@ class TestLognormal(unittest.TestCase):
             perturb_obs(np.ones(3), model('lognormal', 0.2, floor=-1.0))
 
 
+class TestTruncatedNormal(unittest.TestCase):
+    def test_never_below_the_bound_even_where_the_truth_is_on_it(self):
+        np.random.seed(2)
+        obs = perturb_obs(np.zeros(5000), model('truncated_normal', 0.5))
+        self.assertGreaterEqual(obs.min(), 0.0)
+        self.assertTrue(np.isnan(perturb_obs(np.array([np.nan]), model('truncated_normal', 0.5)))[0])
+
+    def test_far_from_the_bound_it_is_the_normal_error(self):
+        np.random.seed(3)
+        err = perturb_obs(np.full(200000, 10.0), model('truncated_normal', 0.5)) - 10.0
+        self.assertAlmostEqual(err.mean(), 0.0, places=2)
+        self.assertAlmostEqual(err.std(), 0.5, places=2)
+
+    def test_assimilation_std_is_constant_whatever_the_draw(self):
+        s = assimilation_std(np.array([0.0, 1e-4, 3e-2]), model('truncated_normal', 5e-4, infl=2.0))
+        np.testing.assert_allclose(s, 1e-3)
+
+
 class TestUnknownType(unittest.TestCase):
     def test_refused_rather_than_silently_treated_as_normal(self):
         with self.assertRaisesRegex(ValueError, 'unsupported observation error type'):
