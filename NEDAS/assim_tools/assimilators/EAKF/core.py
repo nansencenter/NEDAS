@@ -99,20 +99,21 @@ def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_sta
     nens, nfld, nloc = state_data.shape
 
     h_lfactor = h_local_func(h_dist, hroi)
-    v_lfactor = v_local_func(v_dist, vroi)
+    nloc_sub = np.where(h_lfactor>0)[0]  # subset of range(nloc) to update
+    if nloc_sub.size == 0:
+        return
+
+    v_lfactor = v_local_func(v_dist[:, nloc_sub], vroi)
     t_lfactor = t_local_func(t_dist, troi)
 
-    nloc_sub = np.where(h_lfactor>0)[0]  # subset of range(nloc) to update
+    lfactor = np.empty((nfld, nloc_sub.size))
+    for n in range(nfld):
+        for j in range(nloc_sub.size):
+            lfactor[n, j] = h_lfactor[nloc_sub[j]] * v_lfactor[n, j] * t_lfactor[n] * impact_on_variable[n]
 
-    lfactor = np.zeros((nfld, nloc))
-    for l in nloc_sub:
-        for n in range(nfld):
-            lfactor[n, l] = h_lfactor[l] * v_lfactor[n, l] * t_lfactor[n] * impact_on_variable[n]
-
-    state_data[:, :, nloc_sub] = update_ensemble(state_data[:, :, nloc_sub], state_static[:, :, nloc_sub],
-                                                 obs_prior, obs_prior_static, obs_incr, lfactor[:, nloc_sub],
-                                                 correlation_local_func, weight_dynamic, weight_static,
-                                                 hybrid_perturbation)
+    update_ensemble_inplace(state_data, state_static, nloc_sub, lfactor,
+                            obs_prior, obs_prior_static, obs_incr,
+                            correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
 @njit
 def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
@@ -131,17 +132,24 @@ def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prio
 
     # update the unused obs within roi
     ind = np.where(np.logical_and(~used, lfactor>0))[0]
+    if ind.size == 0:
+        return
 
-    obs_data[:, ind] = update_ensemble(obs_data[:, ind], obs_data_static[:, ind],
-                                       obs_prior, obs_prior_static, obs_incr, lfactor[ind],
-                                       correlation_local_func, weight_dynamic, weight_static,
-                                       hybrid_perturbation)
+    # the obs are one field of nlobs points: (nens, 1, nlobs) views, so the writes land in obs_data
+    nens, nlobs = obs_data.shape
+    update_ensemble_inplace(obs_data.reshape((nens, 1, nlobs)),
+                            obs_data_static.reshape((obs_data_static.shape[0], 1, nlobs)),
+                            ind, lfactor[ind].reshape((1, ind.size)),
+                            obs_prior, obs_prior_static, obs_incr,
+                            correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
 @njit
 def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr, local_factor,
                     correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> np.ndarray:
     """
     Regress the obs-space increments onto the dynamic members (ens_prior).
+
+    The readable reference for update_ensemble_inplace, which the serial loop runs.
 
     The regression coefficient is cov(x,y)/var(y) of the hybrid covariance, blending the dynamic members
     with the static ones (ens_static, obs_prior_static), which are held fixed and never updated. With
@@ -225,3 +233,89 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
                                                                + reg_factor_pert * (obs_incr[m] - obs_incr_mean))
 
     return ens_post
+
+
+@njit
+def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_static, obs_incr,
+                            correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> None:
+    """
+    update_ensemble's arithmetic done in place on ens[:, n, sub[j]], with lfactor[n, j] the local
+    factor of field n at point sub[j]: loops over the members outside and the points inside, so the
+    (nens, nfld, nloc) array is read twice and written once and nothing its size is allocated.
+    update_ensemble is the readable reference.
+    """
+    nens, nfld = ens.shape[0], ens.shape[1]
+    nsub = sub.size
+    nens_static = ens_static.shape[0]
+
+    # obs-space statistics of the dynamic members. ss = 'sum of squares'
+    obs_prior_mean = np.mean(obs_prior)
+    ypert = obs_prior - obs_prior_mean
+    obs_prior_ss = np.sum(ypert**2)
+    ypert_sum = np.sum(ypert)    # 0 up to roundoff, kept so cov is exactly sum((x - mean(x)) * ypert)
+
+    # one pass over the members: sum(x) and sum(x * ypert), hence cov = sample covariance * (nens - 1)
+    xsum = np.zeros((nfld, nsub))
+    cov = np.zeros((nfld, nsub))
+    for m in range(nens):
+        for n in range(nfld):
+            for j in range(nsub):
+                x = ens[m, n, sub[j]]
+                xsum[n, j] += x
+                cov[n, j] += x * ypert[m]
+    for n in range(nfld):
+        for j in range(nsub):
+            cov[n, j] -= xsum[n, j] / nens * ypert_sum
+
+    if correlation_local_func is not None:
+        # a second pass, about the mean, for the state sum of squares (no cancellation)
+        ens_ss = np.zeros((nfld, nsub))
+        for m in range(nens):
+            for n in range(nfld):
+                for j in range(nsub):
+                    d = ens[m, n, sub[j]] - xsum[n, j] / nens
+                    ens_ss[n, j] += d * d
+        r = np.zeros((nfld, nsub))
+        if obs_prior_ss > 0.0:
+            for n in range(nfld):
+                for j in range(nsub):
+                    if ens_ss[n, j] > 0.0:
+                        r[n, j] = cov[n, j] / np.sqrt(ens_ss[n, j] * obs_prior_ss)
+        lfactor = lfactor * correlation_local_func(r, nens)
+
+    # variance and covariance of the hybrid covariance
+    obs_prior_var_hybrid = weight_dynamic * obs_prior_ss / (nens - 1)
+    reg_factor = weight_dynamic * cov / (nens - 1)
+    if nens_static > 1:
+        ypert_static = obs_prior_static - np.mean(obs_prior_static)
+        obs_prior_var_hybrid += weight_static * np.sum(ypert_static**2) / (nens_static - 1)
+        for m in range(nens_static):
+            w = weight_static * ypert_static[m] / (nens_static - 1)
+            for n in range(nfld):
+                for j in range(nsub):
+                    reg_factor[n, j] += ens_static[m, n, sub[j]] * w
+
+    # if there is no prior spread, don't update at all
+    if obs_prior_var_hybrid == 0:
+        return
+    reg_factor /= obs_prior_var_hybrid
+
+    # the mean and perturbation increments are regressed with the same coefficient, unless the
+    # perturbations are updated with the dynamic ensemble covariance alone
+    split_increment = (not hybrid_perturbation) and nens_static > 1 and obs_prior_ss > 0
+    if not split_increment:
+        gain = lfactor * reg_factor
+        for m in range(nens):
+            for n in range(nfld):
+                for j in range(nsub):
+                    ens[m, n, sub[j]] += gain[n, j] * obs_incr[m]
+        return
+
+    obs_incr_mean = np.mean(obs_incr)
+    gain_mean = lfactor * reg_factor * obs_incr_mean
+    gain_pert = lfactor * cov / obs_prior_ss
+    for m in range(nens):
+        dincr = obs_incr[m] - obs_incr_mean
+        for n in range(nfld):
+            for j in range(nsub):
+                ens[m, n, sub[j]] += gain_mean[n, j] + gain_pert[n, j] * dincr
