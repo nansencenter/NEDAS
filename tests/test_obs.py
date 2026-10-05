@@ -104,7 +104,7 @@ class TestVerticalInterp(unittest.TestCase):
         self.assertEqual(dzp[0], 1.0)
 
     def test_last_level(self):
-        """Test i=last: Constant f from z-dz/2 to z."""
+        """Test i=last: Constant f from z-dz/2 to z+dz/2."""
         i = 2
         # setup previous layer (i=1)
         fp = np.ones(self.nobs) * self.fz[i-1]
@@ -124,6 +124,23 @@ class TestVerticalInterp(unittest.TestCase):
         self.assertEqual(seq_out[2], 0.0)
         self.assertAlmostEqual(seq_out[3], 27.0) # obs_z[3]=1.5 is in range
         self.assertEqual(seq_out[4], 30.0) # obs_z[4]=2.0 is in range
+
+    def test_last_level_extrapolates_half_a_layer(self):
+        """An obs exactly at the last z survives a z that rounds just short of it (float32
+        storage, horizontal interpolation), and obs up to dz/2 beyond z take the last value."""
+        i = 2
+        fp = np.ones(3) * self.fz[i-1]
+        zp = np.ones(3) * self.z[i-1]
+        dzp = np.ones(3) * self.dz[i-1]
+        f = np.ones(3) * self.fz[i]
+        z = np.ones(3) * (self.z[i] - 1e-11)          # 3.0, rounded down
+        obs_z = np.array([3.0, 3.4, 3.6])
+        seq_out, _, _, _ = self.c.obs.vertical_interp(
+            np.full(3, np.nan), self.levels[i], self.levels, f, fp, z, zp, dzp, obs_z
+        )
+        self.assertEqual(seq_out[0], 30.0)
+        self.assertEqual(seq_out[1], 30.0)             # extrapolated, constant
+        self.assertTrue(np.isnan(seq_out[2]))           # beyond z + dz/2: still undefined
 
     def test_collapsed_layer(self):
         """Test logic when z == zp to avoid division by zero."""

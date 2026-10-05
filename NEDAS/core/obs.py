@@ -319,8 +319,11 @@ class Obs:
             seq[..., inds] = fi[..., inds]
 
         if i == len(levels)-1:
-            # the last level: constant f from z-dz/2 to z
-            inds = (obs_z >= np.minimum(z-0.5*dz, z)) & (obs_z <= np.maximum(z-0.5*dz, z))
+            # the last level: constant f from z-dz/2 to z, extrapolated (still constant) another
+            # dz/2 beyond z. Models giving z at layer centres (vort3d: pressure) have their lowest
+            # layer reach that far, toward the surface; and an obs exactly at z must not be lost
+            # when z is a float32-stored or horizontally interpolated copy that rounds just short
+            inds = (obs_z >= np.minimum(z-0.5*dz, z+0.5*dz)) & (obs_z <= np.maximum(z-0.5*dz, z+0.5*dz))
             seq[..., inds] = f[..., inds]
 
         # save a copy of the current layer as 'previous' layer for use in next k
