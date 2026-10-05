@@ -182,8 +182,6 @@ class PDAFAssimilator(BatchAssimilator):
         """
         unsupported = []
         for rec in c.obs.info.records.values():
-            if np.isfinite(rec.vroi):
-                unsupported.append('obs vroi (vertical localization)')
             if np.isfinite(rec.troi):
                 unsupported.append('obs troi (temporal localization)')
             if any(f != 1.0 for f in rec.impact_on_variable):
@@ -194,7 +192,7 @@ class PDAFAssimilator(BatchAssimilator):
         if unsupported:
             raise NotImplementedError(
                 f"{self.__class__.__name__} does not support: {', '.join(sorted(set(unsupported)))}. "
-                "PDAFomi localizes by horizontal distance only; use ETKF for these.")
+                "PDAFomi localizes by distance in space only; use ETKF for these.")
 
     @property
     def call_cost(self) -> CallCost:
@@ -383,6 +381,13 @@ class PDAFAssimilator(BatchAssimilator):
         location l, padded out to the process-wide dim_p. Each local analysis domain is one
         location l, holding its nfld field entries; the padding belongs to no domain and
         stays zero, so it contributes no covariance.
+
+        With vertical localization (a finite vroi on any obs record) a column no longer shares
+        one set of obs weights, so each local domain is one level of a location instead: the
+        fields at that location with the same z. PDAFomi then localizes non-isotropically in
+        (x, y, z) with radii (hroi, hroi, vroi) -- an ellipsoid, as in DART, where NEDAS's own
+        filters multiply a horizontal and a vertical taper -- and there are about nlev times as
+        many domains, each a callback round.
         """
         pyPDAF = import_pypdaf()
         state_prior = state_data['state_prior']
@@ -398,39 +403,51 @@ class PDAFAssimilator(BatchAssimilator):
 
         analysis = {'called': False}   # filled by the prepoststep callback below
 
+        vroi = {rec: self.vroi(obs_data, rec) for rec, _ in obs_types}
+        vertical = any(np.isfinite(v) for v in vroi.values())
+        ncoord = 3 if vertical else 2
+        if vertical:     # local domains (location, z, fields there); see the docstring
+            domains = [(l, zv, np.flatnonzero(state_data['z'][:, l] == zv))
+                       for l in range(nloc) for zv in np.unique(state_data['z'][:, l])]
+        else:
+            domains = [(l, None, np.arange(nfld)) for l in range(nloc)]
+
         def init_n_domains_pdaf(_step, _ndomains):
-            return nloc
+            return len(domains)
 
         def init_dim_l_pdaf(_step, domain_p, _dim_l):
             # domain_p is 1-based, and so are the state indices PDAFlocal expects
-            loc_id = domain_p - 1
-            ids = (np.arange(nfld) * nloc + loc_id + 1).astype(np.intc)
-            pyPDAF.PDAFlocal.set_indices(nfld, ids)
-            return nfld
+            loc_id, _, fields = domains[domain_p - 1]
+            ids = (fields * nloc + loc_id + 1).astype(np.intc)
+            pyPDAF.PDAFlocal.set_indices(ids.size, ids)
+            return ids.size
 
         def init_dim_obs_pdafomi(_step, _dim_obs):
             dim_obs = 0
             for i_obs, (obs_rec_id, ind) in enumerate(obs_types, start=1):
                 pyPDAF.PDAFomi.set_doassim(i_obs, 1)
                 pyPDAF.PDAFomi.set_disttype(i_obs, self._disttype)
-                pyPDAF.PDAFomi.set_ncoord(i_obs, 2)
+                pyPDAF.PDAFomi.set_ncoord(i_obs, ncoord)
                 # id_obs_p is what PDAFomi's own obs operators use to pick observed entries out
                 # of the state vector; ours does not go through them (see obs_op_pdafomi), so
                 # these are dummies -- but OMI wants the array set, so they have to be valid.
                 id_obs_p = np.ones((1, ind.size), dtype=np.intc, order='F')
                 pyPDAF.PDAFomi.set_id_obs_p(i_obs, 1, ind.size, id_obs_p)
                 pyPDAF.PDAFomi.set_use_global_obs(i_obs, 1)
-                if self._disttype == 1:
-                    pyPDAF.PDAFomi.set_domainsize(i_obs, 2, self._domainsize)
+                if self._disttype == 1:     # z is never periodic
+                    pyPDAF.PDAFomi.set_domainsize(i_obs, ncoord,
+                                                  np.append(self._domainsize, [-1.0] * (ncoord - 2)))
 
-                ocoord_p = np.zeros((2, ind.size), dtype=np.float64, order='F')
+                ocoord_p = np.zeros((ncoord, ind.size), dtype=np.float64, order='F')
                 ocoord_p[0] = obs_data['x'][ind]
                 ocoord_p[1] = obs_data['y'][ind]
+                if vertical:
+                    ocoord_p[2] = obs_data['z'][ind]
                 # PDAF works with the inverse obs error variance (diagonal R)
                 ivar_obs_p = 1.0 / obs_data['err_std'][ind]**2
                 dim_obs += pyPDAF.PDAFomi.gather_obs(i_obs, ind.size,
                                                      obs_data['obs'][ind], ivar_obs_p,
-                                                     ocoord_p, 2, self.hroi(obs_data, obs_rec_id))
+                                                     ocoord_p, ncoord, self.hroi(obs_data, obs_rec_id))
             return dim_obs
 
         def obs_op_pdafomi(_step, _dim_p, _dim_obs_p, state_p, ostate):
@@ -468,19 +485,25 @@ class PDAFAssimilator(BatchAssimilator):
             return ostate
 
         def init_dim_obs_l_pdafomi(domain_p, _step, _dim_obs, _dim_obs_l):
-            loc_id = domain_p - 1
+            loc_id, z_l, _ = domains[domain_p - 1]
             # float64 explicitly: a grid built from integer spacing (vort3d's
             # np.arange(nx)*dx, say) hands us integer coordinates, and pyPDAF's typed
             # memoryview rejects them with "Buffer dtype mismatch, expected 'double'"
-            coords_l = np.array([state_data['x'][loc_id], state_data['y'][loc_id]],
-                                dtype=np.float64)
+            coords_l = np.array([state_data['x'][loc_id], state_data['y'][loc_id]]
+                                + ([z_l] if vertical else []), dtype=np.float64)
             dim_obs_l = 0
             for i_obs, (obs_rec_id, _) in enumerate(obs_types, start=1):
                 hroi = self.hroi(obs_data, obs_rec_id)
                 # cradius = sradius = hroi: PDAFomi tapers to zero at sradius, which is
                 # where NEDAS's localization functions taper to zero too
-                dim_obs_l += pyPDAF.PDAFomi.init_dim_obs_l_iso(i_obs, coords_l, self._locweight,
-                                                               hroi, hroi, dim_obs_l)
+                if vertical:
+                    v = vroi[obs_rec_id] if np.isfinite(vroi[obs_rec_id]) else 1e30
+                    radii = np.array([hroi, hroi, v], dtype=np.float64)
+                    dim_obs_l += pyPDAF.PDAFomi.init_dim_obs_l_noniso(i_obs, coords_l, self._locweight,
+                                                                      radii, radii, dim_obs_l)
+                else:
+                    dim_obs_l += pyPDAF.PDAFomi.init_dim_obs_l_iso(i_obs, coords_l, self._locweight,
+                                                                   hroi, hroi, dim_obs_l)
             return dim_obs_l
 
         def prepoststep_pdaf(_step, _dim_p, _dim_ens, _dim_ens_p, _dim_obs_p,
@@ -531,3 +554,7 @@ class PDAFAssimilator(BatchAssimilator):
     @staticmethod
     def hroi(obs_data: dict, obs_rec_id: int) -> float:
         return float(obs_data['hroi'][obs_rec_id])
+
+    @staticmethod
+    def vroi(obs_data: dict, obs_rec_id: int) -> float:
+        return float(obs_data['vroi'][obs_rec_id])

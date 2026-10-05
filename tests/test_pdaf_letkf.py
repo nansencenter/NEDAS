@@ -22,7 +22,7 @@ is fixed at init, so no single process can run two filters. Everything that swee
 here therefore runs one subprocess per kind (see _run_kind); the in-process tests never switch.
 
 The rest are structural checks that need no pyPDAF: the configuration PDAFomi cannot express
-(vertical/temporal/cross-variable localization) has to be refused rather than silently dropped.
+(temporal/cross-variable localization) has to be refused rather than silently dropped.
 """
 import os
 import subprocess
@@ -79,7 +79,7 @@ def make_partition(seed=42):
     return state_data, obs_data
 
 
-def native_etkf_analysis(state_data, obs_data, loc_weight_sqrt=True):
+def native_etkf_analysis(state_data, obs_data, loc_weight_sqrt=True, vroi=np.inf):
     """
     The same partition through NEDAS's own ETKF, as the reference.
 
@@ -111,7 +111,7 @@ def native_etkf_analysis(state_data, obs_data, loc_weight_sqrt=True):
                             no_static_state[..., loc_id], no_static_obs,
                             obs_data['obs'], obs_data['err_std'], hlfactor,
                             state_data['z'][:, loc_id], obs_data['z'],
-                            np.inf, gaspari_cohn_func,
+                            np.full(NLOBS, vroi), gaspari_cohn_func,
                             state_data['t'], obs_data['t'],
                             np.inf, gaspari_cohn_func,
                             np.ones((NLOBS, NFLD)), np.eye(NENS), False,
@@ -274,6 +274,30 @@ class TestPDAFAnalysis(unittest.TestCase):
         # ... and PDAF's wider taper keeps more of the observations, so it moves the mean further
         self.assertGreater(np.abs(post.mean(axis=0) - self.prior.mean(axis=0)).max(),
                            np.abs(as_formulated.mean(axis=0) - self.prior.mean(axis=0)).max())
+
+    def with_vroi(self, vroi, field_z=(0.0, 0.0)):
+        state_data = dict(self.state_data)
+        state_data['state_prior'] = self.prior.copy()
+        state_data['z'] = np.repeat(np.array(field_z, dtype=float)[:, None], NLOC, axis=1)
+        obs_data = dict(self.obs_data)
+        obs_data['vroi'] = np.array([vroi])
+        return state_data, obs_data
+
+    def test_vertical_localization_at_the_obs_level_matches_native_etkf(self):
+        # every field and obs at z=0: the non-isotropic (x, y, z) domains must give exactly the
+        # column analysis, which checks the 3-D coordinates and the per-level domains
+        state_data, obs_data = self.with_vroi(1.0)
+        make_assimilator(filter_kind='LETKF').analyze_partition(None, state_data, obs_data)
+        reference = native_etkf_analysis(state_data | {'state_prior': self.prior}, obs_data, vroi=1.0)
+        np.testing.assert_allclose(state_data['state_prior'].mean(axis=0), reference.mean(axis=0), atol=1e-12)
+
+    def test_a_level_beyond_vroi_is_left_alone(self):
+        # field 1 sits 10 vroi above the obs: untouched, while field 0 at the obs level is updated
+        state_data, obs_data = self.with_vroi(1.0, field_z=(0.0, 10.0))
+        make_assimilator(filter_kind='LETKF').analyze_partition(None, state_data, obs_data)
+        post = state_data['state_prior']
+        np.testing.assert_allclose(post[:, 1], self.prior[:, 1], atol=1e-12)   # identity transform, to roundoff
+        self.assertGreater(np.abs(post[:, 0] - self.prior[:, 0]).max(), 1e-3)
 
     def test_integer_grid_coordinates(self):
         # a grid built from integer spacing (vort3d: np.arange(nx)*dx) hands the assimilator
