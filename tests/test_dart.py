@@ -13,6 +13,7 @@ from NEDAS.assim_tools.assimilators.DART.core import default_lib_path
 
 DART = os.environ.get('NEDAS_DART_DIR', os.path.expanduser('~/code/DART'))
 FILTER_MOD = os.path.join(DART, 'assimilation_code/modules/assimilation/filter_mod.f90')
+ALGORITHM_INFO_MOD = os.path.join(DART, 'assimilation_code/modules/assimilation/algorithm_info_mod.f90')
 
 
 @unittest.skipUnless(os.path.exists(FILTER_MOD), f"no DART checkout at {DART}")
@@ -24,6 +25,15 @@ class TestPatch(unittest.TestCase):
                      'nedas_obs_ens_distrib_state', 'nedas_write_obs_seq'):
             self.assertIn(f'call {hook}(', out)
         self.assertNotIn('call read_state(', out)
+
+    def test_algorithm_info_teardown_frees_every_table_array(self):
+        # otherwise a second filter_main with a QCEFF table dies in allocate
+        with open(ALGORITHM_INFO_MOD) as f:
+            out = patch_filter_mod.patch(f.read(), patch_filter_mod.ALGORITHM_INFO_PATCHES)
+        teardown = out[out.index('subroutine end_algorithm_info_mod'):]
+        for name in ('dist_type_string_probit_inflation', 'dist_type_string_probit_state',
+                     'dist_type_string_probit_extended_state', 'filter_kind_string'):
+            self.assertIn(name, teardown)
 
     def test_patch_refuses_unknown_source(self):
         with self.assertRaises(RuntimeError):

@@ -53,6 +53,8 @@ EOF
 
 python3 "$here/patch_filter_mod.py" \
     "$DART/assimilation_code/modules/assimilation/filter_mod.f90" "$build/filter_mod.f90"
+python3 "$here/patch_filter_mod.py" \
+    "$DART/assimilation_code/modules/assimilation/algorithm_info_mod.f90" "$build/algorithm_info_mod.f90"
 
 nfprefix=$(nf-config --prefix)
 ncprefix=$(nc-config --prefix 2>/dev/null || echo "$nfprefix")
@@ -88,6 +90,7 @@ swap() { dartsrc=${dartsrc//$1/$2}; }
 swap "$DART/observations/forward_operators/obs_def_mod.f90" "$build/obs_def_mod.f90"
 swap "$DART/assimilation_code/modules/observations/obs_kind_mod.f90" "$build/obs_kind_mod.f90"
 swap "$DART/assimilation_code/modules/assimilation/filter_mod.f90" "$build/filter_mod.f90"
+swap "$DART/assimilation_code/modules/assimilation/algorithm_info_mod.f90" "$build/algorithm_info_mod.f90"
 swap "$DART/models/null_model/model_mod.f90" "$here/model_mod.f90"
 
 # shellcheck disable=SC2086

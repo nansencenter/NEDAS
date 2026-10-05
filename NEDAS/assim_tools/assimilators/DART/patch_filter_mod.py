@@ -1,8 +1,9 @@
 """
-Write a copy of DART's filter_mod.f90 whose file I/O goes to nedas_hooks_mod instead.
+Write a copy of DART's filter_mod.f90 whose file I/O goes to nedas_hooks_mod instead, or of
+algorithm_info_mod.f90 with its teardown completed.
 Each patch must match exactly the expected number of times, else this fails.
 
-Usage: python patch_filter_mod.py DART/.../filter_mod.f90 OUT.f90
+Usage: python patch_filter_mod.py DART/.../{filter_mod,algorithm_info_mod}.f90 OUT.f90
 """
 import re
 import sys
@@ -31,8 +32,19 @@ PATCHES = [
 ]
 
 
-def patch(src: str) -> str:
-    for pattern, repl, count in PATCHES:
+# end_algorithm_info_mod frees 2 of the 6 arrays init_algorithm_info_mod allocates, so a second
+# filter_main in the same process (NEDAS calls it every analysis) dies in allocate when a QCEFF
+# table is used. DART's own filter runs once per process and never meets this
+ALGORITHM_INFO_PATCHES = [
+    (r'deallocate\(specified_qtys\)\ndeallocate\(qceff_table_data\)\n',
+     'deallocate(specified_qtys)\ndeallocate(qceff_table_data)\n'
+     'deallocate(dist_type_string_probit_inflation, dist_type_string_probit_state)\n'
+     'deallocate(dist_type_string_probit_extended_state, filter_kind_string)\n', 1),
+]
+
+
+def patch(src: str, patches=PATCHES) -> str:
+    for pattern, repl, count in patches:
         src, n = re.subn(pattern, repl, src)
         if n != count:
             raise RuntimeError(f"patch matched {n} times, expected {count}: {pattern}")
@@ -43,5 +55,6 @@ if __name__ == '__main__':
     src_file, out_file = sys.argv[1:3]
     with open(src_file) as f:
         src = f.read()
+    patches = ALGORITHM_INFO_PATCHES if src_file.endswith('algorithm_info_mod.f90') else PATCHES
     with open(out_file, 'w') as f:
-        f.write(patch(src))
+        f.write(patch(src, patches))

@@ -9,6 +9,7 @@ use time_manager_mod,     only : time_type, set_time
 use location_mod,         only : location_type, set_location, get_close_obs, get_close_state, &
                                  set_periodic
 use utilities_mod,        only : error_handler, E_ERR
+use obs_kind_mod,         only : get_index_for_quantity
 use netcdf_utilities_mod, only : nc_begin_define_mode, nc_end_define_mode
 use state_structure_mod,  only : add_domain
 use ensemble_manager_mod, only : ensemble_type
@@ -35,6 +36,8 @@ character(len=*), parameter :: source = 'nedas model_mod.f90'
 integer :: nedas_nloc = 0, nedas_nmax = 0
 real(r8), allocatable :: sx(:), sy(:), sz(:)
 integer,  allocatable :: sqty(:)
+! DART's index for QTY_NEDAS_<s>, by slot s; built inside filter_main (see state_qty)
+integer,  allocatable :: qty_index(:)
 logical :: domain_added = .false.
 ! periodic axes; the location_nml flags alone do not enable periodic distances
 logical  :: px = .false., py = .false.
@@ -45,9 +48,10 @@ contains
 subroutine nedas_set_state_meta(nloc, nmax, x, y, z, qty)
 integer,  intent(in) :: nloc, nmax
 real(r8), intent(in) :: x(nloc), y(nloc), z(nloc)
-integer,  intent(in) :: qty(nloc)
+integer,  intent(in) :: qty(nloc)    ! NEDAS slot s, i.e. QTY_NEDAS_<s>
 
 if (allocated(sx)) deallocate(sx, sy, sz, sqty)
+if (allocated(qty_index)) deallocate(qty_index)
 allocate(sx(nloc), sy(nloc), sz(nloc), sqty(nloc))
 sx = x; sy = y; sz = z; sqty = qty
 nedas_nloc = nloc
@@ -94,15 +98,40 @@ k = int((index_in - 1) / task_count()) + 1
 
 if (k <= nedas_nloc) then
    location = set_location(sx(k), sy(k), sz(k))
-   if (present(qty)) qty = sqty(k)
+   if (present(qty)) qty = state_qty(sqty(k))
 else if (nedas_nloc > 0) then   ! padding: constant, so never updated
    location = set_location(sx(1), sy(1), sz(1))
-   if (present(qty)) qty = sqty(1)
+   if (present(qty)) qty = state_qty(sqty(1))
 else
    location = set_location(0.0_r8, 0.0_r8, 0.0_r8)
    if (present(qty)) qty = 1
 endif
 end subroutine get_state_meta_data
+
+
+! DART numbers its quantities after default_quantities_mod's, so slot s is not quantity s:
+! look each one up by name, or DART is handed a quantity that is not ours (and the QCEFF table
+! row for the variable is silently never used). Done on first use, inside filter_main: calling
+! obs_kind_mod earlier initializes it before filter_main's namelist is read, and then no obs
+! type is assimilated
+function state_qty(slot)
+integer, intent(in) :: slot
+integer :: state_qty
+character(len=16) :: qname
+integer :: s
+
+if (.not. allocated(qty_index)) then
+   allocate(qty_index(0:max(0, maxval(sqty))))
+   qty_index = -1
+   do s = 1, ubound(qty_index, 1)
+      if (.not. any(sqty == s)) cycle
+      write(qname, '(A,I2.2)') 'QTY_NEDAS_', s
+      qty_index(s) = get_index_for_quantity(qname)
+      if (qty_index(s) < 0) call error_handler(E_ERR, 'state_qty', 'unknown quantity '//trim(qname), source)
+   end do
+endif
+state_qty = qty_index(slot)
+end function state_qty
 
 
 ! H(x) always comes from NEDAS (precomputed forward operators)
