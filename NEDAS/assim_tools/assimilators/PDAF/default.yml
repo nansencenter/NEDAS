@@ -45,3 +45,10 @@ disttype: -1
 # PDAF screen output verbosity (0 quiet, 1 timings, 2 more); it goes to stdout on every
 # rank and once per partition, so keep it at 0 outside debugging.
 screen: 0
+
+# seedset of PDAF's random number generator, the same for every partition and rank of one analysis
+# (reset before each partition's assim_offline), so the random transform of LNETF/LKNETF is one
+# matrix across the domain, as in a single domain-wide PDAF analysis. PDAF only offers 20 sets.
+#   0      drawn per analysis on rank 0 and broadcast (reproducible when config seed is set)
+#   1-20   that set at every analysis
+seedset: 0

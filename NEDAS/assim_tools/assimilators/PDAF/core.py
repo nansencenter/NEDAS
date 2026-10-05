@@ -165,6 +165,7 @@ class PDAFAssimilator(BatchAssimilator):
     loc_weight: str = 'auto'   # 'auto': follow localization_def.horizontal.type
     disttype: int = -1         # -1: derive from the grid (0 cartesian, 1 periodic)
     screen: int = 0            # PDAF screen verbosity
+    seedset: int = 0           # PDAF seedset (1-20) for the random transforms; 0: drawn per analysis
 
     def check_capabilities(self, c) -> None:
         super().check_capabilities(c)
@@ -273,6 +274,10 @@ class PDAFAssimilator(BatchAssimilator):
         self._locweight = self.locweight_code(c)
         self._disttype = self.disttype_code(c)
         self._domainsize = self.domainsize(c)
+        # one seedset for the whole analysis, shared by every partition and rank (see
+        # analyze_partition); drawn from numpy's RNG, which Config.seed makes reproducible
+        seedset = int(self.seedset) if self.seedset else (np.random.randint(1, 21) if c.pid == 0 else None)
+        self._seedset = c.comm.bcast(seedset, root=0)
 
         c.message = 'preparing...'
         c.state.state_post = copy.deepcopy(c.state.state_prior)
@@ -502,6 +507,11 @@ class PDAFAssimilator(BatchAssimilator):
         # amounts to (NEDAS/utils/call_cost.py), measured inside the 'assim_offline' region
         # so each callback reads as a share of the analysis.
         cost = self.call_cost
+        # PDAF draws the random matrix of LNETF/LKNETF's transform (type_trans 0) once per
+        # assim_offline and keeps the seed advancing, so one call per partition gave every
+        # partition its own matrix and the analysis jumped at partition edges. Resetting the
+        # seed gives each partition the matrix one domain-wide PDAF analysis would use
+        pyPDAF.PDAF.set_seedset(self._seedset)
         pyPDAF.PDAFomi.init(len(obs_types))
         pyPDAF.PDAFomi.init_local()
         with cost.measure('assim_offline'):

@@ -152,6 +152,7 @@ def make_assimilator(**kwargs):
     self._locweight = LOC_WEIGHTS['gaspari_cohn']
     self._disttype = 0
     self._domainsize = np.array([-1.0, -1.0])
+    self._seedset = 1
     self.ensure_initialized(FakeContext(NENS), NFLD * NLOC)
     return self
 
@@ -320,25 +321,29 @@ warnings.filterwarnings("ignore")
 import numpy as np
 sys.path.insert(0, os.environ["NEDAS_TEST_DIR"])
 import test_pdaf_letkf as T
-kind, hroi, out = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+kind, hroi, out, repeats = sys.argv[1], float(sys.argv[2]), sys.argv[3], int(sys.argv[4])
 state_data, obs_data = T.make_partition(seed=42)
 obs_data = dict(obs_data)
 obs_data["hroi"] = np.array([hroi])
 assim = T.make_assimilator(filter_kind=kind)
-sd = dict(state_data)
-sd["state_prior"] = state_data["state_prior"].copy()
-assim.analyze_partition(None, sd, obs_data)
-np.save(out, sd["state_prior"])
+posts = []
+for _ in range(repeats):
+    sd = dict(state_data)
+    sd["state_prior"] = state_data["state_prior"].copy()
+    assim.analyze_partition(None, sd, obs_data)
+    posts.append(sd["state_prior"])
+np.save(out, posts[0] if repeats == 1 else np.array(posts))
 '''
 
 
-def _run_kind(kind, hroi=HROI):
-    """Analyse the test partition with one PDAF filter kind, in a fresh process."""
+def _run_kind(kind, hroi=HROI, repeats=1):
+    """Analyse the test partition with one PDAF filter kind, in a fresh process (repeats > 1:
+    that many analyses of the same partition in the process, stacked)."""
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, 'post.npy')
         env = dict(os.environ,
                    NEDAS_TEST_DIR=os.path.dirname(os.path.abspath(__file__)))
-        run = subprocess.run([sys.executable, '-c', _KIND_DRIVER, kind, repr(hroi), out],
+        run = subprocess.run([sys.executable, '-c', _KIND_DRIVER, kind, repr(hroi), out, str(repeats)],
                              capture_output=True, text=True, env=env, timeout=600)
         if not os.path.exists(out):
             raise AssertionError(f"{kind} produced no analysis (exit {run.returncode}):\n"
@@ -362,6 +367,13 @@ class TestPDAFFilterKinds(unittest.TestCase):
                 self.assertEqual(post.shape, prior.shape)
                 # it has to have done something to every field
                 self.assertGreater(np.abs(post - prior).max(), 1e-8, kind)
+
+    def test_random_transform_is_the_same_on_every_partition(self):
+        # LNETF draws a random matrix once per assim_offline, and NEDAS calls assim_offline once
+        # per partition: without the seedset reset, each partition got its own matrix and the
+        # analysis jumped at partition edges
+        first, second = _run_kind('LNETF', repeats=2)
+        np.testing.assert_array_equal(first, second)
 
 
 if __name__ == '__main__':
