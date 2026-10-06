@@ -284,6 +284,8 @@ class State:
         """
         fields = getattr(self, f"fields_{tag}")
         c.io.prepare_fields_storage(c, f"{tag}_mean")
+        means = {}
+        setattr(self, f"fields_{tag}_mean", means)
 
         c.total_tasks = len(self.rec_list[c.pid_rec])
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
@@ -305,6 +307,7 @@ class State:
             sum_fld = c.comm_mem.allreduce(sum_fld_pid)
 
             mean_fld = sum_fld / c.nens
+            means[0, rec_id] = mean_fld
             c.io.write_field(mean_fld, c, f"{tag}_mean", rec_id, mem_id=0)
 
         c.comm.Barrier()
