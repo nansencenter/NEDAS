@@ -20,24 +20,24 @@ class EAKFAssimilator(SerialAssimilator):
                                   self.weight_dynamic, self.weight_static, self.hybrid_perturbation)
 
     def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
-                           state_h_dist, state_v_dist, state_t_dist,
+                           ind, state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
                            h_local_func, v_local_func, t_local_func, correlation_local_func,
                            impact_on_variable) -> None:
         return update_local_state_linear(state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
-                                         state_h_dist, state_v_dist, state_t_dist,
+                                         ind, state_h_dist, state_v_dist, state_t_dist,
                                          hroi, vroi, troi,
                                          h_local_func, v_local_func, t_local_func, correlation_local_func,
                                          impact_on_variable,
                                          self.weight_dynamic, self.weight_static, self.hybrid_perturbation)
 
     def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
-                         h_dist, v_dist, t_dist,
+                         ind, h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
                          h_local_func, v_local_func, t_local_func, correlation_local_func,
                          impact_on_variable) -> None:
         return update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
-                                       h_dist, v_dist, t_dist,
+                                       ind, h_dist, v_dist, t_dist,
                                        hroi, vroi, troi,
                                        h_local_func, v_local_func, t_local_func, correlation_local_func,
                                        impact_on_variable,
@@ -90,7 +90,7 @@ def obs_increment_eakf(obs_prior, obs_prior_static, obs, obs_err,
 
 @njit
 def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_static, obs_incr,
-                              h_dist, v_dist, t_dist,
+                              ind, h_dist, v_dist, t_dist,
                               hroi, vroi, troi,
                               h_local_func, v_local_func, t_local_func, correlation_local_func,
                               impact_on_variable,
@@ -98,32 +98,41 @@ def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_sta
 
     nens, nfld, nloc = state_data.shape
 
+    # distances are given for the candidate points ind
     h_lfactor = h_local_func(h_dist, hroi)
-    nloc_sub = np.where(h_lfactor>0)[0]  # subset of range(nloc) to update
-    if nloc_sub.size == 0:
+    near = np.where(h_lfactor>0)[0]
+    if near.size == 0:
         return
+    nloc_sub = ind[near]  # subset of range(nloc) to update
 
-    v_lfactor = v_local_func(v_dist[:, nloc_sub], vroi)
+    v_lfactor = v_local_func(v_dist[:, near], vroi)
     t_lfactor = t_local_func(t_dist, troi)
 
     lfactor = np.empty((nfld, nloc_sub.size))
+    updated = np.zeros(nfld, dtype=np.bool_)
     for n in range(nfld):
         for j in range(nloc_sub.size):
-            lfactor[n, j] = h_lfactor[nloc_sub[j]] * v_lfactor[n, j] * t_lfactor[n] * impact_on_variable[n]
+            lfactor[n, j] = h_lfactor[near[j]] * v_lfactor[n, j] * t_lfactor[n] * impact_on_variable[n]
+            if lfactor[n, j] > 0:
+                updated[n] = True
+    # only the fields within reach (levels beyond vroi, other times, no impact are left out)
+    flds = np.where(updated)[0]
+    if flds.size == 0:
+        return
 
-    update_ensemble_inplace(state_data, state_static, nloc_sub, lfactor,
+    update_ensemble_inplace(state_data, state_static, flds, nloc_sub, lfactor[flds],
                             obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
 @njit
 def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
-                            h_dist, v_dist, t_dist,
+                            ind, h_dist, v_dist, t_dist,
                             hroi, vroi, troi,
                             h_local_func, v_local_func, t_local_func, correlation_local_func,
                             impact_on_variable,
                             weight_dynamic, weight_static, hybrid_perturbation):
 
-    # distance between local obs_data and the obs being assimilated
+    # distance between the candidate local obs ind and the obs being assimilated
     h_lfactor = h_local_func(h_dist, hroi)
     v_lfactor = v_local_func(v_dist, vroi)
     t_lfactor = t_local_func(t_dist, troi)
@@ -131,15 +140,15 @@ def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prio
     lfactor = h_lfactor * v_lfactor * t_lfactor * impact_on_variable
 
     # update the unused obs within roi
-    ind = np.where(np.logical_and(~used, lfactor>0))[0]
-    if ind.size == 0:
+    near = np.where(np.logical_and(~used[ind], lfactor>0))[0]
+    if near.size == 0:
         return
 
     # the obs are one field of nlobs points: (nens, 1, nlobs) views, so the writes land in obs_data
     nens, nlobs = obs_data.shape
     update_ensemble_inplace(obs_data.reshape((nens, 1, nlobs)),
                             obs_data_static.reshape((obs_data_static.shape[0], 1, nlobs)),
-                            ind, lfactor[ind].reshape((1, ind.size)),
+                            np.zeros(1, dtype=np.int64), ind[near], lfactor[near].reshape((1, near.size)),
                             obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
@@ -236,15 +245,15 @@ def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr
 
 
 @njit
-def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_static, obs_incr,
+def update_ensemble_inplace(ens, ens_static, flds, sub, lfactor, obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> None:
     """
-    update_ensemble's arithmetic done in place on ens[:, n, sub[j]], with lfactor[n, j] the local
-    factor of field n at point sub[j]: loops over the members outside and the points inside, so the
+    update_ensemble's arithmetic done in place on ens[:, flds[n], sub[j]], with lfactor[n, j] the local
+    factor of field flds[n] at point sub[j]: loops over the members outside and the points inside, so the
     (nens, nfld, nloc) array is read twice and written once and nothing its size is allocated.
     update_ensemble is the readable reference.
     """
-    nens, nfld = ens.shape[0], ens.shape[1]
+    nens, nfld = ens.shape[0], flds.size
     nsub = sub.size
     nens_static = ens_static.shape[0]
 
@@ -260,7 +269,7 @@ def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_
     for m in range(nens):
         for n in range(nfld):
             for j in range(nsub):
-                x = ens[m, n, sub[j]]
+                x = ens[m, flds[n], sub[j]]
                 xsum[n, j] += x
                 cov[n, j] += x * ypert[m]
     for n in range(nfld):
@@ -273,7 +282,7 @@ def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_
         for m in range(nens):
             for n in range(nfld):
                 for j in range(nsub):
-                    d = ens[m, n, sub[j]] - xsum[n, j] / nens
+                    d = ens[m, flds[n], sub[j]] - xsum[n, j] / nens
                     ens_ss[n, j] += d * d
         r = np.zeros((nfld, nsub))
         if obs_prior_ss > 0.0:
@@ -293,7 +302,7 @@ def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_
             w = weight_static * ypert_static[m] / (nens_static - 1)
             for n in range(nfld):
                 for j in range(nsub):
-                    reg_factor[n, j] += ens_static[m, n, sub[j]] * w
+                    reg_factor[n, j] += ens_static[m, flds[n], sub[j]] * w
 
     # if there is no prior spread, don't update at all
     if obs_prior_var_hybrid == 0:
@@ -308,7 +317,7 @@ def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_
         for m in range(nens):
             for n in range(nfld):
                 for j in range(nsub):
-                    ens[m, n, sub[j]] += gain[n, j] * obs_incr[m]
+                    ens[m, flds[n], sub[j]] += gain[n, j] * obs_incr[m]
         return
 
     obs_incr_mean = np.mean(obs_incr)
@@ -318,4 +327,4 @@ def update_ensemble_inplace(ens, ens_static, sub, lfactor, obs_prior, obs_prior_
         dincr = obs_incr[m] - obs_incr_mean
         for n in range(nfld):
             for j in range(nsub):
-                ens[m, n, sub[j]] += gain_mean[n, j] + gain_pert[n, j] * dincr
+                ens[m, flds[n], sub[j]] += gain_mean[n, j] + gain_pert[n, j] * dincr

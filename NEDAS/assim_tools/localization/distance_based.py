@@ -49,3 +49,9 @@ def exponential_func(dist, roi):
     dist = dist.flatten()
     lfactor = np.exp(-dist/roi)
     return lfactor.reshape(shape)
+
+def cutoff(local_func, roi):
+    """Distance beyond which local_func(dist, roi) is 0: inf if it never is, or with no function."""
+    if local_func is gaspari_cohn_func or local_func is step_func:
+        return roi
+    return np.inf

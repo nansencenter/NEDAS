@@ -508,6 +508,24 @@ class Grid2DBase(ABC):
         else:
             raise ValueError(f"unknown distance type '{type}'")
 
+    def search_box(self, ref_x, ref_y, r):
+        """
+        A box in grid coordinates that holds every point within distance r of the reference point,
+        for a neighbor search to pick candidates before computing their distances. The box may run
+        past the grid bounds along a cyclic dimension.
+
+        Args:
+            ref_x, ref_y (float): reference point x,y coordinates
+            r (float): search distance, in the units of distance()
+
+        Returns:
+            (xmin, xmax, ymin, ymax), or None when no box is known and every point is a candidate.
+        """
+        if self.distance_type != 'cartesian' or not np.isfinite(r):
+            # ponytail: spherical distances search everything; a lon/lat box (as DART threed_sphere) when needed
+            return None
+        return ref_x - r, ref_x + r, ref_y - r, ref_y + r
+
     def _collect_shape_data(self, shapes):
         """
         This collects the x,y coordinates from shapes read from .shp files for later plotting

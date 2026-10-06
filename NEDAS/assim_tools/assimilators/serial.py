@@ -1,9 +1,11 @@
 import copy
+import itertools
 from NEDAS.utils.call_cost import CallCost
 from abc import abstractmethod
 import numpy as np
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
 from NEDAS.core import Context, Assimilator
+from NEDAS.assim_tools.localization.distance_based import cutoff
 
 class SerialAssimilator(Assimilator):
     """
@@ -103,6 +105,13 @@ class SerialAssimilator(Assimilator):
         valid = c.comm_mem.allgather(c.obs.valid)
         obs_list = bcast_by_root(c.comm)(c.obs.global_obs_list)(c, valid)
 
+        # local state points and obs binned once, for the points within reach of each obs
+        h_func = c.localization_funcs['horizontal']
+        reach = [cutoff(h_func, r) for r in obs_data['hroi']]
+        width = max([r for r in reach if np.isfinite(r)], default=np.inf)
+        state_bins = BoxBins(c.grid, state_data['x'], state_data['y'], width)
+        obs_bins = BoxBins(c.grid, obs_data['x'], obs_data['y'], width)
+
         # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
         cost = self.loop_cost
@@ -140,26 +149,31 @@ class SerialAssimilator(Assimilator):
             # compute obs-space increment
             obs_incr = obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
 
-            # 2. all pid update their own locally stored state:
-            state_h_dist = c.grid.distance(obs_p['x'], state_data['x'], obs_p['y'], state_data['y'], p=2)
-            state_v_dist = np.abs(obs_p['z'] - state_data['z'])
-            state_t_dist = np.abs(obs_p['t'] - state_data['t'])
+            # 2. all pid update their own locally stored state, at the candidate points ind:
+            r = cutoff(h_func, obs_p['hroi'])
+            with cost.measure('state_dist'):
+                ind = state_bins.candidates(obs_p['x'], obs_p['y'], r)
+                state_h_dist = c.grid.distance(obs_p['x'], state_data['x'][ind], obs_p['y'], state_data['y'][ind], p=2)
+                state_v_dist = np.abs(obs_p['z'] - state_data['z'][:, ind])
+                state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
             update_local_state(state_data['state_prior'], state_data['state_static'],
                                     obs_p['prior'], obs_p['prior_static'], obs_incr,
-                                    state_h_dist, state_v_dist, state_t_dist,
+                                    ind, state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                     c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
                                     c.localization_funcs['correlation'], impact_per_field)
 
-            # 3. all pid update their own locally stored obs:
-            obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'], obs_p['y'], obs_data['y'], p=2)
-            obs_v_dist = np.abs(obs_p['z'] - obs_data['z'])
-            obs_t_dist = np.abs(obs_p['t'] - obs_data['t'])
-            obs_impact = obs_data['obs_impact']
+            # 3. all pid update their own locally stored obs, the candidates ind:
+            with cost.measure('obs_dist'):
+                ind = obs_bins.candidates(obs_p['x'], obs_p['y'], r)
+                obs_h_dist = c.grid.distance(obs_p['x'], obs_data['x'][ind], obs_p['y'], obs_data['y'][ind], p=2)
+                obs_v_dist = np.abs(obs_p['z'] - obs_data['z'][ind])
+                obs_t_dist = np.abs(obs_p['t'] - obs_data['t'][ind])
+            obs_impact = obs_data['obs_impact'][ind]
             update_local_obs(obs_data['obs_prior'], obs_data['obs_prior_static'], obs_data['used'],
                                   obs_p['prior'], obs_p['prior_static'], obs_incr,
-                                  obs_h_dist, obs_v_dist, obs_t_dist,
+                                  ind, obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
                                   c.localization_funcs['correlation'], obs_impact)
@@ -185,7 +199,7 @@ class SerialAssimilator(Assimilator):
 
     @abstractmethod
     def update_local_state(self, state_prior, state_static, obs_prior, obs_prior_static, obs_incr,
-                           state_h_dist, state_v_dist, state_t_dist,
+                           ind, state_h_dist, state_v_dist, state_t_dist,
                            hroi, vroi, troi,
                            h_local_func, v_local_func, t_local_func, correlation_local_func,
                            impact_on_variable) -> None:
@@ -198,13 +212,15 @@ class SerialAssimilator(Assimilator):
             obs_prior (np.ndarray): Observation priors, shape (nens,)
             obs_prior_static (np.ndarray): Observation priors of the static members, shape (nens_static,)
             obs_incr (np.ndarray): Analysis increments, shape (nens,)
+            ind (np.ndarray): The candidate points (indices into nloc) the distances are given for
+            state_h_dist, state_v_dist, state_t_dist (np.ndarray): Distances, shapes (nind,), (nfld, nind), (nfld,)
             impact_on_variable (np.ndarray): Cross-variable localization factor per variable, shape (nfld,)
         """
         pass
 
     @abstractmethod
     def update_local_obs(self, obs_data, obs_data_static, used, obs_prior, obs_prior_static, obs_incr,
-                         h_dist, v_dist, t_dist,
+                         ind, h_dist, v_dist, t_dist,
                          hroi, vroi, troi,
                          h_local_func, v_local_func, t_local_func, correlation_local_func,
                          impact_on_variable) -> None:
@@ -215,5 +231,55 @@ class SerialAssimilator(Assimilator):
             obs_data (np.ndarray): obs prior ensemble, shape (nens, nlobs)
             obs_data_static (np.ndarray): obs priors of the static members, shape (nens_static, nlobs), not updated
             used (np.ndarray): boolean mask of already-assimilated obs
+            ind (np.ndarray): The candidate obs (indices into nlobs) the distances and impact_on_variable are given for
         """
         pass
+
+
+class BoxBins:
+    """
+    Neighbor search as DART's get_close: the points (x, y) are sorted into bins about w wide once,
+    then candidates() returns the points in the bins that overlap grid.search_box, so distances are
+    computed for those alone. Bins count from the grid corner; along a cyclic dim they split the
+    period evenly and wrap around. Every point is a candidate when the grid gives no box.
+    """
+    def __init__(self, grid, x, y, w):
+        self.grid = grid
+        self.all = np.arange(x.size)
+        self.bins = None
+        if not hasattr(grid, 'search_box') or not np.isfinite(w) or w <= 0:
+            return
+        cyclic = grid.cyclic_dim or ''
+        self.dims = []      # (origin, bin width, bins per period or 0 if not cyclic) for x and y
+        for d, origin, period in (('x', grid.xmin, grid.Lx), ('y', grid.ymin, grid.Ly)):
+            n = max(1, int(period // w)) if d in cyclic else 0
+            self.dims.append((origin, period / n if n else w, n))
+        valid = np.where(np.isfinite(x) & np.isfinite(y))[0]
+        ij = np.stack((self._index(0, x[valid]), self._index(1, y[valid])), axis=1)
+        keys, inv = np.unique(ij, axis=0, return_inverse=True)
+        inv = inv.ravel()
+        split = np.cumsum(np.bincount(inv, minlength=len(keys)))[:-1]
+        self.bins = dict(zip(map(tuple, keys.tolist()), np.split(valid[np.argsort(inv, kind='stable')], split)))
+
+    def _index(self, k, v):
+        origin, w, n = self.dims[k]
+        i = np.floor((v - origin) / w).astype(int)
+        return i % n if n else i
+
+    def candidates(self, ref_x, ref_y, r):
+        """Indices of the points that may lie within distance r of (ref_x, ref_y)."""
+        box = None if self.bins is None else self.grid.search_box(ref_x, ref_y, r)
+        if box is None:
+            return self.all
+        ranges = []
+        for k, lo, hi in ((0, box[0], box[1]), (1, box[2], box[3])):
+            origin, w, n = self.dims[k]
+            i0, i1 = int(np.floor((lo - origin) / w)), int(np.floor((hi - origin) / w))
+            if not n:
+                ranges.append(range(i0, i1 + 1))
+            elif i1 - i0 + 1 >= n:      # the box spans the whole period
+                ranges.append(range(n))
+            else:
+                ranges.append([i % n for i in range(i0, i1 + 1)])
+        parts = [self.bins[ij] for ij in itertools.product(*ranges) if ij in self.bins]
+        return np.concatenate(parts) if parts else self.all[:0]
