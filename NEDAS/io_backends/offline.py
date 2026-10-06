@@ -1,5 +1,4 @@
 import os
-import struct
 from typing import Callable
 import numpy as np
 from NEDAS.utils.conversion import type_dic, type_size
@@ -46,7 +45,7 @@ class OfflineIO(IOBackend):
         seq_ = seq.flatten() if rec.is_vector else seq
         with open(self.obs_binfile_name(c, tag), 'r+b') as f:
             f.seek(mem_id * c.obs.info.size + rec.pos)
-            f.write(struct.pack(seq_.size * type_dic[rec.dtype], *seq_))
+            f.write(np.asarray(seq_, dtype=type_dic[rec.dtype]).tobytes())
 
     def read_obs(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> np.ndarray:
         # check memory cache first
@@ -58,7 +57,7 @@ class OfflineIO(IOBackend):
         with open(self.obs_binfile_name(c, tag), 'rb') as f:
             f.seek(mem_id * c.obs.info.size + rec.pos)
             raw = f.read(nv * rec.nobs * type_size[rec.dtype])
-        seq_ = np.array(struct.unpack(nv * rec.nobs * type_dic[rec.dtype], raw))
+        seq_ = np.frombuffer(raw, dtype=type_dic[rec.dtype]).astype(float)
         return seq_.reshape(2, rec.nobs) if rec.is_vector else seq_
 
     def prepare_fields_storage(self, c: Context, tag: str):
@@ -92,8 +91,7 @@ class OfflineIO(IOBackend):
         binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'rb') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
-            fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
-                            f.read(nv*fld_size*type_size[rec.dtype])))
+            fld_ = np.frombuffer(f.read(nv*fld_size*type_size[rec.dtype]), dtype=type_dic[rec.dtype])
             fld = np.full(fld_shape, np.nan)
             if rec.is_vector:
                 fld[:, ~c.grid.mask] = fld_.reshape((2, -1))
@@ -123,7 +121,7 @@ class OfflineIO(IOBackend):
         binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'r+b') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
-            f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
+            f.write(np.asarray(fld_, dtype=type_dic[rec.dtype]).tobytes())
 
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
