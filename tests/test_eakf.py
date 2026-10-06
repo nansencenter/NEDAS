@@ -1,9 +1,22 @@
 import numpy as np
 import unittest
-from NEDAS.assim_tools.assimilators.EAKF.core import (
-    obs_increment_eakf, update_ensemble,
-)
+from NEDAS.assim_tools.assimilators.EAKF.core import obs_increment_eakf
+from NEDAS.assim_tools.assimilators.EAKF.core import update_ensemble as update_ensemble_pm
 from NEDAS.assim_tools.assimilators.ETKF.core import ensemble_transform_weights as etkf_transform_weights
+
+
+def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr, local_factor,
+                    correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation):
+    """members-first view of the point-major kernel: ens_prior (nens, ...) in, posterior out"""
+    nens, shape = ens_prior.shape[0], ens_prior.shape[1:]
+    npt = int(np.prod(shape))
+    ens = np.ascontiguousarray(ens_prior.reshape(nens, npt).T).reshape(npt, 1, nens)
+    nst = ens_static.shape[0]
+    ens_static = np.ascontiguousarray(ens_static.reshape(nst, npt).T).reshape(npt, 1, nst)
+    update_ensemble_pm(ens, ens_static, np.zeros(1, dtype=np.int64), np.arange(npt),
+                       np.asarray(local_factor, dtype=float).reshape(1, npt), obs_prior, obs_prior_static,
+                       obs_incr, correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
+    return ens.reshape(npt, nens).T.reshape(ens_prior.shape)
 
 
 def _plain_obs_increment(obs_prior, obs, obs_err):

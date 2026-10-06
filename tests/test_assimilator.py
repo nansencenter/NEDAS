@@ -77,7 +77,8 @@ class TestSerialBatchEquivalence(unittest.TestCase):
 
     def analyses(self, weights):
         import numpy as np
-        from NEDAS.assim_tools.assimilators.EAKF.core import obs_increment_eakf, update_ensemble
+        from NEDAS.assim_tools.assimilators.EAKF.core import obs_increment_eakf
+        from test_eakf import update_ensemble   # members-first view of the point-major kernel
         from NEDAS.assim_tools.assimilators.ETKF.core import (
             ensemble_transform_weights, apply_ensemble_transform)
 

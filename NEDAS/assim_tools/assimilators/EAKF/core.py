@@ -96,7 +96,7 @@ def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_sta
                               impact_on_variable,
                               weight_dynamic, weight_static, hybrid_perturbation) -> None:
 
-    nens, nfld, nloc = state_data.shape
+    nloc, nfld, nens = state_data.shape   # point-major (see update_ensemble)
 
     # distances are given for the candidate points ind
     h_lfactor = h_local_func(h_dist, hroi)
@@ -120,7 +120,7 @@ def update_local_state_linear(state_data, state_static, obs_prior, obs_prior_sta
     if flds.size == 0:
         return
 
-    update_ensemble_inplace(state_data, state_static, flds, nloc_sub, lfactor[flds],
+    update_ensemble(state_data, state_static, flds, nloc_sub, lfactor[flds],
                             obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
@@ -144,118 +144,32 @@ def update_local_obs_linear(obs_data, obs_data_static, used, obs_prior, obs_prio
     if near.size == 0:
         return
 
-    # the obs are one field of nlobs points: (nens, 1, nlobs) views, so the writes land in obs_data
-    nens, nlobs = obs_data.shape
-    update_ensemble_inplace(obs_data.reshape((nens, 1, nlobs)),
-                            obs_data_static.reshape((obs_data_static.shape[0], 1, nlobs)),
+    # the obs are one field of nlobs points, point-major: (nlobs, 1, nens) views, so the writes land in obs_data
+    nlobs, nens = obs_data.shape
+    update_ensemble(obs_data.reshape((nlobs, 1, nens)),
+                            obs_data_static.reshape((nlobs, 1, obs_data_static.shape[1])),
                             np.zeros(1, dtype=np.int64), ind[near], lfactor[near].reshape((1, near.size)),
                             obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation)
 
 @njit
-def update_ensemble(ens_prior, ens_static, obs_prior, obs_prior_static, obs_incr, local_factor,
-                    correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> np.ndarray:
-    """
-    Regress the obs-space increments onto the dynamic members (ens_prior).
-
-    The readable reference for update_ensemble_inplace, which the serial loop runs.
-
-    The regression coefficient is cov(x,y)/var(y) of the hybrid covariance, blending the dynamic members
-    with the static ones (ens_static, obs_prior_static), which are held fixed and never updated. With
-    hybrid_perturbation=False the perturbation increments are regressed with the dynamic ensemble's own
-    coefficient instead (Wang et al. 2007), so mean and perturbation increments are regressed separately.
-    Plain EAKF = no static members and weight_dynamic = 1. Correlation-based localization, if enabled, is
-    defined using the correlation coefficient computed from the dynamic members only.
-    """
-    nens = ens_prior.shape[0]
-    nens_static = ens_static.shape[0]
-    ens_post = ens_prior.copy()
-
-    # obs-space statistics of the dynamic members. ss = 'sum of squares'
-    obs_prior_mean = np.mean(obs_prior)
-    obs_prior_ss = np.sum((obs_prior - obs_prior_mean)**2)
-
-    # state/obs cross-covariance and correlation (if needed)
-    # per-location member mean (a global np.mean mixes locations and fails on empty input)
-    ens_prior_mean = np.zeros(ens_prior.shape[1:])
-    for m in range(nens):
-        ens_prior_mean += ens_prior[m, ...] / nens
-
-    cov = np.zeros(ens_prior.shape[1:])  # cov is sample covariance * (nens - 1)
-
-    if correlation_local_func is not None:
-        ens_prior_ss = np.zeros(ens_prior.shape[1:])
-
-    for m in range(nens):
-        xpert = ens_prior[m, ...] - ens_prior_mean
-        ypert = obs_prior[m] - obs_prior_mean
-        cov += xpert * ypert
-        if correlation_local_func is not None:
-            ens_prior_ss += xpert**2
-
-    if correlation_local_func is not None:
-        r = np.zeros(cov.shape)
-
-        if obs_prior_ss > 0.0:
-            cov_flat = cov.ravel()
-            ens_prior_ss_flat = ens_prior_ss.ravel()
-            r_flat = r.ravel()
-
-            for i in range(cov_flat.size):
-                if ens_prior_ss_flat[i] > 0.0:
-                    r_flat[i] = (
-                        cov_flat[i]
-                        / np.sqrt(ens_prior_ss_flat[i] * obs_prior_ss)
-                    )
-
-        # Combine distance- and correlation-based localization into a single factor
-        local_factor *= correlation_local_func(r, nens)
-
-    # sum of squares and covariance of the hybrid covariance
-    obs_prior_var_hybrid = weight_dynamic * obs_prior_ss / (nens - 1)
-    cov_hybrid = weight_dynamic * cov / (nens - 1)
-    if nens_static > 1:
-        obs_prior_mean_static = np.mean(obs_prior_static)
-        obs_prior_var_hybrid += weight_static * np.sum((obs_prior_static - obs_prior_mean_static)**2) / (nens_static - 1)
-        for m in range(nens_static):
-            cov_hybrid += weight_static * ens_static[m, ...] * (obs_prior_static[m] - obs_prior_mean_static) / (nens_static - 1)
-
-    # if there is no prior spread, don't update at all
-    if obs_prior_var_hybrid == 0:
-        return ens_post
-
-    reg_factor = cov_hybrid / obs_prior_var_hybrid
-
-    # the mean and perturbation increments are regressed with the same coefficient, unless the
-    # perturbations are updated with the dynamic ensemble covariance alone
-    split_increment = (not hybrid_perturbation) and nens_static > 1 and obs_prior_ss > 0
-    if not split_increment:
-        for m in range(nens):
-            ens_post[m, ...] = ens_prior[m, ...] + local_factor * reg_factor * obs_incr[m]
-        return ens_post
-
-    # Lack of normalization by (nens - 1) in cov and obs_prior_ss is obviated by the division on the next line
-    reg_factor_pert = cov / obs_prior_ss
-    obs_incr_mean = np.mean(obs_incr)
-    for m in range(nens):
-        ens_post[m, ...] = ens_prior[m, ...] + local_factor * (reg_factor * obs_incr_mean
-                                                               + reg_factor_pert * (obs_incr[m] - obs_incr_mean))
-
-    return ens_post
-
-
-@njit
-def update_ensemble_inplace(ens, ens_static, flds, sub, lfactor, obs_prior, obs_prior_static, obs_incr,
+def update_ensemble(ens, ens_static, flds, sub, lfactor, obs_prior, obs_prior_static, obs_incr,
                             correlation_local_func, weight_dynamic, weight_static, hybrid_perturbation) -> None:
     """
-    update_ensemble's arithmetic done in place on ens[:, flds[n], sub[j]], with lfactor[n, j] the local
-    factor of field flds[n] at point sub[j]: loops over the members outside and the points inside, so the
-    (nens, nfld, nloc) array is read twice and written once and nothing its size is allocated.
-    update_ensemble is the readable reference.
+    Regress the obs-space increments onto the members, in place: ens[sub[j], flds[n], :] += gain * obs_incr,
+    with lfactor[n, j] the local factor of field flds[n] at point sub[j]. ens is point-major,
+    (nloc, nfld, nens), so the members of one (point, field) are one contiguous row, as DART stores its
+    copies: each row is read twice and written once and nothing its size is allocated.
+
+    Hybrid covariance: the static members (ens_static, (nloc, nfld, nens_static), and obs_prior_static)
+    enter the regression with weight_static, the dynamic ones with weight_dynamic; the static members
+    are never updated. Unless hybrid_perturbation, the perturbations are updated with the dynamic
+    covariance alone. Correlation-based localization, if given, multiplies lfactor by a factor of the
+    sample correlation of the dynamic members.
     """
-    nens, nfld = ens.shape[0], flds.size
+    nens, nfld = ens.shape[2], flds.size
     nsub = sub.size
-    nens_static = ens_static.shape[0]
+    nens_static = ens_static.shape[2]
 
     # obs-space statistics of the dynamic members. ss = 'sum of squares'
     obs_prior_mean = np.mean(obs_prior)
@@ -263,33 +177,31 @@ def update_ensemble_inplace(ens, ens_static, flds, sub, lfactor, obs_prior, obs_
     obs_prior_ss = np.sum(ypert**2)
     ypert_sum = np.sum(ypert)    # 0 up to roundoff, kept so cov is exactly sum((x - mean(x)) * ypert)
 
-    # one pass over the members: sum(x) and sum(x * ypert), hence cov = sample covariance * (nens - 1)
+    # sum(x) and sum(x * ypert) over each row, hence cov = sample covariance * (nens - 1)
     xsum = np.zeros((nfld, nsub))
     cov = np.zeros((nfld, nsub))
-    for m in range(nens):
-        for n in range(nfld):
-            for j in range(nsub):
-                x = ens[m, flds[n], sub[j]]
-                xsum[n, j] += x
-                cov[n, j] += x * ypert[m]
     for n in range(nfld):
         for j in range(nsub):
-            cov[n, j] -= xsum[n, j] / nens * ypert_sum
+            row = ens[sub[j], flds[n]]
+            xs, c = 0.0, 0.0
+            for m in range(nens):
+                xs += row[m]
+                c += row[m] * ypert[m]
+            xsum[n, j] = xs
+            cov[n, j] = c - xs / nens * ypert_sum
 
     if correlation_local_func is not None:
         # a second pass, about the mean, for the state sum of squares (no cancellation)
-        ens_ss = np.zeros((nfld, nsub))
-        for m in range(nens):
-            for n in range(nfld):
-                for j in range(nsub):
-                    d = ens[m, flds[n], sub[j]] - xsum[n, j] / nens
-                    ens_ss[n, j] += d * d
         r = np.zeros((nfld, nsub))
-        if obs_prior_ss > 0.0:
-            for n in range(nfld):
-                for j in range(nsub):
-                    if ens_ss[n, j] > 0.0:
-                        r[n, j] = cov[n, j] / np.sqrt(ens_ss[n, j] * obs_prior_ss)
+        for n in range(nfld):
+            for j in range(nsub):
+                row = ens[sub[j], flds[n]]
+                ss = 0.0
+                for m in range(nens):
+                    d = row[m] - xsum[n, j] / nens
+                    ss += d * d
+                if obs_prior_ss > 0.0 and ss > 0.0:
+                    r[n, j] = cov[n, j] / np.sqrt(ss * obs_prior_ss)
         lfactor = lfactor * correlation_local_func(r, nens)
 
     # variance and covariance of the hybrid covariance
@@ -298,11 +210,12 @@ def update_ensemble_inplace(ens, ens_static, flds, sub, lfactor, obs_prior, obs_
     if nens_static > 1:
         ypert_static = obs_prior_static - np.mean(obs_prior_static)
         obs_prior_var_hybrid += weight_static * np.sum(ypert_static**2) / (nens_static - 1)
-        for m in range(nens_static):
-            w = weight_static * ypert_static[m] / (nens_static - 1)
-            for n in range(nfld):
-                for j in range(nsub):
-                    reg_factor[n, j] += ens_static[m, flds[n], sub[j]] * w
+        w = weight_static * ypert_static / (nens_static - 1)
+        for n in range(nfld):
+            for j in range(nsub):
+                row = ens_static[sub[j], flds[n]]
+                for m in range(nens_static):
+                    reg_factor[n, j] += row[m] * w[m]
 
     # if there is no prior spread, don't update at all
     if obs_prior_var_hybrid == 0:
@@ -314,17 +227,18 @@ def update_ensemble_inplace(ens, ens_static, flds, sub, lfactor, obs_prior, obs_
     split_increment = (not hybrid_perturbation) and nens_static > 1 and obs_prior_ss > 0
     if not split_increment:
         gain = lfactor * reg_factor
-        for m in range(nens):
-            for n in range(nfld):
-                for j in range(nsub):
-                    ens[m, flds[n], sub[j]] += gain[n, j] * obs_incr[m]
+        for n in range(nfld):
+            for j in range(nsub):
+                row = ens[sub[j], flds[n]]
+                for m in range(nens):
+                    row[m] += gain[n, j] * obs_incr[m]
         return
 
     obs_incr_mean = np.mean(obs_incr)
     gain_mean = lfactor * reg_factor * obs_incr_mean
     gain_pert = lfactor * cov / obs_prior_ss
-    for m in range(nens):
-        dincr = obs_incr[m] - obs_incr_mean
-        for n in range(nfld):
-            for j in range(nsub):
-                ens[m, flds[n], sub[j]] += gain_mean[n, j] + gain_pert[n, j] * dincr
+    for n in range(nfld):
+        for j in range(nsub):
+            row = ens[sub[j], flds[n]]
+            for m in range(nens):
+                row[m] += gain_mean[n, j] + gain_pert[n, j] * (obs_incr[m] - obs_incr_mean)

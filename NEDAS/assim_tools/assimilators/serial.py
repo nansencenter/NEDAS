@@ -112,6 +112,13 @@ class SerialAssimilator(Assimilator):
         state_bins = BoxBins(c.grid, state_data['x'], state_data['y'], width)
         obs_bins = BoxBins(c.grid, obs_data['x'], obs_data['y'], width)
 
+        # point-major copies, members contiguous per point (as DART stores its copies), for the update
+        # kernels; written back after the loop
+        X = np.ascontiguousarray(state_data['state_prior'].transpose(2, 1, 0))
+        Xs = np.ascontiguousarray(state_data['state_static'].transpose(2, 1, 0))
+        Y = np.ascontiguousarray(obs_data['obs_prior'].T)
+        Ys = np.ascontiguousarray(obs_data['obs_prior_static'].T)
+
         # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
         cost = self.loop_cost
@@ -129,8 +136,8 @@ class SerialAssimilator(Assimilator):
             if c.pid_mem == owner_pid:
                 # collect obs info
                 obs_p = {}
-                obs_p['prior'] = obs_data['obs_prior'][:, i]
-                obs_p['prior_static'] = obs_data['obs_prior_static'][:, i]
+                obs_p['prior'] = Y[i]
+                obs_p['prior_static'] = Ys[i]
                 for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
                     obs_p[key] = obs_data[key][i]
                 for key in ('hroi', 'vroi', 'troi', 'impact_on_variable'):
@@ -157,7 +164,7 @@ class SerialAssimilator(Assimilator):
                 state_v_dist = np.abs(obs_p['z'] - state_data['z'][:, ind])
                 state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
-            update_local_state(state_data['state_prior'], state_data['state_static'],
+            update_local_state(X, Xs,
                                     obs_p['prior'], obs_p['prior_static'], obs_incr,
                                     ind, state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
@@ -171,13 +178,15 @@ class SerialAssimilator(Assimilator):
                 obs_v_dist = np.abs(obs_p['z'] - obs_data['z'][ind])
                 obs_t_dist = np.abs(obs_p['t'] - obs_data['t'][ind])
             obs_impact = obs_data['obs_impact'][ind]
-            update_local_obs(obs_data['obs_prior'], obs_data['obs_prior_static'], obs_data['used'],
+            update_local_obs(Y, Ys, obs_data['used'],
                                   obs_p['prior'], obs_p['prior_static'], obs_incr,
                                   ind, obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
                                   c.localization_funcs['correlation'], obs_impact)
 
+        state_data['state_prior'][...] = X.transpose(2, 1, 0)
+        obs_data['obs_prior'][...] = Y.T
         c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
         c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
 
@@ -207,8 +216,8 @@ class SerialAssimilator(Assimilator):
         Update the local state vector with the analysis increments.
 
         Args:
-            state_prior (np.ndarray): Local state vector, shape (nens, nfld, nloc)
-            state_static (np.ndarray): Local state of the static members, shape (nens_static, nfld, nloc), not updated
+            state_prior (np.ndarray): Local state vector, point-major, shape (nloc, nfld, nens)
+            state_static (np.ndarray): Local state of the static members, shape (nloc, nfld, nens_static), not updated
             obs_prior (np.ndarray): Observation priors, shape (nens,)
             obs_prior_static (np.ndarray): Observation priors of the static members, shape (nens_static,)
             obs_incr (np.ndarray): Analysis increments, shape (nens,)
@@ -228,8 +237,8 @@ class SerialAssimilator(Assimilator):
         Update the local observations with analysis increments.
 
         Args:
-            obs_data (np.ndarray): obs prior ensemble, shape (nens, nlobs)
-            obs_data_static (np.ndarray): obs priors of the static members, shape (nens_static, nlobs), not updated
+            obs_data (np.ndarray): obs prior ensemble, point-major, shape (nlobs, nens)
+            obs_data_static (np.ndarray): obs priors of the static members, shape (nlobs, nens_static), not updated
             used (np.ndarray): boolean mask of already-assimilated obs
             ind (np.ndarray): The candidate obs (indices into nlobs) the distances and impact_on_variable are given for
         """
