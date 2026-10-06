@@ -356,7 +356,7 @@ class DARTAssimilator(Assimilator):
                 'cutoff': cutoff, 'sort_obs_inc': self.sort_obs_inc, 'spread_restoration': False,
                 'sampling_error_correction': self.sampling_error_correction,
                 'adaptive_localization_threshold': self.adaptive_localization_threshold,
-                'print_every_nth_obs': 0, 'close_obs_caching': True,
+                'print_every_nth_obs': 0, 'close_obs_caching': True, 'distribute_mean': True,
                 'rectangular_quadrature': self.rectangular_quadrature,
                 'gaussian_likelihood_tails': self.gaussian_likelihood_tails,
                 **({'special_localization_obs_types': [f'NEDAS_{s:02d}' for s in special],
