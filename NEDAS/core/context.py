@@ -28,6 +28,7 @@ class Context:
     comm: parallel.Comm
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
+    comm_mem_ens: parallel.Comm
     pid_show: int
     progress: progress.Progress
     fs: FileSystem
@@ -88,6 +89,8 @@ class Context:
         # setup the parallel (serial or MPI program) communicator
         self.set_comm()
         self.mem_list, self.mem_list_static = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
+        # the pid_mem holding members, for sums over the ensemble
+        self.comm_mem_ens = self.comm_mem.Split(0 if self.mem_list[self.pid_mem] else 1, self.pid_mem)
 
         # initialize a few helper class instances
         self.fs = FileSystem(self.config)

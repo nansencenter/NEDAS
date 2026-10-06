@@ -286,6 +286,9 @@ class State:
         c.io.prepare_fields_storage(c, f"{tag}_mean")
         means = {}
         setattr(self, f"fields_{tag}_mean", means)
+        if not c.mem_list[c.pid_mem]:
+            c.comm.Barrier()
+            return
 
         c.total_tasks = len(self.rec_list[c.pid_rec])
         for r, rec_id in enumerate(self.rec_list[c.pid_rec]):
@@ -302,9 +305,7 @@ class State:
                 sum_fld_pid += fields[mem_id, rec_id]
 
             # sum over all field sums on different pids together to get the total sum
-            # TODO:reduce is expensive if only sparse pid holds state in memory, so in runtime should try to
-            # populate the comm_mem with members as much as possible.
-            sum_fld = c.comm_mem.allreduce(sum_fld_pid)
+            sum_fld = c.comm_mem_ens.allreduce(sum_fld_pid)
 
             mean_fld = sum_fld / c.nens
             means[0, rec_id] = mean_fld
