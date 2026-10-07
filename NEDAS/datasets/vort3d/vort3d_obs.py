@@ -124,6 +124,7 @@ class Vort3DObs(SyntheticObs):
         # the 'wind' entry just added above.
         self.variables.update({
             'wind_b': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m/s'),
+            'wind_speed_b': VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m/s'),
             'vortex_position': VarDesc(name='null', dtype='float', is_vector=True, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m'),
             'vortex_intensity': VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m/s'),
             'vortex_size':  VarDesc(name='null', dtype='float', is_vector=False, dt=restart_dt, levels=np.array([0]), z_units='hPa', units='m'),
@@ -131,6 +132,7 @@ class Vort3DObs(SyntheticObs):
 
         self.obs_operator = {
             'wind_b': self.get_wind_b_obs,
+            'wind_speed_b': self.get_wind_speed_b_obs,
             'vortex_position': self.get_vortex_position,
             'vortex_intensity': self.get_vortex_intensity,
             'vortex_size': self.get_vortex_size,
@@ -150,7 +152,7 @@ class Vort3DObs(SyntheticObs):
         i, j = self.vortex_position(wind_b[0,...], wind_b[1,...])
         true_center_x, true_center_y = grid.x[j,i], grid.y[j,i]
 
-        if name in ('wind_b', 'wind', 'theta', 'q'):
+        if name in ('wind_b', 'wind_speed_b', 'wind', 'theta', 'q'):
             # seed by cycle time so obs network is reproducible across cases, still random over time
             np.random.seed(int(kwargs['time'].timestamp()) % (2**32 - 1))
             nobs = self._draw_count(kwargs['nobs'])
@@ -226,6 +228,9 @@ class Vort3DObs(SyntheticObs):
                             t = -np.log(1 - u * (1 - np.exp(-self.z_lambda))) / self.z_lambda
                         return zmax_pa - t * (zmax_pa - zmin_pa)
                     return np.random.uniform(zmin_pa, zmax_pa, n)
+            elif name == 'wind_speed_b':
+                # at the boundary layer's pressure, so vertical localization applies
+                draw_z = lambda n: np.full(n, model._layer_pressure[model.layer_names[-1]])
             else:
                 draw_z = np.zeros  # 'wind_b': unused by its own custom obs_operator, kept as before
             z = draw_z(nobs)
@@ -501,6 +506,10 @@ class Vort3DObs(SyntheticObs):
         f1 = grid.interp(wind_b[0, ...], obs_x, obs_y, method='linear')
         f2 = grid.interp(wind_b[1, ...], obs_x, obs_y, method='linear')
         return np.array([f1, f2])
+
+    def get_wind_speed_b_obs(self, **kwargs):
+        """boundary-layer wind speed at the obs locations, a nonlinear (bounded below) operator"""
+        return np.hypot(*self.get_wind_b_obs(**kwargs))
 
     def get_vortex_position(self, **kwargs):
         wind_b = self.get_wind_b(**kwargs)
