@@ -95,11 +95,10 @@ class DARTAssimilator(Assimilator):
                 raise NotImplementedError("DART: DART has no temporal localization, set troi: inf")
             if any(f != 1 for f in rec.impact_on_variable):
                 raise NotImplementedError("DART: impact_on_variable is not supported")
-        if self.inflation['posterior']['flavor'] not in (0, 4) and not self.compute_posterior(c):
-            raise RuntimeError("posterior adaptive inflation needs compute_posterior")
 
     def compute_posterior(self, c: Context) -> bool:
-        return self.inflation['posterior']['flavor'] in (2, 3, 5)
+        # DART needs posterior values for any posterior inflation, RTPS (4) included
+        return self.inflation['posterior']['flavor'] != 0
 
     # ---------------------------------------------------------------- slots
 
