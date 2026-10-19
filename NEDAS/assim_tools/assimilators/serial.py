@@ -277,7 +277,9 @@ class BoxBins:
 
     def candidates(self, ref_x, ref_y, r):
         """Indices of the points that may lie within distance r of (ref_x, ref_y)."""
-        box = None if self.bins is None else self.grid.search_box(ref_x, ref_y, r)
+        if self.bins is None:
+            return self.all
+        box = self.grid.search_box(ref_x, ref_y, r)
         if box is None:
             return self.all
         ranges = []

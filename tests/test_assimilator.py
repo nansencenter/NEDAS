@@ -165,7 +165,7 @@ class TestBatchObsAssignmentSpherical(unittest.TestCase):
         state = SimpleNamespace(partitions=partitions)
         obs = SimpleNamespace(info=SimpleNamespace(records={0: SimpleNamespace(hroi=hroi)}),
                               obs_seq={0: {'x': xo, 'y': yo}})
-        obs_inds = BatchAssimilator.assign_obs_to_tiles(None, c, state, obs, 0)
+        obs_inds = BatchAssimilator.assign_obs_to_tiles(None, c, state, obs, 0)  # pyright: ignore[reportArgumentType]
         for par_id, (ist, ied, di, jst, jed, dj) in enumerate(partitions):
             px, py = lon[jst:jed, ist:ied].ravel(), lat[jst:jed, ist:ied].ravel()
             near = [k for k in range(len(xo)) if grid.distance(xo[k], px, yo[k], py).min() <= hroi]

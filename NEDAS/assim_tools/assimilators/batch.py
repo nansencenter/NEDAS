@@ -143,7 +143,7 @@ class BatchAssimilator(Assimilator):
             pid = int(np.argmin(load))
             assigned[pid].append(par_id)
             load[pid] += workload[par_id]
-        par_list = {pid: np.sort(np.array(lst, dtype=int)) for pid, lst in assigned.items()}
+        par_list = {pid: sorted(int(p) for p in lst) for pid, lst in assigned.items()}
 
         return par_list
 

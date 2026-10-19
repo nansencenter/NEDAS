@@ -15,8 +15,25 @@ from datetime import datetime, timedelta
 import numpy as np
 from NEDAS.core import Context
 from NEDAS.models import get_model_class
+from NEDAS.models.lorenz63 import Lorenz63Model
+from NEDAS.models.lorenz84 import Lorenz84Model
+from NEDAS.models.lorenz05 import Lorenz05Model
+from NEDAS.models.lorenz96_2scale import Lorenz96TwoScaleModel
+from NEDAS.models.nine_var import NineVarModel
+from NEDAS.models.ikeda import IkedaModel
+from NEDAS.models.lotka_volterra import LotkaVolterraModel
+from NEDAS.models.ks import KSModel
 
-SMALL_MODELS = ['lorenz63', 'lorenz84', 'lorenz05', 'lorenz96_2scale', 'nine_var', 'ikeda', 'lotka_volterra', 'ks']
+SMALL_MODELS = {
+    'lorenz63': Lorenz63Model,
+    'lorenz84': Lorenz84Model,
+    'lorenz05': Lorenz05Model,
+    'lorenz96_2scale': Lorenz96TwoScaleModel,
+    'nine_var': NineVarModel,
+    'ikeda': IkedaModel,
+    'lotka_volterra': LotkaVolterraModel,
+    'ks': KSModel,
+}
 
 
 class TestInterface(unittest.TestCase):
@@ -29,9 +46,10 @@ class TestInterface(unittest.TestCase):
         shutil.rmtree(self.dir)
 
     def test_grid_variables_and_initial_condition(self):
-        for name in SMALL_MODELS:
+        for name, cls in SMALL_MODELS.items():
             with self.subTest(model=name):
-                m = get_model_class(name)(context=self.c)
+                self.assertIs(get_model_class(name), cls)
+                m = cls(context=self.c)
                 x = m.initial_condition(0)
                 self.assertEqual(x.shape, (m.state_size,))
                 self.assertTrue(np.all(np.isfinite(x)))
@@ -42,10 +60,10 @@ class TestInterface(unittest.TestCase):
                 np.testing.assert_array_equal(m.initial_condition(0), x)
 
     def test_io_round_trip_in_both_modes(self):
-        for name in SMALL_MODELS:
+        for name, cls in SMALL_MODELS.items():
             for io_mode in ('online', 'offline'):
                 with self.subTest(model=name, io_mode=io_mode):
-                    m = get_model_class(name)(context=self.c, io_mode=io_mode)
+                    m = cls(context=self.c, io_mode=io_mode)
                     kw = dict(path=os.path.join(self.dir, name), time=self.time, member=3, tag='current')
                     x = m.initial_condition(0)
                     m.set_state(x, **kw)
@@ -60,10 +78,10 @@ class TestInterface(unittest.TestCase):
                         m.set_state(x, **kw)
 
     def test_run_advances_by_the_forecast_period(self):
-        for name in SMALL_MODELS:
+        for name, cls in SMALL_MODELS.items():
             for io_mode in ('online', 'offline'):
                 with self.subTest(model=name, io_mode=io_mode):
-                    m = get_model_class(name)(context=self.c, io_mode=io_mode)
+                    m = cls(context=self.c, io_mode=io_mode)
                     kw = dict(path=os.path.join(self.dir, name), time=self.time, member=0, tag='current', forecast_period=12)
                     x = m.initial_condition(0)
                     m.set_state(x, **kw)
@@ -73,12 +91,12 @@ class TestInterface(unittest.TestCase):
                     self.assertFalse(np.allclose(later, x))
 
     def test_forecast_period_must_be_a_multiple_of_the_time_step(self):
-        m = get_model_class('lorenz63')(context=self.c)  # 0.24 h time step
+        m = Lorenz63Model(context=self.c)  # 0.24 h time step
         with self.assertRaises(AssertionError):
             m.nsteps(1.)
 
     def test_preprocess_keeps_the_prior(self):
-        m = get_model_class('lorenz63')(context=self.c, io_mode='online')
+        m = Lorenz63Model(context=self.c, io_mode='online')
         kw = dict(time=self.time, member=0, tag='current')
         x = m.initial_condition(0)
         m.set_state(x, **kw)
@@ -95,7 +113,7 @@ class TestInterface(unittest.TestCase):
                 c.config.time_start = self.time
                 c.config.time_end = self.time + timedelta(hours=24)
                 d = os.path.join(self.dir, io_mode)
-                m = get_model_class('lorenz84')(context=c, io_mode=io_mode,
+                m = Lorenz84Model(context=c, io_mode=io_mode,
                                                 truth_dir=os.path.join(d, 'truth'), ens_init_dir=os.path.join(d, 'ens'))
                 m.generate_truth(tag='truth', forecast_period=6)
                 times = [self.time + timedelta(hours=h) for h in range(0, 25, 6)]
@@ -124,23 +142,23 @@ class TestDynamics(unittest.TestCase):
         return (np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + F
 
     def test_lorenz63_tendency(self):
-        m = get_model_class('lorenz63')(context=self.c)
+        m = Lorenz63Model(context=self.c)
         np.testing.assert_allclose(m.dxdt(np.array([1., 2., 3.])), [10., 28 - 2 - 3, 2 - 8.])
 
     def test_lorenz63_stays_on_the_attractor(self):
-        m = get_model_class('lorenz63')(context=self.c)
+        m = Lorenz63Model(context=self.c)
         x = m.advance(m.initial_condition(0), 5000)
         self.assertLess(np.abs(x[:2]).max(), 30.)
         self.assertTrue(0. < x[2] < 60.)
 
     def test_lorenz05_model_I_is_lorenz96(self):
         # K = 1 and I = 1 reduce Lorenz (2005) Model III to Lorenz-96
-        m = get_model_class('lorenz05')(context=self.c, nx=40, K=1, I=1, F=8.)
+        m = Lorenz05Model(context=self.c, nx=40, K=1, I=1, F=8.)
         x = self.rng.normal(0, 3, 40)
         np.testing.assert_allclose(m.dxdt(x), self.l96_dxdt(x, 8.), atol=1e-12)
 
     def test_lorenz05_decomposition(self):
-        m = get_model_class('lorenz05')(context=self.c)
+        m = Lorenz05Model(context=self.c)
         z = m.initial_condition(0)
         x, y = m.decompose(z)
         np.testing.assert_allclose(x + y, z)
@@ -151,12 +169,12 @@ class TestDynamics(unittest.TestCase):
         self.assertLess(np.abs(m.decompose((-1.) ** i)[0]).max(), 1e-3)
 
     def test_lorenz96_2scale_uncoupled_slow_variables_are_lorenz96(self):
-        m = get_model_class('lorenz96_2scale')(context=self.c, coupling_h=0.)
+        m = Lorenz96TwoScaleModel(context=self.c, coupling_h=0.)
         x = self.rng.normal(0, 3, m.state_size)
         np.testing.assert_allclose(m.dxdt(x)[:m.K], self.l96_dxdt(x[:m.K], m.F))
 
     def test_lorenz96_2scale_slow_field_on_the_fast_grid(self):
-        m = get_model_class('lorenz96_2scale')(context=self.c)
+        m = Lorenz96TwoScaleModel(context=self.c)
         x = m.initial_condition(0)
         X = m.get_field(x, 'slow')
         np.testing.assert_array_equal(X.reshape(m.K, m.J), np.repeat(x[:m.K, None], m.J, axis=1))
@@ -169,7 +187,7 @@ class TestDynamics(unittest.TestCase):
 
     def test_nine_var_matches_the_dart_loop(self):
         # a literal transcription of comp_dt in DART models/9var/model_mod.f90
-        m = get_model_class('nine_var')(context=self.c)
+        m = NineVarModel(context=self.c)
         a, b, f, h = [1., 1., 3.], [-1.5, -1.5, 0.5], [0.1, 0., 0.], [-1., 0., 0.]
         nu = kappa = 1. / 48.
         c, g = 0.8660254, m.g
@@ -188,21 +206,21 @@ class TestDynamics(unittest.TestCase):
         np.testing.assert_allclose(m.dxdt(s), np.concatenate([dx, dy, dz]), atol=1e-14)
 
     def test_ikeda_map(self):
-        m = get_model_class('ikeda')(context=self.c)
+        m = IkedaModel(context=self.c)
         # from the origin: t = 0.4 - 6, and the map gives (1, 0)
         np.testing.assert_allclose(m.step(np.zeros(2)), [1., 0.])
         x = m.advance(m.initial_condition(0), 1000)
         self.assertLess(np.abs(x).max(), 1. / (1. - m.u) + 1.)  # |x_n| is bounded by 1 + u |x_{n-1}|
 
     def test_lotka_volterra_stays_positive(self):
-        m = get_model_class('lotka_volterra')(context=self.c)
+        m = LotkaVolterraModel(context=self.c)
         x = m.initial_condition(0)
         for _ in range(20):
             x = m.advance(x, 100)
             self.assertTrue(np.all(x > 0.) and np.all(x < 1.5))
 
     def test_ks_conserves_the_mean_and_is_chaotic(self):
-        m = get_model_class('ks')(context=self.c)
+        m = KSModel(context=self.c)
         x = m.initial_condition(0)
         y = m.advance(x, 400)
         self.assertAlmostEqual(y.mean(), x.mean(), places=10)

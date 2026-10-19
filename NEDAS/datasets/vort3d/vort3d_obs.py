@@ -232,7 +232,7 @@ class Vort3DObs(SyntheticObs):
                 # at the boundary layer's pressure, so vertical localization applies
                 draw_z = lambda n: np.full(n, model._layer_pressure[model.layer_names[-1]])
             else:
-                draw_z = np.zeros  # 'wind_b': unused by its own custom obs_operator, kept as before
+                draw_z = lambda n: np.zeros(n)  # 'wind_b': unused by its own custom obs_operator, kept as before
             z = draw_z(nobs)
 
             # sparse uniform layer over the whole domain, drawn after the main network so the

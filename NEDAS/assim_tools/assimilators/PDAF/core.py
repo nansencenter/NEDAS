@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+from collections.abc import Mapping
 import numpy as np
 from NEDAS.assim_tools.assimilators.batch import BatchAssimilator
 from NEDAS.utils.call_cost import CallCost
@@ -79,7 +80,7 @@ def mpi_sonames(maps_text: str) -> set:
     return set(_LIBMPI_SONAME.findall(maps_text))
 
 
-def check_mpi_environment(maps_text: str = None, environ: dict = None) -> None:
+def check_mpi_environment(maps_text: str|None = None, environ: Mapping[str, str]|None = None) -> None:
     """
     Refuse the two misconfigurations that make PDAF's own MPI_Init abort, with the remedy.
 
@@ -401,7 +402,7 @@ class PDAFAssimilator(BatchAssimilator):
         obs_types = [(int(r), np.where(obs_data['obs_rec_id'] == r)[0]) for r in obs_rec_ids]
         obs_prior = np.ascontiguousarray(obs_data['obs_prior'], dtype=np.float64)
 
-        analysis = {'called': False}   # filled by the prepoststep callback below
+        analysis: dict = {'called': False}   # filled by the prepoststep callback below
 
         vroi = {rec: self.vroi(obs_data, rec) for rec, _ in obs_types}
         vertical = any(np.isfinite(v) for v in vroi.values())

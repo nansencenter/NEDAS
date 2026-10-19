@@ -1,6 +1,7 @@
 import os
 import sys
 from functools import wraps
+from collections.abc import Mapping
 from typing import Any, TypeVar, Callable, ParamSpec, Sequence
 import time
 from concurrent.futures import ProcessPoolExecutor, process
@@ -26,7 +27,7 @@ MPI_LAUNCH_ENV_VARS = ('PMI_SIZE', 'PMI_RANK',
                        'PMIX_RANK', 'PMIX_NAMESPACE')
 
 
-def mpi_launched(environ: dict|None = None) -> bool:
+def mpi_launched(environ: Mapping[str, str]|None = None) -> bool:
     """
     Whether a launcher started this process as one rank of an MPI job.
 
@@ -36,7 +37,7 @@ def mpi_launched(environ: dict|None = None) -> bool:
     return any(var in environ for var in MPI_LAUNCH_ENV_VARS)
 
 
-def launcher_task_count(environ: dict|None = None) -> int:
+def launcher_task_count(environ: Mapping[str, str]|None = None) -> int:
     """
     How many tasks the launcher believes it started, or 0 if it does not say.
 
@@ -70,6 +71,9 @@ class Comm:
         parallel_io (bool): If netCDF4.Dataset is built with parallel I/O support.
 
     """
+    _MPI: Any   # the mpi4py.MPI module, None for a serial program
+    _comm: Any  # MPI.COMM_WORLD or a DummyComm
+
     parallel_io: bool
     mpi_ready: bool = False
 

@@ -281,6 +281,7 @@ class BgridSoloModel(Model[RegularGrid]):
     @contextmanager
     def _in_lib_dir(self):
         cwd = os.getcwd()
+        assert BgridSoloModel._lib_dir is not None, "lib() sets _lib_dir before any call into the library"
         os.chdir(BgridSoloModel._lib_dir)
         try:
             yield
@@ -298,7 +299,7 @@ class BgridSoloModel(Model[RegularGrid]):
         assert os.path.exists(self.model_lib), \
             f"{self.model_lib} not found, build it with NEDAS/models/bgrid_solo/build_bgrid_solo.sh"
         lib = ctypes.CDLL(os.path.abspath(self.model_lib))
-        vec = np.ctypeslib.ndpointer(np.float64, ndim=1, flags='C_CONTIGUOUS,WRITEABLE')
+        vec = np.ctypeslib.ndpointer(np.float64, ndim=1, flags=('C_CONTIGUOUS', 'WRITEABLE'))
         lib.nedas_bgrid_init.argtypes = [ctypes.POINTER(ctypes.c_longlong)]
         lib.nedas_bgrid_time_step.argtypes = [ctypes.POINTER(ctypes.c_int)]
         lib.nedas_bgrid_cold_start.argtypes = [ctypes.c_longlong, vec]

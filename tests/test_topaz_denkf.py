@@ -29,7 +29,7 @@ def _plain_local_analysis_main(state_prior, obs_prior, *args):
     """local_analysis_main without static members"""
     nens, nfld = state_prior.shape
     local_analysis_main(state_prior, obs_prior, np.zeros((0, nfld)), np.zeros((0, obs_prior.shape[1])),
-                        *args, 1.0 / np.sqrt(nens - 1), 0.0, False, np.zeros(4))
+                        *args, 1.0 / np.sqrt(nens - 1), 0.0, False, np.zeros(4))  # pyright: ignore[reportCallIssue]
 
 
 class TestTopazEnsembleTransformWeights(unittest.TestCase):

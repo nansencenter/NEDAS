@@ -2,6 +2,7 @@ import os
 import copy
 import ctypes
 from datetime import datetime
+from typing import Any
 import numpy as np
 from NEDAS.core import Context, Assimilator
 from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
@@ -65,6 +66,23 @@ class DARTAssimilator(Assimilator):
     See build_dart_filter.sh and nedas_hooks_mod.f90.
     """
     assim_mode = 'batch'   # obs_post is recomputed from the posterior by the scheme
+    # from default.yml
+    dart_lib: str | None
+    filter_kind: str
+    probit_dist: str
+    qceff: dict
+    inflation: dict
+    num_groups: int
+    outlier_threshold: float
+    adaptive_localization_threshold: int
+    sort_obs_inc: bool
+    rectangular_quadrature: bool
+    gaussian_likelihood_tails: bool
+    quadrature_order: int
+    sampling_error_correction: bool
+    sec_table: str
+    write_obs_seq_final: bool
+    namelist: dict
 
     # NEDAS's serial partitioning: one strided block per rank
     init_partitions = SerialAssimilator.init_partitions
@@ -215,7 +233,7 @@ class DARTAssimilator(Assimilator):
             cols['errvar'].append(np.repeat(np.asarray(seq['err_std'], dtype=np.float64)**2, ncomp))
             cols['t'].append(np.repeat(np.asarray(seq['t']), ncomp))
             index += [(rec_id, i, v) for i in range(n) for v in comps]
-        obs = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in cols.items()}
+        obs: dict[str, Any] = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in cols.items()}
 
         # drop obs whose H(x) is NaN in any member, wherever that member is held
         bad = np.zeros(start, dtype=np.int64)
@@ -228,7 +246,7 @@ class DARTAssimilator(Assimilator):
         times = [dart_time(t) for t in obs['t']]
         order = sorted(np.flatnonzero(valid), key=lambda i: times[i])
 
-        out = {k: np.ascontiguousarray(obs[k][order], dtype=np.float64) for k in ('x', 'y', 'z', 'val', 'errvar')}
+        out: dict[str, Any] = {k: np.ascontiguousarray(obs[k][order], dtype=np.float64) for k in ('x', 'y', 'z', 'val', 'errvar')}
         out['type'] = np.ascontiguousarray(obs['type'][order], dtype=np.int32)
         out['days'] = np.array([times[i][0] for i in order], dtype=np.int32)
         out['secs'] = np.array([times[i][1] for i in order], dtype=np.int32)
@@ -297,7 +315,7 @@ class DARTAssimilator(Assimilator):
     def cyclic(self, c: Context):
         grid = c.grid
         if hasattr(grid, 'cyclic_dim'):
-            cyc = str(grid.cyclic_dim or '')
+            cyc = str(getattr(grid, 'cyclic_dim') or '')
             return 'x' in cyc, 'y' in cyc
         return bool(getattr(grid, 'cyclic', False)), False
 

@@ -292,7 +292,7 @@ class AlignmentUpdator(Updator):
             c.io.call_method(c, 'current', model.read_grid, member=mem_id, **rec)
             c.grid.set_destination_grid(model.grid)
 
-            if character_length is not None:
+            if res_incr is not None:
                 res_incr_m = c.grid.convert(res_incr, is_vector=rec['is_vector'], method='linear')
                 if fld_shape == model.grid.x.shape:
                     var_post = var_prior + res_incr_m

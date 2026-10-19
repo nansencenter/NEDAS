@@ -180,14 +180,14 @@ class TestGlobalObsList(unittest.TestCase):
         self.c = SimpleNamespace(config=SimpleNamespace(nproc_mem=2))
 
     def test_all_valid(self):
-        obs_list = Obs.global_obs_list(self.obs, self.c)
+        obs_list = Obs.global_obs_list(self.obs, self.c)  # pyright: ignore[reportArgumentType]
         for pid, n in ((0, 5 + 2*2), (1, 3 + 2*4)):
             self.assertEqual(sorted(i for _, _, p, i in obs_list if p == pid), list(range(n)))
 
     def test_invalid_obs_are_left_out(self):
         # pid 0 lost obs 1 and 3 of record 0; pid 1 lost obs 2 of the vector record 1
         valid = [{0: [0, 2, 4], 1: [0, 1]}, {0: [0, 1, 2], 1: [0, 1, 3]}]
-        obs_list = Obs.global_obs_list(self.obs, self.c, valid)
+        obs_list = Obs.global_obs_list(self.obs, self.c, valid)  # pyright: ignore[reportArgumentType]
         for pid, n in ((0, 3 + 2*2), (1, 3 + 2*3)):
             self.assertEqual(sorted(i for _, _, p, i in obs_list if p == pid), list(range(n)))
         # a vector obs's components are visited together (DART's order), while i still points

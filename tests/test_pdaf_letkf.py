@@ -122,6 +122,7 @@ def native_etkf_analysis(state_data, obs_data, loc_weight_sqrt=True, vroi=np.inf
 
 class FakeContext:
     """the bits of a Context these tests reach for"""
+    grid: object
     def __init__(self, nens):
         self.nens = nens
 

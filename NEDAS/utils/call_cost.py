@@ -71,7 +71,7 @@ class CallCost:
             ordinary analysis pays nothing.
     """
 
-    def __init__(self, enabled: bool = None):
+    def __init__(self, enabled: bool|None = None):
         if enabled is None:
             enabled = bool(os.environ.get('NEDAS_CALL_COST'))
         self.enabled = enabled
@@ -90,7 +90,7 @@ class CallCost:
             region = self._regions[label] = _Region(self._record(label))
         return region
 
-    def wrap(self, func, label: str = None):
+    def wrap(self, func, label: str|None = None):
         """
         Return func with its calls counted and timed. For callbacks handed to compiled code,
         which calls them an unknown number of times. Returns func untouched when disabled, so
@@ -117,11 +117,11 @@ class CallCost:
     def seconds(self, label: str) -> float:
         return self.calls.get(label, [0, 0.0])[1]
 
-    def crossings(self, enclosing: str = None) -> int:
+    def crossings(self, enclosing: str|None = None) -> int:
         """Total calls across every label but the enclosing region: boundary crossings."""
         return sum(n for label, (n, _) in self.calls.items() if label != enclosing)
 
-    def report(self, enclosing: str = None) -> str:
+    def report(self, enclosing: str|None = None) -> str:
         """
         A table of count, seconds and -- when `enclosing` names a measured region -- each
         label's share of it. The enclosing region is reported first, at 100%.

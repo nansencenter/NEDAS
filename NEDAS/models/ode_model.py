@@ -81,7 +81,7 @@ class OdeModel(Model[Grid1D]):
         """a reference state, perturbed and spun up to start the truth and the ensemble"""
         raise NotImplementedError
 
-    def dxdt(self, x: np.ndarray) -> np.ndarray:
+    def dxdt(self, x: np.ndarray, /) -> np.ndarray:
         """the time derivative of the state (for an ODE stepped by `step`)"""
         raise NotImplementedError
 

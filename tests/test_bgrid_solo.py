@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 from netCDF4 import Dataset
 from NEDAS.core import Context
-from NEDAS.models import get_model_class
+from NEDAS.models.bgrid_solo import BgridSoloModel
 from NEDAS.models.bgrid_solo.util import vel_to_temp, temp_to_vel, grid_coords, write_restart_file
 
 _MODEL_DIR = os.path.dirname(__import__('NEDAS.models.bgrid_solo', fromlist=['x']).__file__)
@@ -62,7 +62,7 @@ class TestStaggering(unittest.TestCase):
 class TestModel(unittest.TestCase):
     def setUp(self):
         self.c = Context()
-        self.model = get_model_class('bgrid_solo')(context=self.c, io_mode='offline')
+        self.model = BgridSoloModel(context=self.c, io_mode='offline')
         self.dir = tempfile.mkdtemp()
         self.time = datetime(2000, 1, 1)
 
@@ -170,7 +170,7 @@ class TestModel(unittest.TestCase):
 class TestRun(unittest.TestCase):
     def setUp(self):
         self.c = Context()
-        self.model = get_model_class('bgrid_solo')(context=self.c, io_mode='offline', spinup_hours=0)
+        self.model = BgridSoloModel(context=self.c, io_mode='offline', spinup_hours=0)
         self.dir = tempfile.mkdtemp()
         self.time = datetime(2000, 1, 10)
 
@@ -224,8 +224,8 @@ class TestMemory(unittest.TestCase):
     """online io mode: the state vector in memory reads and writes like the restart file"""
     def setUp(self):
         self.c = Context()
-        self.off = get_model_class('bgrid_solo')(context=self.c, io_mode='offline')
-        self.on = get_model_class('bgrid_solo')(context=self.c, io_mode='online')
+        self.off = BgridSoloModel(context=self.c, io_mode='offline')
+        self.on = BgridSoloModel(context=self.c, io_mode='online')
         self.dir = tempfile.mkdtemp()
         self.time = datetime(2000, 1, 1)
         m = self.off
@@ -284,8 +284,8 @@ class TestOnlineRun(unittest.TestCase):
     """online io mode runs the same model code in memory, and gives the same states as offline"""
     def setUp(self):
         self.c = Context()
-        self.off = get_model_class('bgrid_solo')(context=self.c, io_mode='offline', spinup_hours=0)
-        self.on = get_model_class('bgrid_solo')(context=self.c, io_mode='online', spinup_hours=0)
+        self.off = BgridSoloModel(context=self.c, io_mode='offline', spinup_hours=0)
+        self.on = BgridSoloModel(context=self.c, io_mode='online', spinup_hours=0)
         self.dir = tempfile.mkdtemp()
         self.time = datetime(2000, 1, 10)
 
@@ -315,7 +315,7 @@ class TestOnlineRun(unittest.TestCase):
 
     def test_other_settings_in_the_same_process_are_refused(self):
         self.on.lib()
-        other = get_model_class('bgrid_solo')(context=self.c, io_mode='online', dt_atmos=1800)
+        other = BgridSoloModel(context=self.c, io_mode='online', dt_atmos=1800)
         with self.assertRaises(AssertionError):
             other.lib()
 
