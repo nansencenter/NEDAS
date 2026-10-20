@@ -137,11 +137,10 @@ class TestSerialOverrideSignatures(unittest.TestCase):
         import inspect
         from NEDAS.assim_tools.assimilators.serial import SerialAssimilator
         from NEDAS.assim_tools.assimilators.EAKF.core import EAKFAssimilator
+        from NEDAS.assim_tools.assimilators.QCEF.core import QCEFAssimilator
         for name in ('update_local_state', 'update_local_obs'):
             want = list(inspect.signature(getattr(SerialAssimilator, name)).parameters)
-            # QCEF is left out: it is an unfinished stub whose overrides and kernel calls predate
-            # this interface, and is not a working assimilator to hold to it yet
-            for cls in (EAKFAssimilator,):
+            for cls in (EAKFAssimilator, QCEFAssimilator):
                 got = list(inspect.signature(getattr(cls, name)).parameters)
                 self.assertEqual(got, want, f"{cls.__name__}.{name}")
 

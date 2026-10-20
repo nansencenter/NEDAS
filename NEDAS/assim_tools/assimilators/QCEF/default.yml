@@ -1,0 +1,21 @@
+# obs-space filter and probit distribution for every variable (the DART assimilator's settings):
+#   filter_kind: EAKF, ENKF, UNBOUNDED_RHF, GAMMA_FILTER, BOUNDED_NORMAL_RHF, KDE_FILTER
+#   probit_dist: NORMAL_DISTRIBUTION, BOUNDED_NORMAL_RH_DISTRIBUTION, GAMMA_DISTRIBUTION,
+#                BETA_DISTRIBUTION, LOG_NORMAL_DISTRIBUTION, UNIFORM_DISTRIBUTION, KDE_DISTRIBUTION
+# EAKF and NORMAL_DISTRIBUTION, DART's defaults, are the EAKF
+filter_kind: EAKF
+probit_dist: NORMAL_DISTRIBUTION
+
+# per-variable overrides, keyed by variable name (or name_x/name_y for a vector component):
+#   qceff:
+#     tracer: {filter_kind: BOUNDED_NORMAL_RHF, dist: BOUNDED_NORMAL_RH_DISTRIBUTION,
+#              bounded_below: True, lower_bound: 0.0}
+qceff: {}
+
+# ENKF: sort the posterior members to the order of the prior ones; seed of the perturbed obs
+sort_obs_inc: False
+seed: 0
+
+# UNBOUNDED_RHF: likelihood uniform between members (trapezoidal is not implemented), normal on the tails
+rectangular_quadrature: True
+gaussian_likelihood_tails: False

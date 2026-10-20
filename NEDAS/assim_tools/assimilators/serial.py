@@ -118,11 +118,12 @@ class SerialAssimilator(Assimilator):
         Xs = np.ascontiguousarray(state_data['state_static'].transpose(2, 1, 0))
         Y = np.ascontiguousarray(obs_data['obs_prior'].T)
         Ys = np.ascontiguousarray(obs_data['obs_prior_static'].T)
+        self.transform_prior(c, state_data, obs_data, X, Y)
 
         # go through the entire obs list, indexed by p, one scalar obs at a time
         c.total_tasks = len(obs_list)
         cost = self.loop_cost
-        obs_increment = cost.wrap(self.obs_increment, 'obs_increment')
+        obs_space_update = cost.wrap(self.obs_space_update, 'obs_increment')
         update_local_state = cost.wrap(self.update_local_state, 'update_local_state')
         update_local_obs = cost.wrap(self.update_local_obs, 'update_local_obs')
         for p in range(len(obs_list)):
@@ -136,7 +137,7 @@ class SerialAssimilator(Assimilator):
             if c.pid_mem == owner_pid:
                 # collect obs info
                 obs_p = {}
-                obs_p['prior'] = Y[i]
+                obs_p['prior'] = self.owned_obs_prior(i, Y[i])
                 obs_p['prior_static'] = Ys[i]
                 for key in ('obs', 'x', 'y', 'z', 't', 'err_std'):
                     obs_p[key] = obs_data[key][i]
@@ -153,8 +154,10 @@ class SerialAssimilator(Assimilator):
             if np.isnan(obs_p['prior']).any() or np.isnan(obs_p['prior_static']).any() or np.isnan(obs_p['obs']):
                 continue
 
-            # compute obs-space increment
-            obs_incr = obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
+            # compute obs-space increment, and the obs prior it is regressed with
+            obs_prior, obs_incr = obs_space_update(obs_rec_id, v, obs_p)
+            if obs_incr is None:
+                continue
 
             # 2. all pid update their own locally stored state, at the candidate points ind:
             r = cutoff(h_func, obs_p['hroi'])
@@ -165,7 +168,7 @@ class SerialAssimilator(Assimilator):
                 state_t_dist = np.abs(obs_p['t'] - state_data['t'])
             impact_per_field = obs_p['impact_on_variable'][state_data['var_id']]
             update_local_state(X, Xs,
-                                    obs_p['prior'], obs_p['prior_static'], obs_incr,
+                                    obs_prior, obs_p['prior_static'], obs_incr,
                                     ind, state_h_dist, state_v_dist, state_t_dist,
                                     obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                     c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
@@ -179,16 +182,34 @@ class SerialAssimilator(Assimilator):
                 obs_t_dist = np.abs(obs_p['t'] - obs_data['t'][ind])
             obs_impact = obs_data['obs_impact'][ind]
             update_local_obs(Y, Ys, obs_data['used'],
-                                  obs_p['prior'], obs_p['prior_static'], obs_incr,
+                                  obs_prior, obs_p['prior_static'], obs_incr,
                                   ind, obs_h_dist, obs_v_dist, obs_t_dist,
                                   obs_p['hroi'], obs_p['vroi'], obs_p['troi'],
                                   c.localization_funcs['horizontal'], c.localization_funcs['vertical'], c.localization_funcs['temporal'],
                                   c.localization_funcs['correlation'], obs_impact)
 
+        self.transform_post(c, state_data, obs_data, X, Y)
         state_data['state_prior'][...] = X.transpose(2, 1, 0)
         obs_data['obs_prior'][...] = Y.T
         c.state.unpack_local_state_data(c, par_id, c.state.state_post, state_data)
         c.obs.unpack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_post, obs_data)
+
+    def transform_prior(self, c: Context, state_data: dict, obs_data: dict, X: np.ndarray, Y: np.ndarray) -> None:
+        """Transform the state X (nloc, nfld, nens) and obs Y (nlobs, nens) priors in place before the loop (QCEF)"""
+
+    def transform_post(self, c: Context, state_data: dict, obs_data: dict, X: np.ndarray, Y: np.ndarray) -> None:
+        """Undo transform_prior after the loop"""
+
+    def owned_obs_prior(self, i: int, prior: np.ndarray) -> np.ndarray:
+        """The prior of local obs i as obs_increment takes it, on its owner pid"""
+        return prior
+
+    def obs_space_update(self, obs_rec_id, v, obs_p: dict) -> tuple:
+        """
+        The obs prior the update regresses on and its increments, for the obs obs_p of record
+        obs_rec_id (component v); (None, None) leaves the obs out
+        """
+        return obs_p['prior'], self.obs_increment(obs_p['prior'], obs_p['prior_static'], obs_p['obs'], obs_p['err_std'])
 
     @abstractmethod
     def obs_increment(self, obs_prior, obs_prior_static, obs, obs_err) -> np.ndarray:

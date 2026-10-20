@@ -871,6 +871,7 @@ class Obs:
 
         data = {}
         data['obs_rec_id'] = np.zeros(nlobs, dtype=int)
+        data['obs_comp'] = np.zeros(nlobs, dtype=int)   # vector component, -1 for a scalar obs
         data['obs'] = np.full(nlobs, np.nan)
         data['x'] = np.full(nlobs, np.nan)
         data['y'] = np.full(nlobs, np.nan)
@@ -908,6 +909,7 @@ class Obs:
                           if obs_rec.name in state_variables else 1.0)
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
+                data['obs_comp'][i:i+d] = -1 if v is None else v
                 data['obs_impact'][i:i+d] = obs_impact
                 data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, valid])
                 data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x'][valid]
