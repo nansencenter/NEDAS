@@ -16,6 +16,7 @@ class Lorenz96Model(Model[Grid1D]):
         F_std (float): std for per-member F perturbation in generate_init_ensemble; 0 disables SSPE
         dt (float): model time step, default is 0.05
         numeric_opt (str): numeric option, default is 'rk4'
+        seed (int): random seed for the truth initial condition; member m uses seed + 1 + m
     """
     io_mode: IOMode = 'online'  # both online and offline supported, default to online
     nx: int
@@ -24,6 +25,7 @@ class Lorenz96Model(Model[Grid1D]):
     dt: float
     restart_dt: float
     numeric_opt: str
+    seed: int
     memory: dict = {}
 
     # scalar parameters available for SSPE (name → metadata dict)
@@ -126,8 +128,8 @@ class Lorenz96Model(Model[Grid1D]):
     def z_coords(self, **kwargs):
         return self.z[kwargs['k']]
 
-    def generate_initial_condition(self):
-        state = np.random.normal(0, 1, self.nx)
+    def generate_initial_condition(self, seed):
+        state = np.random.default_rng(seed).normal(0, 1, self.nx)
         return state
 
     def preprocess(self, *args, **kwargs):
@@ -170,7 +172,7 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
             self.c.fs.make_dir(self.truth_dir)
-        state = self.generate_initial_condition()
+        state = self.generate_initial_condition(self.seed)
         kwargs['time'] = self.c.config.time_start
         kwargs['member'] = None
         while kwargs['time'] <= self.c.config.time_end:
@@ -182,7 +184,8 @@ class Lorenz96Model(Model[Grid1D]):
         kwargs = super().parse_kwargs(kwargs)
         if self.io_mode == 'offline':
             self.c.fs.make_dir(self.ens_init_dir)
-        state = self.generate_initial_condition()
+        # per-member seed: the global RNG state is identical in every forked worker
+        state = self.generate_initial_condition(self.seed + 1 + kwargs['member'])
         kwargs['time'] = self.c.config.time_start
         kwargs['path'] = self.ens_init_dir
         self.write_var(state, **kwargs)
