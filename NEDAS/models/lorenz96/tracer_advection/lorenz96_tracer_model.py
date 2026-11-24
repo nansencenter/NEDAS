@@ -33,9 +33,9 @@ class Lorenz96TracerModel(Lorenz96Model):
         assert isinstance(var_name, str)
         nc_write_var(fname, {'t': None, 'x': self._state_size}, var_name, var, recno={'t': 0})
 
-    def generate_initial_condition(self):
+    def generate_initial_condition(self, seed):
         state = np.zeros(self._state_size)
-        state[0:self.nx] = np.random.normal(0, 1, self.nx)
+        state[0:self.nx] = np.random.default_rng(seed).normal(0, 1, self.nx)
         if self.positive_tracer:
             state[2*self.nx] = self.point_tracer_source_rate
         else:

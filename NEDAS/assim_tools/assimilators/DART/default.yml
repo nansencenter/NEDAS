@@ -1,0 +1,59 @@
+# path to libdartfilter.so (build_dart_filter.sh); empty = alongside the code
+dart_lib:
+
+# obs-space filter and probit distribution for every variable (DART QCEFF table names):
+#   filter_kind: EAKF, ENKF, UNBOUNDED_RHF, GAMMA_FILTER, BOUNDED_NORMAL_RHF, KDE_FILTER
+#   probit_dist: NORMAL_DISTRIBUTION, BOUNDED_NORMAL_RH_DISTRIBUTION, GAMMA_DISTRIBUTION,
+#                BETA_DISTRIBUTION, LOG_NORMAL_DISTRIBUTION, UNIFORM_DISTRIBUTION, KDE_DISTRIBUTION
+#   (DART v11's QCEFF table rejects KERNEL, OBS_PARTICLE and PARTICLE_FILTER_DISTRIBUTION)
+filter_kind: EAKF
+probit_dist: NORMAL_DISTRIBUTION
+
+# per-variable overrides, keyed by variable name (or name_x/name_y for a vector component):
+#   qceff:
+#     tracer: {filter_kind: BOUNDED_NORMAL_RHF, dist: BOUNDED_NORMAL_RH_DISTRIBUTION,
+#              bounded_below: True, lower_bound: 0.0}
+qceff: {}
+
+# DART inflation (filter_nml inf_*). flavor: 0 none, 2 spatially varying adaptive,
+# 3 spatially fixed adaptive, 4 RTPS (posterior only), 5 enhanced varying adaptive.
+# Adaptive inflation fields are carried to the next cycle by NEDAS.
+inflation:
+  prior:
+    flavor: 0
+    initial: 1.0
+    sd_initial: 0.6
+    damping: 0.9
+    lower_bound: 1.0
+    upper_bound: 1000000.0
+    sd_lower_bound: 0.6
+    sd_max_change: 1.05
+    deterministic: True
+  posterior:
+    flavor: 0
+    initial: 1.0
+    sd_initial: 0.0
+    damping: 1.0
+    lower_bound: 1.0
+    upper_bound: 1000000.0
+    sd_lower_bound: 0.0
+    sd_max_change: 1.05
+    deterministic: True
+
+num_groups: 1
+outlier_threshold: -1.0
+adaptive_localization_threshold: -1
+sort_obs_inc: False
+rectangular_quadrature: True
+gaussian_likelihood_tails: False
+quadrature_order: 9
+
+# needs DART's table, e.g. DART/assimilation_code/programs/gen_sampling_err_table/work/sampling_error_correction_table.nc
+sampling_error_correction: False
+sec_table:
+
+# write obs_seq.final (DART diagnostics) into the dart work directory
+write_obs_seq_final: False
+
+# any other namelist entries, {section: {key: value}}, applied last
+namelist: {}

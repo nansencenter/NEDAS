@@ -104,7 +104,7 @@ class TestVerticalInterp(unittest.TestCase):
         self.assertEqual(dzp[0], 1.0)
 
     def test_last_level(self):
-        """Test i=last: Constant f from z-dz/2 to z."""
+        """Test i=last: Constant f from z-dz/2 to z+dz/2."""
         i = 2
         # setup previous layer (i=1)
         fp = np.ones(self.nobs) * self.fz[i-1]
@@ -124,6 +124,23 @@ class TestVerticalInterp(unittest.TestCase):
         self.assertEqual(seq_out[2], 0.0)
         self.assertAlmostEqual(seq_out[3], 27.0) # obs_z[3]=1.5 is in range
         self.assertEqual(seq_out[4], 30.0) # obs_z[4]=2.0 is in range
+
+    def test_last_level_extrapolates_half_a_layer(self):
+        """An obs exactly at the last z survives a z that rounds just short of it (float32
+        storage, horizontal interpolation), and obs up to dz/2 beyond z take the last value."""
+        i = 2
+        fp = np.ones(3) * self.fz[i-1]
+        zp = np.ones(3) * self.z[i-1]
+        dzp = np.ones(3) * self.dz[i-1]
+        f = np.ones(3) * self.fz[i]
+        z = np.ones(3) * (self.z[i] - 1e-11)          # 3.0, rounded down
+        obs_z = np.array([3.0, 3.4, 3.6])
+        seq_out, _, _, _ = self.c.obs.vertical_interp(
+            np.full(3, np.nan), self.levels[i], self.levels, f, fp, z, zp, dzp, obs_z
+        )
+        self.assertEqual(seq_out[0], 30.0)
+        self.assertEqual(seq_out[1], 30.0)             # extrapolated, constant
+        self.assertTrue(np.isnan(seq_out[2]))           # beyond z + dz/2: still undefined
 
     def test_collapsed_layer(self):
         """Test logic when z == zp to avoid division by zero."""
@@ -152,6 +169,32 @@ class TestVerticalInterp(unittest.TestCase):
         self.assertEqual(seq_out[2], 0.0)  # obs_z[2]=1.0
         self.assertEqual(seq_out[3], 0.0)  # obs_z[3]=2.2
         self.assertEqual(seq_out[4], 0.0)  # obs_z[4]=3.0
+
+class TestGlobalObsList(unittest.TestCase):
+    """the serial loop's obs list must index the packed obs data, which leaves out invalid obs"""
+    def setUp(self):
+        from types import SimpleNamespace
+        self.obs = SimpleNamespace(
+            info=SimpleNamespace(records={0: SimpleNamespace(is_vector=False), 1: SimpleNamespace(is_vector=True)}),
+            obs_inds={0: {0: np.arange(5), 1: np.arange(3)}, 1: {0: np.arange(2), 1: np.arange(4)}})
+        self.c = SimpleNamespace(config=SimpleNamespace(nproc_mem=2))
+
+    def test_all_valid(self):
+        obs_list = Obs.global_obs_list(self.obs, self.c)  # pyright: ignore[reportArgumentType]
+        for pid, n in ((0, 5 + 2*2), (1, 3 + 2*4)):
+            self.assertEqual(sorted(i for _, _, p, i in obs_list if p == pid), list(range(n)))
+
+    def test_invalid_obs_are_left_out(self):
+        # pid 0 lost obs 1 and 3 of record 0; pid 1 lost obs 2 of the vector record 1
+        valid = [{0: [0, 2, 4], 1: [0, 1]}, {0: [0, 1, 2], 1: [0, 1, 3]}]
+        obs_list = Obs.global_obs_list(self.obs, self.c, valid)  # pyright: ignore[reportArgumentType]
+        for pid, n in ((0, 3 + 2*2), (1, 3 + 2*3)):
+            self.assertEqual(sorted(i for _, _, p, i in obs_list if p == pid), list(range(n)))
+        # a vector obs's components are visited together (DART's order), while i still points
+        # into the packing order, where they are stored in blocks
+        pid1 = [(rec, v, i) for rec, v, p, i in obs_list if p == 1]
+        self.assertEqual(pid1, [(0, None, 0), (0, None, 1), (0, None, 2),
+                                (1, 0, 3), (1, 1, 6), (1, 0, 4), (1, 1, 7), (1, 0, 5), (1, 1, 8)])
 
 if __name__ == '__main__':
     unittest.main()

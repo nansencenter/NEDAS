@@ -254,6 +254,8 @@ class FilterAnalysisScheme(Scheme):
         self.c.obs = Obs(self.c)
         self.c.logger('Prepare obs')(self.c.obs.prepare_obs)(self.c)
         self.c.logger('Prepare obs from prior state')(self.c.obs.prepare_obs_from_state)(self.c, 'prior')
+        if self.c.nens_static > 0:
+            self.c.logger('Prepare obs from static members')(self.c.obs.prepare_obs_from_static)(self.c)
         self.c.logger('Output obs prior')(self.c.obs.output_obs)(self.c, 'prior')
 
         # cache the true cycle-start obs-prior (iteration 0 only) for the once-timing posterior

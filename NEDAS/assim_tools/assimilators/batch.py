@@ -1,7 +1,6 @@
 import copy
 from abc import abstractmethod
 import numpy as np
-from NEDAS.utils.parallel import distribute_tasks
 from NEDAS.core import Context, Assimilator
 
 class BatchAssimilator(Assimilator):
@@ -103,8 +102,15 @@ class BatchAssimilator(Assimilator):
             # observations within the bounding box + halo region of width hroi will be assigned to
             # this partition. Although this will include some observations near the corner that are
             # not within hroi of any grid points, this is favorable for the efficiency in finding subset
-            obs_inds[par_id] = np.where(np.logical_and(c.grid.distance(xc, xo, yc, yc, p=1) <= Dx+hroi,
-                                                       c.grid.distance(xc, xc, yc, yo, p=1) <= Dy+hroi))[0]
+            if getattr(c.grid, 'distance_type', 'cartesian') == 'spherical':
+                # distances are great circles in meters, the box is in grid coordinates: take the
+                # disk around the center that holds the box corners (the farthest points of a
+                # lon-lat box from its center), plus the halo
+                rmax = np.max(c.grid.distance(xc, np.array([xmin, xmax, xmin, xmax]), yc, np.array([ymin, ymin, ymax, ymax])))
+                obs_inds[par_id] = np.where(c.grid.distance(xc, xo, yc, yo) <= rmax+hroi)[0]
+            else:
+                obs_inds[par_id] = np.where(np.logical_and(c.grid.distance(xc, xo, yc, yc, p=1) <= Dx+hroi,
+                                                           c.grid.distance(xc, xc, yc, yo, p=1) <= Dy+hroi))[0]
 
         return obs_inds
 
@@ -127,7 +133,17 @@ class BatchAssimilator(Assimilator):
                               for p in par_list_full] )
 
         workload = np.maximum(nlpts_loc, 1) * np.maximum(nlobs_loc, 1)
-        par_list = distribute_tasks(c.comm_mem, par_list_full, workload)
+
+        # largest tile first, each to the pid with the least work so far (greedy LPT): with only a
+        # few tiles per pid, contiguous runs of equal cumulative workload (distribute_tasks) cannot
+        # come out even, and the analysis waits for the most loaded pid
+        load = np.zeros(c.config.nproc_mem)
+        assigned = {pid: [] for pid in range(c.config.nproc_mem)}
+        for par_id in par_list_full[np.argsort(-workload, kind='stable')]:
+            pid = int(np.argmin(load))
+            assigned[pid].append(par_id)
+            load[pid] += workload[par_id]
+        par_list = {pid: sorted(int(p) for p in lst) for pid, lst in assigned.items()}
 
         return par_list
 
@@ -164,13 +180,13 @@ class BatchAssimilator(Assimilator):
         # now the actual work starts, loop through partitions stored on pid_mem
         c.current_task = 0
         for par_id in c.state.par_list[c.pid_mem]:
-            state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z)
+            state_data = c.state.pack_local_state_data(c, par_id, c.state.state_prior, c.state.state_z, c.state.state_static)
             nloc = state_data['state_prior'].shape[-1]
             # skip forward if the partition is empty
             if nloc == 0:
                 continue
 
-            obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior)
+            obs_data = c.obs.pack_local_obs_data(c, par_id, c.obs.lobs, c.obs.lobs_prior, c.obs.lobs_prior_static)
             nlobs = obs_data['x'].size
             # if there is no obs to assimilate, update progress message and skip that partition
             if nlobs == 0:

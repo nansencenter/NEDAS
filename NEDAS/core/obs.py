@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from NEDAS.utils.conversion import t2h, ensure_list
 from NEDAS.utils.parallel import bcast_by_root, distribute_tasks
+from NEDAS.utils.obs_error import perturb_obs, assimilation_std
 from NEDAS.datasets.synthetic import SyntheticObs
 from .context import Context
 from .types import LevelID, Levels, ProcID, ProcIDRec, PartitionID, ObsRecordID, ObsSeq, ObsEns, LocalObsEns, LocalObsSeq
@@ -38,6 +39,8 @@ class Obs:
     obs_prior: ObsEns         # will be created by self.prepare_obs_from_state()
     lobs: LocalObsSeq         # will be created by self.transpose_to_ensemble_complete()
     lobs_prior: LocalObsEns
+    obs_prior_static: ObsEns  # will be created by self.prepare_obs_from_static(), for static members
+    lobs_prior_static: LocalObsEns  # (covariance_def.nens_static), a separate batch from the dynamic members
     lobs_post: LocalObsEns    # will be created by assimilator.assimilate()
     obs_post: ObsEns          # will be created by self.transpose_to_field_complete()
     data: dict                # will be created by self.pack_obs_data, for use in assimilator.assimilate()
@@ -50,6 +53,8 @@ class Obs:
         self.obs_prior = {}
         self.lobs = {}
         self.lobs_prior = {}
+        self.obs_prior_static = {}
+        self.lobs_prior_static = {}
         self.lobs_post = {}
         self.obs_post = {}
         self.data = {}
@@ -242,7 +247,8 @@ class Obs:
             # since there is no separate transformed model-format file for 'prior'/'post'.
             read_tag = 'current' if (tag in ('prior', 'post') and not transforms_are_identity) else tag
             model_fld = c.io.call_method(c, read_tag, model.read_var, **kwargs)
-            model_z = c.io.call_method(c, 'z', model.z_coords, **kwargs)
+            # a static member's z coords come from its own restart file in the bank
+            model_z = c.io.call_method(c, 'static' if tag == 'static' else 'z', model.z_coords, **kwargs)
             # convert the model fields to the analysis c.grid
             model.grid.set_destination_grid(c.grid)
             fld = model.grid.convert(model_fld, is_vector=kwargs['is_vector'], method=c.config.interp_method)
@@ -313,8 +319,11 @@ class Obs:
             seq[..., inds] = fi[..., inds]
 
         if i == len(levels)-1:
-            # the last level: constant f from z-dz/2 to z
-            inds = (obs_z >= np.minimum(z-0.5*dz, z)) & (obs_z <= np.maximum(z-0.5*dz, z))
+            # the last level: constant f from z-dz/2 to z, extrapolated (still constant) another
+            # dz/2 beyond z. Models giving z at layer centres (vort3d: pressure) have their lowest
+            # layer reach that far, toward the surface; and an obs exactly at z must not be lost
+            # when z is a float32-stored or horizontally interpolated copy that rounds just short
+            inds = (obs_z >= np.minimum(z-0.5*dz, z+0.5*dz)) & (obs_z <= np.maximum(z-0.5*dz, z+0.5*dz))
             seq[..., inds] = f[..., inds]
 
         # save a copy of the current layer as 'previous' layer for use in next k
@@ -388,11 +397,10 @@ class Obs:
                     # compute obs values
                     seq['obs'] = self.state_to_obs(c, 'truth', member=None, **obs_rec.asdict(), **seq)
 
-                    # perturb with obs err
-                    # TODO: only support normal err_type here
+                    # perturb with obs err (normal or lognormal, see utils/obs_error.py)
                     # seed by (time, obs_rec_id) so noise is reproducible across cases/cycles
                     np.random.seed((int(obs_rec.time.timestamp()) + obs_rec_id) % (2**32 - 1))
-                    seq['obs'] += np.random.normal(0, 1, seq['obs'].shape) * obs_rec.err.std
+                    seq['obs'] = perturb_obs(seq['obs'], obs_rec.err)
 
                     c._synthetic_obs_cache[obs_rec_id] = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in seq.items()}
                 else:
@@ -401,7 +409,7 @@ class Obs:
                 # err_std for the assimilator's R, re-applied fresh every iteration (not cached
                 # with the rest of seq) so obs values/generation noise stay fixed per cycle while
                 # R can still be inflated per iteration (e.g. tempering) independent of them
-                seq['err_std'] = np.full_like(seq['err_std'], obs_rec.err.std * obs_rec.err.infl)
+                seq['err_std'] = assimilation_std(seq['obs'], obs_rec.err).astype(seq['err_std'].dtype)
 
             else:
                 # read dataset files and obtain obs sequence
@@ -430,14 +438,27 @@ class Obs:
 
     def prepare_obs(self, c: Context) -> None:
         self.obs_seq = bcast_by_root(c.comm_mem)(self.collect_obs_seq)(c)
-        # collect_obs_seq runs only on root and sets rec.nobs there; sync to all procs
-        # using the already-broadcast obs_seq so no extra communication is needed
-        for obs_rec_id, seq in self.obs_seq.items():
+        # collect_obs_seq returns only this pid_rec group's records and the bcast above
+        # only spans comm_mem, so gather over comm_rec too: every rank must know every
+        # record's nobs before finalize_pos(), since info.size/rec.pos set the obs_*.bin
+        # write offsets (io_backends/offline.py::write_obs) and the .dat header pid 0
+        # writes. Without this, ranks in different rec groups compute different layouts
+        # and pid 0 records nobs=0 for records its own group does not own.
+        all_seq = {}
+        for part in c.comm_rec.allgather(self.obs_seq):
+            all_seq.update(part)
+        for obs_rec_id, seq in all_seq.items():
             self.info.records[obs_rec_id].nobs = seq['obs'].shape[-1]
         self.info.finalize_pos()
+        # every rank must agree on the layout, or write_obs scatters obs_*.bin at
+        # mismatched offsets and pid 0's .dat describes none of it
+        sizes = c.comm.allgather(self.info.size)
+        if min(sizes) != max(sizes):
+            raise RuntimeError(f"obs layout differs across ranks (info.size {min(sizes)}..{max(sizes)}); "
+                               "obs records not synced")
         if c.pid == 0 and c.config.io_mode != 'online':
             analysis_dir = c.fs.analysis_dir(c.time, c.iter)
-            np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(self.obs_seq, dtype=object))
+            np.save(os.path.join(analysis_dir, 'obs_seq.npy'), np.array(all_seq, dtype=object))
 
     def output_obs(self, c: 'Context', tag: str) -> None:
         """Persist obs_post already in memory (from serial assimilator lobs_post
@@ -473,16 +494,7 @@ class Obs:
                 c.debug_message = f"obs_prior mem{mem_id+1:03} {obs_rec.name:20}"
                 c.current_task = m*nr+r
 
-                seq = {}
-                # need the coordinates for transform later
-                for key in ['x', 'y', 'z', 't', 'err_std']:
-                    seq[key] = self.obs_seq[obs_rec_id][key]
-                # obtain obs_prior values from model state
-                seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
-
-                # misc. transform here
-                for transform_func in c.transform_funcs:
-                    seq = transform_func.forward_obs(c, obs_rec, seq)
+                seq = self.compute_obs_seq(c, tag, obs_rec_id, mem_id)
 
                 c.io.call_method(c, tag, dataset.write_obs, seq, **obs_rec.asdict(), member=mem_id)
 
@@ -497,23 +509,73 @@ class Obs:
                 file = f'obs_{tag}.rec{obs_rec_id}.mem{mem_id:03}'
                 c.io.save_debug_data(c, file, {f'obs_{tag}':seq}, path=c.fs.analysis_dir(c.time, c.iter))
 
-    def global_obs_list(self, c: Context) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
-        # form the global list of obs (in serial mode the main loop is over this list)
+    def prepare_obs_from_static(self, c: Context) -> None:
+        """
+        Compute the obs priors of the static members (covariance_def.nens_static) into
+        obs_prior_static, a separate batch from the dynamic members in obs_prior, distributed
+        by c.mem_list_static. Static members only enter the analysis, so their obs priors are
+        not written to the dataset or io storage.
+        """
+        nr = len(self.obs_rec_list[c.pid_rec])
+        nm = len(c.mem_list_static[c.pid_mem])
+        c.total_tasks = nr * nm
+        for m, mem_id in enumerate(c.mem_list_static[c.pid_mem]):
+            for r, obs_rec_id in enumerate(self.obs_rec_list[c.pid_rec]):
+                c.debug_message = f"obs_prior static mem{mem_id+1:03} {self.info.records[obs_rec_id].name:20}"
+                c.current_task = m*nr+r
+                self.obs_prior_static[mem_id, obs_rec_id] = self.compute_obs_seq(c, 'static', obs_rec_id, mem_id)['obs']
+        c.comm.Barrier()
+
+    def compute_obs_seq(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> dict:
+        """
+        Compute the obs seq for record obs_rec_id from the model state of member mem_id,
+        with the coordinates, and apply the transforms
+        """
+        obs_rec = self.info.records[obs_rec_id]
+        seq = {}
+        # need the coordinates for transform later
+        for key in ['x', 'y', 'z', 't', 'err_std']:
+            seq[key] = self.obs_seq[obs_rec_id][key]
+        # obtain obs_prior values from model state
+        seq['obs'] = self.state_to_obs(c, tag, member=mem_id, **obs_rec.asdict(), **self.obs_seq[obs_rec_id])
+
+        # misc. transform here
+        for transform_func in c.transform_funcs:
+            seq = transform_func.forward_obs(c, obs_rec, seq)
+        return seq
+
+    def global_obs_list(self, c: Context, valid: list[dict]|None=None) -> list[tuple[ObsRecordID, int|None, ProcID, int]]:
+        """
+        Form the global list of obs (in serial mode the main loop is over this list): entries
+        (obs_rec_id, v, owner_pid, i), i the position of the obs in the owner's packed obs data.
+
+        Args:
+            c (Context): the runtime context
+            valid (list[dict], optional): for each owner pid, its pack_local_obs_data's self.valid
+                (obs_rec_id -> indices of the obs with valid priors, the ones that are packed).
+                Without it all obs are assumed valid.
+        """
         n_obs_rec = len(self.info.records)
 
         i = {}  # location in full obs vector on owner pid
         for owner_pid in range(c.config.nproc_mem):
             i[owner_pid] = 0
 
+        # pack_local_obs_data stores each record by vector component, then obs; the list visits
+        # the components of a vector obs together (u1, v1, u2, v2, ...), the order of DART's obs_seq
         obs_list = []
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
             v_list = [0, 1] if obs_rec.is_vector else [None]
             for owner_pid in self.obs_inds[obs_rec_id].keys():
-                for _ in self.obs_inds[obs_rec_id][owner_pid]:
-                    for v in v_list:
-                        obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid]))
-                        i[owner_pid] += 1
+                if valid is None:
+                    nvalid = len(self.obs_inds[obs_rec_id][owner_pid])
+                else:
+                    nvalid = len(valid[owner_pid][obs_rec_id])
+                for k in range(nvalid):
+                    for iv, v in enumerate(v_list):
+                        obs_list.append((obs_rec_id, v, owner_pid, i[owner_pid] + iv*nvalid + k))
+                i[owner_pid] += len(v_list) * nvalid
 
         if getattr(c, 'shuffle_obs', False):
             np.random.shuffle(obs_list)  # randomize the order of obs (this is optional)
@@ -613,7 +675,7 @@ class Obs:
 
         return output_obs
 
-    def transpose_to_ensemble_complete(self, c: Context, input_obs: ObsEns) -> LocalObsEns:
+    def transpose_to_ensemble_complete(self, c: Context, input_obs: ObsEns, mem_list: dict[int, list[int]]) -> LocalObsEns:
         """
         Transpose obs from field-complete to ensemble-complete
 
@@ -627,11 +689,12 @@ class Obs:
         Args:
             c (Context): the runtime context
             input_obs (ObsEns): obs_prior from process_all_obs_priors(), dict[(mem_id, obs_rec_id), np.array];
+            mem_list (dict): the member ids on each pid_mem, c.mem_list for the dynamic members
+                or c.mem_list_static for the static members
 
         Returns,
             LocalObsEns: the lobs_prior dict[(mem_id, obs_rec_id), dict[par_id, np.array]]
         """
-        mem_list = c.mem_list
         nproc_mem = c.config.nproc_mem
         pid_mem_show = [p for p,lst in mem_list.items() if len(lst)>0][0]
         pid_rec_show = [p for p,lst in self.obs_rec_list.items() if len(lst)>0][0]
@@ -787,7 +850,7 @@ class Obs:
         c.comm.Barrier()
         return obs_seq
 
-    def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns) -> dict:
+    def pack_local_obs_data(self, c: Context, par_id: PartitionID, lobs: LocalObsSeq, lobs_prior: LocalObsEns, lobs_prior_static: LocalObsEns) -> dict:
         """pack lobs and lobs_prior into arrays for the jitted functions"""
         n_obs_rec = len(self.info.records)        # number of obs records
         state_variables = list(c.state.info.variables)
@@ -799,13 +862,16 @@ class Obs:
         for obs_rec_id in range(n_obs_rec):
             obs_rec = self.info.records[obs_rec_id]
             v_list = [0, 1] if obs_rec.is_vector else [None]
-            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list], axis=0)
+            # the static members' obs priors (covariance_def.nens_static) need to be valid too
+            values = np.stack([lobs_prior[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens) for v in v_list]
+                              + [lobs_prior_static[m, obs_rec_id][par_id][v, :].flatten() for m in range(c.nens_static) for v in v_list], axis=0)
             no_nan_mask = ~np.isnan(values).any(axis=0)
             self.valid[obs_rec_id] = np.where(no_nan_mask)[0].tolist()
             nlobs += len(self.valid[obs_rec_id]) * len(v_list)
 
         data = {}
         data['obs_rec_id'] = np.zeros(nlobs, dtype=int)
+        data['obs_comp'] = np.zeros(nlobs, dtype=int)   # vector component, -1 for a scalar obs
         data['obs'] = np.full(nlobs, np.nan)
         data['x'] = np.full(nlobs, np.nan)
         data['y'] = np.full(nlobs, np.nan)
@@ -813,6 +879,7 @@ class Obs:
         data['t'] = np.full(nlobs, np.nan)
         data['err_std'] = np.full(nlobs, np.nan)
         data['obs_prior'] = np.full((c.nens, nlobs), np.nan)
+        data['obs_prior_static'] = np.full((c.nens_static, nlobs), np.nan)
         data['used'] = np.full(nlobs, False)
         data['hroi'] = np.ones(n_obs_rec)
         data['vroi'] = np.ones(n_obs_rec)
@@ -842,6 +909,7 @@ class Obs:
                           if obs_rec.name in state_variables else 1.0)
             for v in v_list:
                 data['obs_rec_id'][i:i+d] = obs_rec_id
+                data['obs_comp'][i:i+d] = -1 if v is None else v
                 data['obs_impact'][i:i+d] = obs_impact
                 data['obs'][i:i+d] = np.squeeze(lobs[obs_rec_id][par_id]['obs'][v, valid])
                 data['x'][i:i+d] = lobs[obs_rec_id][par_id]['x'][valid]
@@ -851,6 +919,8 @@ class Obs:
                 data['err_std'][i:i+d] = lobs[obs_rec_id][par_id]['err_std'][valid]
                 for m in range(c.nens):
                     data['obs_prior'][m, i:i+d] = np.squeeze(lobs_prior[m, obs_rec_id][par_id][v, valid].copy())
+                for m in range(c.nens_static):
+                    data['obs_prior_static'][m, i:i+d] = np.squeeze(lobs_prior_static[m, obs_rec_id][par_id][v, valid].copy())
                 i += d
 
         return data

@@ -28,13 +28,17 @@ class Context:
     comm: parallel.Comm
     comm_rec: parallel.Comm
     comm_mem: parallel.Comm
+    comm_mem_ens: parallel.Comm
     pid_show: int
     progress: progress.Progress
     fs: FileSystem
     io: IOBackend
     jsub: JobSubmitter
     nens: int
+    nens_static: int
+    covariance: assim_tools.covariance.Covariance
     mem_list: dict[ProcIDMem, list[MemID]]
+    mem_list_static: dict[ProcIDMem, list[MemID]]
     grid: grid.GridType
     grid_orig: grid.GridType
     time: datetime
@@ -76,12 +80,17 @@ class Context:
         self.pid_show = 0
         self._prev_msg = ''
 
-        # ensemble size
+        # ensemble size: nens is the dynamic (forecast) ensemble, the covariance model can add
+        # nens_static static members, a separate batch that only enters the analysis
         self.nens = self.config.nens
+        self.covariance = assim_tools.covariance.get_covariance(self.config)
+        self.nens_static = self.covariance.nens_static
 
         # setup the parallel (serial or MPI program) communicator
         self.set_comm()
-        self.mem_list = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
+        self.mem_list, self.mem_list_static = parallel.bcast_by_root(self.comm)(self.distribute_mem_tasks)()
+        # the pid_mem holding members, for sums over the ensemble
+        self.comm_mem_ens = self.comm_mem.Split(0 if self.mem_list[self.pid_mem] else 1, self.pid_mem)
 
         # initialize a few helper class instances
         self.fs = FileSystem(self.config)
@@ -145,14 +154,14 @@ class Context:
         }
         self.progress = progress.Progress(**progress_opts)
 
-    def distribute_mem_tasks(self) -> dict[int, list[int]]:
+    def distribute_mem_tasks(self) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
         """
-        Distribute mem_id across processors
+        Distribute mem_id across processors, for the dynamic members (mem_list) and the
+        static members (mem_list_static, with their own mem_id 0...nens_static-1)
         """
-        # list of mem_id as tasks
-        mem_list_full = [m for m in range(self.nens)]
-        mem_list = parallel.distribute_tasks(self.comm_mem, mem_list_full)
-        return mem_list
+        mem_list = parallel.distribute_tasks(self.comm_mem, list(range(self.nens)))
+        mem_list_static = parallel.distribute_tasks(self.comm_mem, list(range(self.nens_static)))
+        return mem_list, mem_list_static
 
     def update_assim_tools(self):
         """
@@ -168,6 +177,9 @@ class Context:
         self.localization_funcs = assim_tools.localization.get_localization_funcs(self)
         self.inflation_func = assim_tools.inflation.get_inflation_func(self)
         self.transform_funcs = assim_tools.transforms.get_transform_funcs(self)
+
+        # check that the assimilator supports the settings of the other components
+        self.assimilator.check_capabilities(self)
 
     @property
     def prev_time(self) -> datetime:

@@ -1,2 +1,18 @@
 random_rotation: True
-transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs >> nens, svd otherwise)
+transform_solver: 'auto'  # 'svd', 'eigen', or 'auto' (auto-selects eigen when nlobs > nens, svd otherwise)
+
+# Take the square root of the localization weight before using it. The whitening in
+# ensemble_transform_weights applies the weight to both the observation anomalies and the
+# innovation, so whatever goes in arrives squared:
+#   False  w goes in, so it arrives as w^2 -- self-consistent R-localization with w^2,
+#          NEDAS's own convention (the default).
+#   True   sqrt(w) goes in, so it arrives as w: textbook R-localization (Hunt et al. 2007).
+#          Set this to be compatible with PDAF's convention, whose LETKF applies the weight
+#          once (PDAFomi locweight 2) -- needed to compare the two codes at one convention.
+# A given hroi localizes more tightly under False than under True, and squaring cannot be
+# reproduced by rescaling hroi instead: it preserves the taper's support and changes its
+# shape, whereas rescaling the radius moves the support.
+#
+# This does NOT bring the batch analysis into agreement with the serial EAKF, which tapers
+# the Kalman gain rather than R (see tests/test_assimilator.py for the measurement).
+loc_weight_sqrt: False

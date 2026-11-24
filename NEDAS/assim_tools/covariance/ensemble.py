@@ -2,10 +2,6 @@ import yaml
 import numpy as np
 from NEDAS.utils.njit import njit
 
-class EnsembleCovariance:
-    def compute_covariance(self,):
-        pass
-
 # def covariance(x, y, cov_model='ensemble'):
 #     if cov_model == 'ensemble':
 #         return None

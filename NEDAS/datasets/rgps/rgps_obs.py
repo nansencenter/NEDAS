@@ -181,7 +181,7 @@ class RgpsObs(Dataset):
         obs_grid = IrregularGrid(grid.proj, obs_x, obs_y, triangles=obs_grid.tri.triangles[~msk,:])
         # convert to target grid with coarse graining (superobing)
         obs_grid.set_destination_grid(grid)
-        obs_on_grid = obs_grid.convert(obs_seq['obs'], is_vector=self.variables[obs_name].is_vector, coarse_grain=True)
+        obs_on_grid = obs_grid.convert(obs_seq_arr['obs'], is_vector=self.variables[obs_name].is_vector, coarse_grain=True)
         # overwrite the obs info with superobs
         if self.variables[obs_name].is_vector:
             msk = np.isnan(obs_on_grid[0,...])

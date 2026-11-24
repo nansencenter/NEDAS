@@ -1,5 +1,4 @@
 import os
-import struct
 from typing import Callable
 import numpy as np
 from NEDAS.utils.conversion import type_dic, type_size
@@ -46,7 +45,7 @@ class OfflineIO(IOBackend):
         seq_ = seq.flatten() if rec.is_vector else seq
         with open(self.obs_binfile_name(c, tag), 'r+b') as f:
             f.seek(mem_id * c.obs.info.size + rec.pos)
-            f.write(struct.pack(seq_.size * type_dic[rec.dtype], *seq_))
+            f.write(np.asarray(seq_, dtype=type_dic[rec.dtype]).tobytes())
 
     def read_obs(self, c: Context, tag: str, obs_rec_id: int, mem_id: int) -> np.ndarray:
         # check memory cache first
@@ -58,7 +57,7 @@ class OfflineIO(IOBackend):
         with open(self.obs_binfile_name(c, tag), 'rb') as f:
             f.seek(mem_id * c.obs.info.size + rec.pos)
             raw = f.read(nv * rec.nobs * type_size[rec.dtype])
-        seq_ = np.array(struct.unpack(nv * rec.nobs * type_dic[rec.dtype], raw))
+        seq_ = np.frombuffer(raw, dtype=type_dic[rec.dtype]).astype(float)
         return seq_.reshape(2, rec.nobs) if rec.is_vector else seq_
 
     def prepare_fields_storage(self, c: Context, tag: str):
@@ -77,11 +76,9 @@ class OfflineIO(IOBackend):
         """
         self.validate_tag(tag)
         # check if it is available in cache
-        if hasattr(c.state, f"fields_{tag}"):
-            if c.state and rec_id in c.state.rec_list[c.pid_rec] and mem_id in c.mem_list[c.pid_mem]:
-                fields = getattr(c.state, f"fields_{tag}")
-                if (mem_id, rec_id) in fields:
-                    return fields[mem_id, rec_id]
+        fields = getattr(c.state, f"fields_{tag}", {})
+        if (mem_id, rec_id) in fields:
+            return fields[mem_id, rec_id]
 
         # otherwise, read it from binfile
         rec = c.state.info.fields[rec_id]
@@ -92,8 +89,7 @@ class OfflineIO(IOBackend):
         binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'rb') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
-            fld_ = np.array(struct.unpack((nv*fld_size*type_dic[rec.dtype]),
-                            f.read(nv*fld_size*type_size[rec.dtype])))
+            fld_ = np.frombuffer(f.read(nv*fld_size*type_size[rec.dtype]), dtype=type_dic[rec.dtype])
             fld = np.full(fld_shape, np.nan)
             if rec.is_vector:
                 fld[:, ~c.grid.mask] = fld_.reshape((2, -1))
@@ -123,10 +119,14 @@ class OfflineIO(IOBackend):
         binfile = self.state_binfile_name(c, tag)
         with open(binfile, 'r+b') as f:
             f.seek(mem_id*c.state.info.size + rec.pos)
-            f.write(struct.pack(fld_.size*type_dic[rec.dtype], *fld_))
+            f.write(np.asarray(fld_, dtype=type_dic[rec.dtype]).tobytes())
 
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs):
         self.validate_tag(tag)
+
+        # static member (covariance_def.nens_static): read from its restart file in the bank
+        if tag == 'static':
+            return method(*args, **self.static_member_kwargs(c, kwargs))
 
         # if path is already specified, directly call the method
         if 'path' in kwargs and kwargs['path'] is not None:

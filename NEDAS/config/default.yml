@@ -121,7 +121,8 @@ obs_def:
   # the following is specific to the observation 'streamfunc' in the dataset
   nobs: 3000              # number of observations (if generating synthetic obs)
   err:
-    type: normal          # observation error model (normal, ...)
+    type: normal          # observation error model: normal, or lognormal (multiplicative: std is the
+                          # log-space std, dimensionless, and 'floor' below is the smallest truth value)
     std: 0.2              # error standard deviation (in observation physical units); can also be
                           # given as a per-iteration dict, e.g. {iter0: 0.5, iter1: 0.2}, see hroi below
   hroi: 100               # horizontal localization radius (in grid coordinate units); can also be
@@ -166,9 +167,17 @@ updator_def:
                   # {iter0: alignment, iter1: alignment, iter2: additive}
   config_file:
 
+# background error covariance, a blend of the dynamic ensemble and a static ensemble:
+#   P = (1-beta)*P_dynamic + beta*static_var_scaling*P_static
 covariance_def:
-  type: ensemble
-  config_file:
+  beta: 0.0         # weight of the static covariance (0: pure ensemble, 1: static only)
+  static_var_scaling: 1.0  # scaling of the static covariance (static members are climatological states)
+  nens_static: 0    # number of static members, added to the nens dynamic members in the analysis
+  static_dir:       # bank of static members: restart files named as the model's own member files
+  static_list:      # file listing the static members, one line each: <time> [<source member>]; first nens_static used
+  hybrid_perturbation: False  # the mean is always updated with P; the dynamic perturbations with
+                              # False: the dynamic ensemble covariance alone (Wang et al. 2007)
+                              # True: the hybrid covariance P, reduced Kalman gain (Counillon et al. 2009)
 
 # covariance inflation technique in assimilation
 inflation_def:
@@ -181,7 +190,8 @@ inflation_def:
 # covariance localization technique in assimilation
 localization_def:       # localization is configured separately for horizontal, vertical and temporal relations
   horizontal:
-    type: gaspari_cohn  # type of localization kernel (gaspari_cohn, step, exp, nice...)
+    type: gaspari_cohn  # localization kernel: gaspari_cohn, step, exponential, or the
+                        # correlation-based gcv / polo (see assim_tools/localization/registry)
   vertical:
     type: gaspari_cohn
   temporal:

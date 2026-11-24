@@ -1,0 +1,24 @@
+# competitive Lotka-Volterra, chaotic setting of Vano et al. (2006), as in DAPPER
+r: [1., 0.72, 1.53, 1.27]
+A: [[1.0, 1.09, 1.52, 0.0],
+    [0.0, 1.0, 0.44, 1.36],
+    [2.33, 0.0, 1.0, 0.47],
+    [1.21, 0.51, 0.35, 1.0]]
+dt: 0.5  # time step (model time units)
+hours_per_unit_time: 0.6  # 10 time units (DAPPER's observation interval) per 6 h
+
+# --- common to the small models (see NEDAS/models/ode_model.py) ---
+restart_dt: 6  # restart interval (hours)
+spinup_time: 100.0  # model time from the perturbed x0 to a state on the attractor
+init_sd: 0.01  # standard deviation of the perturbation added to x0 before the spinup
+# initial ensemble: 'climatology' = independently spun up states (seed + 1 + member),
+#                   'truth' = the truth at time_start plus noise of init_ens_sd
+init_ens_mode: climatology
+init_ens_sd: 0.01
+seed: 0  # random seed of the truth
+
+nproc_per_run: 1
+nproc_per_util: 1
+walltime: 10
+ens_init_dir:
+truth_dir:

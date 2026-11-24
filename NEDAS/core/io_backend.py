@@ -85,6 +85,16 @@ class IOBackend(ABC):
         """Read one member's obs sequence array for one obs record."""
         ...
 
+    def static_member_kwargs(self, c: Context, kwargs: dict) -> dict:
+        """
+        Redirect a read for static member kwargs['member'] (covariance_def.nens_static) to its
+        restart file in the bank static_dir, at the time and source member listed for it in
+        static_list; the time offset from the analysis time (state/obs at multiple time steps) is kept
+        """
+        static_time, static_member = c.covariance.static_members[kwargs['member']]
+        return {**kwargs, 'time': static_time + (kwargs['time'] - c.time),
+                'member': static_member, 'path': c.covariance.static_dir}
+
     @abstractmethod
     def call_method(self, c: Context, tag: str, method: Callable, *args, **kwargs) -> Any:
         """

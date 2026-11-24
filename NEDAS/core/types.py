@@ -71,6 +71,9 @@ class ErrorModel:
             the whole ErrorModel hashable as long as every field is.
         infl (float): multiplier on std applied only when packed into obs_data
             for the assimilator's R, not to the generated obs noise itself
+        floor (float): smallest truth value taken by a lognormal error, in variable units
+            (see utils/obs_error.py); unused by the normal model
+        lower_bound (float): bound a truncated_normal error keeps the obs above, in variable units
     """
     type: str
     std: float
@@ -79,6 +82,8 @@ class ErrorModel:
     tcorr: float
     cross_corr: tuple[float, ...]
     infl: float = 1.0
+    floor: float = 0.0
+    lower_bound: float = 0.0
     def __getitem__(self, key):
         # keeps kwargs['err']['std']-style access working (used by several
         # obs_operator modules, e.g. amsr2_obs.py, ice_conc_obs.py) even
@@ -179,6 +184,6 @@ LocalObsSeq = Annotated[dict[ObsRecordID, dict[PartitionID, dict[str, np.ndarray
 LocalObsEns = Annotated[dict[tuple[MemID, ObsRecordID], dict[PartitionID, np.ndarray]], 'local obs ensemble data']
 
 IOMode = Literal['online', 'offline']
-IOTag = Literal['current', 'prior', 'prior_mean', 'post', 'post_mean', 'truth', 'raw', 'z', 'z_mean']
+IOTag = Literal['current', 'prior', 'prior_mean', 'post', 'post_mean', 'truth', 'raw', 'z', 'z_mean', 'static']
 EnsRunStrategy = Literal['scheduler', 'batch']
 ParallelMode = Literal['serial', 'mpi', 'openmp']

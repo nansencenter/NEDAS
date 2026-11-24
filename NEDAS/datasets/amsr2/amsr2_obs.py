@@ -196,17 +196,27 @@ class AMSR2Obs(Dataset):
         #liquid = self.read_obs(**{**kwargs, 'name': 'liquid_water', 'units': 'g/kg'})['obs']
         #airtemp = self.read_obs(**{**kwargs, 'name': 'air_temp', 'units': 'K'})['obs']
         # option 2: read from model forcing files
-        wind_vector_from_model = model.read_var(**{**kwargs, 'name': 'atmos_surf_velocity', 'units': 'm/s'})
+        # Forcing is a cycle-current auxiliary input, not part of the assimilated ensemble
+        # state -- it never differs between the 'prior' and 'post' snapshot, so it must be
+        # read via an explicit 'current' tag (per state_to_obs's own docstring on
+        # tag-independent auxiliary reads), not the tag-derived path already baked into
+        # kwargs['path']. Without this override, kwargs['path'] resolved for tag='prior' at
+        # the very first cycle of a chained run points at model.ens_init_dir (the pre-staged
+        # restart source, cf. io_backends/offline.py::call_method), which never has forcing
+        # files -- only restart files -- causing a FileNotFoundError on e.g. forcing.wndewd.b.
+        # Found 2026-09-25 debugging the full-period Tb-assim cycling run's first cycle.
+        atmos_kwargs = {**kwargs, 'path': None}
+        wind_vector_from_model = self.c.io.call_method(self.c, 'current', model.read_var, **{**atmos_kwargs, 'name': 'atmos_surf_velocity', 'units': 'm/s'})
         wind_vector = model.grid.convert(wind_vector_from_model, is_vector=True)
         wind_on_grid = np.hypot(wind_vector[0,...], wind_vector[1,...])
         wind = grid.interp(wind_on_grid, x, y)
-        airtemp_from_model = model.read_var(**{**kwargs, 'name': 'atmos_surf_temp', 'units': 'K'})
+        airtemp_from_model = self.c.io.call_method(self.c, 'current', model.read_var, **{**atmos_kwargs, 'name': 'atmos_surf_temp', 'units': 'K'})
         airtemp_on_grid = model.grid.convert(airtemp_from_model)
         airtemp = grid.interp(airtemp_on_grid, x, y)
-        vapor_from_model = model.read_var(**{**kwargs, 'name': 'atmos_column_vapor', 'units': 'kg/m2'})
+        vapor_from_model = self.c.io.call_method(self.c, 'current', model.read_var, **{**atmos_kwargs, 'name': 'atmos_column_vapor', 'units': 'kg/m2'})
         vapor_on_grid = model.grid.convert(vapor_from_model)
         vapor = grid.interp(vapor_on_grid, x, y)
-        liquid_from_model = model.read_var(**{**kwargs, 'name': 'atmos_column_liquid', 'units': 'kg/m2'})
+        liquid_from_model = self.c.io.call_method(self.c, 'current', model.read_var, **{**atmos_kwargs, 'name': 'atmos_column_liquid', 'units': 'kg/m2'})
         liquid_on_grid = model.grid.convert(liquid_from_model)
         liquid = grid.interp(liquid_on_grid, x, y)
 

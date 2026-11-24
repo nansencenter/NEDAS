@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 
 class OpticalFlow:
     def __init__(self, method='DIS', **kwargs):
@@ -30,6 +29,68 @@ class OpticalFlow:
         frame2 = np.clip((fld2 - vmin) * scale, 0, 255).astype(np.uint8)
         return frame1, frame2
 
+    def _raft(self, grid, fld1, fld2):
+        """RAFT learned optical flow (Teed & Deng 2020, pretrained torchvision weights).
+
+        torch/torchvision are imported here only, so they stay optional dependencies.
+
+        Both frames are normalized with one shared min/max, as in _to_uint8_pair: per-frame
+        normalization breaks brightness constancy, and RAFT does not fail on that, it just
+        returns a worse field. kwargs:
+          model: 'large' (default) or 'small'
+          weights: torchvision pretrained variant, e.g. 'C_T_V2' (default 'DEFAULT')
+          weights_path: local state_dict file (use on compute nodes without internet)
+          normalize: 'minmax' (float, default) or 'uint8' (quantized like DIS/Farneback)
+          num_flow_updates: refinement iterations (default 12)
+          num_threads: torch CPU threads per process (default 1, one per MPI rank)
+          upscale: resize images by this factor before RAFT (default 4). RAFT estimates flow on a
+                   1/8-resolution grid, which shows up as 8-pixel blocks; upscaling shrinks them
+                   (~16x the cost of upscale=1)
+        """
+        import torch
+        import torch.nn.functional as F
+        from torchvision.models import optical_flow as tvof
+        if not hasattr(self, '_raft_model'):
+            torch.set_num_threads(self.kwargs.get('num_threads', 1))
+            name = self.kwargs.get('model', 'large')
+            build = getattr(tvof, f'raft_{name}')
+            if self.kwargs.get('weights_path'):
+                model = build(weights=None)
+                model.load_state_dict(torch.load(self.kwargs['weights_path'], map_location='cpu'))
+            else:
+                weights = getattr(tvof, f'Raft_{name.capitalize()}_Weights')
+                model = build(weights=weights[self.kwargs.get('weights', 'DEFAULT')])
+            self._raft_model = model.eval()
+
+        vmin = min(np.nanmin(fld1), np.nanmin(fld2))
+        vmax = max(np.nanmax(fld1), np.nanmax(fld2))
+        fld1 = np.where(np.isnan(fld1), vmin, fld1)
+        fld2 = np.where(np.isnan(fld2), vmin, fld2)
+        if self.kwargs.get('normalize', 'minmax') == 'uint8':
+            frames = np.stack(self._to_uint8_pair(fld1, fld2)) / 255.0
+        else:
+            scale = 1.0 / (vmax - vmin) if vmax > vmin else 0.0
+            frames = (np.stack([fld1, fld2]) - vmin) * scale
+
+        # RAFT expects (N,3,H,W) in [-1,1], H,W divisible by 8 and at least 128:
+        # upsample low-res images, then map the flow back to the original grid and pixel units
+        ny, nx = fld1.shape
+        up = self.kwargs.get('upscale', 4)
+        size = lambda n: max(128, round(n * up) + -round(n * up) % 8)
+        H, W = size(ny), size(nx)
+        imgs = torch.from_numpy(frames).float().mul(2).sub(1)[:, None].expand(2, 3, ny, nx)
+        if (H, W) != (ny, nx):
+            imgs = F.interpolate(imgs, size=(H, W), mode='bilinear', align_corners=False)
+        with torch.no_grad():
+            flow = self._raft_model(imgs[0:1], imgs[1:2],
+                                    num_flow_updates=self.kwargs.get('num_flow_updates', 12))[-1]
+        if (H, W) != (ny, nx):
+            # antialias averages the upscaled flow when shrinking it back, removing block edges
+            flow = F.interpolate(flow, size=(ny, nx), mode='bilinear', align_corners=False,
+                                 antialias=(H > ny or W > nx))
+        flow = flow[0].numpy()
+        return np.array([flow[0] * nx / W * grid.dx, flow[1] * ny / H * grid.dy])
+
     def __call__(self, grid, fld1, fld2):
         if self.method == 'DIS':
             # 2026-07-08: exposed DIS's own tunable parameters (previously hardcoded to
@@ -39,6 +100,7 @@ class OpticalFlow:
             # PRESET_FAST's default (large) patch size produces a blocky, over-smoothed
             # displacement field relative to Horn-Schunck -- smaller patch_size or
             # PRESET_MEDIUM should recover finer spatial detail, at the cost of more noise/compute.
+            import cv2   # optional: pip install nedas[alignment]
             preset_name = self.kwargs.get('preset', 'DISOPTICAL_FLOW_PRESET_FAST')
             DISOpticalFlow_create = getattr(cv2, 'DISOpticalFlow_create')
             dis = DISOpticalFlow_create(getattr(cv2, preset_name))
@@ -72,6 +134,7 @@ class OpticalFlow:
             # window) is the main smoothing control -- OpenCV's own docs note larger winsize
             # "yields more blurred motion field"; the default 15 is larger than even the S-scale's
             # character_length (6.4), which likely over-smooths fine-scale displacement structure.
+            import cv2   # optional: pip install nedas[alignment]
             calcOpticalFlowFarneback = getattr(cv2, 'calcOpticalFlowFarneback')
             frame1, frame2 = self._to_uint8_pair(fld1, fld2)
             pyr_scale = self.kwargs.get('pyr_scale', 0.5)
@@ -90,6 +153,9 @@ class OpticalFlow:
 
         elif self.method == 'HornSchunck_pyramid':
             return optical_flow_HS_pyramid(grid, fld1, fld2, **self.kwargs)
+
+        elif self.method == 'RAFT':
+            return self._raft(grid, fld1, fld2)
 
         else:
             raise ValueError(f"Unsupported optical flow method: {self.method}")

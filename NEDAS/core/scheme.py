@@ -313,6 +313,10 @@ class Scheme(ABC):
             # not a local CPU count.  Submit all nens members at once and let the HPC scheduler
             # manage actual concurrency — throttle with opts['max_concurrent'] if needed.
             nworker = opts.get('max_concurrent', self.c.nens)
+            # SLURM --time already bounds each job; the scheduler's own timer runs
+            # from submission, so queue wait would count against it and fail jobs
+            # that are merely pending.
+            sched_walltime = None
         else:
             # Local or in-allocation mode: bound concurrency by available processors.
             total_nproc = opts.get('total_nproc', self.config.nproc)
@@ -320,10 +324,11 @@ class Scheme(ABC):
                 f"requested nproc ({nproc_per_task}) exceeds available total_nproc ({total_nproc})"
             )
             nworker = max(1, total_nproc // nproc_per_task)
+            sched_walltime = opts.get('walltime')
 
         # initialize the scheduler
         self.c.debug_message = f"running {task_name} in offline scheduler: nworker={nworker}"
-        self.scheduler = OfflineScheduler(self.c, nworker, opts.get('walltime'), debug=self.config.debug)
+        self.scheduler = OfflineScheduler(self.c, nworker, sched_walltime, debug=self.config.debug)
 
         # submit jobs
         for mem_id in range(self.c.nens):

@@ -2,12 +2,21 @@ import numpy as np
 import unittest
 from NEDAS.assim_tools.assimilators.ETKF.core import (
     ensemble_transform_weights, apply_ensemble_transform,
-    mean_preserving_rotation,
+    mean_preserving_rotation, local_analysis_main,
 )
+from NEDAS.assim_tools.localization.distance_based import gaspari_cohn_func
 
 
 def _eye(nens):
     return np.eye(nens)
+
+
+def _plain_etkf_weights(obs, obs_err, obs_prior, local_factor, rotation, use_eigen=False):
+    """plain ETKF: no static members, the dynamic ensemble covariance alone"""
+    nens, nlobs = obs_prior.shape
+    weights, _ = ensemble_transform_weights(obs, obs_err, obs_prior, np.zeros((0, nlobs)), local_factor,
+                                            rotation, use_eigen, 1.0 / np.sqrt(nens - 1), 0.0, False)
+    return weights
 
 
 class TestEnsembleTransformWeights(unittest.TestCase):
@@ -22,12 +31,12 @@ class TestEnsembleTransformWeights(unittest.TestCase):
 
     def test_weight_matrix_shape(self):
         obs, obs_err, obs_prior, lfactor = self._make_data(nens=10, nlobs=5)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(10))
+        W = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(10))
         self.assertEqual(W.shape, (10, 10))
 
     def test_column_sums_equal_one(self):
         obs, obs_err, obs_prior, lfactor = self._make_data(nens=10, nlobs=5)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(10))
+        W = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(10))
         np.testing.assert_allclose(W.sum(axis=0), 1.0, atol=1e-5)
 
     def test_huge_obs_error_gives_near_identity(self):
@@ -37,7 +46,7 @@ class TestEnsembleTransformWeights(unittest.TestCase):
         obs = np.array([0.0])
         obs_err = np.array([1e6])
         lfactor = np.ones(1)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
+        W = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
         np.testing.assert_allclose(W, np.eye(nens), atol=1e-3)
 
     def test_posterior_spread_not_greater_than_prior(self):
@@ -47,7 +56,7 @@ class TestEnsembleTransformWeights(unittest.TestCase):
         obs = rng.normal(0, 1, 3)
         obs_err = np.ones(3)
         lfactor = np.ones(3)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
+        W = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
         prior_ens = rng.normal(0, 2, nens)
         post_ens = apply_ensemble_transform(prior_ens, W)
         self.assertLessEqual(np.std(post_ens), np.std(prior_ens) + 1e-10)
@@ -64,8 +73,8 @@ class TestTransformSolvers(unittest.TestCase):
         obs = rng.normal(0, 1, nlobs)
         obs_err = np.ones(nlobs) * 0.7
         lfactor = rng.uniform(0, 1, nlobs)
-        W_svd = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(nens), False)
-        W_eig = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(nens), True)
+        W_svd = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(nens), False)
+        W_eig = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(nens), True)
         np.testing.assert_allclose(W_svd, W_eig, atol=1e-10)
 
 
@@ -85,7 +94,7 @@ class TestRandomRotation(unittest.TestCase):
         lfactor = rng.uniform(0, 1, 6)
         np.random.seed(0)
         G = mean_preserving_rotation(12)
-        W = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, G)
+        W = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, G)
         np.testing.assert_allclose(W.sum(axis=0), 1.0, atol=1e-5)
 
     def test_rotation_preserves_analysis_covariance(self):
@@ -97,10 +106,10 @@ class TestRandomRotation(unittest.TestCase):
         obs = rng.normal(0, 1, nlobs)
         obs_err = np.ones(nlobs) * 0.7
         lfactor = rng.uniform(0, 1, nlobs)
-        W0 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
+        W0 = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, _eye(nens))
         np.random.seed(2)
         G = mean_preserving_rotation(nens)
-        W1 = ensemble_transform_weights(obs, obs_err, obs_prior, lfactor, G)
+        W1 = _plain_etkf_weights(obs, obs_err, obs_prior, lfactor, G)
         # rotation must actually change the transform
         self.assertGreater(np.max(np.abs(W0 - W1)), 1e-3)
         # but the posterior covariance of an arbitrary prior anomaly set is invariant
@@ -133,23 +142,215 @@ class TestRandomRotation(unittest.TestCase):
             return np.sum(px * py) / (nens - 1)
 
         # reference (no rotation)
-        Wx0 = ensemble_transform_weights(ox, ex, opx, lx, _eye(nens))
-        Wy0 = ensemble_transform_weights(oy, ey, opy, ly, _eye(nens))
+        Wx0 = _plain_etkf_weights(ox, ex, opx, lx, _eye(nens))
+        Wy0 = _plain_etkf_weights(oy, ey, opy, ly, _eye(nens))
         c_ref = cross_cov(Wx0, Wy0)
 
         # SAME rotation at both points -> cross-cov preserved
         np.random.seed(7)
         G = mean_preserving_rotation(nens)
-        Wx_s = ensemble_transform_weights(ox, ex, opx, lx, G)
-        Wy_s = ensemble_transform_weights(oy, ey, opy, ly, G)
+        Wx_s = _plain_etkf_weights(ox, ex, opx, lx, G)
+        Wy_s = _plain_etkf_weights(oy, ey, opy, ly, G)
         self.assertAlmostEqual(cross_cov(Wx_s, Wy_s), c_ref, places=8)
 
         # DIFFERENT rotations at the two points -> cross-cov corrupted
         np.random.seed(7); Gx = mean_preserving_rotation(nens)
         np.random.seed(99); Gy = mean_preserving_rotation(nens)
-        Wx_d = ensemble_transform_weights(ox, ex, opx, lx, Gx)
-        Wy_d = ensemble_transform_weights(oy, ey, opy, ly, Gy)
+        Wx_d = _plain_etkf_weights(ox, ex, opx, lx, Gx)
+        Wy_d = _plain_etkf_weights(oy, ey, opy, ly, Gy)
         self.assertGreater(abs(cross_cov(Wx_d, Wy_d) - c_ref), 1e-3)
+
+
+class TestHybridCovariance(unittest.TestCase):
+    """Hybrid ETKF-OI with nens_dynamic dynamic members and a separate batch of nens_static
+    static members, P = (1-beta)*P_d + beta*static_var_scaling*P_s. H picks the first nobs state
+    components; uniform obs error, so the Whitaker-Hamill reduced gain is unambiguous."""
+
+    def setUp(self):
+        rng = np.random.default_rng(31)
+        self.nens_dynamic, self.nens_static, self.nobs, self.nstate = 6, 9, 3, 5
+        self.ens_dynamic = rng.normal(0, 1, (self.nens_dynamic, self.nstate))  # members as rows
+        self.ens_static = rng.normal(0.5, 2, (self.nens_static, self.nstate))
+        self.obs = rng.normal(0, 1, self.nobs)
+        self.obs_err = np.ones(self.nobs) * 0.8
+        self.beta, self.static_var_scaling = 0.4, 0.3
+
+    def _weights(self, hybrid_perturbation, beta=None, use_eigen=False):
+        beta = self.beta if beta is None else beta
+        fac_dynamic = np.sqrt(1 - beta) / np.sqrt(self.nens_dynamic - 1)
+        fac_static = np.sqrt(beta * self.static_var_scaling) / np.sqrt(self.nens_static - 1)
+        return ensemble_transform_weights(self.obs, self.obs_err,
+                                          self.ens_dynamic[:, :self.nobs].copy(), self.ens_static[:, :self.nobs].copy(),
+                                          np.ones(self.nobs), _eye(self.nens_dynamic), use_eigen,
+                                          fac_dynamic, fac_static, hybrid_perturbation)
+
+    def _post_dynamic(self, weights, weights_static):
+        return (self.ens_dynamic.T @ weights + self.ens_static.T @ weights_static).T
+
+    def _plain_etkf(self):
+        weights = _plain_etkf_weights(self.obs, self.obs_err, self.ens_dynamic[:, :self.nobs].copy(),
+                                      np.ones(self.nobs), _eye(self.nens_dynamic))
+        return weights, (self.ens_dynamic.T @ weights).T
+
+    def _gain_terms(self):
+        P = (1 - self.beta) * np.cov(self.ens_dynamic.T) + self.beta * self.static_var_scaling * np.cov(self.ens_static.T)
+        H = np.eye(self.nstate)[:self.nobs]
+        R = np.diag(self.obs_err**2)
+        return P, H, R
+
+    def test_beta_zero_reduces_to_plain_etkf(self):
+        weights_ref, _ = self._plain_etkf()
+        for hybrid_perturbation in (False, True):
+            weights, weights_static = self._weights(hybrid_perturbation, beta=0.0)
+            np.testing.assert_allclose(weights, weights_ref, atol=1e-10)
+            np.testing.assert_allclose(weights_static, 0, atol=1e-12)
+
+    def test_mean_update_uses_hybrid_gain(self):
+        P, H, R = self._gain_terms()
+        K = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
+        mean_dynamic = self.ens_dynamic.mean(0)
+        mean_ref = mean_dynamic + K @ (self.obs - H @ mean_dynamic)
+        for hybrid_perturbation in (False, True):
+            for use_eigen in (False, True):
+                weights, weights_static = self._weights(hybrid_perturbation, use_eigen=use_eigen)
+                np.testing.assert_allclose(weights.sum(axis=0), 1.0, atol=1e-10)
+                np.testing.assert_allclose(weights_static.sum(axis=0), 0.0, atol=1e-10)
+                np.testing.assert_allclose(self._post_dynamic(weights, weights_static).mean(0), mean_ref, atol=1e-10)
+
+    def test_dynamic_perturbations_ignore_static(self):
+        _, post_ref = self._plain_etkf()
+        post = self._post_dynamic(*self._weights(False))
+        np.testing.assert_allclose(post - post.mean(0), post_ref - post_ref.mean(0), atol=1e-10)
+
+    def test_hybrid_perturbations_use_reduced_gain(self):
+        # A_d <- A_d - K~ H A_d, K~ = P H^T (sqrt(HPH^T+R))^-T (sqrt(HPH^T+R) + sqrt(R))^-1
+        P, H, R = self._gain_terms()
+        def sqrtm(matrix):
+            eigval, eigvec = np.linalg.eigh(matrix)
+            return (eigvec * np.sqrt(eigval)) @ eigvec.T
+        innov_cov_sqrt = sqrtm(H @ P @ H.T + R)
+        reduced_gain = P @ H.T @ np.linalg.inv(innov_cov_sqrt).T @ np.linalg.inv(innov_cov_sqrt + sqrtm(R))
+        anom_dynamic = self.ens_dynamic - self.ens_dynamic.mean(0)
+        post = self._post_dynamic(*self._weights(True))
+        np.testing.assert_allclose(post - post.mean(0),
+                                   anom_dynamic - (reduced_gain @ H @ anom_dynamic.T).T, atol=1e-10)
+
+
+class TestLocalAnalysisStaticMembers(unittest.TestCase):
+
+    def test_static_members_enter_the_dynamic_update(self):
+        """local_analysis_main updates the dynamic members with weights and weights_static,
+        and leaves the static members unchanged (state = the observed quantities, no localization)"""
+        rng = np.random.default_rng(41)
+        nens_dynamic, nens_static, nobs = 6, 9, 3
+        ens_dynamic = rng.normal(0, 1, (nens_dynamic, nobs))
+        ens_static = rng.normal(0.5, 2, (nens_static, nobs))
+        obs, obs_err = rng.normal(0, 1, nobs), np.ones(nobs) * 0.8
+        fac_dynamic = np.sqrt(0.6 / (nens_dynamic - 1))
+        fac_static = np.sqrt(0.4 * 0.3 / (nens_static - 1))
+        weights, weights_static = ensemble_transform_weights(obs, obs_err, ens_dynamic.copy(), ens_static.copy(),
+                                                             np.ones(nobs), _eye(nens_dynamic), False,
+                                                             fac_dynamic, fac_static, True)
+        post_ref = (ens_dynamic.T @ weights + ens_static.T @ weights_static).T
+
+        state_dynamic, state_static = ens_dynamic.copy(), ens_static.copy()
+        zeros, ones = np.zeros(nobs), np.ones(nobs)
+        local_analysis_main(state_dynamic, ens_dynamic.copy(), state_static, ens_static.copy(),
+                            obs, obs_err, ones,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            np.ones((nobs, nobs)), _eye(nens_dynamic), False,
+                            fac_dynamic, fac_static, True)
+        np.testing.assert_allclose(state_dynamic, post_ref, atol=1e-10)
+        np.testing.assert_allclose(state_static, ens_static)
+
+
+class TestLocWeightSqrt(unittest.TestCase):
+    """
+    loc_weight_sqrt decides how far the localization weight reaches into the analysis.
+
+    The whitening applies it to both the observation anomalies and the innovation, so by
+    default it lands on w^2 in the Hessian and in the mean-update numerator alike -- which is
+    R-localization with w^2. False feeds sqrt(w) in so it lands on w, PDAF's convention.
+    """
+
+    def _run(self, hlfactor, loc_weight_sqrt, nens=8, nobs=5, seed=7):
+        rng = np.random.default_rng(seed)
+        state = rng.normal(0, 1, (nens, nobs))
+        obs_prior = rng.normal(0, 1, (nens, nobs))
+        obs, obs_err = rng.normal(0, 1, nobs), np.ones(nobs) * 0.7
+        zeros, ones = np.zeros(nobs), np.ones(nobs)
+        local_analysis_main(state, obs_prior, np.zeros((0, nobs)), np.zeros((0, nobs)),
+                            obs, obs_err, hlfactor,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            zeros, zeros, ones, gaspari_cohn_func,
+                            np.ones((nobs, nobs)), _eye(nens), False,
+                            1.0 / np.sqrt(nens - 1), 0.0, False,
+                            loc_weight_sqrt)
+        return state
+
+    @staticmethod
+    def _kalman_R_localized(power, nens=8, nobs=5, seed=7, roi=5.0):
+        """
+        Textbook R-localization at a given power, built independently of the assimilator:
+        R^-1 -> w^power R^-1, covariances untouched. The weight enters the Hessian and the
+        numerator alike, which is what makes it the reference for a *consistent* convention.
+        """
+        rng = np.random.default_rng(seed)
+        prior = rng.normal(0, 1, (nens, nobs))
+        obs_prior = rng.normal(0, 1, (nens, nobs))
+        obs = rng.normal(0, 1, nobs)
+        err = np.ones(nobs) * 0.7
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, nobs), roi)
+        A = prior - prior.mean(0)
+        Y = obs_prior - obs_prior.mean(0)
+        Pxy = (A.T @ Y) / (nens - 1)
+        Pyy = (Y.T @ Y) / (nens - 1)
+        with np.errstate(divide='ignore'):
+            R_eff = np.diag(err**2 / w**power)
+        K = Pxy @ np.linalg.inv(Pyy + R_eff)
+        return prior.mean(0) + K @ (obs - obs_prior.mean(0))
+
+    def test_default_is_r_localization_with_w_squared(self):
+        """loc_weight_sqrt=False, the default: w goes in and arrives as w^2."""
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        np.testing.assert_allclose(self._run(w, False).mean(axis=0),
+                                   self._kalman_R_localized(2.0), atol=1e-10)
+
+    def test_unsquared_is_r_localization_with_w(self):
+        """loc_weight_sqrt=True: sqrt(w) goes in and arrives as w -- PDAF's convention,
+        the setting that puts the two codes on one footing."""
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        np.testing.assert_allclose(self._run(w, True).mean(axis=0),
+                                   self._kalman_R_localized(1.0), atol=1e-10)
+
+    def test_the_two_settings_differ(self):
+        """a guard against the flag being silently dropped"""
+        w = gaspari_cohn_func(np.linspace(0.0, 4.0, 5), 5.0)
+        self.assertGreater(np.abs(self._run(w, True) - self._run(w, False)).max(), 1e-8)
+
+    def test_squaring_is_not_a_rescaled_roi(self):
+        """
+        Why this needs a flag rather than an adjusted hroi: squaring keeps the taper's
+        support and changes its shape, while rescaling moves the support. No radius
+        reproduces the squared Gaspari-Cohn.
+        """
+        d = np.linspace(0, 400, 9)
+        squared = gaspari_cohn_func(d, 400.0) ** 2
+        best = min(np.abs(gaspari_cohn_func(d, roi) - squared).max()
+                   for roi in np.linspace(50, 800, 751))
+        self.assertGreater(best, 1e-3)
+        # the exponential taper is the exception -- squaring it halves the radius exactly
+        from NEDAS.assim_tools.localization.distance_based import exponential_func
+        np.testing.assert_allclose(exponential_func(d, 400.0) ** 2,
+                                   exponential_func(d, 200.0), atol=1e-14)
+
+    def test_zero_weights_stay_zero(self):
+        """sqrt preserves which obs are excluded, so the skip logic is intact"""
+        w = gaspari_cohn_func(np.array([0.0, 2.0, 9.0, 9.0, 9.0]), 5.0)
+        self.assertTrue((w[2:] == 0).all())
+        for use_sqrt in (True, False):
+            self.assertTrue(np.isfinite(self._run(w, use_sqrt)).all())
 
 
 class TestApplyEnsembleTransform(unittest.TestCase):
@@ -176,3 +377,24 @@ class TestApplyEnsembleTransform(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestHessianSolvers(unittest.TestCase):
+    """'auto' switches between the two decompositions as nlobs crosses nens, so they must agree
+    on both sides of it: same eigenvalues, same eigenvectors up to sign."""
+
+    def test_svd_and_eigen_agree_either_side_of_the_switch(self):
+        from NEDAS.assim_tools.assimilators.ETKF.core import hessian_decomposition
+        rng = np.random.default_rng(1)
+        nens = 20
+        for nlobs in (5, nens, 3 * nens):
+            S = rng.standard_normal((nens, nlobs))
+            ok_s, d_s, U_s = hessian_decomposition(S, False)
+            ok_e, d_e, U_e = hessian_decomposition(S, True)
+            self.assertTrue(ok_s and ok_e)
+            order_s, order_e = np.argsort(d_s), np.argsort(d_e)
+            np.testing.assert_allclose(d_s[order_s], d_e[order_e], rtol=1e-10, atol=1e-10)
+            # the Hessian itself is the sign-free check on the vectors
+            H = np.eye(nens) + S @ S.T
+            for d, U in ((d_s, U_s), (d_e, U_e)):
+                np.testing.assert_allclose((U * d) @ U.T, H, rtol=1e-9, atol=1e-9)

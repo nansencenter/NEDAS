@@ -1,6 +1,6 @@
 dataset_dir:
 nobs:
-obs_position: random
+obs_position: random  # random (x,y uniform in the grid; z drawn from obs_z, or 0) or prescribed (obs_x,y,z)
 obs_x:
 obs_y:
 obs_z:

@@ -4,6 +4,7 @@ F: 8     ## forcing parameter
 dt: 0.05 ## time step
 
 numeric_opt: rk4
+seed: 0  # truth initial condition; member m uses seed + 1 + m
 
 mean_velocity: 0.0
 pert_velocity_multiplier: 5.0
