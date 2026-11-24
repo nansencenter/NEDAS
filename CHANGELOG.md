@@ -11,55 +11,69 @@ DA schemes, or other backward-compatible features land in the next minor release
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-24
+
 ### Added
-- `bgrid_solo` model: DART's dry dynamical core with Held-Suarez forcing (global
-  atmosphere, 60x30x5), run through a driver built against the DART source
-  (`build_bgrid_solo.sh`); example in `examples/bgrid_solo`
-- `bgrid_solo`: online io mode, the model advanced in memory through
-  `libnedas_bgrid.so` (a C interface to the same DART code, built by
-  `build_bgrid_solo.sh`), giving the same states as the offline executable
-- Small test models from DART and DAPPER on a common base (`models/ode_model.py`):
-  `lorenz63`, `lorenz84`, `lorenz05` (Lorenz 2005 Models II/III, DART lorenz_04),
-  `lorenz96_2scale`, `nine_var` (Lorenz 1980), `ikeda`, `lotka_volterra`, `ks`
-  (Kuramoto-Sivashinsky); example in `examples/small_models`
-- `synthetic` obs: random positions take their levels from `obs_z` if given
-- `PDAF` assimilator: local ensemble filters (LSEIK/LETKF/LESTKF/LNETF/LKNETF)
-  via pyPDAF
-- `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error
-  options ported from `enkf-topaz`, default off
+- `DART` assimilator: runs DART's `filter_main` in memory, giving access to DART's
+  filter kinds and QCEFF tables
+- `PDAF` assimilator: PDAF's local ensemble filters (LSEIK/LETKF/LESTKF/LNETF/LKNETF)
+  via pyPDAF, with vertical localization
+- `QCEF` assimilator: native Python QCEFF filter, validated against DART's `filter_main`
+- Hybrid covariance (`covariance_def`): a static ensemble bank blended with the
+  flow-dependent ensemble in EAKF, TopazDEnKF and ETKF-OI (Wang et al. 2007)
+- `bgrid_solo` model: DART's dry dynamical core with Held-Suarez forcing, offline and
+  online io; example in `examples/bgrid_solo`
+- Small test models from DART and DAPPER on a common `ode_model` base: `lorenz63`,
+  `lorenz84`, `lorenz05`, `lorenz96_2scale`, `nine_var`, `ikeda`, `lotka_volterra`,
+  `ks`; example in `examples/small_models`
 - `InterpolationAssimilator`: Cressman/OI local obs-only analysis
-- `vort3d` obs: core-biased radial sampling option for targeted networks
-- DIS optical flow: `variational_refine_alpha` now configurable
-- `vort3d`: adaptive dt retry on NaN blowup (`dt_reduction_factor`,
-  `max_dt_retries`, `min_dt`)
-- `vort3d` obs: `z_dist=exp` option for near-surface-weighted obs levels
-- `stream_log` option (`Context.run_job`/`Model`) to control job-log
-  streaming to stdout; `topaz5` sets it `False`
+- Obs error models: `lognormal` (multiplicative, with a floor) and `truncated_normal`
+  (bounded quantities)
+- Correlation-based localization options
+- `loc_weight_sqrt`, matching PDAF's LETKF tapering convention in the ETKF
+- RAFT learned optical flow backend for the alignment updator
+- Non-Gaussianity diagnostics (skewness, excess kurtosis, negentropy) for ensemble forecasts
+- DFS and SRF diagnostics from the DEnKF assimilator; IIEE sea-ice metric
+- `vort3d` obs: `theta`/`q` and boundary-layer `wind_speed_b` observables, optional
+  global obs layer, time-varying obs counts, core-biased radial sampling, `z_dist=exp`
+- `vort3d`: adaptive dt retry on NaN blowup
+- `ice_conc`/`ice_drift`/`cs2smos`: opt-in per-pixel/adaptive obs error options, default off
+- `synthetic` obs: random positions take their levels from `obs_z` if given
+- DIS optical flow: `variational_refine_alpha` configurable
+- `stream_log` option (`Context.run_job`/`Model`) to control job-log streaming
 
 ### Changed
-- `vort3d`: netCDF reads now slice at the netCDF4 level instead of reading
-  all levels into memory
-- neXtSIM model module naming aligned with `topaz.v4`/`topaz.v5`:
-  `nextsim.v1` -> `nextsim.v2`, `nextsim.dg` -> `nextsim.v3` (no active use
-  of this interface yet, minor change)
+- Serial EAKF: point-major state layout, one `update_ensemble` kernel, in-place updates,
+  and neighbor search via `grid.search_box`
+- ETKF/TopazDEnKF: fields sharing a localization factor transformed in one matmul
+- Batch assimilator: partitions assigned largest-first to the least loaded process
+- Ensemble means cached in memory and summed only over the ranks holding members
+- `OfflineIO`: `.bin` records read/written with numpy instead of `struct`
+- `numba` is now a required dependency
+- `vort3d`: netCDF reads sliced at the netCDF4 level instead of reading all levels
+- neXtSIM model modules renamed: `nextsim.v1` -> `nextsim.v2`, `nextsim.dg` -> `nextsim.v3`
 
 ### Fixed
-- Horizontal localization on grids with `distance_type: spherical` (lon-lat grids,
-  e.g. `bgrid_solo`): `Grid.distance` ignored the grid's distance type, so the
-  assimilators compared cartesian degrees with `hroi` in meters and localized
-  nothing; it now follows the grid, and the batch assimilators' partition screen
-  handles great-circle distances. The `topaz` grid (a conformal mapping) is
-  declared spherical too and now gets the great-circle distances it was meant to
-  have: before, its distances were cartesian in the model plane, which do not
-  account for the varying map factor (up to ~5% shorter within 1000 km)
-- `Grid1D`: the last point of a non-cyclic grid was outside the grid, so an
-  observation there had no prior and the serial assimilators failed
-- `build_bgrid_solo.sh` works with a fresh DART checkout (no site `mkmf.template`
-  needed) and no longer builds into it
+- Horizontal localization on `distance_type: spherical` grids: `Grid.distance` ignored
+  the grid's distance type, so cartesian degrees were compared with `hroi` in meters and
+  nothing was localized; the `topaz` grid is now spherical too
+- `Grid1D`: the last point of a non-cyclic grid fell outside it, leaving an observation
+  there with no prior
+- Observations at the last level now extend half a layer beyond z
+- `assimilation_std`: one std per location for vector obs; the serial assimilators visit
+  vector obs components together
+- `obs_*.bin` layout corruption and empty `obs_seq.npy` when `nproc_rec > 1`; unsynced
+  obs layout across ranks now guarded
+- Concurrent file-access bugs in topaz5 cycling
+- Scalar state params persist across offline subprocesses
+- `Comm`: PMIx launches detected, launcher/MPI size mismatch fails loudly
+- ETKF: auto transform solver switches to `eigen` at `nlobs > nens`
+- Optional `cv2` import broke the test suite where opencv is absent
+- `lorenz96`: per-member seed for the initial ensemble
+- `build_bgrid_solo.sh` works with a fresh DART checkout and no longer builds into it
 - `test_file_system.py` no longer creates a stray `test/` dir at repo root
-  (used `work_dir='test'` instead of the `work_dir` default); `work/` is now
-  gitignored
 - numba warning now includes the actual `ImportError` message
+- readthedocs shows the latest release version
 
 ## [1.3.2] - 2026-08-17
 
